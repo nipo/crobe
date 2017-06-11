@@ -61,10 +61,10 @@ class Register:
         self.value = value
         
     def dump(self):
-        print " %s" % self.name
-        print "   0x%08x" % self.value
+        print(" %s" % self.name)
+        print("   0x%08x" % self.value)
         for f in sorted(self.fields):
             v = f.value(self.value)
-            print "   % 10s % 10s % 8d %s %s" % (
+            print("   % 10s % 10s % 8d %s %s" % (
                 "%x" % (v << (f.pos % 4)) + " " * (f.pos / 4),
-                hex(v), v, f.name, f.pretty(v))
+                hex(v), v, f.name, f.pretty(v)))

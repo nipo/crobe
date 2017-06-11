@@ -1,8 +1,8 @@
-import dwt
-import etb
-import etm
-import fpb
-import itm
-import rom_table
-import scs
-import tpiu
+from . import dwt
+from . import etb
+from . import etm
+from . import fpb
+from . import itm
+from . import rom_table
+from . import scs
+from . import tpiu

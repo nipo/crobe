@@ -29,7 +29,7 @@ class Adapter(model.Adapter):
 
     @property
     def supported_interfaces(self):
-        return map(str.lower, self.handle.available_interfaces)
+        return [x.lower() for x in self.handle.available_interfaces]
 
     @property
     def firmware_info(self):
@@ -107,8 +107,8 @@ class SwdInterface(swd.Interface, Interface):
         ops = list(operation_list)
 
         while ops:
-            oe_buf = ""
-            out_buf = ""
+            oe_buf = b""
+            out_buf = b""
             pending = []
 
             while ops and len(out_buf) < 1024 - 8:
@@ -125,10 +125,10 @@ class SwdInterface(swd.Interface, Interface):
                     ap = int(bool(op.ap))
 
                     oe_buf  += struct.pack("<H", 0xffff >> self.READ_ALIGN_SHIFT) \
-                               + "\x00\x00\x00\x00\xfc\xff"
+                               + b"\x00\x00\x00\x00\xfc\xff"
                     parity = ap ^ (addr & 1) ^ (addr >> 1) ^ 1
                     out_buf += struct.pack("<H", ((ap << 1) | (addr << 3) | (parity << 5) | 0x85) << (8 - self.READ_ALIGN_SHIFT)) \
-                               + "\x00\x00\x00\x00\x00\x00"
+                               + b"\x00\x00\x00\x00\x00\x00"
 
                 # byte:  00000000111111112222222233333333444444445555555566666666
                 # bit:   01234567012345670123456701234567012345670123456701234567
@@ -139,7 +139,7 @@ class SwdInterface(swd.Interface, Interface):
                     ap = int(bool(op.ap))
 
                     oe_buf  += struct.pack("<H", 0xffff >> self.WRITE_ALIGN_SHIFT) \
-                               + "\xff\xff\xff\xff\xff\xff"
+                               + b"\xff\xff\xff\xff\xff\xff"
                     parity = ap ^ (addr & 1) ^ (addr >> 1)
                     dparity = (op.data ^ (op.data >> 16))
                     dparity ^= (dparity >> 8)
@@ -147,15 +147,15 @@ class SwdInterface(swd.Interface, Interface):
                     dparity = (0x6996 >> (dparity & 0xf)) & 1
                     out_buf += struct.pack("<HLB", (((ap << 1) | (addr << 3) | (parity << 5) | 0x81) << (8 - self.WRITE_ALIGN_SHIFT)), \
                                            op.data,
-                                           dparity) + "\x00"
+                                           dparity) + b"\x00"
 
                 elif isinstance(op, swd.Wakeup):
-                    oe_buf  += "\xff" * 7
-                    out_buf += "\xff" * 7
+                    oe_buf  += b"\xff" * 7
+                    out_buf += b"\xff" * 7
 
                 elif isinstance(op, swd.JtagToSwd):
-                    oe_buf  += "\xff" * 16
-                    out_buf += "\xff" * 7 + "\x9e\xe7" + "\xff" * 7
+                    oe_buf  += b"\xff" * 16
+                    out_buf += b"\xff" * 7 + b"\x9e\xe7" + b"\xff" * 7
 
                 else:
                     raise NotSupportedError("Unknown SWD operation %s" % type(op))
@@ -173,10 +173,10 @@ class SwdInterface(swd.Interface, Interface):
                 ack = 1
                 if isinstance(op, swd.Read):
                     op.data, = struct.unpack("<L", in_buf[op.__offset + 2 : op.__offset + 6])
-                    ack = (ord(in_buf[op.__offset + 1]) >> (8 - self.READ_ALIGN_SHIFT)) & 0x7
+                    ack = (in_buf[op.__offset + 1] >> (8 - self.READ_ALIGN_SHIFT)) & 0x7
                 elif isinstance(op, swd.Write):
-                    ack = (ord(in_buf[op.__offset + 1]) >> (8 - self.WRITE_ALIGN_SHIFT)) & 0x7
+                    ack = (in_buf[op.__offset + 1] >> (8 - self.WRITE_ALIGN_SHIFT)) & 0x7
                 if ack != 1:
-                    print "While running", pending[:idx+1], ("..." if idx < len(pending)-1 else "")
-                    print "Got ACK/Wait/Error =", ack
+                    print("While running", pending[:idx+1], ("..." if idx < len(pending)-1 else ""))
+                    print("Got ACK/Wait/Error =", ack)
                     raise model.ProtocolError()

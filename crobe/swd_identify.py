@@ -7,10 +7,10 @@ import hexdump
 
 def main():
     swd = Enumerator().get(index = 0).open("swd")
-    print "Adapter:", swd.adapter.firmware_info
-    print "Serial:", swd.adapter.serial_number
+    print("Adapter:", swd.adapter.firmware_info)
+    print("Serial:", swd.adapter.serial_number)
     swd.speed = 1000e3
-    print "Speed:", swd.speed
+    print("Speed:", swd.speed)
 
     swd.adapter.reset = True
     time.sleep(.005)
@@ -23,7 +23,7 @@ def main():
     component_dump(root)
 
 def component_dump(comp, prefix = ""):
-    print prefix, comp
+    print(prefix, comp)
     for c in comp.children:
         component_dump(c, prefix + "  ")
 

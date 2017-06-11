@@ -1,5 +1,4 @@
 from . import model
-import bitstring
 
 __all__ = ["Read", "Write", "JtagToSwd", "Wakeup"]
 

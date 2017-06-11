@@ -49,7 +49,7 @@ class Bus(object):
 
         self.run(commands)
 
-        blob = "".join(map(lambda x:struct.pack("<L", x.data), commands))
+        blob = b"".join([struct.pack("<L", x.data) for x in commands])
 
         if after:
             return blob[before:-after]

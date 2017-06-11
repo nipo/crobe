@@ -46,7 +46,7 @@ class MemAp(ap.Ap, model.Bus):
         self.csw_base = self.reg_read(self.CSW) & ~0x00000307
         self.wrap_mask = 0x3ff
 
-        from component.model import MemoryMappedComponent
+        from .component.model import MemoryMappedComponent
         self.children.append(MemoryMappedComponent(self, self.base).cast())
     
     def run(self, ops):

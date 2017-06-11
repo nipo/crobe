@@ -1,5 +1,5 @@
-import nrf
-import lpc11u
-import efm32
-import stm32
-import psoc5
+from . import nrf
+from . import lpc11u
+from . import efm32
+from . import stm32
+from . import psoc5

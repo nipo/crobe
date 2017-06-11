@@ -20,11 +20,11 @@ def _load(name, *vers):
                             return _c.CDLL(filename, _c.RTLD_GLOBAL)
                         else:
                             return _c.cdll.LoadLibrary(filename)
-                    except OSError,e:
+                    except OSError as e:
                         pass
 
     def try_load_env_path(var, name, *vers):
-        return try_load(filter(None, os.environ.get(var, "").split(":")), name, *vers)
+        return try_load([_f for _f in os.environ.get(var, "").split(":") if _f], name, *vers)
 
     libpath = "DYLD_LIBRARY_PATH" if sys.platform == "darwin" else "LD_LIBRARY_PATH"
 
@@ -157,7 +157,7 @@ class speed(_c.Structure):
         ('freq', _c.c_uint32),
         ('div', _c.c_uint16),
         ]
-    __slots__ = map(lambda x:x[0], _fields_)
+    __slots__ = [x[0] for x in _fields_]
 
 class swo_speed(_c.Structure):
     _fields_ = [
@@ -167,7 +167,7 @@ class swo_speed(_c.Structure):
         ('min_prescaler', _c.c_uint32),
         ('max_prescaler', _c.c_uint32),
         ]
-    __slots__ = map(lambda x:x[0], _fields_)
+    __slots__ = [x[0] for x in _fields_]
 
 class hardware_version(_c.Structure):
     _fields_ = [
@@ -176,7 +176,7 @@ class hardware_version(_c.Structure):
         ('minor', _c.c_uint8),
         ('revision', _c.c_uint8),
         ]
-    __slots__ = map(lambda x:x[0], _fields_)
+    __slots__ = [x[0] for x in _fields_]
 
 class hardware_status(_c.Structure):
     _fields_ = [
@@ -188,7 +188,7 @@ class hardware_status(_c.Structure):
         ('tres', _c.c_bool),
         ('trst', _c.c_bool),
         ]
-    __slots__ = map(lambda x:x[0], _fields_)
+    __slots__ = [x[0] for x in _fields_]
 
 class connection(_c.Structure):
     _fields_ = [
@@ -199,7 +199,7 @@ class connection(_c.Structure):
         ('cid', _c.c_uint8),
         ('timestamp', _c.c_uint32),
         ]
-    __slots__ = map(lambda x:x[0], _fields_)
+    __slots__ = [x[0] for x in _fields_]
 
 class context(_c.Structure):
     pass

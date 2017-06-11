@@ -1,1 +1,1 @@
-import soc
+from . import soc

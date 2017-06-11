@@ -37,7 +37,7 @@ class Handle(object):
 
         self.register_conn.handle = 0
         self.register_conn.pid = os.getpid()
-        self.register_conn.hid = "0.0.0.0"
+        self.register_conn.hid = b"0.0.0.0"
         self.register_conn.iid = 0
         self.register_conn.cid = 0
         
@@ -78,7 +78,7 @@ class Handle(object):
         length = ctypes.c_size_t()
 
         checked(libjaylink.get_firmware_version(self.handle, ctypes.byref(value), ctypes.byref(length)))
-        return ctypes.string_at(value, length.value).split("\x00")[:2]
+        return ctypes.string_at(value, length.value).split(b"\x00")[:2]
 
     @property
     def hardware_version(self):
@@ -184,14 +184,14 @@ class Handle(object):
 
         length = (count + 7) / 8
             
-        if isinstance(tms, (int, long)):
+        if isinstance(tms, int):
             tms_buf = (ctypes.c_char * length)()
             for i in range(length):
                 tms_buf[i] = chr((tms >> (i * 8)) & 0xff)
         else:
             tms_buf = (ctypes.c_char * length).from_buffer_copy(tms.ljust(length, "\x00"))
 
-        if isinstance(tdi, (int, long)):
+        if isinstance(tdi, int):
             tdi_buf = (ctypes.c_char * length)()
             for i in range(length):
                 tdi_buf[i] = chr((tdi >> (i * 8)) & 0xff)
@@ -203,7 +203,7 @@ class Handle(object):
         checked(libjaylink.jtag_io(self.handle, tms_buf, tdi_buf, tdo_buf,
                                    count, 2))
 
-        if isinstance(tdi, (int, long)):
+        if isinstance(tdi, int):
             tdo = 0
             for i in range(length):
                 tdo |= ord(tdo_buf[i]) << (8 * i)
@@ -226,33 +226,33 @@ class Handle(object):
     def swd_io(self, out, oe, count):
         assert self.__interface == "SWD"
 
-        length = (count + 7) / 8
+        length = (count + 7) // 8
 
-        if isinstance(out, (int, long)):
+        if isinstance(out, int):
             out_buf = (ctypes.c_ubyte * length)()
             for i in range(length):
                 out_buf[i] = chr((out >> (i * 8)) & 0xff)
         else:
-            out_buf = (ctypes.c_ubyte * length).from_buffer_copy(out.ljust(length, "\x00"))
+            out_buf = (ctypes.c_ubyte * length).from_buffer_copy(out.ljust(length, b"\x00"))
             
-        if isinstance(oe, (int, long)):
+        if isinstance(oe, int):
             oe_buf = (ctypes.c_ubyte * length)()
             for i in range(length):
                 oe_buf[i] = chr((oe >> (i * 8)) & 0xff)
         else:
-            oe_buf = (ctypes.c_ubyte * length).from_buffer_copy(oe.ljust(length, "\x00"))
+            oe_buf = (ctypes.c_ubyte * length).from_buffer_copy(oe.ljust(length, b"\x00"))
 
         input_buf = (ctypes.c_ubyte * length)()
 
         checked(libjaylink.swd_io(self.handle, oe_buf, out_buf, input_buf, count))
 
-        if isinstance(out, (int, long)):
+        if isinstance(out, int):
             input = 0
             for i in range(length):
                 input |= ord(input_buf[i]) << (8 * i)
             return input
         else:
-            return str(bytearray(input_buf))[:length]
+            return bytes(bytearray(input_buf))[:length]
 
     @property
     def speed(self):
@@ -367,7 +367,7 @@ class Context(object):
         formatted = ctypes.create_string_buffer(4096)
         _vsnprintf(formatted, 4096, format, ctypes.c_void_p(args))
         if level < libjaylink.LOG_LEVEL["DEBUG"]:
-            print formatted.value
+            print(formatted.value)
         return 0
 
     def __del__(self):
@@ -441,25 +441,25 @@ class Context(object):
 if __name__ == "__main__":
     ctx = Context()
 
-    print ctx.package_version
-    print ctx.library_version
+    print(ctx.package_version)
+    print(ctx.library_version)
 
 #    print ctx.log_level
 #    ctx.log_level = libjaylink.LOG_LEVEL_DEBUG
     ctx.log_level = libjaylink.LOG_LEVEL["NONE"]
 
     for d in ctx.devices():
-        print d.serial_number, d.host_interface
+        print(d.serial_number, d.host_interface)
         h = d.open()
-        print "hw:", repr(h.hardware_version)
-        print "fw:", repr(h.firmware_version)
-        print h.caps
+        print("hw:", repr(h.hardware_version))
+        print("fw:", repr(h.firmware_version))
+        print(h.caps)
 
         if "GET_HW_INFO" in h.caps:
             for name in libjaylink.HW_INFO.keys():
                 try:
                     v = h.hardware_info_get(name)
-                    print name, v
+                    print(name, v)
                 except:
                     pass
 
@@ -467,15 +467,15 @@ if __name__ == "__main__":
             for name in libjaylink.COUNTER_TARGET.keys():
                 try:
                     v = h.counter_get(name)
-                    print name, v
+                    print(name, v)
                 except:
                     pass
 
         if "READ_CONFIG" in h.caps:
-            print binascii.b2a_hex(h.config)
+            print(binascii.b2a_hex(h.config))
             
         for i in h.available_interfaces:
             h.interface = i
-            print i, h.speed_range
+            print(i, h.speed_range)
 
         h.power = False
