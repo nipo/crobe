@@ -1,18 +1,16 @@
 from .model import MemoryMappedComponent
 from .. import cpuid
+from ...part_id import PartId
 
 @MemoryMappedComponent.db.register(
-    0x4002bb000,
-    0x4003bb000,
-    0x4000bb000,
-    0x4000bb008,
-    0x4000bb00c,
-    0x4001bb000,
+    PartId(4, 0x3b, 0x000, 0), # m3
+    PartId(4, 0x3b, 0x008, 0), # m0
+    PartId(4, 0x3b, 0x00c, 0), # m4
     )
 class Scs(MemoryMappedComponent):
     def __init__(self, ap, base):
         MemoryMappedComponent.__init__(self, ap, base)
-        self.reg_write(self.DHCSR, self.DHCSR_KEY | self.DHCSR_DEBUGEN)
+        self.reg_write(self.DHCSR, self.DHCSR_KEY | self.DHCSR_DEBUGEN | self.DHCSR_HALT)
         self.reg_write(self.DEMCR, self.reg_read(self.DEMCR) | self.DEMCR_TRCENA)
 
         self.cpu_name = cpuid.decode(self.cpuid)
@@ -22,6 +20,15 @@ class Scs(MemoryMappedComponent):
 
         self.name = "System Control Space, " + self.cpu_name
 
+        for i in range(4):
+            self.logger.info("PFR%d: 0x%08x", i, self.reg_read(self.ID_PFR(i)))
+        for i in range(4):
+            self.logger.info("MMFR%d: 0x%08x", i, self.reg_read(self.ID_MMFR(i)))
+        for i in range(5):
+            self.logger.info("ISAR%d: 0x%08x", i, self.reg_read(self.ID_ISAR(i)))
+        for i in range(4):
+            self.logger.info("MVFR%d: 0x%08x", i, self.reg_read(self.MVFR(i)))
+        
     @property
     def has_fpu(self):
         # Has single or double precision implemented ?

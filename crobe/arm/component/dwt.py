@@ -1,11 +1,9 @@
 from .model import MemoryMappedComponent
+from ...part_id import PartId
 
 @MemoryMappedComponent.db.register(
-    0x4002bb002,
-    0x4000bb002,
-    0x4001bb002,
-    0x4003bb002,
-    0x4000bb00a,
+    PartId(4, 0x3b, 0x002, 0), # m3
+    PartId(4, 0x3b, 0x00a, 0), # m0
     )
 class Dwt(MemoryMappedComponent):
     CTRL = 0

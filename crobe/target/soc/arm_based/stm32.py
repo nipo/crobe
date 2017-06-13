@@ -1,6 +1,19 @@
 from ....part_id import PartId
 from ....arm import ap
+from ....adapter import jtag
 from .soc import SoC
+
+@jtag.Chain.db.register(PartId.from_idcode(0x06416041),
+                        PartId.from_idcode(0x06418041))
+def stm32_bs_irlen():
+    return 5
+
+@jtag.Tap.db.register(PartId.from_idcode(0x06416041),
+                      PartId.from_idcode(0x06418041))
+class Stm32Bs(jtag.Tap):
+    def __init__(self, port, idcode, ir_pre, ir_len, ir_post, dr_pre, dr_post):
+        jtag.Tap.__init__(self, port, idcode, ir_pre, ir_len, ir_post, dr_pre, dr_post)
+        self.name = "STM32 Boundary Scan"
 
 @SoC.db.register(PartId(0, 0x20, 0x449, 0))
 def stm32f74x(dp):

@@ -1,9 +1,12 @@
 from ... import model
 import struct
 from ...part_id import PartId
-from ...db import Db
+from ...db import Db, NoMatch
 
 __all__ = ["MemoryMappedComponent"]
+
+def version_out(id):
+    return PartId(id.jep106_bank, id.jep106_id, id.part_no, 0)
 
 class MemoryMappedComponent(model.BusComponent):
     DEVID = 0xfc0
@@ -12,7 +15,7 @@ class MemoryMappedComponent(model.BusComponent):
     CID = 0xff0
 
     class_db = Db()
-    db = Db()
+    db = Db(id_filter = version_out)
 
     def __init__(self, bus, base):
         model.BusComponent.__init__(self, "Memory Component", bus)
@@ -22,10 +25,19 @@ class MemoryMappedComponent(model.BusComponent):
         self.devid, pid0, pid1, self.cid = struct.unpack("<LLLL", blob[::4])
         self.pid = (pid0 << 32) | pid1
 
-        self.partid = PartId(jep106_bank = (self.pid >> 32) & 0xf,
-                             jep106_id = (self.pid >> 12) & 0x7f,
-                             part_no = self.pid & 0xfff,
-                             revision = (self.pid >> 20) & 0xf)
+        if self.pid & 0x80000:
+            self.partid = PartId(jep106_bank = (self.pid >> 32) & 0xf,
+                                 jep106_id = (self.pid >> 12) & 0x7f,
+                                 part_no = self.pid & 0xfff,
+                                 revision = (self.pid >> 20) & 0xf)
+        else:
+            jbank, jid = {
+                0x41: (4, 0x77),
+            }.get((self.pid >> 12) & 0xff, (0xf, (self.pid >> 12) & 0xff))
+            self.partid = PartId(jep106_bank = jbank,
+                                 jep106_id = jid,
+                                 part_no = self.pid & 0xfff,
+                                 revision = (self.pid >> 20) & 0xf)
 
         self.component_class = (self.cid >> 12) & 0xf
         self.dev_type = self.devid >> 24
@@ -60,17 +72,18 @@ class MemoryMappedComponent(model.BusComponent):
 
     def cast(self):
         try:
-            cc = self.class_db.get(self.component_class)
-        except KeyError:
-            cc = None
-        if cc:
-            return cc(self.bus, self.base)
+            return self.class_db.call(self.component_class, self.bus, self.base)
+        except NoMatch:
+            pass
 
         if self.component_class == 0x09:
-            return CoresightComponent.db.get(self.dev_type)(self.bus, self.base)
+            return CoresightComponent.db.call(self.dev_type, self.bus, self.base)
 
         if self.component_class == 0x0e:
-            return self.db.get(self.pid)(self.bus, self.base)
+            try:
+                return self.db.call(self.partid, self.bus, self.base)
+            except NoMatch:
+                pass
 
         return self
 
@@ -130,3 +143,5 @@ class CoresightComponent(MemoryMappedComponent):
 
     def __init__(self, bus, base):
         MemoryMappedComponent.__init__(self, bus, base)
+
+CoresightComponent.db.register_default(CoresightComponent)

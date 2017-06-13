@@ -11,5 +11,9 @@ def leopard_gecko(dp):
     return SoC("EFM32 Leopard Gecko", dp)
 
 @SoC.db.register(PartId(6, 0x73, 0xc9, 0))
-def leopard_gecko(dp):
+def flex_gecko(dp):
     return SoC("EFM32 Flex Gecko", dp)
+
+@SoC.db.register(PartId(6, 0x73, 0x901, 0))
+def mighty_gecko(dp):
+    return SoC("EFM32 Mighty Gecko", dp)

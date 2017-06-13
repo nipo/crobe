@@ -1,6 +1,7 @@
 from . import model
 from . import swd
 from . import jtag
+from .. import bitstring
 import struct
 
 __all__ = ['Enumerator']
@@ -23,10 +24,11 @@ class Enumerator(model.Enumerator):
 
 class Adapter(model.Adapter):
     def __init__(self, device):
-        model.Adapter.__init__(self)
         self.device = device
+        self.serial_number = self.device.serial_number
+        model.Adapter.__init__(self, "JLink %d" % self.serial_number)
         self.handle = device.open()
-
+        
     @property
     def supported_interfaces(self):
         return [x.lower() for x in self.handle.available_interfaces]
@@ -34,10 +36,6 @@ class Adapter(model.Adapter):
     @property
     def firmware_info(self):
         return self.handle.firmware_version[0]
-
-    @property
-    def serial_number(self):
-        return str(self.device.serial_number)
 
     def open(self, interface_name):
         if interface_name.upper() not in self.handle.available_interfaces:
@@ -55,128 +53,232 @@ class Adapter(model.Adapter):
 
     @reset.setter
     def reset(self, reset):
+        self.logger.info("%s %s target reset", self, ["releasing", "holding"][int(reset)])
         self.handle.resetn = not reset
 
-class Interface(model.Interface):
-    def __init__(self, adapter):
-        self.adapter = adapter
-        model.Interface.__init__(self)
-
+class JLinkInterface(object):
     @property
     def speed(self):
-        return int(self.adapter.handle.speed * 1000)
+        return int(self.port.handle.speed * 1000)
 
     @speed.setter
     def speed(self, speed):
-        self.adapter.handle.speed = speed / 1000.
+        self.port.handle.speed = speed / 1000.
 
     @property
     def reset(self):
-        return self.adapter.reset
+        return self.port.reset
 
     @reset.setter
     def reset(self, reset):
-        self.adapter.reset = reset
+        self.port.reset = reset
 
-class JtagInterface(jtag.Interface, Interface):
-    def __init__(self, adapter):
-        Interface.__init__(self, adapter)
-        jtag.Interface.__init__(self)
-        self.adapter.handle.interface = "JTAG"
-        self.__state = "Unknown"
+class JtagInterface(jtag.Interface, JLinkInterface):
+    def __init__(self, port):
+        jtag.Interface.__init__(self, port)
+        self.port.handle.interface = "JTAG"
+        self.port.handle.tresetn = True
+        self.__state = None
 
-    def run(self, operation_list):
-        raise NotImplementedError()
+    def execute(self, operation_list):
+        ops = [x for x in operation_list if not isinstance(x, jtag.Shift) or len(x.tdi)]
 
-def bin_dump(s):
-    ret = ""
-    for c in s:
-        ret += " " + bin(ord(c))[2:].rjust(8, "0")[::-1]
-    return ret
-
-class SwdInterface(swd.Interface, Interface):
-    READ_ALIGN_SHIFT = 3
-    WRITE_ALIGN_SHIFT = 5
-
-    def __init__(self, adapter):
-        Interface.__init__(self, adapter)
-        swd.Interface.__init__(self)
-        self.adapter.handle.interface = "SWD"
-
-    def run(self, operation_list):
-        ops = list(operation_list)
-
+        self.logger.debug("%s running %s", self, operation_list)
+        
         while ops:
-            oe_buf = b""
-            out_buf = b""
+            tdi_buf = bitstring.BitString()
+            tms_buf = bitstring.BitString()
             pending = []
 
-            while ops and len(out_buf) < 1024 - 8:
+            while ops and len(tms_buf) < 4032:
+                op = ops.pop(0)
+                pending.append(op)
+
+                if isinstance(op, jtag.CaptureDr):
+                    if self.__state == self.STATE_RTI:
+                        tms_buf.append(0x1, 2)
+                        tdi_buf.append(0x0, 2)
+                    elif self.__state == self.STATE_PAUSE:
+                        tms_buf.append(0x7, 4)
+                        tdi_buf.append(0x0, 4)
+                    else:
+                        raise ProtocolError("Bad state sequence")
+
+                    if ops and isinstance(ops[0], jtag.Shift):
+                        tms_buf.append(0x0, 1)
+                        tdi_buf.append(0x0, 1)
+                        self.__state = self.STATE_SHIFT
+                    else:
+                        tms_buf.append(0x1, 2)
+                        tdi_buf.append(0x0, 2)
+                        self.__state = self.STATE_PAUSE
+
+                elif isinstance(op, jtag.CaptureIr):
+                    if self.__state == self.STATE_RTI:
+                        tms_buf.append(0x3, 3)
+                        tdi_buf.append(0x0, 3)
+                    elif self.__state == self.STATE_PAUSE:
+                        tms_buf.append(0xf, 5)
+                        tdi_buf.append(0x0, 5)
+                    else:
+                        raise ProtocolError("Bad state sequence")
+
+                    if ops and isinstance(ops[0], jtag.Shift):
+                        tms_buf.append(0x0, 1)
+                        tdi_buf.append(0x0, 1)
+                        self.__state = self.STATE_SHIFT
+                    else:
+                        tms_buf.append(0x1, 2)
+                        tdi_buf.append(0x0, 2)
+                        self.__state = self.STATE_PAUSE
+
+                elif isinstance(op, jtag.Run):
+                    if self.__state == self.STATE_PAUSE:
+                        tms_buf.append(0x3, 3)
+                        tdi_buf.append(0x0, 3)
+                        self.__state = self.STATE_RTI
+                    elif self.__state == self.STATE_RESET:
+                        tms_buf.append(0, 1)
+                        tdi_buf.append(0, 1)
+                        self.__state = self.STATE_RTI
+                        
+                    if self.__state == self.STATE_RTI:
+                        tms_buf.append(0, op.cycles + 1)
+                        tdi_buf.append(0, op.cycles + 1)
+                    else:
+                        raise ProtocolError("Bad state sequence")
+
+                elif isinstance(op, jtag.GenericOperation):
+                    tms_buf += op.tms
+                    tdi_buf += bitstring.BitString(-1, len(op.tms))
+                    self.__state = self.STATE_RESET
+
+                elif isinstance(op, jtag.Shift):
+                    if self.__state == self.STATE_PAUSE:
+                        tms_buf.append(0x1, 2)
+                        tdi_buf.append(0x0, 2)
+                        self.__state = self.STATE_SHIFT
+
+                    if self.__state == self.STATE_SHIFT:
+                        op.__offset = len(tms_buf)
+                        tdi_buf += op.tdi
+
+                        if ops and isinstance(ops[0], jtag.Shift):
+                            tms_buf.append(0, len(op.tdi))
+                        elif ops and isinstance(ops[0], (jtag.CaptureIr, jtag.CaptureDr, jtag.Run)):
+                            tms_buf.append(3 << (len(op.tdi) - 1), len(op.tdi) + 1)
+                            tdi_buf.append(0x0, 1)
+                            self.__state = self.STATE_RTI
+                        else:
+                            tms_buf.append(1 << (len(op.tdi) - 1), len(op.tdi) + 1)
+                            tdi_buf.append(0x0, 1)
+                            self.__state = self.STATE_PAUSE
+
+                else:
+                    raise NotSupportedError("Unknown SWD operation %s" % type(op))
+
+                assert len(tms_buf) == len(tdi_buf)
+
+            self.logger.debug("tms: %s", tms_buf)
+            self.logger.debug("tdi: %s", tdi_buf)
+            
+            tdo_blob = self.port.handle.jtag_io(tms_buf.data, tdi_buf.data, len(tms_buf))
+            tdo_buf = bitstring.BitString(tdo_blob, len(tms_buf))
+
+            self.logger.debug("tdo: %s", tdo_buf)
+
+            for idx, op in enumerate(pending):
+                if isinstance(op, jtag.Shift) and op.read_tdo:
+                    op.tdo = tdo_buf[op.__offset : op.__offset + len(op.tdi)]
+                    
+class SwdInterface(swd.Interface, JLinkInterface):
+    def __init__(self, port):
+        swd.Interface.__init__(self, port)
+        self.port.handle.interface = "SWD"
+
+    def execute(self, operation_list):
+        ops = list(operation_list)
+
+        self.logger.debug("%s running %s", self, ops)
+        
+        while ops:
+            oe_buf = bitstring.BitString()
+            out_buf = bitstring.BitString()
+            pending = []
+
+            while ops and len(out_buf) < 4032:
                 op = ops.pop(0)
                 pending.append(op)
                 op.__offset = len(out_buf)
 
-                # byte:  00000000111111112222222233333333444444445555555566666666
-                # bit:   01234567012345670123456701234567012345670123456701234567
-                # Out:   ______SpRaax_P.------------------------------------._____
-                # In:    ______--------OWFddddddddddddddddddddddddddddddddp.._____
+                # Out: _SpRaax_P.-------------------------------------.
+                # In:  _-------.OWFddddddddddddddddddddddddddddddddp.._
                 if isinstance(op, swd.Read):
                     addr = op.addr & 0x3
                     ap = int(bool(op.ap))
-
-                    oe_buf  += struct.pack("<H", 0xffff >> self.READ_ALIGN_SHIFT) \
-                               + b"\x00\x00\x00\x00\xfc\xff"
                     parity = ap ^ (addr & 1) ^ (addr >> 1) ^ 1
-                    out_buf += struct.pack("<H", ((ap << 1) | (addr << 3) | (parity << 5) | 0x85) << (8 - self.READ_ALIGN_SHIFT)) \
-                               + b"\x00\x00\x00\x00\x00\x00"
 
-                # byte:  00000000111111112222222233333333444444445555555566666666
-                # bit:   01234567012345670123456701234567012345670123456701234567
-                # Out:   ___Spwaax_P.---.ddddddddddddddddddddddddddddddddp_______
-                # In:    ___--------OWF---------------------------------_________
+                    oe_buf.append(0x4000000001ff, 1 + 8 + 4 + 33 + 1)
+                    out_buf.append((ap << 2) | (addr << 4) | (parity << 6) | 0x10a,
+                                   1 + 8 + 4 + 33 + 1)
+
+                    if ap:
+                        oe_buf.append(-1, 16)
+                        out_buf.append(0, 16)
+                    
+                # Out: _Spwaax_P.---.ddddddddddddddddddddddddddddddddp
+                # In:  _--------OWF---------------------------------__
                 elif isinstance(op, swd.Write):
                     addr = op.addr & 0x3
                     ap = int(bool(op.ap))
-
-                    oe_buf  += struct.pack("<H", 0xffff >> self.WRITE_ALIGN_SHIFT) \
-                               + b"\xff\xff\xff\xff\xff\xff"
                     parity = ap ^ (addr & 1) ^ (addr >> 1)
                     dparity = (op.data ^ (op.data >> 16))
                     dparity ^= (dparity >> 8)
                     dparity ^= (dparity >> 4)
                     dparity = (0x6996 >> (dparity & 0xf)) & 1
-                    out_buf += struct.pack("<HLB", (((ap << 1) | (addr << 3) | (parity << 5) | 0x81) << (8 - self.WRITE_ALIGN_SHIFT)), \
-                                           op.data,
-                                           dparity) + b"\x00"
+
+                    oe_buf.append(0x7fffffffc1ff, 1 + 8 + 5 + 33)
+                    out_buf.append((ap << 2) | (addr << 4) | (parity << 6) | 0x102
+                                   | (op.data << 14) | (dparity << 46),
+                                   1 + 8 + 5 + 33)
+
+                    if ap:
+                        oe_buf.append(-1, 16)
+                        out_buf.append(0, 16)
 
                 elif isinstance(op, swd.Wakeup):
-                    oe_buf  += b"\xff" * 7
-                    out_buf += b"\xff" * 7
+                    oe_buf.append(-1, 50)
+                    out_buf.append(-1, 50)
+
+                elif isinstance(op, swd.Run):
+                    oe_buf.append(-1, op.cycles)
+                    out_buf.append(0, op.cycles)
 
                 elif isinstance(op, swd.JtagToSwd):
-                    oe_buf  += b"\xff" * 16
-                    out_buf += b"\xff" * 7 + b"\x9e\xe7" + b"\xff" * 7
+                    oe_buf.append(-1, len(op.out))
+                    out_buf += op.out
 
                 else:
                     raise NotSupportedError("Unknown SWD operation %s" % type(op))
 
                 assert len(out_buf) == len(oe_buf)
 
-            #print "out:", bin_dump(out_buf)
-            #print "oe :", bin_dump(oe_buf)
+            self.logger.debug("out: %s", out_buf)
+            self.logger.debug("oe : %s", oe_buf)
             
-            in_buf = self.adapter.handle.swd_io(out_buf, oe_buf, len(out_buf) * 8)
+            in_blob = self.port.handle.swd_io(out_buf.data, oe_buf.data, len(out_buf))
+            in_buf = bitstring.BitString(in_blob, len(out_buf))
 
-            #print "in :", bin_dump(in_buf)
+            self.logger.debug("in : %s", in_buf)
 
             for idx, op in enumerate(pending):
-                ack = 1
-                if isinstance(op, swd.Read):
-                    op.data, = struct.unpack("<L", in_buf[op.__offset + 2 : op.__offset + 6])
-                    ack = (in_buf[op.__offset + 1] >> (8 - self.READ_ALIGN_SHIFT)) & 0x7
-                elif isinstance(op, swd.Write):
-                    ack = (in_buf[op.__offset + 1] >> (8 - self.WRITE_ALIGN_SHIFT)) & 0x7
-                if ack != 1:
-                    print("While running", pending[:idx+1], ("..." if idx < len(pending)-1 else ""))
-                    print("Got ACK/Wait/Error =", ack)
-                    raise model.ProtocolError()
+                if isinstance(op, (swd.Read, swd.Write)):
+                    ack = in_buf[op.__offset + 9 : op.__offset + 12]
+                    if int(ack) != 1:
+                        self.logger.error("While running %s%s", pending[:idx+1], ("..." if idx < len(pending)-1 else ""))
+                        self.logger.error("Got ACK/Wait/Error = %s", ack)
+                        raise model.ProtocolError()
+
+                    if isinstance(op, swd.Read):
+                        op.data = int(in_buf[op.__offset + 12 : op.__offset + 44])
+        

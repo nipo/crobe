@@ -1,5 +1,4 @@
 from .model import MemoryMappedComponent
-import struct
 
 @MemoryMappedComponent.class_db.register(0x1)
 class RomTable(MemoryMappedComponent):
@@ -19,6 +18,7 @@ class RomTable(MemoryMappedComponent):
 
             address_offset = e & ~0x3ff
             c = MemoryMappedComponent(self.bus, (self.base + address_offset) & 0xffffffff).cast()
+            self.logger.info("%s/%d: %s", self, i, c)
             self.children.append(c)
 
     def __str__(self):

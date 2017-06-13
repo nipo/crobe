@@ -19,3 +19,8 @@ class PartId(collections.namedtuple("IdCode", ["jep106_bank", "jep106_id", "part
         return self.jep106_id == other.jep106_id \
             and self.jep106_bank == other.jep106_bank \
             and self.part_no == other.part_no
+
+    @property
+    def manufacturer_name(self):
+        from . import jep106
+        return jep106.name_get(self.jep106_bank, self.jep106_id)

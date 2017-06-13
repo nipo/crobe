@@ -10,29 +10,14 @@ chip_names = {
     PartId(0, 0x15, 0x9884, 0): "LPC11U24",
     PartId(0, 0x15, 0x9800, 0): "LPC11U24",
 }
-        
-@SoC.db.register(*chip_names.keys())
-def lcp(dp):
-    return SoC(chip_names[part_id], dp)
 
-# class Lpc11u(model.TargetProber):
-#     rom_ids = [PartId(4, 0x3b, 0x471, 0)]
-#     part_ids = 
-# 
-#     def probe(self, target):
-#         if not isinstance(target, Ap):
-#             raise model.NoMatch("Not an AP")
-# 
-#         import struct
-# 
-#         target.u32_write(0xe000edf0, 0xa05f0003)
-#         target.u32_write(0xe000edfc, target.u32_read(0xe000edfc) | (1 << 24))
-# 
-#         idcode, = struct.unpack("<L", target.mem_read(0x400483f4, 4))
-#         partid = PartId.from_idcode(idcode)
-# 
-#         for pid, name in self.part_ids.items():
-#             if partid.is_same_part(pid):
-#                 return SoCTarget(name, target)
-# 
-#         raise model.NoMatch("Not a LCP part number")
+@SoC.db.register(PartId(4, 0x3b, 0x471, 0))
+def lcp_ducktyping(dp):
+    from ....arm.mem_ap import MemAp
+    ap, = dp.children_find(lambda x: isinstance(x, MemAp))
+    idcode = ap.u32_read(0x400483f4)
+    # Clear out revision field
+    partid = PartId.from_idcode(idcode & 0x0fffffff)
+    if partid in chip_names:
+        return SoC(chip_names[partid], dp)
+    raise KeyError(partid)

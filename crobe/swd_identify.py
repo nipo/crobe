@@ -3,24 +3,21 @@ from .arm.dap import Dap
 from .model import Bus
 import time
 import binascii
-import hexdump
+import logging
 
 def main():
+    FORMAT = '%(asctime)-15s %(message)s'
+    logging.basicConfig(format=FORMAT, level = 40)
+
     swd = Enumerator().get(index = 0).open("swd")
-    print("Adapter:", swd.adapter.firmware_info)
-    print("Serial:", swd.adapter.serial_number)
+    print("Adapter:", swd.port.firmware_info)
+    print("Serial:", swd.port.serial_number)
     swd.speed = 1000e3
     print("Speed:", swd.speed)
 
-    swd.adapter.reset = True
-    time.sleep(.005)
-    swd.adapter.reset = False
-    time.sleep(.005)
+    swd.discover()
     
-    dap = Dap(swd)
-    root = dap.component()
-
-    component_dump(root)
+    component_dump(swd)
 
 def component_dump(comp, prefix = ""):
     print(prefix, comp)

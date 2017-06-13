@@ -5,6 +5,7 @@ import ctypes
 import struct
 import sys
 import math
+import logging
 
 class JaylinkError(Exception):
     def __init__(self, message, code):
@@ -24,8 +25,9 @@ class Handle(object):
         self.caps = self._get_caps()
         self._close = libjaylink.close
         self.__resetn = None
-        self.__trst = None
+        self.__tresetn = None
         self.__target_power = None
+        self.__speed = 1000
 
         if "REGISTER" in self.caps:
             self._register()
@@ -78,7 +80,7 @@ class Handle(object):
         length = ctypes.c_size_t()
 
         checked(libjaylink.get_firmware_version(self.handle, ctypes.byref(value), ctypes.byref(length)))
-        return ctypes.string_at(value, length.value).split(b"\x00")[:2]
+        return [str(x, 'utf-8') for x in ctypes.string_at(value, length.value).split(b"\x00")[:2]]
 
     @property
     def hardware_version(self):
@@ -123,16 +125,16 @@ class Handle(object):
         if not "READ_CONFIG" in self.caps:
             raise NotImplementedError("Incapable hardware")
 
-        value = (ctypes.c_char * libjaylink.DEV_CONFIG_SIZE)()
+        value = (ctypes.c_ubyte * libjaylink.DEV_CONFIG_SIZE)()
         checked(libjaylink.read_raw_config(self.handle, ctypes.cast(value, ctypes.POINTER(ctypes.c_ubyte))))
-        return str(value.raw)
+        return bytes(value)
 
     @config.setter
     def config(self, value):
         if not "WRITE_CONFIG" in self.caps:
             raise NotImplementedError("Incapable hardware")
 
-        value = (ctypes.c_uint8 * libjaylink.DEV_CONFIG_SIZE).from_buffer_copy(value)
+        value = (ctypes.c_ubyte * libjaylink.DEV_CONFIG_SIZE).from_buffer_copy(value)
         checked(libjaylink.write_raw_config(self.handle, value))
 
     @property
@@ -182,42 +184,22 @@ class Handle(object):
     def jtag_io(self, tms, tdi, count):
         assert self.__interface == "JTAG"
 
-        length = (count + 7) / 8
-            
-        if isinstance(tms, int):
-            tms_buf = (ctypes.c_char * length)()
-            for i in range(length):
-                tms_buf[i] = chr((tms >> (i * 8)) & 0xff)
-        else:
-            tms_buf = (ctypes.c_char * length).from_buffer_copy(tms.ljust(length, "\x00"))
+        length = (count + 7) // 8
+        tms_buf = (ctypes.c_ubyte * length).from_buffer_copy(tms)
+        tdi_buf = (ctypes.c_ubyte * length).from_buffer_copy(tdi)
+        tdo_buf = (ctypes.c_ubyte * length)()
 
-        if isinstance(tdi, int):
-            tdi_buf = (ctypes.c_char * length)()
-            for i in range(length):
-                tdi_buf[i] = chr((tdi >> (i * 8)) & 0xff)
-        else:
-            tdi_buf = (ctypes.c_char * length).from_buffer_copy(tdi.ljust(length, "\x00"))
+        checked(libjaylink.jtag_io(self.handle, tms_buf, tdi_buf, tdo_buf, count, 1))
 
-        tdo_buf = (ctypes.c_char * length)()
-
-        checked(libjaylink.jtag_io(self.handle, tms_buf, tdi_buf, tdo_buf,
-                                   count, 2))
-
-        if isinstance(tdi, int):
-            tdo = 0
-            for i in range(length):
-                tdo |= ord(tdo_buf[i]) << (8 * i)
-            return tdo
-        else:
-            return str(bytearray(tdo_buf))[:length]
+        return bytes(tdo_buf)
 
     @property
-    def trst(self):
-        return self.__trst
+    def tresetn(self):
+        return self.__tresetn
 
-    @trst.setter
-    def trst(self, value):
-        self.__trst = bool(value)
+    @tresetn.setter
+    def tresetn(self, value):
+        self.__tresetn = bool(value)
         if value:
             checked(libjaylink.jtag_set_trst(self.handle))
         else:
@@ -227,32 +209,13 @@ class Handle(object):
         assert self.__interface == "SWD"
 
         length = (count + 7) // 8
-
-        if isinstance(out, int):
-            out_buf = (ctypes.c_ubyte * length)()
-            for i in range(length):
-                out_buf[i] = chr((out >> (i * 8)) & 0xff)
-        else:
-            out_buf = (ctypes.c_ubyte * length).from_buffer_copy(out.ljust(length, b"\x00"))
-            
-        if isinstance(oe, int):
-            oe_buf = (ctypes.c_ubyte * length)()
-            for i in range(length):
-                oe_buf[i] = chr((oe >> (i * 8)) & 0xff)
-        else:
-            oe_buf = (ctypes.c_ubyte * length).from_buffer_copy(oe.ljust(length, b"\x00"))
-
+        out_buf = (ctypes.c_ubyte * length).from_buffer_copy(out)
+        oe_buf = (ctypes.c_ubyte * length).from_buffer_copy(oe)
         input_buf = (ctypes.c_ubyte * length)()
 
         checked(libjaylink.swd_io(self.handle, oe_buf, out_buf, input_buf, count))
 
-        if isinstance(out, int):
-            input = 0
-            for i in range(length):
-                input |= ord(input_buf[i]) << (8 * i)
-            return input
-        else:
-            return bytes(bytearray(input_buf))[:length]
+        return bytes(bytearray(input_buf))
 
     @property
     def speed(self):
@@ -262,7 +225,10 @@ class Handle(object):
     def speed(self, khz):
         speed = libjaylink.speed()
         checked(libjaylink.get_speeds(self.handle, ctypes.byref(speed)))
-        div = max((int(speed.freq / (khz * 1000.) + .5), speed.div))
+        if khz:
+            div = max((int(speed.freq / (khz * 1000.) + .5), speed.div))
+        else:
+            div = speed.div
 
         self.__speed = int(speed.freq / div / 1000. + .5)
         
@@ -284,7 +250,8 @@ class Handle(object):
     @interface.setter
     def interface(self, interface):
         checked(libjaylink.select_interface(self.handle, libjaylink.TIF[interface], None))
-        self.interface
+        assert self.interface == interface
+        self.speed = self.__speed
 
     @property
     def resetn(self):
@@ -359,15 +326,22 @@ class Context(object):
         checked(libjaylink.log_set_callback(self.context, self._log,
                                             ctypes.py_object(self)))
 
+        self.logger = logging.getLogger("jaylink")
+        self.log_level_match = {}
+        for name, level in [("DEBUG", logging.DEBUG),
+                            ("INFO", logging.INFO),
+                            ("WARNING", logging.WARNING),
+                            ("ERROR", logging.ERROR)]:
+            self.log_level_match[libjaylink.LOG_LEVEL[name]] = level
+        
     @staticmethod
     @libjaylink.log_callback
     def _log(ctx, level, format, args, self):
-        if not _vsnprintf or not ctypes:
+        if not _vsnprintf or not ctypes or not level:
             return 0
         formatted = ctypes.create_string_buffer(4096)
         _vsnprintf(formatted, 4096, format, ctypes.c_void_p(args))
-        if level < libjaylink.LOG_LEVEL["DEBUG"]:
-            print(formatted.value)
+        self.logger.log(self.log_level_match[level], str(formatted.value, "utf-8"))
         return 0
 
     def __del__(self):
@@ -444,8 +418,6 @@ if __name__ == "__main__":
     print(ctx.package_version)
     print(ctx.library_version)
 
-#    print ctx.log_level
-#    ctx.log_level = libjaylink.LOG_LEVEL_DEBUG
     ctx.log_level = libjaylink.LOG_LEVEL["NONE"]
 
     for d in ctx.devices():

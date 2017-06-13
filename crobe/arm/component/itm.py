@@ -1,10 +1,9 @@
 from .model import MemoryMappedComponent
+from ...part_id import PartId
 
 @MemoryMappedComponent.db.register(
-    0x4000bb001,
-    0x4002bb001,
-    0x4001bb001,
-    0x4003bb001,
+    PartId(4, 0x3b, 0x001, 0),
+    PartId(4, 0x3b, 0x913, 0),
     )
 class Itm(MemoryMappedComponent):
     STIM = lambda x: 4 * x

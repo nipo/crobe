@@ -1,4 +1,5 @@
 import struct
+import logging
 
 class Component(object):
     def __init__(self, name):
@@ -6,8 +7,17 @@ class Component(object):
         self.children = []
 
     def __str__(self):
-        return self.name
+        return self.__name
 
+    @property
+    def name(self):
+        return self.__name
+
+    @name.setter
+    def name(self, name):
+        self.__name = name
+        self.logger = logging.getLogger(name)
+    
     def children_find(self, predicate):
         ret = list(filter(predicate, self.children))
         for c in self.children:
@@ -35,8 +45,8 @@ class Bus(object):
     def __str__(self):
         return self.name
 
-    def run(self, commands):
-        raise NotImplemented()
+    def execute(self, commands):
+        raise NotImplementedError()
 
     def mem_read(self, address, size):
         before = address & 3
@@ -47,7 +57,7 @@ class Bus(object):
         for a in range(address - before, end + after, 4):
             commands.append(self.cmd_u32_read(a))
 
-        self.run(commands)
+        self.execute(commands)
 
         blob = b"".join([struct.pack("<L", x.data) for x in commands])
 
@@ -56,30 +66,30 @@ class Bus(object):
         return blob[before:]
 
     def u32_write(self, address, data):
-        self.run([self.cmd_u32_write(address, data)])
+        self.execute([self.cmd_u32_write(address, data)])
 
     def u32_read(self, address):
         ops = [self.cmd_u32_read(address)]
-        self.run(ops)
+        self.execute(ops)
         return ops[0].data
 
     def cmd_u8_read(self, address):
-        raise NotImplemented()
+        raise NotImplementedError()
 
     def cmd_u16_read(self, address):
-        raise NotImplemented()
+        raise NotImplementedError()
 
     def cmd_u32_read(self, address):
-        raise NotImplemented()
+        raise NotImplementedError()
 
     def cmd_u8_write(self, address, data):
-        raise NotImplemented()
+        raise NotImplementedError()
 
     def cmd_u16_write(self, address, data):
-        raise NotImplemented()
+        raise NotImplementedError()
 
     def cmd_u32_write(self, address, data):
-        raise NotImplemented()
+        raise NotImplementedError()
 
 class Register(object):
     def __init__(self, number, name, width, datatype, group):
@@ -99,32 +109,32 @@ class Cpu(object):
         self.registers = [] # List of Register objects
 
     def step(self):
-        raise NotImplemented()
+        raise NotImplementedError()
 
     def run(self):
-        raise NotImplemented()
+        raise NotImplementedError()
 
     def stop(self):
-        raise NotImplemented()
+        raise NotImplementedError()
 
     def reset(self, stop = True):
-        raise NotImplemented()
+        raise NotImplementedError()
 
     def reg_write(self, reg, data):
-        raise NotImplemented()
+        raise NotImplementedError()
 
     def reg_read(self, reg):
-        raise NotImplemented()
+        raise NotImplementedError()
 
     def reg_read_all(self):
-        raise NotImplemented()
+        raise NotImplementedError()
 
     def breakpoint_list(self):
         return []
 
     def breakpoint_add(self, breakpoint):
-        raise NotImplemented()
+        raise NotImplementedError()
 
     def breakpoint_remove(self, breakpoint):
-        raise NotImplemented()
+        raise NotImplementedError()
 

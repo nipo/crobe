@@ -1,44 +1,67 @@
 from ..adapter import swd, jtag
-from ..model import Component
+from ..model import Component, PortComponent
+from ..part_id import PartId
 import time
 
 __all__ = ["Dap", "Idcode", "Abort", "CtrlStat", "RdBuff", "ApRead", "ApWrite"]
 
-class Dap(Component):
-    SWDAP = object()
-    JTAGDAP = object()
+@jtag.Chain.db.register(PartId.from_idcode(0x0ba00477))
+def jtagdp_irlen():
+    return 4
 
-    IDCODE = 0 # R
-    ABORT = 0 # W
-    CTRLSTAT = 0x1 # RW (DPBank = 0)
-    DCLR     = 0x5 # RW (DPBank = 1)
-    TARGETID = 0x9 # RW (DPBank = 2)
-    DLPIDR   = 0xd # RW (DPBank = 3)
-    RESEND = 2 # R
-    SELECT = 2 # W
-    RDBUFF = 3 # R
+@jtag.Tap.db.register(PartId.from_idcode(0x0ba00477))
+class JtagDp(jtag.Tap):
+    def __init__(self, port, idcode, ir_pre, ir_len, ir_post, dr_pre, dr_post):
+        jtag.Tap.__init__(self, port, idcode, ir_pre, ir_len, ir_post, dr_pre, dr_post)
+        self.name = "JTAG-DP Tap"
+
+        self.children.append(Dap(self))
+
+class Dap(PortComponent):
+    SWD_IDCODE   = 0 # R
+    SWD_ABORT    = 0 # W
+    DP_CTRLSTAT = 0x1 # RW (DPBank = 0)
+    DP_DCLR     = 0x5 # RW (DPBank = 1)
+    DP_TARGETID = 0x9 # RW (DPBank = 2)
+    DP_DLPIDR   = 0xd # RW (DPBank = 3)
+    SWD_RESEND   = 2 # R
+    DP_SELECT   = 2 # W
+    DP_RDBUFF   = 3 # R
+
+    JTAG_IDCODE  = 0xe
+    JTAG_DPACC   = 0xa
+    JTAG_APACC   = 0xb
+    JTAG_ABORT   = 0x8
     
-    def __init__(self, interface):
-        self.interface = interface
-        if isinstance(self.interface, swd.Interface):
-            self.mode = self.SWDAP
-            name = "SW-DP"
-        elif isinstance(self.interface, jtag.Interface):
-            self.mode = self.JTAGDAP
-            name = "JTAG-DP"
-        else:
-            raise ValueError("Unknown interface type")
+    def __init__(self, port):
+        self.port = port
 
-        Component.__init__(self, name)
+        PortComponent.__init__(self, "DP", port)
 
         self.last_ap = None
         self.last_ap_bank = None
         self.last_dp_bank = None
 
-    def run(self, operations):
+        from ..target.soc.arm_based.soc import SoC
+        from .component.rom_table import RomTable
+        from ..part_id import PartId
+
+        self.debug_enable(True)
+        self.discover()
+
+        rts = self.children_find(lambda x: isinstance(x, RomTable))
+
+        if rts:
+            part_id = rts[0].partid
+        else:
+            part_id = PartId(0,0,0,0)
+            
+        self.children.insert(0, SoC.db.call(part_id, self))
+
+    def execute(self, operations):
         ops = []
         for o in operations:
-            if isinstance(o, (swd.Operation, jtag.Operation)):
+            if isinstance(o, (swd.Operation, jtag.TapOperation)):
                 ops.append(o)
             elif isinstance(o, Operation):
                 o.__ops = list(o.operations(self))
@@ -57,7 +80,7 @@ class Dap(Component):
                     o.__ops[i] = ops[before + i + 1]
             before += len(o.__ops)
 
-        self.interface.run(ops)
+        self.port.execute(ops)
 
         for o in operations:
             if isinstance(o, (swd.Operation, jtag.Operation)):
@@ -68,30 +91,33 @@ class Dap(Component):
     @property
     def idcode(self):
         ops = [Idcode()]
-        self.run(ops)
+        self.execute(ops)
         return ops[0].data
 
     @property
     def ctrlstat(self):
         ops = [CtrlStat()]
-        self.run(ops)
+        self.execute(ops)
         return ops[0].data
 
     @ctrlstat.setter
     def ctrlstat(self, data):
         ops = [CtrlStat(data)]
-        self.run(ops)
+        self.execute(ops)
 
     def abort(self, what = 0x1f):
         ops = [Abort(what)]
-        self.run(ops)
+        self.execute(ops)
 
     def debug_enable(self, enabled):
         if not enabled:
             self.ctrlstat = 0
         else:
-            if self.mode == self.SWDAP:
-                self.interface.run([swd.Wakeup(), swd.JtagToSwd(), swd.Read(False, Dap.IDCODE)])
+            if isinstance(self.port, swd.Interface):
+                self.port.execute([swd.Wakeup(), swd.JtagToSwd(), swd.Wakeup(),
+                                        swd.Run(10), swd.Read(False, Dap.SWD_IDCODE)])
+            elif isinstance(self.port, jtag.Tap):
+                pass
 
             count = 0
             while self.ctrlstat & 0xa0000000 != 0xa0000000:
@@ -111,23 +137,8 @@ class Dap(Component):
 
             if ap.idr == 0:
                 continue
-
+            
             self.children.append(ap.cast())
-
-    def component(self):
-        from ..target.soc.arm_based.soc import SoC
-        from .component.rom_table import RomTable
-
-        self.debug_enable(True)
-        self.discover()
-
-        rts = self.children_find(lambda x: isinstance(x, RomTable))
-        part_id = rts[0].partid
-
-        if rts:
-            return SoC.db.get(part_id)(self)
-
-        return SoC.db.get(None)(self)
 
 class Operation:
     def __init__(self):
@@ -140,20 +151,27 @@ class Operation:
         pass
 
 class Idcode(Operation):
-    def operations(self, dap):
-        if dap.mode == dap.SWDAP:
-            return [swd.Read(False, Dap.IDCODE)]
+    def operations(self, dp):
+        if isinstance(dp.port, swd.Interface):
+            return [swd.Read(False, Dap.SWD_IDCODE)]
+        elif isinstance(dp.port, jtag.Tap):
+            return [dp.port.cmd_dr_shift(Dap.JTAG_IDCODE, 0, 32)]
 
     def update(self, ops):
-        self.data = ops[0].data
+        if isinstance(ops[-1], jtag.TapOperation):
+            self.data = ops[-1].tdo
+        else:
+            self.data = ops[-1].data
 
 class Abort(Operation):
     def __init__(self, what = 0x1f):
         self.what = what
 
-    def operations(self, dap):
-        if dap.mode == dap.SWDAP:
-            return [swd.Write(False, Dap.ABORT, self.what)]
+    def operations(self, dp):
+        if isinstance(dp.port, swd.Interface):
+            return [swd.Write(False, Dap.SWD_ABORT, self.what)]
+        elif isinstance(dp.port, jtag.Tap):
+            return [dp.port.cmd_dr_shift(Dap.JTAG_ABORT, 1, 35)]
 
     def __repr__(self):
         return "dap.Abort(0x%x)" % (self.what)
@@ -162,40 +180,44 @@ class DpBankedOperation(Operation):
     def __init__(self, address, data = None):
         self.address = address
         self.data = data
-        if data is None:
-            self.mode = "read"
-        else:
-            self.mode = "write"
+        self.is_read = data is None
 
-    def operations(self, dap):
-        if dap.mode == dap.SWDAP:
-            ret = Select(dp_bank = self.address >> 2).operations(dap)
-        else:
-            assert (self.address >> 2) == 0
-            ret = []
-
-        if dap.mode == dap.SWDAP:
-            if self.mode == "read":
+    def operations(self, dp):
+        ret = Select(dp_bank = self.address >> 2).operations(dp)
+        
+        if isinstance(dp.port, swd.Interface):
+            if self.is_read:
                 return ret + [swd.Read(False, self.address & 3)]
             else:
                 return ret + [swd.Write(False, self.address & 3, self.data)]
+        elif isinstance(dp.port, jtag.Tap):
+            if self.is_read:
+                return ret + [dp.port.cmd_dr_shift(Dap.JTAG_DPACC, ((self.address & 3) << 1) | 1, 35),
+                              dp.port.cmd_run(40),
+                              dp.port.cmd_dr_shift(Dap.JTAG_DPACC, 1, 35)]
+            else:
+                return ret + [dp.port.cmd_dr_shift(Dap.JTAG_DPACC, (self.data << 3) | ((self.address & 3) << 1), 35)]
 
     def update(self, ops):
-        if self.mode == "read":
-            self.data = ops[-1].data
+        if self.is_read:
+            if isinstance(ops[-1], jtag.TapOperation):
+                self.data = ops[-1].tdo >> 3
+                assert ops[-1].tdo & 7 == 2, ops[-1].tdo & 7
+            else:
+                self.data = ops[-1].data
 
     def __repr__(self):
-        if self.mode == "read":
+        if self.is_read:
             return "dap.CtrlStat()"
         else:
             return "dap.CtrlStat(0x%x)" % self.data
 
 class CtrlStat(DpBankedOperation):
     def __init__(self, data = None):
-        DpBankedOperation.__init__(self, Dap.CTRLSTAT, data)
+        DpBankedOperation.__init__(self, Dap.DP_CTRLSTAT, data)
         
     def __repr__(self):
-        if self.mode == "read":
+        if self.is_read:
             return "dap.CtrlStat()"
         else:
             return "dap.CtrlStat(0x%x)" % self.data
@@ -206,31 +228,40 @@ class Select(Operation):
         self.ap_bank = ap_bank
         self.dp_bank = dp_bank
 
-    def operations(self, dap):
-        if dap.mode == dap.SWDAP:
-            sel = (dap.last_ap, dap.last_ap_bank, dap.last_dp_bank)
-            if self.ap is not None or dap.last_ap is None:
-                dap.last_ap = self.ap or 0
-            if self.ap_bank is not None or dap.last_ap_bank is None:
-                dap.last_ap_bank = self.ap_bank or 0
-            if self.dp_bank is not None or dap.last_dp_bank is None:
-                dap.last_dp_bank = self.dp_bank or 0
-            nsel = (dap.last_ap, dap.last_ap_bank, dap.last_dp_bank)
-            if sel == nsel:
-                return []
-            data = (nsel[0] << 24) | (nsel[1] << 4) | (nsel[2])
-            return [swd.Write(False, Dap.SELECT, data)]
+    def operations(self, dp):
+        sel = (dp.last_ap, dp.last_ap_bank, dp.last_dp_bank)
+        if self.ap is not None or dp.last_ap is None:
+            dp.last_ap = self.ap or 0
+        if self.ap_bank is not None or dp.last_ap_bank is None:
+            dp.last_ap_bank = self.ap_bank or 0
+        if self.dp_bank is not None or dp.last_dp_bank is None:
+            dp.last_dp_bank = self.dp_bank or 0
+        nsel = (dp.last_ap, dp.last_ap_bank, dp.last_dp_bank)
+        if sel == nsel:
+            return []
+        data = (nsel[0] << 24) | (nsel[1] << 4) | (nsel[2])
+
+        if isinstance(dp.port, swd.Interface):
+            return [swd.Write(False, Dap.DP_SELECT, data)]
+        elif isinstance(dp.port, jtag.Tap):
+            return [dp.port.cmd_dr_shift(Dap.JTAG_DPACC, (data << 3) | (Dap.DP_SELECT << 1), 35)]
 
     def __repr__(self):
         return "dap.Select(%d, %d, %d)" % (self.ap, self.ap_bank, self.dp_bank)
 
 class RdBuff(Operation):
-    def operations(self, dap):
-        if dap.mode == dap.SWDAP:
-            return [swd.Read(False, Dap.RDBUFF)]
+    def operations(self, dp):
+        if isinstance(dp.port, swd.Interface):
+            return [swd.Read(False, Dap.DP_RDBUFF)]
+        elif isinstance(dp.port, jtag.Tap):
+            return [dp.port.cmd_dr_shift(Dap.JTAG_DPACC, (Dap.DP_RDBUFF << 1) | 1, 35)]
 
     def update(self, ops):
-        self.data = ops[0].data
+        if isinstance(ops[-1], jtag.TapOperation):
+            self.data = ops[-1].tdo >> 3
+            assert ops[-1].tdo & 7 == 2, ops[-1].tdo & 7
+        else:
+            self.data = ops[-1].data
 
 class ApAccess(Operation):
     def __init__(self, addr, ap = 0, be = 0xf):
@@ -238,23 +269,30 @@ class ApAccess(Operation):
         self.addr = addr
         self.be = be
 
-    def operations(self, dap):
-        return Select(ap = self.ap, ap_bank = self.addr >> 4).operations(dap)
+    def operations(self, dp):
+        return Select(ap = self.ap, ap_bank = self.addr >> 4).operations(dp)
 
 class ApRead(ApAccess):
     def __init__(self, addr, ap = 0, be = 0xf):
         ApAccess.__init__(self, addr, ap, be)
 
-    def operations(self, dap):
-        ret = ApAccess.operations(self, dap)
+    def operations(self, dp):
+        ret = ApAccess.operations(self, dp)
         
-        if dap.mode == dap.SWDAP:
-            ret += [swd.Read(True, (self.addr >> 2) & 3)]
+        if isinstance(dp.port, swd.Interface):
+            ret.append(swd.Read(True, (self.addr >> 2) & 3))
+        elif isinstance(dp.port, jtag.Tap):
+            ret.append(dp.port.cmd_dr_shift(Dap.JTAG_APACC, ((self.addr >> 1) & 0x6) | 1, 35))
+            ret.append(dp.port.cmd_run(40))
 
-        return ret + RdBuff().operations(dap)
+        return ret + RdBuff().operations(dp)
 
     def update(self, ops):
-        self.data = ops[-1].data
+        if isinstance(ops[-1], jtag.TapOperation):
+            self.data = ops[-1].tdo >> 3
+            assert ops[-1].tdo & 7 == 2, ops[-1].tdo & 7
+        else:
+            self.data = ops[-1].data
 
     def __repr__(self):
         return "dap.ApRead(0x%x, %d, 0x%x)" % (self.addr, self.ap, self.be)
@@ -264,11 +302,14 @@ class ApWrite(ApAccess):
         ApAccess.__init__(self, addr, ap, be)
         self.data = data
 
-    def operations(self, dap):
-        ret = ApAccess.operations(self, dap)
+    def operations(self, dp):
+        ret = ApAccess.operations(self, dp)
         
-        if dap.mode == dap.SWDAP:
+        if isinstance(dp.port, swd.Interface):
             return ret + [swd.Write(True, (self.addr >> 2) & 3, self.data)]
+        elif isinstance(dp.port, jtag.Tap):
+            return ret + [dp.port.cmd_dr_shift(Dap.JTAG_APACC, (self.data << 3) | ((self.addr >> 1) & 0x6), 35),
+                          dp.port.cmd_run(40)]
 
     def __repr__(self):
         return "dap.ApWrite(0x%x, 0x%x, %d, 0x%x)" % (self.addr, self.data, self.ap, self.be)

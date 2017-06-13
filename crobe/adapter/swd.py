@@ -1,16 +1,46 @@
 from . import model
+from .. import bitstring
+import time
 
 __all__ = ["Read", "Write", "JtagToSwd", "Wakeup"]
 
 class Interface(model.Interface):
-    def __init__(self):
-        pass
+    def __init__(self, port):
+        model.Interface.__init__(self, "SWD Intf", port)
 
-    def run(self, operation_list):
+    def discover(self):
+        from ..arm import dap
+
+        self.port.reset = True
+        time.sleep(.005)
+        self.port.reset = False
+        time.sleep(.050)
+        
+        self.children.append(dap.Dap(self))
+
+    def execute(self, operation_list):
         raise NotImplementedError()
 
+    def read(self, ap, addr):
+        op = Read(ap, addr)
+        self.execute([op])
+        return op.data
+
+    def write(self, ap, addr, data):
+        self.execute([Write(ap, addr, data)])
+
+    def run(self, cycles):
+        self.execute([Run(cycles)])
+
+    def jtag_to_swd(self):
+        self.execute([JtagToSwd()])
+
+    def wakeup(self):
+        self.execute([Wakeup()])
+    
 class Operation(object):
-    pass
+    def __repr__(self):
+        return str(self)
 
 class Read(Operation):
     def __init__(self, ap, addr):
@@ -42,6 +72,15 @@ class JtagToSwd(Operation):
     def __str__(self):
         return "<JTAG to SWD>"
 
+    out = bitstring.BitString(0b1110011110011110, 16)
+
 class Wakeup(Operation):
     def __str__(self):
         return "<SWD Wakeup>"
+
+class Run(Operation):
+    def __init__(self, cycles):
+        self.cycles = cycles
+
+    def __str__(self):
+        return "<Run %d>" % self.cycles

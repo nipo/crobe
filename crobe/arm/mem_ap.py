@@ -25,7 +25,10 @@ class Csw(bitfield.Register):
         bitfield.Log2ValueField("Size", (0, 2), 3),
         ]
 
-@ap.Ap.db.register(0x04770001)
+@ap.Ap.db.register(0x04770001,# AHB-AP
+                   0x04770002,# APB-AP
+                   0x04770004,# AXI-AP
+)
 class MemAp(ap.Ap, model.Bus):
     CSW = 0x00
     TAR = 0x04
@@ -49,13 +52,14 @@ class MemAp(ap.Ap, model.Bus):
         from .component.model import MemoryMappedComponent
         self.children.append(MemoryMappedComponent(self, self.base).cast())
     
-    def run(self, ops):
+    def execute(self, ops):
         be_to_size_l2 = {0xf: 2, 0x3: 1, 0xc: 1, 0x1: 0, 0x2: 0, 0x4: 0, 0x8: 0}
         dops = []
 
         for o in ops:
             o.__ops = list(o.operations())
             dops += o.__ops
+            self.logger.debug("%s executing %s: %s", self, o, o.__ops)
 
         access_size_l2 = None
         address = None
@@ -81,7 +85,7 @@ class MemAp(ap.Ap, model.Bus):
                 if address & self.wrap_mask == 0:
                     address -= self.wrap_mask + 1
 
-        self.port.run(dops)
+        self.port.execute(dops)
 
         for o in ops:
             o.update(o.__ops)
@@ -159,6 +163,9 @@ class ReadAccess(MemoryAccess):
     def update(self, ops):
         self.data = ops[-1].data >> (8 * (self.address & 0x3))
 
+    def __str__(self):
+        return "<MemAP %s 0x%08x>" % (self.__class__.__name__, self.address)
+        
 class WriteAccess(MemoryAccess):
     def __init__(self, address, data, auto_increment = True):
         self.address = address
@@ -176,6 +183,9 @@ class WriteAccess(MemoryAccess):
                     dap.ApWrite(MemAp.BD0,
                                 data = self.data << (8 * (self.address & 0x3)),
                                 be = ((1 << (1 << self.size_l2)) - 1) << (self.address & 0x3))]
+
+    def __str__(self):
+        return "<MemAP %s 0x%08x 0x%08x>" % (self.__class__.__name__, self.address, self.data)
 
 class Read8(ReadAccess):
     size_l2 = 0

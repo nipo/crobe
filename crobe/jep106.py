@@ -1158,4 +1158,4 @@ name_by_id = {
 }
 
 def name_get(bank, id):
-    return name_by_id.get((bank << 8) | id, "Unknown JEP106 ID bank %d id %02x" % (bank, id))
+    return name_by_id.get((bank << 8) | id, "Unknown (%d/%02x)" % (bank, id))
