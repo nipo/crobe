@@ -3,9 +3,9 @@ from .. import cpuid
 from ...part_id import PartId
 
 @MemoryMappedComponent.db.register(
-    PartId(4, 0x3b, 0x000, 0), # m3
-    PartId(4, 0x3b, 0x008, 0), # m0
-    PartId(4, 0x3b, 0x00c, 0), # m4
+    PartId(4, 0x3b, 0x000), # m3
+    PartId(4, 0x3b, 0x008), # m0
+    PartId(4, 0x3b, 0x00c), # m4
     )
 class Scs(MemoryMappedComponent):
     def __init__(self, ap, base):

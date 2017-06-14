@@ -5,9 +5,6 @@ from ...db import Db, NoMatch
 
 __all__ = ["MemoryMappedComponent"]
 
-def version_out(id):
-    return PartId(id.jep106_bank, id.jep106_id, id.part_no, 0)
-
 class MemoryMappedComponent(model.BusComponent):
     DEVID = 0xfc0
     PID1 = 0xfd0
@@ -15,7 +12,7 @@ class MemoryMappedComponent(model.BusComponent):
     CID = 0xff0
 
     class_db = Db()
-    db = Db(id_filter = version_out)
+    db = Db()
 
     def __init__(self, bus, base):
         model.BusComponent.__init__(self, "Memory Component", bus)

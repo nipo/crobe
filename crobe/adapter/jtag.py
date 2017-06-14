@@ -7,7 +7,7 @@ import math
 import time
 
 __all__ = ["CaptureDr", "CaptureIr", "Shift", "Reset", "Run",
-           "Chain", "Tap", "TapOperation", "TAP", "CHAIN"]
+           "Chain", "Tap", "TapOperation"]
 
 class Interface(model.Interface):
     STATE_RESET = object()
@@ -17,6 +17,12 @@ class Interface(model.Interface):
 
     def __init__(self, port):
         model.Interface.__init__(self, "JTAG Intf", port)
+        self.use_icepick = False
+
+    def start(self):
+        chain = Chain(self)
+        self.children.append(chain)
+        model.Interface.start(self)
 
     def execute(self, operation_list):
         raise NotImplementedError()
@@ -41,9 +47,6 @@ class Interface(model.Interface):
 
     def run(self, count):
         self.execute([Run(count)])
-
-    def chain(self):
-        return Chain(self)
 
     def __str__(self):
         return "JTAG Interface"
@@ -90,6 +93,13 @@ class Shift(Operation):
     def __str__(self):
         return "<Shift %s>" % (self.tdi)
 
+class Pause(Operation):
+    def __init__(self):
+        pass
+
+    def __str__(self):
+        return "<Pause>"
+
 class Run(Operation):
     def __init__(self, cycles):
         self.cycles = cycles
@@ -97,45 +107,59 @@ class Run(Operation):
     def __str__(self):
         return "<Run %d>" % self.cycles
 
-def version_out(id):
-    return PartId(id.jep106_bank, id.jep106_id, id.part_no, 0)
-
 class Chain(PortComponent):
-    db = Db(id_filter = version_out)
-
     def __init__(self, port):
         PortComponent.__init__(self, "JTAG Chain", port)
 
+    def start(self):
+        import time
         self.reset()
-        #self.cjtag_enable()
-        self.discover()
 
+        if self.port.use_icepick:
+            self.icepick_enable()
+        else:
+            self.swd_to_jtag()
+            self.discover()
+
+        PortComponent.start(self)
+            
     def reset(self):
+        import time
         self.port.reset()
+        self.port.port.reset = True
+        self.port.port.trst = True
+        time.sleep(.02)
+        self.port.port.reset = False
+        self.port.port.trst = False
+        time.sleep(.1)
+        self.port.reset()
+        self.port.run(0)
+
+    def swd_to_jtag(self):
         self.port.swd_to_jtag()
         self.port.reset()
         self.port.run(50)
-
-    def cjtag_enable(self):
-        self.port.port.reset = True
-        self.port.port.reset = False
+        
+    def icepick_enable(self):
+        speed_before = self.port.port.speed
+        self.port.port.speed = 100e3
         time.sleep(.001)
-        self.port.execute([CaptureIr(), Shift(BitString(-1, 64))])
-        def do_scan(*lengths):
-            ops = []
+        ops = [CaptureIr(), Shift(BitString(-1, 6)), Run(1), CaptureDr()]
+        for lengths in [(0, 0, 1), (2, 9)]:
             for l in lengths:
-                ops += [CaptureDr(), Shift(BitString(0, l))]
-            ops += [Run(0)]
-            self.port.execute(ops)
-        do_scan(0, 0, 1)
-        do_scan(2, 9)
+                ops += [Shift(BitString(0, l)), Run(1), CaptureDr(), Pause()]
+        ops += [CaptureIr(), Shift(BitString(-1, 16)), Run(0)]
+        ops += [Run(5), CaptureIr(), Shift(BitString(0x4, 6)), Run(3)]
+        self.port.execute(ops)
+        self.port.port.speed = speed_before
+        self.discover([PartId(0, 0x17, 0x1ce)])
 
-    def discover(self):
+    def discover(self, forced_idcodes = []):
         # Get device ID codes
         #self.port.reset()
         self.port.run(1)
-        self.port.capture_dr()
 
+        self.port.capture_dr()
         default_dr = BitString()
         dr = True
         while dr:
@@ -175,16 +199,19 @@ class Chain(PortComponent):
             out = self.port.shift(BitString(0, 32))
         device_count += int(math.log(int(out), 2))
 
-        # Get device ID codes
-        id_codes = []
-        point = 0
-        for i in range(device_count):
-            if default_dr[point]:
-                id_codes.append(PartId.from_idcode(int(default_dr[point : point + 32])))
-                point += 32
-            else:
-                id_codes.append(0)
-                point += 1
+        if device_count == len(forced_idcodes):
+            id_codes = forced_idcodes
+        else:
+            # Get device ID codes
+            id_codes = []
+            point = 0
+            for i in range(device_count):
+                if default_dr[point]:
+                    id_codes.append(PartId.from_idcode(int(default_dr[point : point + 32])))
+                    point += 32
+                else:
+                    id_codes.append(None)
+                    point += 1
 
         # Determine possible IR lengths
         ir_length_possibilities = []
@@ -206,19 +233,22 @@ class Chain(PortComponent):
                                            [(b-a) for a, b in zip(cutoffs, cutoffs[1:])],
                                            device_count)
 
-        # Done
-        for i, idcode in enumerate(id_codes):
-            if not idcode:
-                continue
+        if len(ir_length_possibilities) > 1:
+            self.logger.info("Filtering too many possibities %s with known IDCODEs", ir_length_possibilities)
+
+            # Done
+            for i, idcode in enumerate(id_codes):
+                if not idcode:
+                    continue
+
+                irlen = self.irlen_for(idcode)
+
+                if not irlen:
+                    continue
+
+                ir_length_possibilities = list(filter(lambda x:x[i] == irlen,
+                                                 ir_length_possibilities))
             
-            try:
-                irlen = self.db.call(idcode)
-            except NoMatch:
-                continue
-
-            ir_length_possibilities = list(filter(lambda x:x[i] == irlen,
-                                             ir_length_possibilities))
-
         self.logger.info("Found %d devices with IDs %s", len(id_codes), id_codes)
         self.logger.info("IR length possibilities %s", ir_length_possibilities)
 
@@ -226,62 +256,125 @@ class Chain(PortComponent):
             self.logger.error("Ambiguous IR lengths")
             raise ValueError("Bad IR length possibilities", ir_length_possibilities)
 
-        ir_pre = 0
-        ir_post = sum(ir_length_possibilities[0])
-        dr_pre = 0
-        dr_post = len(ir_length_possibilities[0])
-        for ir_len, idcode in zip(ir_length_possibilities[0], id_codes):
-            ir_post -= ir_len
-            dr_post -= 1
-            self.children.append(Tap.db.call(idcode, self, idcode, ir_pre, ir_len, ir_post, dr_pre, dr_post))
-            ir_pre += ir_len
-            dr_pre += 1
+        self.idcodes = id_codes
+        self.ir_lengths = ir_length_possibilities[0]
 
+        for index, idcode in enumerate(id_codes):
+            tap = Tap.db.call(idcode or PartId.from_idcode(1), self, index)
+            self.children.append(tap)
+
+        self.logger.info("Discovered chain:")
         for i, tap in enumerate(self.children):
-            self.logger.info("Chain TAP #%d: %s", i, tap)
-            
+            self.logger.info("- %s", tap)
+
+    def irlen_for(self, idcode):
+        try:
+            matches = Tap.db.get(idcode)
+        except NoMatch:
+            return 0
+
+        if not matches:
+            return 0
+
+        possibilities = set()
+        for m in matches:
+            if m and m.irlen:
+                possibilities.add(m.irlen)
+
+        if len(possibilities) != 1:
+            return 0
+
+        return possibilities.pop()
+
+    def idcode_at(self, index):
+        return self.idcodes[index]
+
+    def ir_pre_post(self, index):
+        return sum(self.ir_lengths[:index]), self.ir_lengths[index], sum(self.ir_lengths[index+1:])
+
+    def dr_pre_post(self, index):
+        return index, len(self.ir_lengths) - index - 1
+
     def execute(self, ops):
         self.port.execute(ops)
+
+    def insert(self, index, idcode, irlen = None):
+        if isinstance(idcode, int):
+            idcode = PartId.from_idcode(idcode)
+
+        if irlen is None:
+            irlen = self.irlen_for(idcode)
+
+        for c in self.children[index:]:
+            c.index += 1
+
+        self.idcodes.insert(index, idcode)
+        self.ir_lengths.insert(index, irlen)
+
+        tap = Tap.db.call(idcode, self, index)
+        self.logger.info("Inserting %s at index %d in chain, irlen=%d", idcode, index, irlen)
+
+        self.children.insert(index, tap)
+
+        self.logger.info("New chain:")
+        for t in self.children:
+            self.logger.info("- %s", t)
+
+        tap.start()
             
 class Tap(PortComponent):
-    db = Db(id_filter = version_out)
+    irlen = None
 
-    def __init__(self, port, idcode, ir_pre, ir_len, ir_post, dr_pre, dr_post):
-        PortComponent.__init__(self, "TAP[0x%08x]" % int(idcode), port)
-        self.ir_pre = ir_pre
-        self.ir_len = ir_len
-        self.ir_post = ir_post
-        self.dr_pre = dr_pre
-        self.dr_post = dr_post
+    db = Db()
+
+    def __init__(self, port, index):
+        PortComponent.__init__(self, "TAP[0x%08x]" % int(port.idcode_at(index)), port)
+        self.index = index
+        if self.irlen:
+            _, irlen, _ = self.ir_pre_post()
+            assert irlen == self.irlen
 
     def __str__(self):
-        return "%s (IR:%d/%d/%d, DR:%d/-/%d)" % (
-            self.name,
-            self.ir_pre, self.ir_len, self.ir_post,
-            self.dr_pre, self.dr_post)
+        _, irlen, _ = self.ir_pre_post()
+        return "%s (TAP#%d, irlen:%d)" % (
+            self.name, self.index, irlen)
+
+    def insert_after(self, idcode, irlen = None):
+        self.port.insert(self.index + 1, idcode, irlen)
+
+    def insert_before(self, idcode, irlen = None):
+        self.port.insert(self.index, idcode, irlen)
+
+    def ir_pre_post(self):
+        return self.port.ir_pre_post(self.index)
+
+    def dr_pre_post(self):
+        return self.port.dr_pre_post(self.index)
                 
     def execute(self, cmds):
         ops = []
         ir = None
 
-        self.logger.debug("%s running %s", self, cmds)
+        self.logger.debug("running %s", cmds)
+        ir_pre, ir_len, ir_post = self.ir_pre_post()
+        dr_pre, dr_post = self.dr_pre_post()
         
         for c in cmds:
             if isinstance(c, TapDrShift):
                 if ir != c.ir:
                     ops += [CaptureIr(),
-                            Shift(BitString(-1, self.ir_pre)),
-                            Shift(BitString(c.ir, self.ir_len)),
-                            Shift(BitString(-1, self.ir_post))]
+                            Shift(BitString(-1, ir_pre)),
+                            Shift(BitString(c.ir, ir_len)),
+                            Shift(BitString(-1, ir_post))]
                     ir = c.ir
 
                 ops += [CaptureDr()]
 
                 if c.tdi is not None:
                     c.__op = Shift(c.tdi, read_tdo = c.read_tdo)
-                    ops += [Shift(BitString(0, self.dr_pre)),
+                    ops += [Shift(BitString(0, dr_pre)),
                             c.__op,
-                            Shift(BitString(0, self.dr_post))]
+                            Shift(BitString(0, dr_post))]
 
             elif isinstance(c, TapRun):
                 ops += [Run(c.cycles)]
@@ -312,6 +405,9 @@ Tap.db.register_default(Tap)
 class TapOperation(object):
     def __str__(self):
         return "<%s>" % self.__class__.__name__
+
+    def __repr__(self):
+        return str(self)
 
 class TapDrShift(TapOperation):
     def __init__(self, ir, dr, length = None, read_tdo = True):

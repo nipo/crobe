@@ -18,7 +18,7 @@ class RomTable(MemoryMappedComponent):
 
             address_offset = e & ~0x3ff
             c = MemoryMappedComponent(self.bus, (self.base + address_offset) & 0xffffffff).cast()
-            self.logger.info("%s/%d: %s", self, i, c)
+            self.logger.info("- %d: %s", i, c)
             self.children.append(c)
 
     def __str__(self):

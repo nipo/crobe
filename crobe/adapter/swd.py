@@ -8,7 +8,7 @@ class Interface(model.Interface):
     def __init__(self, port):
         model.Interface.__init__(self, "SWD Intf", port)
 
-    def discover(self):
+    def start(self):
         from ..arm import dap
 
         self.port.reset = True
@@ -18,6 +18,8 @@ class Interface(model.Interface):
         
         self.children.append(dap.Dap(self))
 
+        model.Interface.start(self)
+        
     def execute(self, operation_list):
         raise NotImplementedError()
 

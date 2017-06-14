@@ -5,18 +5,21 @@ import time
 
 __all__ = ["Dap", "Idcode", "Abort", "CtrlStat", "RdBuff", "ApRead", "ApWrite"]
 
-@jtag.Chain.db.register(PartId.from_idcode(0x0ba00477))
-def jtagdp_irlen():
-    return 4
-
-@jtag.Tap.db.register(PartId.from_idcode(0x0ba00477))
+@jtag.Tap.db.register(PartId(4, 0x3b, 0xba00))
 class JtagDp(jtag.Tap):
-    def __init__(self, port, idcode, ir_pre, ir_len, ir_post, dr_pre, dr_post):
-        jtag.Tap.__init__(self, port, idcode, ir_pre, ir_len, ir_post, dr_pre, dr_post)
+    irlen = 4
+
+    def __init__(self, port, index):
+        jtag.Tap.__init__(self, port, index)
         self.name = "JTAG-DP Tap"
 
+    def start(self):
         self.children.append(Dap(self))
+        jtag.Tap.start(self)
 
+class WaitError(Exception):
+    pass
+        
 class Dap(PortComponent):
     SWD_IDCODE   = 0 # R
     SWD_ABORT    = 0 # W
@@ -42,6 +45,8 @@ class Dap(PortComponent):
         self.last_ap_bank = None
         self.last_dp_bank = None
 
+    def start(self):
+        
         from ..target.soc.arm_based.soc import SoC
         from .component.rom_table import RomTable
         from ..part_id import PartId
@@ -54,9 +59,11 @@ class Dap(PortComponent):
         if rts:
             part_id = rts[0].partid
         else:
-            part_id = PartId(0,0,0,0)
+            part_id = PartId(0,0,0)
             
         self.children.insert(0, SoC.db.call(part_id, self))
+
+        PortComponent.start(self)
 
     def execute(self, operations):
         ops = []
@@ -82,11 +89,20 @@ class Dap(PortComponent):
 
         self.port.execute(ops)
 
-        for o in operations:
+        self.logger.debug("Done:")
+        for i, o in enumerate(operations):
+            self.logger.debug("- %d, %s: %s", i, o, o.__ops)
+
+        for i, o in enumerate(operations):
             if isinstance(o, (swd.Operation, jtag.Operation)):
                 pass
             elif isinstance(o, Operation):
-                o.update(o.__ops)
+                try:
+                    o.update(o.__ops)
+                except WaitError as e:
+                    self.logger.error("Failed at operation #%d", i)
+                    raise
+
 
     @property
     def idcode(self):
@@ -115,13 +131,14 @@ class Dap(PortComponent):
         else:
             if isinstance(self.port, swd.Interface):
                 self.port.execute([swd.Wakeup(), swd.JtagToSwd(), swd.Wakeup(),
-                                        swd.Run(10), swd.Read(False, Dap.SWD_IDCODE)])
+                                   swd.Run(10), swd.Read(False, Dap.SWD_IDCODE)])
             elif isinstance(self.port, jtag.Tap):
                 pass
 
+            self.ctrlstat = 0x50000020
             count = 0
             while self.ctrlstat & 0xa0000000 != 0xa0000000:
-                self.ctrlstat = 0x50000000
+                self.ctrlstat = 0x50000020
                 time.sleep(.005)
                 if count > 3:
                     raise RuntimeError("Unable to enable debugger on DP, CTRL/STAT = 0x%08x" % self.ctrlstat)
@@ -199,10 +216,12 @@ class DpBankedOperation(Operation):
                 return ret + [dp.port.cmd_dr_shift(Dap.JTAG_DPACC, (self.data << 3) | ((self.address & 3) << 1), 35)]
 
     def update(self, ops):
+        if isinstance(ops[-1], jtag.TapOperation):
+            if ops[-1].tdo & 7 != 2:
+                raise WaitError()
         if self.is_read:
             if isinstance(ops[-1], jtag.TapOperation):
                 self.data = ops[-1].tdo >> 3
-                assert ops[-1].tdo & 7 == 2, ops[-1].tdo & 7
             else:
                 self.data = ops[-1].data
 
@@ -258,8 +277,9 @@ class RdBuff(Operation):
 
     def update(self, ops):
         if isinstance(ops[-1], jtag.TapOperation):
+            if ops[-1].tdo & 7 != 2:
+                raise WaitError()
             self.data = ops[-1].tdo >> 3
-            assert ops[-1].tdo & 7 == 2, ops[-1].tdo & 7
         else:
             self.data = ops[-1].data
 
@@ -289,8 +309,9 @@ class ApRead(ApAccess):
 
     def update(self, ops):
         if isinstance(ops[-1], jtag.TapOperation):
+            if ops[-1].tdo & 7 != 2:
+                raise WaitError()
             self.data = ops[-1].tdo >> 3
-            assert ops[-1].tdo & 7 == 2, ops[-1].tdo & 7
         else:
             self.data = ops[-1].data
 

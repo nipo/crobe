@@ -48,22 +48,41 @@ class Adapter(model.Adapter):
         raise NotSupportedError("Unsupported interface %s" % interface_name)
         
     @property
+    def speed(self):
+        return self.handle.speed * 1000.
+
+    @speed.setter
+    def speed(self, speed):
+        self.logger.info("speed %dHz", speed)
+        self.handle.speed = speed / 1000.
+
+    @property
     def reset(self):
         return not self.handle.resetn
 
     @reset.setter
     def reset(self, reset):
-        self.logger.info("%s %s target reset", self, ["releasing", "holding"][int(reset)])
+        self.logger.info("%s target reset", ["releasing", "holding"][int(reset)])
         self.handle.resetn = not reset
+        
+    @property
+    def power(self):
+        return self.handle.power
+
+    @power.setter
+    def power(self, power):
+        self.logger.info("%s target power", ["disabling", "enabling"][int(power)])
+        self.handle.power = power
 
 class JLinkInterface(object):
     @property
     def speed(self):
-        return int(self.port.handle.speed * 1000)
+        return int(self.port.speed)
 
     @speed.setter
     def speed(self, speed):
-        self.port.handle.speed = speed / 1000.
+        self.logger.info("speed: %dHz", speed)
+        self.port.speed = speed
 
     @property
     def reset(self):
@@ -83,7 +102,9 @@ class JtagInterface(jtag.Interface, JLinkInterface):
     def execute(self, operation_list):
         ops = [x for x in operation_list if not isinstance(x, jtag.Shift) or len(x.tdi)]
 
-        self.logger.debug("%s running %s", self, operation_list)
+        self.logger.debug("running %s", operation_list)
+
+        assert self.__state in (self.STATE_RESET, self.STATE_PAUSE, self.STATE_RTI, None)
         
         while ops:
             tdi_buf = bitstring.BitString()
@@ -102,12 +123,15 @@ class JtagInterface(jtag.Interface, JLinkInterface):
                         tms_buf.append(0x7, 4)
                         tdi_buf.append(0x0, 4)
                     else:
-                        raise ProtocolError("Bad state sequence")
+                        raise model.ProtocolError("Bad state sequence")
 
                     if ops and isinstance(ops[0], jtag.Shift):
                         tms_buf.append(0x0, 1)
                         tdi_buf.append(0x0, 1)
                         self.__state = self.STATE_SHIFT
+#                    elif ops and isinstance(ops[0], (jtag.CaptureIr, jtag.Run, jtag.CaptureDr)):
+#                        # Actually lie about that, this will do the same
+#                        self.__state = self.STATE_PAUSE
                     else:
                         tms_buf.append(0x1, 2)
                         tdi_buf.append(0x0, 2)
@@ -121,7 +145,7 @@ class JtagInterface(jtag.Interface, JLinkInterface):
                         tms_buf.append(0xf, 5)
                         tdi_buf.append(0x0, 5)
                     else:
-                        raise ProtocolError("Bad state sequence")
+                        raise model.ProtocolError("Bad state sequence")
 
                     if ops and isinstance(ops[0], jtag.Shift):
                         tms_buf.append(0x0, 1)
@@ -143,10 +167,11 @@ class JtagInterface(jtag.Interface, JLinkInterface):
                         self.__state = self.STATE_RTI
                         
                     if self.__state == self.STATE_RTI:
-                        tms_buf.append(0, op.cycles + 1)
-                        tdi_buf.append(0, op.cycles + 1)
+                        if op.cycles:
+                            tms_buf.append(0, op.cycles)
+                            tdi_buf.append(0, op.cycles)
                     else:
-                        raise ProtocolError("Bad state sequence")
+                        raise model.ProtocolError("Bad state sequence")
 
                 elif isinstance(op, jtag.GenericOperation):
                     tms_buf += op.tms
@@ -174,8 +199,11 @@ class JtagInterface(jtag.Interface, JLinkInterface):
                             tdi_buf.append(0x0, 1)
                             self.__state = self.STATE_PAUSE
 
+                elif isinstance(op, jtag.Pause):
+                    pass
+
                 else:
-                    raise NotSupportedError("Unknown SWD operation %s" % type(op))
+                    raise NotSupportedError("Unknown JTAG operation %s" % type(op))
 
                 assert len(tms_buf) == len(tdi_buf)
 
@@ -190,7 +218,9 @@ class JtagInterface(jtag.Interface, JLinkInterface):
             for idx, op in enumerate(pending):
                 if isinstance(op, jtag.Shift) and op.read_tdo:
                     op.tdo = tdo_buf[op.__offset : op.__offset + len(op.tdi)]
-                    
+
+            assert self.__state in (self.STATE_RTI, self.STATE_RESET, self.STATE_PAUSE)
+
 class SwdInterface(swd.Interface, JLinkInterface):
     def __init__(self, port):
         swd.Interface.__init__(self, port)
@@ -199,7 +229,7 @@ class SwdInterface(swd.Interface, JLinkInterface):
     def execute(self, operation_list):
         ops = list(operation_list)
 
-        self.logger.debug("%s running %s", self, ops)
+        self.logger.debug("running %s", ops)
         
         while ops:
             oe_buf = bitstring.BitString()

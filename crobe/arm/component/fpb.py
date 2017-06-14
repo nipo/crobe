@@ -2,9 +2,9 @@ from .model import MemoryMappedComponent
 from ...part_id import PartId
 
 @MemoryMappedComponent.db.register(
-    PartId(4, 0x3b, 0x003, 0), # m3
-    PartId(4, 0x3b, 0x00b, 0), # m0 BPU
-    PartId(4, 0x3b, 0x00e, 0), # m7
+    PartId(4, 0x3b, 0x003), # m3
+    PartId(4, 0x3b, 0x00b), # m0 BPU
+    PartId(4, 0x3b, 0x00e), # m7
     )
 class Fpb(MemoryMappedComponent):
     CTRL = 0x000

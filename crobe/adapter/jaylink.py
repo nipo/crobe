@@ -1,4 +1,5 @@
 from . import libjaylink
+from .. import model
 import os
 import binascii
 import ctypes
@@ -18,8 +19,9 @@ def checked(err):
         raise JaylinkError(msg, err)
     return err
 
-class Handle(object):
+class Handle(model.Component):
     def __init__(self, handle, context):
+        model.Component.__init__(self, "JLink handle")
         self.handle = handle
         self.context = context
         self.caps = self._get_caps()
@@ -231,6 +233,8 @@ class Handle(object):
             div = speed.div
 
         self.__speed = int(speed.freq / div / 1000. + .5)
+
+        self.logger.info("requested speed %d kHz, had %dHz/%d (%d kHz)", khz, speed.freq, div, self.__speed)
         
         checked(libjaylink.set_speed(self.handle, self.__speed))
 

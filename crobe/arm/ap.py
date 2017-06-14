@@ -7,7 +7,7 @@ __all__ = ["Ap", "db"]
 class Ap(PortComponent):
     IDR = 0xfc
 
-    db = Db(id_filter = lambda idr: idr & 0x0fffe00f)
+    db = Db(eq_func = lambda a, b: not ((a ^ b) & 0x0fffe00f))
 
     def __init__(self, dp, index = 0):
         PortComponent.__init__(self, "AP", dp)

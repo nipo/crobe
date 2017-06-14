@@ -5,10 +5,24 @@ class Component(object):
     def __init__(self, name):
         self.name = name
         self.children = []
+        self.__started = False
 
+    def start(self):
+        assert not self.__started
+        self.__started = True
+
+        self.logger.info("started")
+        
+        for c in self.children[:]:
+            c.start()
+        
     def __str__(self):
         return self.__name
 
+    @property
+    def started(self):
+        return self.__started
+    
     @property
     def name(self):
         return self.__name

@@ -59,7 +59,7 @@ class MemAp(ap.Ap, model.Bus):
         for o in ops:
             o.__ops = list(o.operations())
             dops += o.__ops
-            self.logger.debug("%s executing %s: %s", self, o, o.__ops)
+            self.logger.debug("%s translated to %s", o, o.__ops)
 
         access_size_l2 = None
         address = None

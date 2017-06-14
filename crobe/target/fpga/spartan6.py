@@ -1,12 +1,10 @@
 from ...part_id import PartId
 from ...adapter import jtag
 
-@jtag.Chain.db.register(PartId.from_idcode(0x24001093))
-def xc6_bs_irlen():
-    return 6
-
-@jtag.Tap.db.register(PartId.from_idcode(0x24001093))
+@jtag.Tap.db.register( PartId(0, 0x41, 0x4001))
 class Spartan6(jtag.Tap):
-    def __init__(self, port, idcode, ir_pre, ir_len, ir_post, dr_pre, dr_post):
-        jtag.Tap.__init__(self, port, idcode, ir_pre, ir_len, ir_post, dr_pre, dr_post)
+    irlen = 6
+
+    def __init__(self, port, index):
+        jtag.Tap.__init__(self, port, index)
         self.name = "Spartan-6"
