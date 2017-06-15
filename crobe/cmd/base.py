@@ -29,7 +29,7 @@ class Adapter(Command):
         self.parser.add_argument('--adapter', '-a', type = str, default = "0")
 
     def c10_adapter_parse(self, args):
-        from ..adapter.jlink import Enumerator
+        from ..adapter.jlink.jlink import Enumerator
         self.adapter = Enumerator().get(index = int(args.adapter))
     
 class Interface(Adapter):

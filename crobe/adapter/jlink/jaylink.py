@@ -1,5 +1,5 @@
 from . import libjaylink
-from .. import model
+from ... import model
 import os
 import binascii
 import ctypes

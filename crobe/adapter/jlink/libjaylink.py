@@ -1,39 +1,7 @@
 import ctypes as _c
-
-def _load(name, *vers):
-    import os, os.path
-    import sys
-
-    def try_load(paths, name, *vers):
-        name_formats = ["lib%(name)s.%(ver)d.dylib",
-                        "lib%(name)s.so.%(ver)d",
-                        "lib%(name)s.dll"]
-
-        for path in paths:
-            for ver in vers:
-                for f in name_formats:
-                    filename = os.path.join(path, f % dict(name = name, ver = ver))
-                    if not os.path.exists(filename):
-                        continue
-                    try:
-                        if sys.platform == 'darwin':
-                            return _c.CDLL(filename, _c.RTLD_GLOBAL)
-                        else:
-                            return _c.cdll.LoadLibrary(filename)
-                    except OSError as e:
-                        pass
-
-    def try_load_env_path(var, name, *vers):
-        return try_load([_f for _f in os.environ.get(var, "").split(":") if _f], name, *vers)
-
-    libpath = "DYLD_LIBRARY_PATH" if sys.platform == "darwin" else "LD_LIBRARY_PATH"
-
-    return try_load_env_path(libpath, name, *vers) \
-           or try_load([os.path.expanduser('~/lib'), os.path.expanduser('~/local/lib'), '/usr/local/lib', '/usr/lib'], name, *vers)
+from ...util.dynamic_library import load as _load
 
 _lib = _load("jaylink", 0)
-
-assert _lib, RuntimeError("Unable to load JLink library")
 
 error = _c.c_int
 OK = 0

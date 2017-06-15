@@ -1,7 +1,7 @@
-from . import model
-from . import swd
-from . import jtag
-from .. import bitstring
+from .. import model
+from .. import swd
+from .. import jtag
+from ... import bitstring
 import struct
 
 __all__ = ['Enumerator']
