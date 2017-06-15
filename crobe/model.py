@@ -30,7 +30,7 @@ class Component(object):
     @name.setter
     def name(self, name):
         self.__name = name
-        self.logger = logging.getLogger(name)
+        self.logger = logging.getLogger(name[:10])
     
     def children_find(self, predicate):
         ret = list(filter(predicate, self.children))
@@ -47,10 +47,6 @@ class PortComponent(Component):
     def __init__(self, name, port):
         Component.__init__(self, name)
         self.port = port
-
-class SoC(Component):
-    def __init__(self, name):
-        Component.__init__(self, name)
 
 class Bus(object):
     def __init__(self, name):

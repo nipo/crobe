@@ -1,10 +1,10 @@
 def main():
-    from .base import Command
+    from . import base
     
-    class Tool(Command):
+    class Tool(base.Speed, base.Power, base.IcePick):
         pass
 
-    args = Tool("Node NFC Tag reader")
+    args = Tool("Target enumerator")
 
     print("Adapter:", args.interface.port.firmware_info)
     print("Serial:", args.interface.port.serial_number)

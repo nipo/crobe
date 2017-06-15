@@ -1,8 +1,7 @@
-from ..part_id import PartId
-from . import dap
+from ...part_id import PartId
 from . import ap
-from .. import bitfield
-from .. import model
+from ... import bitfield
+from ... import model
 import struct
 
 __all__ = ["MemAp"]
@@ -49,7 +48,7 @@ class MemAp(ap.Ap, model.Bus):
         self.csw_base = self.reg_read(self.CSW) & ~0x00000307
         self.wrap_mask = 0x3ff
 
-        from .component.model import MemoryMappedComponent
+        from .coresight.model import MemoryMappedComponent
         self.children.append(MemoryMappedComponent(self, self.base).cast())
     
     def execute(self, ops):
@@ -57,7 +56,7 @@ class MemAp(ap.Ap, model.Bus):
         dops = []
 
         for o in ops:
-            o.__ops = list(o.operations())
+            o.__ops = list(o.operations(self))
             dops += o.__ops
             self.logger.debug("%s translated to %s", o, o.__ops)
 
@@ -66,20 +65,17 @@ class MemAp(ap.Ap, model.Bus):
         for i in range(-len(dops), 0):
             o = dops[i]
 
-            if isinstance(o, (dap.ApWrite, dap.ApRead)):
-                o.ap = self.index
-
-            if isinstance(o, dap.ApWrite) and o.addr == self.TAR:
+            if not o.is_read and o.addr == self.TAR:
                 if o.data == address:
                     del dops[i]
                 else:
                     address = o.data
 
-            elif isinstance(o, (dap.ApWrite, dap.ApRead)) and o.addr == self.DRW:
+            elif o.addr == self.DRW:
                 size_l2 = be_to_size_l2[o.be]
                 if size_l2 != access_size_l2:
                     access_size_l2 = size_l2
-                    dops.insert(i, dap.ApWrite(self.CSW, self.csw_base | 0x00000000 | 0x10 | access_size_l2, ap = self.index))
+                    dops.insert(i, self.port.cmd_ap_write(self.CSW, self.csw_base | 0x00000000 | 0x10 | access_size_l2))
 
                 address += 1 << access_size_l2
                 if address & self.wrap_mask == 0:
@@ -150,14 +146,14 @@ class ReadAccess(MemoryAccess):
         self.address = address
         self.auto_increment = auto_increment
 
-    def operations(self):
+    def operations(self, ap):
         if self.auto_increment or self.size_l2 != 2:
-            return [dap.ApWrite(MemAp.TAR, self.address),
-                    dap.ApRead(MemAp.DRW,
+            return [ap.cmd_write(MemAp.TAR, self.address),
+                    ap.cmd_read(MemAp.DRW,
                                be = ((1 << (1 << self.size_l2)) - 1) << (self.address & 0x3))]
         else:
-            return [dap.ApWrite(MemAp.TAR, self.address),
-                    dap.ApRead(MemAp.BD0,
+            return [ap.cmd_write(MemAp.TAR, self.address),
+                    ap.cmd_read(MemAp.BD0,
                                be = ((1 << (1 << self.size_l2)) - 1) << (self.address & 0x3))]
 
     def update(self, ops):
@@ -172,15 +168,15 @@ class WriteAccess(MemoryAccess):
         self.data = data
         self.auto_increment = auto_increment
 
-    def operations(self):
+    def operations(self, ap):
         if self.auto_increment or self.size_l2 != 2:
-            return [dap.ApWrite(MemAp.TAR, self.address),
-                    dap.ApWrite(MemAp.DRW,
+            return [ap.cmd_write(MemAp.TAR, self.address),
+                    ap.cmd_write(MemAp.DRW,
                                 data = self.data << (8 * (self.address & 0x3)),
                                 be = ((1 << (1 << self.size_l2)) - 1) << (self.address & 0x3))]
         else:
-            return [dap.ApWrite(MemAp.TAR, self.address),
-                    dap.ApWrite(MemAp.BD0,
+            return [ap.cmd_write(MemAp.TAR, self.address),
+                    ap.cmd_write(MemAp.BD0,
                                 data = self.data << (8 * (self.address & 0x3)),
                                 be = ((1 << (1 << self.size_l2)) - 1) << (self.address & 0x3))]
 

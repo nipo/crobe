@@ -1,6 +1,6 @@
 from .model import MemoryMappedComponent
 from .. import cpuid
-from ...part_id import PartId
+from ....part_id import PartId
 
 @MemoryMappedComponent.db.register(
     PartId(4, 0x3b, 0x000), # m3

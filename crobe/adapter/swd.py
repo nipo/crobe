@@ -1,22 +1,31 @@
 from . import model
 from .. import bitstring
+from ..db import Db
+from ..part_id import PartId
 import time
 
 __all__ = ["Read", "Write", "JtagToSwd", "Wakeup"]
 
 class Interface(model.Interface):
+    db = Db()
+
+    IDCODE = 0
+
     def __init__(self, port):
         model.Interface.__init__(self, "SWD Intf", port)
 
     def start(self):
-        from ..arm import dap
-
         self.port.reset = True
         time.sleep(.005)
         self.port.reset = False
         time.sleep(.050)
-        
-        self.children.append(dap.Dap(self))
+
+        ops = [Wakeup(), JtagToSwd(), Wakeup(), Run(10), Read(False, self.IDCODE)]
+        self.execute(ops)
+
+        partid = PartId.from_idcode(ops[-1].data)
+
+        self.children.append(self.db.call(partid, self))
 
         model.Interface.start(self)
         

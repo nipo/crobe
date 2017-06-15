@@ -1,13 +1,10 @@
-from .... import model
-from ....db import Db
+from .. import model
 from ....part_id import PartId
-from ....arm.component.rom_table import RomTable
+from ...arm.coresight.rom_table import RomTable
 
 __all__ = ["SoC"]
 
 class SoC(model.SoC):
-    db = Db()
-
     def __init__(self, name, port):
         model.SoC.__init__(self, name)
         self.port = port

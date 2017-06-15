@@ -1,5 +1,4 @@
 from ....part_id import PartId
-from ....arm import ap
 from ....adapter import jtag
 from .soc import SoC
 

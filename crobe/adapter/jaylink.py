@@ -15,9 +15,8 @@ class JaylinkError(Exception):
 
 def checked(err):
     if err != libjaylink.OK:
-        msg = libjaylink.strerror(err)
+        msg = str(libjaylink.strerror(err), 'utf-8')
         raise JaylinkError(msg, err)
-    return err
 
 class Handle(model.Component):
     def __init__(self, handle, context):
@@ -275,6 +274,8 @@ class Handle(model.Component):
 
     @power.setter
     def power(self, enabled):
+        if "SET_TARGET_POWER" not in self.caps:
+            raise NotImplementedError("Incapable hardware")
         self.__target_power = bool(enabled)
         checked(libjaylink.set_target_power(self.handle, bool(enabled)))
 

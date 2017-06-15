@@ -1,5 +1,5 @@
 from .model import MemoryMappedComponent
-from ...part_id import PartId
+from ....part_id import PartId
 
 @MemoryMappedComponent.db.register(
     PartId(4, 0x3b, 0x002), # m3

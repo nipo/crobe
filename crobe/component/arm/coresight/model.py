@@ -1,7 +1,7 @@
-from ... import model
+from .... import model
 import struct
-from ...part_id import PartId
-from ...db import Db, NoMatch
+from ....part_id import PartId
+from ....db import Db, NoMatch
 
 __all__ = ["MemoryMappedComponent"]
 
@@ -22,19 +22,10 @@ class MemoryMappedComponent(model.BusComponent):
         self.devid, pid0, pid1, self.cid = struct.unpack("<LLLL", blob[::4])
         self.pid = (pid0 << 32) | pid1
 
-        if self.pid & 0x80000:
-            self.partid = PartId(jep106_bank = (self.pid >> 32) & 0xf,
-                                 jep106_id = (self.pid >> 12) & 0x7f,
-                                 part_no = self.pid & 0xfff,
-                                 revision = (self.pid >> 20) & 0xf)
-        else:
-            jbank, jid = {
-                0x41: (4, 0x77),
-            }.get((self.pid >> 12) & 0xff, (0xf, (self.pid >> 12) & 0xff))
-            self.partid = PartId(jep106_bank = jbank,
-                                 jep106_id = jid,
-                                 part_no = self.pid & 0xfff,
-                                 revision = (self.pid >> 20) & 0xf)
+        self.partid = PartId(jep106_bank = (self.pid >> 32) & 0xf,
+                             jep106_id = (self.pid >> 12) & 0x7f,
+                             part_no = self.pid & 0xfff,
+                             revision = (self.pid >> 20) & 0xf)
 
         self.component_class = (self.cid >> 12) & 0xf
         self.dev_type = self.devid >> 24
@@ -55,6 +46,20 @@ class MemoryMappedComponent(model.BusComponent):
 
         self.name = "<0x%08x: %s (0x%08x/0x%08x)>" % (self.base, self.name, self.pid, self.cid)
 
+    def cast(self):
+        try:
+            return self.class_db.call(self.component_class, self.bus, self.base)
+        except NoMatch:
+            pass
+
+        if self.component_class == 0x09:
+            return CoresightComponent.db.call(self.dev_type, self.bus, self.base)
+
+        if self.component_class == 0x0e:
+            return self.db.call(self.partid, self.bus, self.base)
+
+        return self
+
     def reg_read(self, offset):
         return self.bus.u32_read(self.base + offset)
 
@@ -66,23 +71,6 @@ class MemoryMappedComponent(model.BusComponent):
 
     def cmd_reg_write(self, offset, data):
         return self.bus.cmd_u32_write(self.base + offset, data)
-
-    def cast(self):
-        try:
-            return self.class_db.call(self.component_class, self.bus, self.base)
-        except NoMatch:
-            pass
-
-        if self.component_class == 0x09:
-            return CoresightComponent.db.call(self.dev_type, self.bus, self.base)
-
-        if self.component_class == 0x0e:
-            try:
-                return self.db.call(self.partid, self.bus, self.base)
-            except NoMatch:
-                pass
-
-        return self
 
     class9_names = {
         0x00: "Other",
@@ -140,5 +128,3 @@ class CoresightComponent(MemoryMappedComponent):
 
     def __init__(self, bus, base):
         MemoryMappedComponent.__init__(self, bus, base)
-
-CoresightComponent.db.register_default(CoresightComponent)

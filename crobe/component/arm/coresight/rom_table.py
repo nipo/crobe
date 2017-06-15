@@ -7,6 +7,10 @@ class RomTable(MemoryMappedComponent):
         if self.component_class != 0x1:
             raise ValueError("Component is not a RomTable")
 
+        self.name = "RomTable for 0x%08x (%s, part 0x%04x,v%d)" % (int(self.partid),
+            self.partid.manufacturer_name, self.partid.part_no, self.partid.revision)
+
+    def start(self):
         for i in range(0, 960):
             e = self.reg_read(i * 4)
 
@@ -21,5 +25,4 @@ class RomTable(MemoryMappedComponent):
             self.logger.info("- %d: %s", i, c)
             self.children.append(c)
 
-    def __str__(self):
-        return "ROM Table"
+        MemoryMappedComponent.start(self)

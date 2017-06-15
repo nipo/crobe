@@ -92,6 +92,14 @@ class JLinkInterface(object):
     def reset(self, reset):
         self.port.reset = reset
 
+    @property
+    def power(self):
+        return self.port.power
+
+    @power.setter
+    def power(self, power):
+        self.port.power = power
+
 class JtagInterface(jtag.Interface, JLinkInterface):
     def __init__(self, port):
         jtag.Interface.__init__(self, port)
@@ -129,9 +137,9 @@ class JtagInterface(jtag.Interface, JLinkInterface):
                         tms_buf.append(0x0, 1)
                         tdi_buf.append(0x0, 1)
                         self.__state = self.STATE_SHIFT
-#                    elif ops and isinstance(ops[0], (jtag.CaptureIr, jtag.Run, jtag.CaptureDr)):
-#                        # Actually lie about that, this will do the same
-#                        self.__state = self.STATE_PAUSE
+                    elif ops and isinstance(ops[0], (jtag.CaptureIr, jtag.Run, jtag.CaptureDr)):
+                        # Actually lie about that, this will do the same
+                        self.__state = self.STATE_PAUSE
                     else:
                         tms_buf.append(0x1, 2)
                         tdi_buf.append(0x0, 2)

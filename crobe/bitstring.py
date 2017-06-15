@@ -13,7 +13,8 @@ class BitString:
         elif data < 0:
             data += 1 << length
 
-        assert (data >> length) == 0
+        if length % 8:
+            data = data & ((1 << length) - 1)
         self.__data |= data << self.__length
         self.__length += length
 

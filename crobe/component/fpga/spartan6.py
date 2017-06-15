@@ -1,7 +1,7 @@
 from ...part_id import PartId
 from ...adapter import jtag
 
-@jtag.Tap.db.register( PartId(0, 0x41, 0x4001))
+@jtag.Tap.db.register( PartId(0, 0x49, 0x4001))
 class Spartan6(jtag.Tap):
     irlen = 6
 

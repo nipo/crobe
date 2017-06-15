@@ -333,6 +333,7 @@ class Tap(PortComponent):
         if self.irlen:
             _, irlen, _ = self.ir_pre_post()
             assert irlen == self.irlen
+        self.ir = None
 
     def __str__(self):
         _, irlen, _ = self.ir_pre_post()
@@ -353,7 +354,6 @@ class Tap(PortComponent):
                 
     def execute(self, cmds):
         ops = []
-        ir = None
 
         self.logger.debug("running %s", cmds)
         ir_pre, ir_len, ir_post = self.ir_pre_post()
@@ -361,12 +361,12 @@ class Tap(PortComponent):
         
         for c in cmds:
             if isinstance(c, TapDrShift):
-                if ir != c.ir:
+                if self.ir != c.ir:
                     ops += [CaptureIr(),
                             Shift(BitString(-1, ir_pre)),
                             Shift(BitString(c.ir, ir_len)),
                             Shift(BitString(-1, ir_post))]
-                    ir = c.ir
+                    self.ir = c.ir
 
                 ops += [CaptureDr()]
 
@@ -418,7 +418,7 @@ class TapDrShift(TapOperation):
         if dr is None:
             read_tdo = False
             self.tdi = None
-        if isinstance(dr, BitString):
+        elif isinstance(dr, BitString):
             self.tdi = dr
         elif isinstance(dr, int):
             assert isinstance(length, int) and length >= 1
@@ -430,7 +430,7 @@ class TapDrShift(TapOperation):
         self.read_tdo = read_tdo
 
     def __str__(self):
-        return "<DrShift 0x%x %s %s>" % (self.ir, self.tdi, BitString(self.tdo, len(self.tdi)))
+        return "<DrShift 0x%x %s %s>" % (self.ir, self.tdi, BitString(self.tdo, len(self.tdi or [])))
         
 class TapRun(TapOperation):
     def __init__(self, cycles):

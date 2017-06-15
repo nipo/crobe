@@ -1,5 +1,4 @@
 from ..part_id import PartId
-from ..arm import ap
 from ..adapter import jtag
 
 @jtag.Tap.db.register(PartId(0, 0x17, 0x1ce))

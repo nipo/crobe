@@ -1,5 +1,5 @@
 from ....part_id import PartId
-from ....arm.ap import Ap
+from ...arm.ap import Ap
 from .soc import SoC
 
 @Ap.db.register(0x02880000)

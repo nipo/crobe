@@ -1,3 +1,2 @@
-from . import arm
-from . import target
+from . import component
 

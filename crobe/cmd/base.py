@@ -24,6 +24,7 @@ class Command:
         FORMAT = '%(asctime)-15s %(name)-10s %(message)s'
         logging.basicConfig(format = FORMAT, level = 10 * (5 - args.verbose))
 
+class Adapter(Command):
     def c10_adapter_declare(self):
         self.parser.add_argument('--adapter', '-a', type = str, default = "0")
 
@@ -31,33 +32,36 @@ class Command:
         from ..adapter.jlink import Enumerator
         self.adapter = Enumerator().get(index = int(args.adapter))
     
+class Interface(Adapter):
     def c20_interface_declare(self):
         self.parser.add_argument('--interface', '-i', type = str, default = "swd")
 
     def c20_interface_parse(self, args):
         self.interface = self.adapter.open(args.interface)
-    
-    def c24_power_declare(self):
-        self.parser.add_argument('--power', '-p', action = "store_true")
 
-    def c24_power_parse(self, args):
-        import time
-        self.interface.power = False
-        if args.power:
-            time.sleep(.3)
-            self.interface.power = True
-    
-    def c25_icepick_declare(self):
-        self.parser.add_argument('--icepick', action = "store_true")
-
-    def c25_icepick_parse(self, args):
-        self.interface.use_icepick = args.icepick
-
+class Speed(Interface):
     def c30_speed_declare(self):
         self.parser.add_argument('--speed', '-s', type = int, default = 10000000)
 
     def c30_speed_parse(self, args):
         self.interface.speed = args.speed
+    
+class Power(Interface):
+    def c24_power_declare(self):
+        self.parser.add_argument('--power', '-p', type = str, default = "")
+
+    def c24_power_parse(self, args):
+        import time
+        if args.power:
+            self.interface.power = args.power.lower() in ["on", "1", "true"]
+            time.sleep(.3)
+    
+class IcePick(Interface):
+    def c25_icepick_declare(self):
+        self.parser.add_argument('--icepick', action = "store_true")
+
+    def c25_icepick_parse(self, args):
+        self.interface.use_icepick = args.icepick
         
 if __name__ == "__main__":
     class LolCommand:
