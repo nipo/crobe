@@ -1,7 +1,9 @@
 from . import libftdi as ftdi
+from ...bitstring import BitString
 import ctypes
 import struct
 import logging
+import binascii
 
 class FtdiError(Exception):
     pass
@@ -127,19 +129,21 @@ class Handle(Context):
 
     def read(self, size = 4096):
         blob = (ctypes.c_ubyte * size)()
-        size = self.check(ftdi.write_data(self.context, blob, size))
+        size = self.check(ftdi.read_data(self.context, blob, size))
         return bytes(blob[:size])
 
+    def command(self, blob):
+        self.write(blob)
+        return self.read()
+
     def direction_set(self, outputs, high = 0):
-        cmd = bytes([ftdi.MPSSE_SET_BITS_LOW, (high & 0xf0) | 0x08, (outputs & 0xf0) | 0x0b,
-                     ftdi.MPSSE_SET_BITS_HIGH, high >> 8, outputs >> 8,
-                     ftdi.MPSSE_CLK_DIV5_DISABLE,
-                     ftdi.MPSSE_3_PHASE_DISABLE,
-                     ftdi.MPSSE_ADAPTIVE_DISABLE,
-                     ftdi.MPSSE_LOOPBACK_DISABLE,
-                     ftdi.MPSSE_CLK_DIV, 59, 0])
-        self.write(cmd)
-        print("response: %r" % self.read())
+        self.command(bytes([ftdi.MPSSE_SET_BITS_LOW, (high & 0xf0) | 0x08, (outputs & 0xf0) | 0x0b,
+                            ftdi.MPSSE_SET_BITS_HIGH, high >> 8, outputs >> 8,
+                            ftdi.MPSSE_CLK_DIV5_DISABLE,
+                            ftdi.MPSSE_3_PHASE_DISABLE,
+                            ftdi.MPSSE_ADAPTIVE_DISABLE,
+                            ftdi.MPSSE_LOOPBACK_DISABLE,
+                            ftdi.MPSSE_CLK_DIV, 59, 0]))
 
 class Jtag(object):
     def __init__(self, handle):
@@ -147,12 +151,86 @@ class Jtag(object):
 
     def execute(self, cmds):
         pass
+
+    def cmd_tms(self, tms, next = 0):
+        cmd = ftdi.MPSSE_WRITE_NEG | ftdi.MPSSE_LSB | ftdi.MPSSE_TMS
+        ret = bytes()
+
+        bits = len(tms)
+        data = tms.data
+
+        if bits > 8:
+            bytestring = data[:-1]
+            for i in range(0, len(bytestring), 256):
+                chunk = bytestring[i : i+256]
+                ret += bytes([cmd, len(chunk) - 1]) + d
+            
+        ret += bytes([cmd | ftdi.MPSSE_BITS, (bits % 8) - 1, data[-1] | (next << 7)])
+
+        return ret
+
+    def cmd_reset(self):
+        return self.cmd_tms(BitString(-1, 5))
+
+    def cmd_run(self, count):
+        return self.cmd_tms(BitString(0, count))
+
+    def cmd_ir(self):
+        return self.cmd_tms(BitString(0b01011, 5))
+
+    def cmd_dr(self):
+        return self.cmd_tms(BitString(0b0101, 4))
+
+    def cmd_update(self):
+        return self.cmd_tms(BitString(0b011, 3))
+
+    def cmd_shift(self, tdi, read_tdo = True):
+        if not len(tdi):
+            return
+
+        cmd = ftdi.MPSSE_WRITE_NEG | ftdi.MPSSE_LSB
+        if read_tdo:
+            cmd |= ftdi.MPSSE_READ
+
+        ret = bytes()
+
+        bits = len(tdi) - 1
+        last = int(tdi[-1])
+        data = tdi[:-1].data
+
+        ret += self.cmd_tms(BitString(0b01, 2), int(tdi[0]))
+
+        if bits > 8:
+            bytestring = data[:-1]
+            for i in range(0, len(bytestring), 256):
+                chunk = bytestring[i : i+256]
+                ret += bytes([cmd, len(chunk) - 1]) + chunk
+
+        ret += bytes([cmd | ftdi.MPSSE_BITS, (bits % 8) - 1, data[-1]])
+
+        ret += self.cmd_tms(BitString(0b01, 2), last)
+
+        return ret
     
 def main():
-    adapters = Enumerator().find_all(0x0403, 0x6014)
-#    adapters = Enumerator().find_all(0x10eb, 0x0026)
+#    adapters = Enumerator().find_all(0x0403, 0x6014)
+    adapters = Enumerator().find_all(0x10eb, 0x0026)
     jtag = adapters[0].open().jtag()
     jtag.handle.direction_set(0x60eb, 0x00e8)
-    
+
+    cmd = bytes()
+    cmd += jtag.cmd_reset()
+    cmd += jtag.cmd_run(2)
+    cmd += jtag.cmd_dr()
+    cmd += jtag.cmd_shift(BitString(-1, 64))
+    cmd += jtag.cmd_update()
+    cmd += jtag.cmd_ir()
+    cmd += jtag.cmd_shift(BitString(-1, 32))
+    cmd += jtag.cmd_update()
+
+    print(binascii.b2a_hex(cmd))
+
+    print(binascii.b2a_hex(jtag.handle.command(cmd)))
+
 if __name__ == '__main__':
     main()
