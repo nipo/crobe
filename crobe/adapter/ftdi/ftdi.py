@@ -70,7 +70,7 @@ class Handle(Context):
         Context.__init__(self)
         self.device = device
 
-        self.check(ftdi.set_interface(self.context, ftdi.INTERFACE["A"]))
+        self.check(ftdi.set_interface(self.context, ftdi.INTERFACE["B"]))
         self.check(ftdi.usb_open_string(self.context, self.device.connection_id))
         self.check(ftdi.read_eeprom(self.context))
         self.check(ftdi.eeprom_decode(self.context, 0))
@@ -161,9 +161,10 @@ class Jtag(object):
 
         if bits > 8:
             bytestring = data[:-1]
-            for i in range(0, len(bytestring), 256):
-                chunk = bytestring[i : i+256]
-                ret += bytes([cmd, len(chunk) - 1]) + d
+            for i in range(0, len(bytestring), 1024):
+                chunk = bytestring[i : i+1024]
+                ret += struct.pack("<BH", cmd, len(chunk) - 1)
+                ret += chunk
             
         ret += bytes([cmd | ftdi.MPSSE_BITS, (bits % 8) - 1, data[-1] | (next << 7)])
 
@@ -188,7 +189,7 @@ class Jtag(object):
         if not len(tdi):
             return
 
-        cmd = ftdi.MPSSE_WRITE_NEG | ftdi.MPSSE_LSB
+        cmd = ftdi.MPSSE_WRITE_NEG | ftdi.MPSSE_LSB | ftdi.MPSSE_WRITE
         if read_tdo:
             cmd |= ftdi.MPSSE_READ
 
@@ -202,9 +203,10 @@ class Jtag(object):
 
         if bits > 8:
             bytestring = data[:-1]
-            for i in range(0, len(bytestring), 256):
-                chunk = bytestring[i : i+256]
-                ret += bytes([cmd, len(chunk) - 1]) + chunk
+            for i in range(0, len(bytestring), 1024):
+                chunk = bytestring[i : i+1024]
+                ret += struct.pack("<BH", cmd, len(chunk) - 1)
+                ret += chunk
 
         ret += bytes([cmd | ftdi.MPSSE_BITS, (bits % 8) - 1, data[-1]])
 
@@ -222,7 +224,8 @@ def main():
     cmd += jtag.cmd_reset()
     cmd += jtag.cmd_run(2)
     cmd += jtag.cmd_dr()
-    cmd += jtag.cmd_shift(BitString(-1, 64))
+    cmd += jtag.cmd_shift(BitString(0, 64))
+    cmd += jtag.cmd_shift(BitString(-1, 56))
     cmd += jtag.cmd_update()
     cmd += jtag.cmd_ir()
     cmd += jtag.cmd_shift(BitString(-1, 32))
