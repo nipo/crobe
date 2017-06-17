@@ -66,3 +66,14 @@ class Enumerator(JtagAdapterEnumerator):
 
     def serial_mangle(self, serial):
         return serial.split(";")[-1]
+
+@model.Enumerator.register
+class Enumerator(JtagAdapterEnumerator):
+    def __init__(self):
+        JtagAdapterEnumerator.__init__(self, "Proby-internal", "proby-int",
+                                       vid = 0x10eb, pid = 0x0026,
+                                       channel = "B",
+                                       resetn_pin = 9)
+
+    def serial_mangle(self, serial):
+        return serial.split(";")[-1]
