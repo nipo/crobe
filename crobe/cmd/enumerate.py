@@ -8,6 +8,7 @@ def main():
 
     print("Adapter:", args.interface.port.firmware_info)
     print("Serial:", args.interface.port.serial_number)
+    print("Nickname:", args.interface.port.nickname)
     print("Speed:", args.interface.speed)
     
     args.interface.start()

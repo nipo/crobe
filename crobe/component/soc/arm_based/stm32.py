@@ -1,5 +1,5 @@
 from ....part_id import PartId
-from ....adapter import jtag
+from ....adapter.protocol import jtag
 from .soc import SoC
 
 @jtag.Tap.db.register(PartId(0, 0x20, 0x6416),

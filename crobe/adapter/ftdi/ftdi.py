@@ -1,121 +1,188 @@
-from . import libftdi as ftdi
+from . import api
 from ...bitstring import BitString
+from ... import model
+from ..protocol import base, jtag
 import ctypes
 import struct
 import logging
 import binascii
 
-class FtdiError(Exception):
+class FtdiError(base.CommunicationError):
     pass
 
 class Context(object):
     def __init__(self):
-        self.context = ftdi.new()
-        self.logger = logging.getLogger("ftdi")
+        self.context = api.new()
 
     def __del__(self):
-        if ftdi:
-            ftdi.free(self.context)
+        if api:
+            api.free(self.context)
 
     def check(self, ret):
         if ret < 0:
-            errorstring = str(ftdi.get_error_string(self.context), 'utf-8')
+            errorstring = str(api.get_error_string(self.context), 'utf-8')
             raise FtdiError(errorstring, ret)
         return ret
 
-class Enumerator(Context):
-    def __init__(self):
-        Context.__init__(self)
+class Device(object):
+    @classmethod
+    def list_all(self, vid, pid):
+        devlist = ctypes.POINTER(api.device_list)()
+        c = Context()
 
-    def find_all(self, vid, pid):
+        count = c.check(api.usb_find_all(c.context, ctypes.byref(devlist), vid, pid))
+        if not count:
+            return []
+
         ret = []
-
-        self.logger.info("Looking for %04x:%04x...", vid, pid)
-        
-        devlist = ctypes.POINTER(ftdi.device_list)()
-        count = self.check(ftdi.usb_find_all(self.context, ctypes.byref(devlist), vid, pid))
-
-        cur = ctypes.POINTER(ftdi.device_list)(devlist.contents)
-        
+        cur = ctypes.POINTER(api.device_list)(devlist.contents)
         while cur:
-            d = Device(self, cur.contents.dev)
-            self.logger.info("Found %s", d)
+            d = Device.from_dev(c, cur.contents.dev, vid, pid)
+            
             ret.append(d)
+
             cur = cur.contents.next
+
+        api.list_free2(devlist)
 
         return ret
 
-class Device(object):
-    def __init__(self, context, dev):
-        vendor = (ctypes.c_char * 32)()
-        model = (ctypes.c_char * 32)()
-        serial = (ctypes.c_char * 32)()
-        
-        context.check(ftdi.usb_get_strings(context.context, dev, vendor, 32, model, 32, serial, 32))
+    @classmethod
+    def from_dev(cls, ctx, dev, vid, pid):
+        vendor, model, serial = "", "", ""
 
-        self.vendor = str(vendor.value, "utf-8")
-        self.model = str(model.value, "utf-8")
-        self.serial = str(serial.value, "utf-8")
-
-        self.connection_id = b"d:%03u/%03u" % (ftdi.libusb_get_bus_number(dev), ftdi.libusb_get_device_address(dev))
+        try:
+            blob = (ctypes.c_char * 32)()
+            ctx.check(api.usb_get_strings(ctx.context, dev, blob, 32, None, 0, None, 0))
+            vendor = str(blob.value, "utf-8")
+        except:
+            pass
         
-    def open(self):
-        return Handle(self)
+        try:
+            blob = (ctypes.c_char * 32)()
+            ctx.check(api.usb_get_strings(ctx.context, dev, None, 0, blob, 32, None, 0))
+            model = str(blob.value, "utf-8")
+        except:
+            pass
+        
+        try:
+            blob = (ctypes.c_char * 32)()
+            ctx.check(api.usb_get_strings(ctx.context, dev, None, 0, None, 0, blob, 32))
+            serial = str(blob.value, "utf-8")
+        except:
+            pass
+
+        connection_id = b"d:%03u/%03u" % (api.libusb_get_bus_number(dev), api.libusb_get_device_address(dev))
+
+        return cls(vid, pid, vendor, model, serial, connection_id)
+    
+    def __init__(self, vid, pid, vendor, model, serial, connection_id):
+        self.vid = vid
+        self.pid = pid
+        self.vendor = vendor
+        self.model = model
+        self.serial = serial
+        self.connection_id = connection_id
         
     def __str__(self):
-        return "<FTDI Device %r %r %r>" % (self.vendor, self.model, self.serial)
+        return "<%s %r %r %r>" % (self.connection_id, self.vendor, self.model, self.serial)
+        
+    def open(self, interface = "A", mode = "mpsse", **defaults):
+        if mode == "mpsse":
+            return Mpsse(self, interface, **defaults)
 
 class Handle(Context):
-    def __init__(self, device):
+    def __init__(self, device, interface, mode, gpio_oe = 0, gpio_val = 0):
         Context.__init__(self)
         self.device = device
 
-        self.check(ftdi.set_interface(self.context, ftdi.INTERFACE["B"]))
-        self.check(ftdi.usb_open_string(self.context, self.device.connection_id))
-        self.check(ftdi.read_eeprom(self.context))
-        self.check(ftdi.eeprom_decode(self.context, 0))
-        self.check(ftdi.set_bitmode(self.context, 0, ftdi.BITMODE["RESET"]))
-        self.check(ftdi.usb_purge_buffers(self.context))
-        self.check(ftdi.set_latency_timer(self.context, 1))
-        print("init: %r" % self.read(5))
+        self.__gpio_oe = gpio_oe
+        self.__gpio_val = gpio_val
+        self.__speed = 1000000
 
+        self.check(api.set_interface(self.context, api.INTERFACE[interface]))
+        self.check(api.usb_open_string(self.context, self.device.connection_id))
+        try:
+            self.check(api.read_eeprom(self.context))
+            self.check(api.eeprom_decode(self.context, 0))
+            self.__has_eeprom = True
+        except:
+            self.__has_eeprom = False
+        self.check(api.set_bitmode(self.context, 0, api.BITMODE["RESET"]))
+        self.check(api.usb_purge_buffers(self.context))
+        self.check(api.set_latency_timer(self.context, 1))
+        self.check(api.set_bitmode(self.context, 0xfb, api.BITMODE[mode]))
+
+        self.execute(bytes([api.MPSSE_3_PHASE_DISABLE,
+                            api.MPSSE_ADAPTIVE_DISABLE,
+                            api.MPSSE_LOOPBACK_DISABLE,
+                            api.MPSSE_CLK_DIV, 59, 0])
+                     + self.cmd_gpio_mask_set(0xffff, gpio_oe, gpio_val))
+
+        self.speed = 1000000
+        
+    @property
+    def last_gpio(self):
+        return self.__gpio_oe & self.__gpio_val
+        
+    @property
+    def speed(self):
+        return self.__speed
+
+    @speed.setter
+    def speed(self, speed):
+        divisor = 120000000 / speed
+        if divisor >= 65535:
+            divisor /= 5
+            d = min((max((int(divisor) - 1, 0)), 65535))
+            self.execute(struct.pack("<BBH",
+                                     api.MPSSE_CLK_DIV5_ENABLE,
+                                     api.MPSSE_CLK_DIV, d))
+            self.__speed = 24000000 // (d + 1)
+        else:
+            d = min((max((int(divisor) - 1, 0)), 65535))
+            self.execute(struct.pack("<BBH",
+                                     api.MPSSE_CLK_DIV5_DISABLE,
+                                     api.MPSSE_CLK_DIV, int(divisor - 1)))
+            self.__speed = 120000000 // (d + 1)
+        
+        
     def eeprom_dump(self):
-        for name in ftdi.EEPROM_VALUE:
+        for name in api.EEPROM_VALUE:
             try:
                 print(name, self.eeprom_value_get(name))
             except FtdiError:
                 pass
-
-    def jtag(self):
-        self.check(ftdi.set_bitmode(self.context, 0xfb, ftdi.BITMODE["MPSSE"]))
-        return Jtag(self)
             
     def eeprom_value_get(self, name):
+        if not self.__has_eeprom:
+            raise KeyError("No valid eeprom")
+
         value = ctypes.c_int()
-        id = ftdi.EEPROM_VALUE[name]
-        self.check(ftdi.get_eeprom_value(self.context, id, ctypes.byref(value)))
+        id = api.EEPROM_VALUE[name]
+        self.check(api.get_eeprom_value(self.context, id, ctypes.byref(value)))
         revmap = dict(
-            CHANNEL_A_TYPE = ftdi.CHANNEL_TYPE_NAME,
-            CHANNEL_B_TYPE = ftdi.CHANNEL_TYPE_NAME,
-            CHANNEL_A_DRIVER = ftdi.DRIVER_NAME,
-            CHANNEL_B_DRIVER = ftdi.DRIVER_NAME,
-            CHANNEL_C_DRIVER = ftdi.DRIVER_NAME,
-            CHANNEL_D_DRIVER = ftdi.DRIVER_NAME,
-            CBUS_FUNCTION_0 = ftdi.CBUS_NAME,
-            CBUS_FUNCTION_1 = ftdi.CBUS_NAME,
-            CBUS_FUNCTION_2 = ftdi.CBUS_NAME,
-            CBUS_FUNCTION_3 = ftdi.CBUS_NAME,
-            CBUS_FUNCTION_4 = ftdi.CBUS_NAME,
-            CBUS_FUNCTION_5 = ftdi.CBUS_NAME,
-            CBUS_FUNCTION_6 = ftdi.CBUS_NAME,
-            CBUS_FUNCTION_7 = ftdi.CBUS_NAME,
-            CBUS_FUNCTION_8 = ftdi.CBUS_NAME,
-            CBUS_FUNCTION_9 = ftdi.CBUS_NAME,
-            GROUP0_DRIVE = ftdi.DRIVE_NAME,
-            GROUP1_DRIVE = ftdi.DRIVE_NAME,
-            GROUP2_DRIVE = ftdi.DRIVE_NAME,
-            GROUP3_DRIVE = ftdi.DRIVE_NAME,
-            CHIP_TYPE = ftdi.CHIP_TYPE_NAME,
+            CHANNEL_A_TYPE = api.CHANNEL_TYPE_NAME,
+            CHANNEL_B_TYPE = api.CHANNEL_TYPE_NAME,
+            CHANNEL_A_DRIVER = api.DRIVER_NAME,
+            CHANNEL_B_DRIVER = api.DRIVER_NAME,
+            CHANNEL_C_DRIVER = api.DRIVER_NAME,
+            CHANNEL_D_DRIVER = api.DRIVER_NAME,
+            CBUS_FUNCTION_0 = api.CBUS_NAME,
+            CBUS_FUNCTION_1 = api.CBUS_NAME,
+            CBUS_FUNCTION_2 = api.CBUS_NAME,
+            CBUS_FUNCTION_3 = api.CBUS_NAME,
+            CBUS_FUNCTION_4 = api.CBUS_NAME,
+            CBUS_FUNCTION_5 = api.CBUS_NAME,
+            CBUS_FUNCTION_6 = api.CBUS_NAME,
+            CBUS_FUNCTION_7 = api.CBUS_NAME,
+            CBUS_FUNCTION_8 = api.CBUS_NAME,
+            CBUS_FUNCTION_9 = api.CBUS_NAME,
+            GROUP0_DRIVE = api.DRIVE_NAME,
+            GROUP1_DRIVE = api.DRIVE_NAME,
+            GROUP2_DRIVE = api.DRIVE_NAME,
+            GROUP3_DRIVE = api.DRIVE_NAME,
+            CHIP_TYPE = api.CHIP_TYPE_NAME,
             )
         try:
             rev = revmap[name]
@@ -125,115 +192,192 @@ class Handle(Context):
 
     def write(self, blob):
         raw = (ctypes.c_ubyte * len(blob)).from_buffer_copy(blob)
-        self.check(ftdi.write_data(self.context, raw, len(blob)))
+        self.check(api.write_data(self.context, raw, len(blob)))
 
-    def read(self, size = 4096):
+    def status(self):
+        status = ctypes.c_ushort()
+        self.check(api.poll_modem_status(self.context, ctypes.byref(status)))
+        return status.value
+
+    def _read(self, size = 4096):
         blob = (ctypes.c_ubyte * size)()
-        size = self.check(ftdi.read_data(self.context, blob, size))
+        size = self.check(api.read_data(self.context, blob, size))
         return bytes(blob[:size])
 
-    def command(self, blob):
+    def read(self, rsize):
+        ret = b""
+        retries = 1000
+        while len(ret) < rsize:
+            chunk = self._read(rsize - len(ret))
+            if chunk:
+                retries += 1000
+            ret += chunk
+            retries -= 1
+            if not retries:
+                raise base.CommunicationError("Failed to read all data")
+        return ret
+    
+    def execute(self, blob, rsize = 0):
+        self.status()
         self.write(blob)
-        return self.read()
+        return self.read(rsize)
 
-    def direction_set(self, outputs, high = 0):
-        self.command(bytes([ftdi.MPSSE_SET_BITS_LOW, (high & 0xf0) | 0x08, (outputs & 0xf0) | 0x0b,
-                            ftdi.MPSSE_SET_BITS_HIGH, high >> 8, outputs >> 8,
-                            ftdi.MPSSE_CLK_DIV5_DISABLE,
-                            ftdi.MPSSE_3_PHASE_DISABLE,
-                            ftdi.MPSSE_ADAPTIVE_DISABLE,
-                            ftdi.MPSSE_LOOPBACK_DISABLE,
-                            ftdi.MPSSE_CLK_DIV, 59, 0]))
+    def gpio_get(self, pin):
+        if pin < 8:
+            cmd = bytes([api.MPSSE_GET_BITS_LOW])
+        else:
+            cmd = bytes([api.MPSSE_GET_BITS_HIGH])
+        rsp = self.execute(cmd, 1)
+        return bool(rsp[0] & (1 << (pin & 7)))
 
-class Jtag(object):
-    def __init__(self, handle):
-        self.handle = handle
+    def gpio_set(self, pin, value):
+        return self.gpio_mask_set(1 << pin, 1 << pin, (1 << pin) if value else 0)
 
-    def execute(self, cmds):
-        pass
+    def gpio_mask_set(self, change_mask, oe, val):
+        cmd = self.cmd_gpio_mask_set(change_mask, oe, val)
+        self.execute(cmd)
 
-    def cmd_tms(self, tms, next = 0):
-        cmd = ftdi.MPSSE_WRITE_NEG | ftdi.MPSSE_LSB | ftdi.MPSSE_TMS
+    def cmd_gpio_mask_set(self, change_mask, oe, val):
+        cmd = bytes()
+
+        self.__gpio_oe = (self.__gpio_oe & ~change_mask) | (change_mask & oe)
+        self.__gpio_val = (self.__gpio_val & ~change_mask) | (change_mask & val)
+
+        if change_mask & 0x00ff:
+            cmd += bytes([api.MPSSE_SET_BITS_LOW, self.__gpio_val & 0xff, self.__gpio_oe & 0xff])
+        if change_mask & 0xff00:
+            cmd += bytes([api.MPSSE_SET_BITS_HIGH, (self.__gpio_val >> 8), (self.__gpio_oe >> 8)])
+
+        return cmd
+
+class Mpsse(Handle):
+    def __init__(self, device, interface, **defaults):
+        Handle.__init__(self, device, interface, "MPSSE", **defaults)
+
+    def cmd_tms_shift(self, tms, next = 0):
+        cmd = api.MPSSE_WRITE_NEG | api.MPSSE_LSB | api.MPSSE_TMS
         ret = bytes()
 
-        bits = len(tms)
-        data = tms.data
-
-        if bits > 8:
-            bytestring = data[:-1]
-            for i in range(0, len(bytestring), 1024):
-                chunk = bytestring[i : i+1024]
-                ret += struct.pack("<BH", cmd, len(chunk) - 1)
-                ret += chunk
-            
-        ret += bytes([cmd | ftdi.MPSSE_BITS, (bits % 8) - 1, data[-1] | (next << 7)])
+        l = len(tms)
+        
+        for i in range(0, l, 6):
+            bits = tms[i : min((i + 6, l))]
+            ret += bytes([cmd | api.MPSSE_BITS, len(bits) - 1, int(bits) | (next << 7)])
 
         return ret
 
     def cmd_reset(self):
-        return self.cmd_tms(BitString(-1, 5))
+        return self.cmd_tms_shift(BitString(-1, 5))
 
     def cmd_run(self, count):
-        return self.cmd_tms(BitString(0, count))
+        return self.cmd_tms_shift(BitString(0, count))
 
     def cmd_ir(self):
-        return self.cmd_tms(BitString(0b01011, 5))
+        return self.cmd_tms_shift(BitString(0b01011, 5))
 
     def cmd_dr(self):
-        return self.cmd_tms(BitString(0b0101, 4))
+        return self.cmd_tms_shift(BitString(0b0101, 4))
 
     def cmd_update(self):
-        return self.cmd_tms(BitString(0b011, 3))
+        return self.cmd_tms_shift(BitString(0b011, 3))
 
-    def cmd_shift(self, tdi, read_tdo = True):
+    def cmd_shift_io(self, tdi):
         if not len(tdi):
-            return
+            return b'', []
 
-        cmd = ftdi.MPSSE_WRITE_NEG | ftdi.MPSSE_LSB | ftdi.MPSSE_WRITE
-        if read_tdo:
-            cmd |= ftdi.MPSSE_READ
+        counts = []
+        tms_cmd = api.MPSSE_WRITE_NEG | api.MPSSE_LSB | api.MPSSE_TMS | api.MPSSE_BITS
+        cmd = api.MPSSE_WRITE_NEG | api.MPSSE_LSB | api.MPSSE_WRITE
+        read = api.MPSSE_READ
 
         ret = bytes()
-
+        
         bits = len(tdi) - 1
         last = int(tdi[-1])
         data = tdi[:-1].data
 
-        ret += self.cmd_tms(BitString(0b01, 2), int(tdi[0]))
+        ret += bytes([tms_cmd, 1, (int(tdi[0]) << 7) | 0b01])
+        
+        if bits:
+            if bits >= 8:
+                bytestring = data
+                if bits % 8:
+                    bytestring = bytestring[:-1]
+                    
+                for i in range(0, len(bytestring), 1024):
+                    chunk = bytestring[i : i+1024]
+                    ret += struct.pack("<BH", cmd | read, len(chunk) - 1)
+                    ret += chunk
+                    counts.append((len(chunk), None))
+                    
+            if bits % 8:
+                ret += bytes([cmd | read | api.MPSSE_BITS, (bits % 8) - 1, data[-1]])
+                counts.append((1, bits % 8))
 
-        if bits > 8:
-            bytestring = data[:-1]
-            for i in range(0, len(bytestring), 1024):
-                chunk = bytestring[i : i+1024]
-                ret += struct.pack("<BH", cmd, len(chunk) - 1)
-                ret += chunk
+        ret += bytes([tms_cmd | read, 0, 0x01 | (last << 7)])
+        counts.append((1, 1))
 
-        ret += bytes([cmd | ftdi.MPSSE_BITS, (bits % 8) - 1, data[-1]])
+        ret += bytes([tms_cmd, 0, 0])
+        
+        return ret, counts
 
-        ret += self.cmd_tms(BitString(0b01, 2), last)
+    def cmd_shift_out(self, tdi):
+        if not len(tdi):
+            return b''
 
+        tms_cmd = api.MPSSE_WRITE_NEG | api.MPSSE_LSB | api.MPSSE_TMS | api.MPSSE_BITS
+        cmd = api.MPSSE_WRITE_NEG | api.MPSSE_LSB | api.MPSSE_WRITE
+
+        ret = bytes()
+        
+        bits = len(tdi) - 1
+        last = int(tdi[-1])
+        data = tdi[:-1].data
+
+        ret += bytes([tms_cmd, 1, (int(tdi[0]) << 7) | 0b01])
+        
+        if bits:
+            if bits >= 8:
+                bytestring = data
+                if bits % 8:
+                    bytestring = bytestring[:-1]
+                    
+                for i in range(0, len(bytestring), 1024):
+                    chunk = bytestring[i : i+1024]
+                    ret += struct.pack("<BH", cmd, len(chunk) - 1)
+                    ret += chunk
+                    
+            if bits % 8:
+                ret += bytes([cmd | api.MPSSE_BITS, (bits % 8) - 1, data[-1]])
+
+        ret += bytes([tms_cmd, 2, 0b01 | (last << 7)])
+        
         return ret
     
 def main():
-#    adapters = Enumerator().find_all(0x0403, 0x6014)
-    adapters = Enumerator().find_all(0x10eb, 0x0026)
-    jtag = adapters[0].open().jtag()
-    jtag.handle.direction_set(0x60eb, 0x00e8)
-
-    cmd = bytes()
-    cmd += jtag.cmd_reset()
-    cmd += jtag.cmd_run(2)
-    cmd += jtag.cmd_dr()
-    cmd += jtag.cmd_shift(BitString(0, 64))
-    cmd += jtag.cmd_shift(BitString(-1, 56))
-    cmd += jtag.cmd_update()
-    cmd += jtag.cmd_ir()
-    cmd += jtag.cmd_shift(BitString(-1, 32))
-    cmd += jtag.cmd_update()
-
-    print(binascii.b2a_hex(cmd))
-
-    print(binascii.b2a_hex(jtag.handle.command(cmd)))
+    import time
+    adapters = Device.list_all(0x10eb, 0x26)
+    mpsse = adapters[0].open()
+#    mpsse.gpio_mask_set(0xffff, 0x60eb, 0x00e8)
+#
+#    mpsse.speed = 1000
+#    
+#    cmd = bytes([api.MPSSE_LOOPBACK_ENABLE])
+#    print("cmd", binascii.b2a_hex(cmd))
+#    print("rsp", binascii.b2a_hex(mpsse.execute(cmd)))
+#
+#    for i in range(25):
+#        print()
+#        print(i)
+#        cmd = mpsse.cmd_shift(BitString(0x01010101, i))
+#        rlen = ((i-1) // 8 + 1) if i else 0
+#        print("cmd", binascii.b2a_hex(cmd), rlen)
+#        print("rsp", binascii.b2a_hex(mpsse.execute(cmd, rlen)))
+    while True:
+        mpsse.gpio_mask_set(0xffff, 0xffff, 0)
+        time.sleep(1)
+        mpsse.gpio_mask_set(0xffff, 0xffff, 0xffff)
+        time.sleep(1)
 
 if __name__ == '__main__':
     main()

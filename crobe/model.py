@@ -37,6 +37,9 @@ class Component(object):
         for c in self.children:
             ret += c.children_find(predicate)
         return ret
+    
+    def children_of_class(self, klass):
+        return self.children_find(lambda x: isinstance(x, klass))
 
 class BusComponent(Component):
     def __init__(self, name, bus):

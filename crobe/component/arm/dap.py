@@ -1,4 +1,4 @@
-from ...adapter import swd, jtag
+from ...adapter.protocol import swd, jtag
 from ...model import Component, PortComponent
 from ...part_id import PartId
 import time

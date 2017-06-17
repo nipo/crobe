@@ -1,18 +1,18 @@
-from . import model
-from .. import bitstring
-from ..db import Db
-from ..part_id import PartId
+from . import base
+from ... import bitstring
+from ...db import Db
+from ...part_id import PartId
 import time
 
 __all__ = ["Read", "Write", "JtagToSwd", "Wakeup"]
 
-class Interface(model.Interface):
+class Interface(base.Interface):
     db = Db()
 
     IDCODE = 0
 
     def __init__(self, port):
-        model.Interface.__init__(self, "SWD Intf", port)
+        base.Interface.__init__(self, "SWD Intf", port)
 
     def start(self):
         self.port.reset = True
@@ -27,7 +27,7 @@ class Interface(model.Interface):
 
         self.children.append(self.db.call(partid, self))
 
-        model.Interface.start(self)
+        base.Interface.start(self)
         
     def execute(self, operation_list):
         raise NotImplementedError()

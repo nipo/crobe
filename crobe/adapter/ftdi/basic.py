@@ -1,0 +1,276 @@
+from .. import model
+from ... import bitstring
+from ..protocol import jtag, base
+from . import ftdi
+        
+class Adapter(model.Adapter):
+    def __init__(self, enumerator, device):
+        self.device = device
+        self.enumerator = enumerator
+        self.serial_number = enumerator.serial_mangle(self.device.serial)
+        self.supported_interfaces = ["jtag"]
+        model.Adapter.__init__(self, "%s:%s" % (enumerator.short_name.lower(), self.serial_number or str(self.device.connection_id, 'ascii')[2:]))
+        self.nickname = self.name
+
+    @property
+    def firmware_info(self):
+        return self.enumerator.name
+
+    def open(self, interface_name, **defaults):
+        d = {}
+        d.update(self.enumerator.defaults)
+        d.update(defaults)
+
+        if interface_name.lower() == "jtag":
+            return JtagInterface(self, **d)
+
+        raise NotSupportedError("Unsupported interface %s" % interface_name)
+
+class JtagAdapterEnumerator(model.Enumerator):
+    adapter_class = Adapter
+
+    def __init__(self, name, short_name,
+                 vid = 0, pid = 0,
+                 **defaults):
+        model.Enumerator.__init__(self, name)
+        self.vid = vid
+        self.pid = pid
+        self.short_name = short_name
+        self.defaults = defaults
+
+    def start(self):
+        for device in ftdi.Device.list_all(self.vid, self.pid):
+            self.children.append(self.adapter_class(self, device))
+        model.Enumerator.start(self)
+
+    def serial_mangle(self, serial):
+        return serial
+
+class JtagInterface(jtag.Interface):
+    def __init__(self, adapter,
+                 channel = "A",
+                 gpio_output = 0, gpio_value = 0,
+                 resetn_pin = None, reset_pin = None,
+                 powern_pin = None, power_pin = None,
+                 activityn_pin = None, activity_pin = None):
+        jtag.Interface.__init__(self, adapter)
+
+        oe = 0xb
+        val = 0x0
+
+        self.__reset_pin = None
+        self.__power_pin = None
+        self.__activity_pin = None
+
+        if reset_pin is not None:
+            self.__reset_pin = (reset_pin, True)
+            oe |= (1 << reset_pin)
+        elif resetn_pin is not None:
+            self.__reset_pin = (resetn_pin, False)
+            oe |= (1 << resetn_pin)
+            val |= (1 << resetn_pin)
+
+        if power_pin is not None:
+            self.__power_pin = (power_pin, True)
+            oe |= (1 << power_pin)
+        elif powern_pin is not None:
+            self.__power_pin = (powern_pin, False)
+            oe |= (1 << powern_pin)
+            val |= (1 << powern_pin)
+
+        if activity_pin is not None:
+            self.__activity_pin = (activity_pin, True)
+            oe |= (1 << activity_pin)
+        elif activityn_pin is not None:
+            self.__activity_pin = (activityn_pin, False)
+            oe |= (1 << activityn_pin)
+            val |= (1 << activityn_pin)
+
+        self.handle = adapter.device.open(interface = channel, gpio_oe = oe, gpio_val = val)
+
+        self.__state = None
+
+    @property
+    def reset(self):
+        if self.__reset_pin is None:
+            return False
+
+        pin, polarity = self.__reset_pin
+        return self.gpio_get(pin) == polarity
+
+    @reset.setter
+    def reset(self, reset):
+        if self.__reset_pin is None:
+            self.logger.warning("Reset %s ignored", "holding" if reset else "releasing")
+            return
+
+        self.logger.info("%s reset pin", "holding" if reset else "releasing")
+        pin, polarity = self.__reset_pin
+        self.handle.gpio_mask_set(1 << pin, 1 << pin,
+                                  (1 << pin) if bool(reset) == polarity else 0)
+
+    @property
+    def power(self):
+        if not self.__power_pin:
+            return False
+
+        pin, polarity = self.__power_pin
+        return self.gpio_get(pin) == polarity
+
+    @power.setter
+    def power(self, power):
+        if not self.__power_pin:
+            self.logger.warning("Power %s ignored", "enabling" if power else "disabling")
+            return
+
+        self.logger.info("%s power", "enabling" if power else "disabling")
+        pin, polarity = self.__power_pin
+        self.handle.gpio_mask_set(1 << pin, 1 << pin,
+                                  (1 << pin) if bool(reset) == polarity else 0)
+        
+    @property
+    def speed(self):
+        return int(self.handle.speed)
+
+    @speed.setter
+    def speed(self, speed):
+        self.handle.speed = speed
+        self.logger.info("requested speed %dHz, had %dHz", speed, self.handle.speed)
+
+    def execute(self, operation_list):
+        to_join = []
+        ops = []
+
+        max_shift_bits = 512*8
+        
+        for o in operation_list:
+            if isinstance(o, jtag.Shift):
+                if not len(o.tdi):
+                    continue
+                if o.tdi and len(o.tdi) > max_shift_bits:
+                    parts = []
+                    for i in range(0, len(o.tdi), max_shift_bits):
+                        parts.append(jtag.Shift(o.tdi[i : i + max_shift_bits], read_tdo = o.read_tdo))
+                    o.__parts = parts
+                    ops += parts
+                    if o.read_tdo:
+                        to_join.append(o)
+                else:
+                    ops.append(o)
+            else:
+                ops.append(o)
+
+        self.logger.debug("running %s", operation_list)
+
+        assert self.__state in (self.STATE_RESET, self.STATE_PAUSE, self.STATE_RTI, None)
+        
+        while ops:
+            pending = []
+            if self.__activity_pin:
+                pin, polarity = self.__activity_pin
+                cmd = self.handle.cmd_gpio_mask_set(1 << pin, 1 << pin,
+                                                    (1 << pin) if polarity else 0)
+            else:
+                cmd = b''
+            tdo_length = 0
+
+            while ops and len(cmd) < 1024:
+                op = ops.pop(0)
+                pending.append(op)
+
+                if isinstance(op, jtag.CaptureDr):
+                    if self.__state == self.STATE_RTI:
+                        cmd += self.handle.cmd_tms_shift(bitstring.BitString(0x1, 2))
+                    elif self.__state == self.STATE_PAUSE:
+                        cmd += self.handle.cmd_tms_shift(bitstring.BitString(0x7, 4))
+                    else:
+                        raise model.ProtocolError("Bad state sequence")
+
+                    if ops and isinstance(ops[0], (jtag.CaptureIr, jtag.Run, jtag.CaptureDr)):
+                        # Actually lie about that, this will do the same
+                        self.__state = self.STATE_PAUSE
+                    else:
+                        cmd += self.handle.cmd_tms_shift(bitstring.BitString(1, 2))
+                        self.__state = self.STATE_PAUSE
+
+                elif isinstance(op, jtag.CaptureIr):
+                    if self.__state == self.STATE_RTI:
+                        cmd += self.handle.cmd_tms_shift(bitstring.BitString(0x3, 3))
+                    elif self.__state == self.STATE_PAUSE:
+                        cmd += self.handle.cmd_tms_shift(bitstring.BitString(0xf, 5))
+                    else:
+                        raise model.ProtocolError("Bad state sequence")
+
+                    cmd += self.handle.cmd_tms_shift(bitstring.BitString(0x1, 2))
+                    self.__state = self.STATE_PAUSE
+
+                elif isinstance(op, jtag.Run):
+                    if self.__state == self.STATE_PAUSE:
+                        cmd += self.handle.cmd_tms_shift(bitstring.BitString(0x3, 3))
+                        self.__state = self.STATE_RTI
+                    elif self.__state == self.STATE_RESET:
+                        cmd += self.handle.cmd_tms_shift(bitstring.BitString(0, 1))
+                        self.__state = self.STATE_RTI
+                        
+                    if self.__state == self.STATE_RTI:
+                        if op.cycles:
+                            # TODO anything shorter ?
+                            cmd += self.handle.cmd_tms_shift(bitstring.BitString(0, op.cycles))
+                    else:
+                        raise model.ProtocolError("Bad state sequence")
+
+                elif isinstance(op, jtag.GenericOperation):
+                    cmd += self.handle.cmd_tms_shift(op.tms)
+                    self.__state = self.STATE_RESET
+
+                elif isinstance(op, jtag.Shift):
+                    assert self.__state == self.STATE_PAUSE
+                    if op.read_tdo:
+                        blob, counts = self.handle.cmd_shift_io(op.tdi)
+                        op.__counts = counts
+                        op.__offset = tdo_length
+                        tdo_length += sum([bc for bc, bic in counts])
+                    else:
+                        blob = self.handle.cmd_shift_out(op.tdi)
+                    cmd += blob
+
+                elif isinstance(op, jtag.Pause):
+                    pass
+
+                else:
+                    raise base.ProtocolError("Unknown JTAG operation %s" % type(op))
+                
+            self.logger.debug("MPSSE commands: %r", cmd)
+
+            if self.__activity_pin:
+                pin, polarity = self.__activity_pin
+                cmd += self.handle.cmd_gpio_mask_set(1 << pin, 1 << pin,
+                                                     0 if polarity else (1 << pin))
+
+            tdo_blob = self.handle.execute(cmd, tdo_length)
+
+            if tdo_length:
+                self.logger.debug("MPSSE response: %r", tdo_blob)
+
+                for op in pending:
+                    if isinstance(op, jtag.Shift) and op.read_tdo:
+                        base = op.__offset
+                        tdo = bitstring.BitString()
+                        for i, (bytec, bits) in enumerate(op.__counts):
+                            if bits is None:
+                                tdo += bitstring.BitString(tdo_blob[base : base + bytec])
+                            else:
+                                assert bytec == 1
+                                tdo += bitstring.BitString(tdo_blob[base] >> (8 - bits), bits)
+                            base += bytec
+                        op.tdo = tdo
+            else:
+                self.logger.debug("MPSSE status: %r", tdo_blob)
+
+            assert self.__state in (self.STATE_RTI, self.STATE_RESET, self.STATE_PAUSE)
+
+        for o in to_join:
+            tdo = bitstring.BitString()
+            for op in o.__parts:
+                tdo += op.tdo
+            o.tdo = tdo

@@ -1,55 +1,74 @@
-from .. import model
-from .. import swd
-from .. import jtag
-from ... import bitstring
+from . import model
+from .protocol import swd, jtag, base
+from .. import bitstring
 import struct
 
-__all__ = ['Enumerator']
+__all__ = []
 
+@model.Enumerator.register
 class Enumerator(model.Enumerator):
     def __init__(self):
-        from . import jaylink
-        model.Enumerator.__init__(self)
-        self.ctx = jaylink.Context()
+        from . import libjaylink
+        model.Enumerator.__init__(self, "JLink")
+        self.ctx = libjaylink.Context()
 
-    def find(self, **filter):
-        ret = []
+    def start(self):
         for index, d in enumerate(self.ctx.devices()):
-            if "serial_number" in filter and int(filter["serial_number"]) != d.serial_number:
-                continue
-            if "index" in filter and filter["index"] != index:
-                continue
-            ret.append(Adapter(d))
-        return ret
+            self.children.append(Adapter.from_device(d))
 
+        model.Enumerator.start(self)
+            
 class Adapter(model.Adapter):
-    def __init__(self, device):
+    @classmethod
+    def from_device(cls, d):
+        handle = d.open()
+
+        address = d.usb_address
+        interfaces = handle.available_interfaces
+        firmware_version = handle.firmware_version
+        nickname = handle.config[80:80+32].split(b"\x00")[0]
+        if nickname.startswith(b"\xff"):
+            nickname = b""
+        nickname = str(nickname, 'utf-8', 'ignore')
+
+        del handle
+
+        return cls(d, address, d.serial_number, interfaces, firmware_version, nickname)
+
+    def __init__(self, device, address, serial_number, available_interfaces, firmware_version, nickname):
+        model.Adapter.__init__(self, "jlink:%s" % (nickname or serial_number))
+
         self.device = device
-        self.serial_number = self.device.serial_number
-        model.Adapter.__init__(self, "JLink %d" % self.serial_number)
-        self.handle = device.open()
-        
-    @property
-    def supported_interfaces(self):
-        return [x.lower() for x in self.handle.available_interfaces]
+        self.address = address
+        self.nickname = nickname
+        self.serial_number = serial_number
+        self.supported_interfaces = [x.lower() for x in available_interfaces]
+        self.__firmware_version = firmware_version
 
     @property
     def firmware_info(self):
-        return self.handle.firmware_version[0]
+        return self.__firmware_version[0]
 
     def open(self, interface_name):
-        if interface_name.upper() not in self.handle.available_interfaces:
-            raise NotSupportedError("Unsupported interface %s" % interface_name)
+        if interface_name.lower() not in self.supported_interfaces:
+            raise NotImplementedError("Unsupported interface %s" % interface_name)
 
-        if interface_name == "jtag":
+        if interface_name.lower() == "jtag":
             return JtagInterface(self)
-        elif interface_name == "swd":
+
+        if interface_name.lower() == "swd":
             return SwdInterface(self)
-        raise NotSupportedError("Unsupported interface %s" % interface_name)
-        
+
+        raise NotImplementedError("Unsupported interface %s" % interface_name)
+
+class JLinkInterface(object):
+    def __init__(self, device, interface):
+        self.handle = device.device.open()
+        self.handle.interface = interface.upper()
+
     @property
     def speed(self):
-        return self.handle.speed * 1000.
+        return int(self.handle.speed * 1000.)
 
     @speed.setter
     def speed(self, speed):
@@ -74,37 +93,11 @@ class Adapter(model.Adapter):
         self.logger.info("%s target power", ["disabling", "enabling"][int(power)])
         self.handle.power = power
 
-class JLinkInterface(object):
-    @property
-    def speed(self):
-        return int(self.port.speed)
-
-    @speed.setter
-    def speed(self, speed):
-        self.logger.info("speed: %dHz", speed)
-        self.port.speed = speed
-
-    @property
-    def reset(self):
-        return self.port.reset
-
-    @reset.setter
-    def reset(self, reset):
-        self.port.reset = reset
-
-    @property
-    def power(self):
-        return self.port.power
-
-    @power.setter
-    def power(self, power):
-        self.port.power = power
-
-class JtagInterface(jtag.Interface, JLinkInterface):
+class JtagInterface(JLinkInterface, jtag.Interface):
     def __init__(self, port):
+        JLinkInterface.__init__(self, port, "JTAG")
         jtag.Interface.__init__(self, port)
-        self.port.handle.interface = "JTAG"
-        self.port.handle.tresetn = True
+        self.handle.tresetn = True
         self.__state = None
 
     def execute(self, operation_list):
@@ -131,7 +124,7 @@ class JtagInterface(jtag.Interface, JLinkInterface):
                         tms_buf.append(0x7, 4)
                         tdi_buf.append(0x0, 4)
                     else:
-                        raise model.ProtocolError("Bad state sequence")
+                        raise base.ProtocolError("Bad state sequence")
 
                     if ops and isinstance(ops[0], jtag.Shift):
                         tms_buf.append(0x0, 1)
@@ -153,7 +146,7 @@ class JtagInterface(jtag.Interface, JLinkInterface):
                         tms_buf.append(0xf, 5)
                         tdi_buf.append(0x0, 5)
                     else:
-                        raise model.ProtocolError("Bad state sequence")
+                        raise base.ProtocolError("Bad state sequence")
 
                     if ops and isinstance(ops[0], jtag.Shift):
                         tms_buf.append(0x0, 1)
@@ -179,7 +172,7 @@ class JtagInterface(jtag.Interface, JLinkInterface):
                             tms_buf.append(0, op.cycles)
                             tdi_buf.append(0, op.cycles)
                     else:
-                        raise model.ProtocolError("Bad state sequence")
+                        raise base.ProtocolError("Bad state sequence")
 
                 elif isinstance(op, jtag.GenericOperation):
                     tms_buf += op.tms
@@ -211,14 +204,14 @@ class JtagInterface(jtag.Interface, JLinkInterface):
                     pass
 
                 else:
-                    raise NotSupportedError("Unknown JTAG operation %s" % type(op))
+                    raise base.ProtocolError("Unknown JTAG operation %s" % type(op))
 
                 assert len(tms_buf) == len(tdi_buf)
 
             self.logger.debug("tms: %s", tms_buf)
             self.logger.debug("tdi: %s", tdi_buf)
             
-            tdo_blob = self.port.handle.jtag_io(tms_buf.data, tdi_buf.data, len(tms_buf))
+            tdo_blob = self.handle.jtag_io(tms_buf.data, tdi_buf.data, len(tms_buf))
             tdo_buf = bitstring.BitString(tdo_blob, len(tms_buf))
 
             self.logger.debug("tdo: %s", tdo_buf)
@@ -232,7 +225,7 @@ class JtagInterface(jtag.Interface, JLinkInterface):
 class SwdInterface(swd.Interface, JLinkInterface):
     def __init__(self, port):
         swd.Interface.__init__(self, port)
-        self.port.handle.interface = "SWD"
+        JLinkInterface.__init__(self, port, "JTAG")
 
     def execute(self, operation_list):
         ops = list(operation_list)
@@ -297,14 +290,14 @@ class SwdInterface(swd.Interface, JLinkInterface):
                     out_buf += op.out
 
                 else:
-                    raise NotSupportedError("Unknown SWD operation %s" % type(op))
+                    raise base.ProtocolError("Unknown SWD operation %s" % type(op))
 
                 assert len(out_buf) == len(oe_buf)
 
             self.logger.debug("out: %s", out_buf)
             self.logger.debug("oe : %s", oe_buf)
             
-            in_blob = self.port.handle.swd_io(out_buf.data, oe_buf.data, len(out_buf))
+            in_blob = self.handle.swd_io(out_buf.data, oe_buf.data, len(out_buf))
             in_buf = bitstring.BitString(in_blob, len(out_buf))
 
             self.logger.debug("in : %s", in_buf)
@@ -315,7 +308,7 @@ class SwdInterface(swd.Interface, JLinkInterface):
                     if int(ack) != 1:
                         self.logger.error("While running %s%s", pending[:idx+1], ("..." if idx < len(pending)-1 else ""))
                         self.logger.error("Got ACK/Wait/Error = %s", ack)
-                        raise model.ProtocolError()
+                        raise base.ProtocolError()
 
                     if isinstance(op, swd.Read):
                         op.data = int(in_buf[op.__offset + 12 : op.__offset + 44])

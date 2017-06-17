@@ -1,52 +1,69 @@
-from . import model
-from ..model import PortComponent
-from ..bitstring import BitString
-from ..db import Db, NoMatch
-from ..part_id import PartId
+from . import base
+from ...model import PortComponent
+from ...bitstring import BitString
+from ...db import Db, NoMatch
+from ...part_id import PartId
 import math
 import time
 
-__all__ = ["CaptureDr", "CaptureIr", "Shift", "Reset", "Run",
-           "Chain", "Tap", "TapOperation"]
+__all__ = []
 
-class Interface(model.Interface):
+class Interface(base.Interface):
     STATE_RESET = object()
     STATE_RTI   = object()
     STATE_SHIFT = object()
     STATE_PAUSE = object()
 
     def __init__(self, port):
-        model.Interface.__init__(self, "JTAG Intf", port)
+        base.Interface.__init__(self, "JTAG Intf", port)
         self.use_icepick = False
 
     def start(self):
         chain = Chain(self)
         self.children.append(chain)
-        model.Interface.start(self)
+        base.Interface.start(self)
 
     def execute(self, operation_list):
         raise NotImplementedError()
 
+    def cmd_shift(self, tdi, read_tdo = True):
+        return Shift(tdi, read_tdo)
+
+    def cmd_capture_dr(self):
+        return CaptureDr()
+
+    def cmd_capture_ir(self):
+        return CaptureIr()
+
+    def cmd_tap_reset(self, count = 5):
+        return Reset(count)
+
+    def cmd_swd_to_jtag(self):
+        return SwdToJtag()
+
+    def cmd_run(self, count):
+        return Run(count)
+
     def shift(self, tdi, read_tdo = True):
-        op = Shift(tdi, read_tdo)
+        op = self.cmd_shift(tdi, read_tdo)
         self.execute([op])
         if read_tdo:
             return op.tdo
 
     def capture_dr(self):
-        self.execute([CaptureDr()])
+        self.execute([self.cmd_capture_dr()])
 
     def capture_ir(self):
-        self.execute([CaptureIr()])
+        self.execute([self.cmd_capture_ir()])
 
-    def reset(self):
-        self.execute([Reset()])
+    def tap_reset(self, count = 5):
+        self.execute([self.cmd_tap_reset(count)])
 
     def swd_to_jtag(self):
-        self.execute([SwdToJtag()])
+        self.execute([self.cmd_swd_to_jtag()])
 
     def run(self, count):
-        self.execute([Run(count)])
+        self.execute([self.cmd_run(count)])
 
     def __str__(self):
         return "JTAG Interface"
@@ -71,10 +88,11 @@ class GenericOperation(Operation):
         pass
 
 class Reset(GenericOperation):
+    def __init__(self, count):
+        self.tms = BitString(-1, max((count, 5)))
+
     def __str__(self):
         return "<TAP Reset>"
-
-    tms = BitString(-1, 5)
 
 class SwdToJtag(GenericOperation):
     def __str__(self):
@@ -125,24 +143,24 @@ class Chain(PortComponent):
             
     def reset(self):
         import time
-        self.port.reset()
-        self.port.port.reset = True
-        self.port.port.trst = True
-        time.sleep(.02)
-        self.port.port.reset = False
-        self.port.port.trst = False
-        time.sleep(.1)
-        self.port.reset()
+        speed_before = self.port.speed
+        self.port.speed = 1000000
+        self.port.tap_reset()
+        self.port.trst = True
+        self.port.tap_reset()
+        self.port.trst = False
+        self.port.tap_reset()
         self.port.run(0)
+        self.port.speed = speed_before
 
     def swd_to_jtag(self):
         self.port.swd_to_jtag()
-        self.port.reset()
+        self.port.tap_reset()
         self.port.run(50)
         
     def icepick_enable(self):
-        speed_before = self.port.port.speed
-        self.port.port.speed = 100e3
+        speed_before = self.port.speed
+        self.port.speed = 100000
         time.sleep(.001)
         ops = [CaptureIr(), Shift(BitString(-1, 6)), Run(1), CaptureDr()]
         for lengths in [(0, 0, 1), (2, 9)]:
@@ -151,12 +169,12 @@ class Chain(PortComponent):
         ops += [CaptureIr(), Shift(BitString(-1, 16)), Run(0)]
         ops += [Run(5), CaptureIr(), Shift(BitString(0x4, 6)), Run(3)]
         self.port.execute(ops)
-        self.port.port.speed = speed_before
+        self.port.speed = speed_before
         self.discover([PartId(0, 0x17, 0x1ce)])
 
     def discover(self, forced_idcodes = []):
         # Get device ID codes
-        #self.port.reset()
+        #self.port.tap_reset()
         self.port.run(1)
 
         self.port.capture_dr()
@@ -167,7 +185,7 @@ class Chain(PortComponent):
             default_dr += dr
             dr = int(dr)
             assert len(default_dr) < 500
-
+            
         # Get default IR
         self.port.capture_ir()
 
@@ -192,12 +210,8 @@ class Chain(PortComponent):
 
         # Discover device count
         self.port.capture_dr()
-        device_count = 0
-        out = self.port.shift(BitString(1, 32))
-        while not out:
-            device_count += 32
-            out = self.port.shift(BitString(0, 32))
-        device_count += int(math.log(int(out), 2))
+        out = self.port.shift(BitString(1, total_ir_length // 2 + 1))
+        device_count = int(math.log(int(out), 2))
 
         if device_count == len(forced_idcodes):
             id_codes = forced_idcodes
@@ -361,20 +375,21 @@ class Tap(PortComponent):
         
         for c in cmds:
             if isinstance(c, TapDrShift):
-                if self.ir != c.ir:
+                if self.ir != c.ir or c.read_ir:
+                    c.__op = Shift(BitString(c.ir, ir_len), read_tdo = c.read_ir)
                     ops += [CaptureIr(),
                             Shift(BitString(-1, ir_pre)),
-                            Shift(BitString(c.ir, ir_len)),
+                            c.__op,
                             Shift(BitString(-1, ir_post))]
                     self.ir = c.ir
 
-                ops += [CaptureDr()]
-
                 if c.tdi is not None:
-                    c.__op = Shift(c.tdi, read_tdo = c.read_tdo)
-                    ops += [Shift(BitString(0, dr_pre)),
-                            c.__op,
-                            Shift(BitString(0, dr_post))]
+                    ops += [CaptureDr()]
+                    if len(c.tdi):
+                        c.__op = Shift(c.tdi, read_tdo = c.read_tdo)
+                        ops += [Shift(BitString(0, dr_pre)),
+                                c.__op,
+                                Shift(BitString(0, dr_post))]
 
             elif isinstance(c, TapRun):
                 ops += [Run(c.cycles)]
@@ -382,20 +397,22 @@ class Tap(PortComponent):
         self.port.execute(ops)
 
         for c in cmds:
-            if isinstance(c, TapDrShift) and c.read_tdo:
+            if isinstance(c, TapDrShift) and (c.read_tdo or c.read_ir):
                 c.tdo = c.postprocess(c.__op.tdo)
 
-    def dr_shift(self, ir, dr, length = None, read_tdo = True):
-        op = self.cmd_dr_shift(ir, dr, length, read_tdo)
+    def dr_shift(self, ir, dr, length = None, read_tdo = True, read_ir = False):
+        op = self.cmd_dr_shift(ir, dr, length, read_tdo, read_ir)
         self.execute([op])
         if dr is not None and read_tdo:
             return op.tdo
+        elif read_ir:
+            return op.tdo
 
-    def run(self, cycles):
+    def run(self, cycles = 1):
         self.execute([TapRun(cycles)])
 
-    def cmd_dr_shift(self, ir, dr, length = None, read_tdo = True):
-        return TapDrShift(ir, dr, length, read_tdo)
+    def cmd_dr_shift(self, ir, dr, length = None, read_tdo = True, read_ir = False):
+        return TapDrShift(ir, dr, length, read_tdo, read_ir)
 
     def cmd_run(self, cycles):
         return TapRun(cycles)
@@ -410,13 +427,15 @@ class TapOperation(object):
         return str(self)
 
 class TapDrShift(TapOperation):
-    def __init__(self, ir, dr, length = None, read_tdo = True):
+    def __init__(self, ir, dr, length = None, read_tdo = True, read_ir = False):
         self.ir = ir
         self.postprocess = lambda x:x
         self.tdo = 0
+        self.read_ir = False
 
         if dr is None:
             read_tdo = False
+            self.read_ir = read_ir
             self.tdi = None
         elif isinstance(dr, BitString):
             self.tdi = dr

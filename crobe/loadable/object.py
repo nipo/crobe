@@ -166,7 +166,12 @@ class Program:
         import struct
         
         self = cls()
-        fd = open(filename, 'rb')
+
+        if filename.endswith(".bit.gz"):
+            import gzip
+            fd = gzip.open(filename, 'rb')
+        else:
+            fd = open(filename, 'rb')
 
         header = fd.read(len(HEADER))
         if header != HEADER:
@@ -200,7 +205,7 @@ class Program:
 
         if filename.endswith(".bin"):
             return cls.from_bin(filename, offset)
-        if filename.endswith(".bit"):
+        if filename.endswith(".bit") or filename.endswith(".bit.gz"):
             return cls.from_bit(filename, offset)
         if filename.endswith(".hex") or filename.endswith(".ihex"):
             return cls.from_ihex(filename, offset)

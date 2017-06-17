@@ -47,6 +47,9 @@ class BitString:
             elif e < 0:
                 e += self.__length
 
+            b = max(0, min(b, self.__length))
+            e = max(0, min(e, self.__length))
+
             if e <= b:
                 return self.__class__(0, 0)
 
@@ -58,11 +61,15 @@ class BitString:
         return bool((self.__data >> offset) & 1)
 
     def __str__(self):
+        if self.__length > 1024:
+            return "[%d bits]" % self.__length
         if self.__length:
             return bin(self.__data)[2:][::-1].ljust(self.__length, '0')
         return "."
 
     def __repr__(self):
+        if self.__length > 1024:
+            return "BitString([...], %d)" % (self.__length)
         return "BitString(0x%x, %d)" % (self.__data, self.__length)
 
     def __bool__(self):

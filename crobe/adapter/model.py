@@ -1,10 +1,14 @@
 from .. import model
 
-__all__ = ['Enumerator', 'Adapter', 'Interface', 'JtagInterface', 'SwdInterface']
+__all__ = ['Enumerator', 'Adapter']
+
+registry = []
 
 class Enumerator(model.Component):
-    def __init__(self):
-        model.Component.__init__(self, "Enumerator")
+    @classmethod
+    def register(cls, enum_class):
+        cls.singleton.children.append(enum_class())
+        return enum_class
 
     def find(self, **filter):
         raise KeyError("Adapter not found")
@@ -31,22 +35,4 @@ class Adapter(model.Component):
     def open(self, interface_name):
         raise NotSupportedError("Unsupported interface %s" % interface_name)
 
-class Interface(model.PortComponent):
-    def __init__(self, name, port):
-        model.PortComponent.__init__(self, name, port)
-
-    def close(self):
-        pass
-
-    # property, writable, Hz
-    speed = None
-
-    # property read-write
-    # Active high
-    reset = False
-
-    def __str__(self):
-        return "%s on %s" % (self.__class__.__name__, self.port)
-
-class ProtocolError(Exception):
-    pass
+Enumerator.singleton = Enumerator("root")

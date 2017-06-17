@@ -1,4 +1,4 @@
-from ....adapter import jtag
+from ....adapter.protocol import jtag
 from ....part_id import PartId
 from ...mips.ejtag import EjtagTap
 
