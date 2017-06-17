@@ -68,15 +68,19 @@ class Adapter(Command):
         raise ValueError("Adapter not found", args.adapter)
     
 class Interface(Adapter):
+    forced_interface = None
+
     def c20_interface_declare(self):
-        self.parser.add_argument('--interface', '-i', type = str, default = "swd")
+        if not self.forced_interface:
+            self.parser.add_argument('--interface', '-i', type = str, default = "swd")
 
     def c20_interface_parse(self, args):
-        self.interface = self.adapter.open(args.interface)
+        interface = self.forced_interface or args.interface
+        self.interface = self.adapter.open(interface)
 
 class Speed(Interface):
     def c30_speed_declare(self):
-        self.parser.add_argument('--speed', '-s', type = int, default = 10000000)
+        self.parser.add_argument('--speed', '-s', type = float, default = 10000000)
 
     def c30_speed_parse(self, args):
         self.interface.speed = args.speed
@@ -97,6 +101,29 @@ class IcePick(Interface):
 
     def c25_icepick_parse(self, args):
         self.interface.use_icepick = args.icepick
+
+class Programs:
+    def c40_program_declare(self):
+        self.parser.add_argument('programs', metavar = 'PROGRAMS',
+                                 type = str, nargs = '*',
+                                 help = 'Files to load')
+
+    def c40_program_parse(self, args):
+        from ..loadable.object import Program
+        self.program = Program()
+
+        for fn in args.programs:
+            try:
+                filename, offset = fn.split("+", 1)
+                offset = int(offset, 16)
+                assert os.path.exists(filename)
+            except:
+                filename = fn
+                offset = 0
+
+            prog = Program.from_file(filename, offset)
+
+            self.program += prog
         
 if __name__ == "__main__":
     class LolCommand:

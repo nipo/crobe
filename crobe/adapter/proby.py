@@ -56,6 +56,8 @@ class ProbyAdapter(Adapter):
 
         self.mode = mode
 
+        del jtag_intf
+
 @model.Enumerator.register
 class Enumerator(JtagAdapterEnumerator):
     adapter_class = ProbyAdapter
