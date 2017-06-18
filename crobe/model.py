@@ -2,6 +2,16 @@ import struct
 import logging
 
 class Component(object):
+    """
+    Crobe base component.  Everything in crobe is a component
+    (Enumerators, Adapters, Interfaces, TAPs, Debug components, SoCs,
+    etc.).
+
+    Components are hierarchical, they can have children.
+
+    There are utilities to retrieve a component in the subtree of an
+    other.
+    """
     def __init__(self, name):
         self.name = name
         self.children = []
@@ -33,20 +43,34 @@ class Component(object):
         self.logger = logging.getLogger(name[:10])
     
     def children_find(self, predicate):
+        """
+        Retrieve childrens in the deep subtree matching predicate.
+        """
         ret = list(filter(predicate, self.children))
         for c in self.children:
             ret += c.children_find(predicate)
         return ret
     
     def children_of_class(self, klass):
+        """
+        Retrieve childrens in the deep subtree of class klass.
+        """
         return self.children_find(lambda x: isinstance(x, klass))
 
 class BusComponent(Component):
+    """
+    Component with a bus interface.
+    """
+
     def __init__(self, name, bus):
         Component.__init__(self, name)
         self.bus = bus
 
 class PortComponent(Component):
+    """
+    Component with a port interface.
+    """
+
     def __init__(self, name, port):
         Component.__init__(self, name)
         self.port = port

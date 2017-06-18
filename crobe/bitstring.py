@@ -1,11 +1,30 @@
 class BitString:
+    """
+    A bitstring.
+
+    A sized binary string.
+    """
+    
     def __init__(self, *args, **kwargs):
+        """
+        Creates a new bit string, uses prototype of append().
+        """
         self.__data = 0
         self.__length = 0
         if args or kwargs:
             self.append(*args, **kwargs)
 
     def append(self, data, length = None):
+        """
+        :param data: May either be a bytes() array, an integer, or another BitString object.
+        :param int length: Size (if data is an integer or bytes()).
+
+        If data is bytes, it is parsed little endian, LSB first.
+        If length is omitted, it is assumed to be total (i.e. 8 * len(data)).
+
+        If data is an integer, it is used LSB first, providing length
+        is mandatory.
+        """
         if isinstance(data, bytes):
             if length is None:
                 length = len(data) * 8
@@ -29,12 +48,24 @@ class BitString:
 
     @property
     def data(self):
+        """
+        Binary representation of bit string as a blob. LSB first, little-endian.
+        """
         return self.__data.to_bytes(length = (self.__length + 7) // 8, byteorder = "little")
 
     def __len__(self):
+        """
+        Length of bit string, in bits.
+        """
         return self.__length
 
     def __getitem__(self, offset):
+        """
+        If used to retrieve a sigle bit, it returns a bool.
+
+        If used to retrieve a slice, a BitString is returned.
+        Negative indices are supported, stride is not.
+        """
         if isinstance(offset, slice):
             b, e = offset.start, offset.stop
             if b is None:
@@ -61,6 +92,9 @@ class BitString:
         return bool((self.__data >> offset) & 1)
 
     def __str__(self):
+        """
+        String representation, in bit order (LSB first).
+        """
         if self.__length > 1024:
             return "[%d bits]" % self.__length
         if self.__length:
@@ -73,7 +107,13 @@ class BitString:
         return "BitString(0x%x, %d)" % (self.__data, self.__length)
 
     def __bool__(self):
+        """
+        Whether BitString is zero length (regardless of value).
+        """
         return bool(self.__length)
 
     def __int__(self):
+        """
+        Integer representation of data.
+        """
         return self.__data

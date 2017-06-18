@@ -4,7 +4,7 @@ __all__ = ["Interface", "ProtocolError", "CommunicationError"]
 
 class Interface(model.PortComponent):
     """
-    Base class for a given protocol interface from an adapter.
+    Base class for protocol interfaces from an Adapter.
     """
     def __init__(self, name, port):
         model.PortComponent.__init__(self, name, port)

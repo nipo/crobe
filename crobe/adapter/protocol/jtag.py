@@ -6,9 +6,63 @@ from ...part_id import PartId
 import math
 import time
 
-__all__ = []
+__all__ = ["Interface"]
 
 class Interface(base.Interface):
+    """
+    JTAG protocol interface.
+
+    JTAG protocol model uses 5 basic operations:
+
+    - TAP reset,
+    - Capture IR,
+    - Capture DR,
+    - Data shift (reading TDO or not),
+    - Run (with optional cycle count).
+
+    These five operations allow to implement all the operations that
+    can be done on a JTAG chain.  Allowed transitions are:
+
+    - Any to TAP Reset,
+    - TAP Reset to Capture IR/DR,
+    - Capture to Capture (goes through the FSM to capture again),
+    - Capture to Shift,
+    - Shift to Shift,
+    - Capture to Run,
+    - Shift to Run,
+    - Run to Run.
+
+    Adapter implementations are responsible for handling the FSM as
+    they require.  They may take advantage of the Pause IR/DR states
+    if they need.
+
+    Basic entry points of the JTAG Interface are either:
+
+    - the synchronous interface:
+
+      * run(),
+      * capture_ir(),
+      * capture_dr(),
+      * shift() (it returns TDO if asked for),
+      * tap_reset(),
+      * swd_to_jtag();
+
+    - the asynchronous interface, building a list of operation objects
+      using operation factories:
+
+      * cmd_run(),
+      * cmd_capture_ir(),
+      * cmd_capture_dr(),
+      * cmd_shift(),
+      * cmd_tap_reset(),
+      * cmd_swd_to_jtag(),
+
+      then passing the list of operations to execute().  Operations
+      will be batched as fast as possible, and execute() will return
+      when all operations are flushed.  TDO value will be available on
+      each shift operation object where relevant.
+    """
+
     STATE_RESET = "RESET"
     STATE_RTI   = "RTI"
     STATE_SHIFT = "SHIFT"
@@ -126,6 +180,11 @@ class Run(Operation):
         return "<Run %d>" % self.cycles
 
 class Chain(PortComponent):
+    """
+    JTAG Chain abstraction, handles discovery of the chain and instanciation of TAPs.
+
+    This can handle SWD to JTAG switching or ICEPick initialization.
+    """
     def __init__(self, port):
         PortComponent.__init__(self, "JTAG Chain", port)
 
@@ -173,6 +232,17 @@ class Chain(PortComponent):
         self.discover([PartId(0, 0x17, 0x1ce)])
 
     def discover(self, forced_idcodes = []):
+        """
+        This does a blind discovery of the JTAG Chain.  This can
+        reliably identify IDCodes of devices that reply their IDCodes
+        on TAP reset, and can reliably identify TAP count.
+
+        It does its best to discover TAP IR lengths when possible, in
+        a last resort, it will use known TAP idcodes to disambiguify.
+
+        Known components will automatically be instanciated and
+        attached on matching TAPs.
+        """
         # Get device ID codes
         #self.port.tap_reset()
         self.port.run(1)
@@ -337,8 +407,33 @@ class Chain(PortComponent):
         tap.start()
             
 class Tap(PortComponent):
+    """
+    A TAP model, i.e. a device in a JTAG chain.  This transparently
+    handles shifting BYPASS instruction in other TAPs and inserting
+    relevant DR shifts through Bypass DR.
+
+    For TAPs that can modify the JTAG chain (like ICE-Pick), there are
+    helpers that can insert other TAPs around the current one.
+
+    Like the raw JTAG interface, this object supports both a
+    synchronous and an asynchronous interface:
+
+    - object returned by cmd_dr_shift() and cmd_run() can be put in a
+      list, batch-executed through a call to execute(),
+      
+    - dr_shift() and run() allow to do the same, step by step
+      (dr_shift returns TDO if asked for).
+    """
+
+    """
+    Expected IR length of TAP. Can be used by Chain code when
+    discovering chain in order to disambiguify discovered chain.
+    """
     irlen = None
 
+    """
+    TAP Registry, by IDCode.
+    """
     db = Db()
 
     def __init__(self, port, index):
@@ -367,6 +462,8 @@ class Tap(PortComponent):
         return self.port.dr_pre_post(self.index)
                 
     def execute(self, cmds):
+        """
+        """
         ops = []
 
         self.logger.debug("running %s", cmds)
@@ -401,6 +498,9 @@ class Tap(PortComponent):
                 c.tdo = c.postprocess(c.__op.tdo)
 
     def dr_shift(self, ir, dr, length = None, read_tdo = True, read_ir = False):
+        """
+        See cmd_dr_shift().
+        """
         op = self.cmd_dr_shift(ir, dr, length, read_tdo, read_ir)
         self.execute([op])
         if dr is not None and read_tdo:
@@ -409,12 +509,31 @@ class Tap(PortComponent):
             return op.tdo
 
     def run(self, cycles = 1):
+        """
+        See cmd_run().
+        """
         self.execute([TapRun(cycles)])
 
     def cmd_dr_shift(self, ir, dr, length = None, read_tdo = True, read_ir = False):
+        """
+        Shifts DR having a given IR selected. Will only reload IR if needed.
+
+        If read_tdo is True, DR TDO is read back and returned.  If
+        read_ir is True, IR is always shifted in and IR captured value is returned.
+
+        dr may be None, in which case only IR is shifted.  Ir read_ir
+        is True, dr must be None.
+
+        dr may be either a BitString object (then length must be None)
+        or an integer (in which case it will be used as a
+        little-endian value of length bits, then length is mandatory).
+        """
         return TapDrShift(ir, dr, length, read_tdo, read_ir)
 
     def cmd_run(self, cycles):
+        """
+        Runs the TAP for at least cycles cycles.
+        """
         return TapRun(cycles)
 
 Tap.db.register_default(Tap)
