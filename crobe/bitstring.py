@@ -46,6 +46,13 @@ class BitString:
         n.append(other.__data, other.__length)
         return n
 
+    def enlarge(self, length):
+        """
+        Append zeroes to length
+        """
+        assert self.__length <= length
+        self.__length = length
+
     @property
     def data(self):
         """

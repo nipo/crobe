@@ -39,32 +39,9 @@ class JtagHandler(object):
         self.interface = interface
         self.state = self.STATE_RESET
         self.ir = False
-
-    def reset(self):
-        logging.info("TAP Reset")
-        self.interface.tap_reset()
-
-    def shift(self, tdi):
-        logging.info("TAP Shift TDI:%s", tdi)
-        tdo = self.interface.shift(tdi)
-        logging.info(" -> TDO:%s", tdo)
-        return tdo or BitString()
-
-    def run(self, count):
-        logging.info("TAP run, %d cycles", count)
-        return self.interface.run(count)
-
-    def capture_dr(self):
-        logging.info("TAP Capture DR")
-        return self.interface.capture_dr()
-
-    def capture_ir(self):
-        logging.info("TAP Capture IR")
-        return self.interface.capture_ir()
+        self.pending = []
 
     def handle(self, tms, tdi):
-        tdo = BitString()
-
         #if (self.ir and self.state == self.STATE_EXIT1 and int(tms) == 0x17 and len(tms) == 5) \
         #       or (not self.ir and self.state == self.STATE_EXIT1 and int(tms) == 0xb and len(tms) == 4):
         #    logging.warning("Workaround bug like anyone else, but dont know why...")
@@ -72,41 +49,58 @@ class JtagHandler(object):
 
         last_new_state = 0
         last_shift = 0
-        point = 0
-        while point < len(tms):
+        tdo_parts = []
+
+        for point in range(len(tms)):
             next_state = self.NEXT_STATE[int(tms[point])][self.state]
             if self.state != next_state:
-                logging.debug("State change %s -> %s", self.STATE_NAME[self.state], self.STATE_NAME[next_state])
                 if next_state == self.STATE_CAPTURE:
                     if self.state == self.STATE_SELECT_IR:
                         self.ir = True
-                        self.capture_ir()
+                        self.pending.append(self.interface.cmd_capture_ir())
                     else:
                         self.ir = False
-                        self.capture_dr()
+                        self.pending.append(self.interface.cmd_capture_dr())
 
                 if self.state == self.STATE_SHIFT:
-                    data = tdi[last_new_state : point + 1]
-                    tdo += tdi[last_shift : last_new_state] + self.shift(data)
+                    op = self.interface.cmd_shift(tdi[last_new_state : point + 1])
+                    self.pending.append(op)
+                    tdo_parts.append((op, last_new_state))
                     last_shift = point + 1
+
                 elif self.state == self.STATE_RTI:
-                    self.run(point + 1 - last_new_state)
+                    self.pending.append(self.interface.cmd_run(point + 1 - last_new_state))
+
                 elif self.state == self.STATE_RESET:
-                    self.reset()
+                    self.pending = [self.interface.cmd_tap_reset()]
                     
                 self.state = next_state
                 last_new_state = point + 1
-            point += 1
 
         if self.state == self.STATE_SHIFT and last_new_state != len(tdi):
-            tdo += tdi[last_shift : last_new_state] + self.shift(tdi[last_new_state : len(tms)])
+            op = self.interface.cmd_shift(tdi[last_new_state : len(tms)])
+            self.pending.append(op)
+            tdo_parts.append((op, last_new_state))
+
         elif self.state == self.STATE_RTI and last_new_state != len(tdi):
-            tdo += tdi[last_shift : len(tms)]
-            self.run(len(tms) - last_new_state)
-        else:
-            tdo += tdi[last_shift : len(tms)]
+            self.pending.append(self.interface.cmd_run(len(tms) - last_new_state))
+
+        if not tdo_parts:
+            return tdi
+
+        logging.info("Running %s", self.pending)
+        self.interface.execute(self.pending)
+
+        tdo = BitString()
+        for op, off in tdo_parts:
+            tdo.enlarge(off)
+            tdo += op.tdo
+        tdo.enlarge(len(tdi))
+
+        self.pending = []
 
         return tdo
+
 
 class SocketClosed(Exception):
     pass
@@ -159,12 +153,9 @@ class XvcdSession(object):
         bytes = (bits + 7) // 8
         tms = BitString(self.read(bytes), bits)
         tdi = BitString(self.read(bytes), bits)
-        logging.info("Ready to shift command TMS:%s TDI:%s", tms, tdi)
         tdo = self.jtag.handle(tms, tdi)
-        logging.info("Had TDO:%s", tdo)
 
         assert len(tdo) == bits
-        
         self.write(tdo.data)
 
     def handle_getinfo(self):
@@ -192,6 +183,7 @@ class XvcdServer(object):
     def serve(self):
         while True:
             (clientsocket, address) = self.server_sock.accept()
+            clientsocket.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
             XvcdSession(clientsocket, self.interface).serve()
 
 def main():
