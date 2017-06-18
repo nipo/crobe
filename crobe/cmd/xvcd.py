@@ -32,12 +32,13 @@ class JtagHandler(object):
                    STATE_SHIFT, STATE_SHIFT, STATE_PAUSE, STATE_PAUSE,
                    STATE_SHIFT, STATE_RTI],
                   [STATE_RESET, STATE_SELECT_DR, STATE_SELECT_IR, STATE_RESET,
-                   STATE_PAUSE, STATE_EXIT1, STATE_UPDATE, STATE_EXIT2,
+                   STATE_EXIT1, STATE_EXIT1, STATE_UPDATE, STATE_EXIT2,
                    STATE_UPDATE, STATE_SELECT_DR]]
 
     def __init__(self, interface):
         self.interface = interface
         self.state = self.STATE_RESET
+        self.ir = False
 
     def reset(self):
         logging.info("TAP Reset")
@@ -64,6 +65,11 @@ class JtagHandler(object):
     def handle(self, tms, tdi):
         tdo = BitString()
 
+        #if (self.ir and self.state == self.STATE_EXIT1 and int(tms) == 0x17 and len(tms) == 5) \
+        #       or (not self.ir and self.state == self.STATE_EXIT1 and int(tms) == 0xb and len(tms) == 4):
+        #    logging.warning("Workaround bug like anyone else, but dont know why...")
+        #    return tdi
+
         last_new_state = 0
         last_shift = 0
         point = 0
@@ -73,8 +79,10 @@ class JtagHandler(object):
                 logging.debug("State change %s -> %s", self.STATE_NAME[self.state], self.STATE_NAME[next_state])
                 if next_state == self.STATE_CAPTURE:
                     if self.state == self.STATE_SELECT_IR:
+                        self.ir = True
                         self.capture_ir()
                     else:
+                        self.ir = False
                         self.capture_dr()
 
                 if self.state == self.STATE_SHIFT:
@@ -92,6 +100,9 @@ class JtagHandler(object):
 
         if self.state == self.STATE_SHIFT and last_new_state != len(tdi):
             tdo += tdi[last_shift : last_new_state] + self.shift(tdi[last_new_state : len(tms)])
+        elif self.state == self.STATE_RTI and last_new_state != len(tdi):
+            tdo += tdi[last_shift : len(tms)]
+            self.run(len(tms) - last_new_state)
         else:
             tdo += tdi[last_shift : len(tms)]
 
@@ -127,11 +138,17 @@ class XvcdSession(object):
     def serve(self):
         try:
             while True:
-                self.refill(6)
+                self.refill(8)
 
                 if self.buffer.startswith(b"shift:"):
                     self.read(6)
                     self.handle_shift()
+                elif self.buffer.startswith(b"getinfo:"):
+                    self.Read(8)
+                    self.handle_getinfo()
+                elif self.buffer.startswith(b"settck:"):
+                    self.read(7)
+                    self.handle_settck()
                 else:
                     raise ValueError("Unknown command: %r" % (self.buffer.split(b':')[0]))
         except SocketClosed:
@@ -149,6 +166,19 @@ class XvcdSession(object):
         assert len(tdo) == bits
         
         self.write(tdo.data)
+
+    def handle_getinfo(self):
+        logging.info("Answering to version information")
+        assert not self.buffer
+        self.write(b"xvcServer_v1.0:4096\n")
+
+    def handle_settck(self):
+        ns, = struct.unpack("<L", self.read(4))
+        period = 1e9 * ns
+        self.buffer = b""
+        self.interface.speed = 1 / period
+        logging.info("Setting speed to %d, had %d", int(1/period), int(self.interface.speed))
+        self.write(struct.pack("<L", int(self.interface.speed)))
 
 class XvcdServer(object):
     def __init__(self, port, interface):

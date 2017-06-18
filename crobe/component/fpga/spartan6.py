@@ -27,7 +27,7 @@ class Spartan6(jtag.Tap):
     IR_BYPASS      = 0x3f
     IR_ISC_ENABLE  = 0x10
     IR_ISC_PROGRAM = 0x11
-    IR_ISC_DNA     = 0x30
+    IR_ISC_DNA     = 0x31
     IR_ISC_DISABLE = 0x16
     IR_JPROGRAM    = 0x0b
     IR_JSTART      = 0x0c
@@ -46,6 +46,14 @@ class Spartan6(jtag.Tap):
     def __init__(self, port, index):
         jtag.Tap.__init__(self, port, index)
         self.name = parts.get(int(port.idcode_at(index).drop_revision()), "Spartan-6")
+
+    def start(self):
+        if not (self.ir_status & self.IR_STATUS_DONE):
+            self.dna = self.dna_read()
+            self.logger.info("Device DNA: %x", self.dna)
+        else:
+            self.logger.info("Device is running, cannot get DNA")
+        jtag.Tap.start(self)
 
     @property
     def ir_status(self):
@@ -91,6 +99,18 @@ class Spartan6(jtag.Tap):
     @property
     def cfg_status(self):
         return self.cfg_read(self.CFG_STATUS, 1)[0]
+
+    def dna_read(self):
+        ops = [self.cmd_dr_shift(self.IR_ISC_ENABLE, None),
+               self.cmd_run(20),
+               self.cmd_dr_shift(self.IR_ISC_DNA, 0, 57),
+               self.cmd_run(20),
+               self.cmd_dr_shift(self.IR_ISC_DISABLE, None),
+               ]
+
+        self.execute(ops)
+
+        return ops[2].tdo >> 2
 
     def load(self, program):
         if len(program) != 1:
