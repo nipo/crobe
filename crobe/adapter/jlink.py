@@ -101,7 +101,27 @@ class JtagInterface(JLinkInterface, jtag.Interface):
         self.__state = None
 
     def execute(self, operation_list):
-        ops = [x for x in operation_list if not isinstance(x, jtag.Shift) or len(x.tdi)]
+        to_join = []
+        ops = []
+
+        max_shift_bits = 4096*8
+        
+        for o in operation_list:
+            if isinstance(o, jtag.Shift):
+                if not len(o.tdi):
+                    continue
+                if o.tdi and len(o.tdi) > max_shift_bits:
+                    parts = []
+                    for i in range(0, len(o.tdi), max_shift_bits):
+                        parts.append(jtag.Shift(o.tdi[i : i + max_shift_bits], read_tdo = o.read_tdo))
+                    o.__parts = parts
+                    ops += parts
+                    if o.read_tdo:
+                        to_join.append(o)
+                else:
+                    ops.append(o)
+            else:
+                ops.append(o)
 
         self.logger.debug("running %s", operation_list)
 
@@ -185,20 +205,21 @@ class JtagInterface(JLinkInterface, jtag.Interface):
                         tdi_buf.append(0x0, 2)
                         self.__state = self.STATE_SHIFT
 
-                    if self.__state == self.STATE_SHIFT:
-                        op.__offset = len(tms_buf)
-                        tdi_buf += op.tdi
+                    assert self.__state == self.STATE_SHIFT
 
-                        if ops and isinstance(ops[0], jtag.Shift):
-                            tms_buf.append(0, len(op.tdi))
-                        elif ops and isinstance(ops[0], (jtag.CaptureIr, jtag.CaptureDr, jtag.Run)):
-                            tms_buf.append(3 << (len(op.tdi) - 1), len(op.tdi) + 1)
-                            tdi_buf.append(0x0, 1)
-                            self.__state = self.STATE_RTI
-                        else:
-                            tms_buf.append(1 << (len(op.tdi) - 1), len(op.tdi) + 1)
-                            tdi_buf.append(0x0, 1)
-                            self.__state = self.STATE_PAUSE
+                    op.__offset = len(tms_buf)
+                    tdi_buf += op.tdi
+
+                    if ops and isinstance(ops[0], jtag.Shift):
+                        tms_buf.append(0, len(op.tdi))
+                    elif ops and isinstance(ops[0], (jtag.CaptureIr, jtag.CaptureDr, jtag.Run)):
+                        tms_buf.append(3 << (len(op.tdi) - 1), len(op.tdi) + 1)
+                        tdi_buf.append(0x0, 1)
+                        self.__state = self.STATE_RTI
+                    else:
+                        tms_buf.append(1 << (len(op.tdi) - 1), len(op.tdi) + 1)
+                        tdi_buf.append(0x0, 1)
+                        self.__state = self.STATE_PAUSE
 
                 elif isinstance(op, jtag.Pause):
                     pass
@@ -220,7 +241,13 @@ class JtagInterface(JLinkInterface, jtag.Interface):
                 if isinstance(op, jtag.Shift) and op.read_tdo:
                     op.tdo = tdo_buf[op.__offset : op.__offset + len(op.tdi)]
 
-            assert self.__state in (self.STATE_RTI, self.STATE_RESET, self.STATE_PAUSE)
+        assert self.__state in (self.STATE_RTI, self.STATE_RESET, self.STATE_PAUSE), self.__state
+
+        for o in to_join:
+            tdo = bitstring.BitString()
+            for op in o.__parts:
+                tdo += op.tdo
+            o.tdo = tdo
 
 class SwdInterface(swd.Interface, JLinkInterface):
     def __init__(self, port):

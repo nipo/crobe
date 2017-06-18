@@ -30,7 +30,8 @@ class Command:
             hook(args)
 
     def c00_verbose_declare(self):
-        self.parser.add_argument('--verbose', '-v', action='count', default = 0)
+        self.parser.add_argument('--verbose', '-v', action='count', default = 0,
+                                 help = "Increase verbosity (Error -> Warning -> Info -> Debug)")
 
     def c00_verbose_parse(self, args):
         handler = logging.StreamHandler()
@@ -44,14 +45,15 @@ class Command:
 
 class Adapter(Command):
     def c10_adapter_declare(self):
-        self.parser.add_argument('--adapter', '-a', type = str, default = "0")
+        self.parser.add_argument('--adapter', '-a', type = str, default = "0",
+                                 help = "Adapter identifier or index (use crobe.cmd.adapters for a list)")
 
     def c10_adapter_parse(self, args):
         from ..adapter.model import Enumerator, Adapter
 
         Enumerator.singleton.start()
 
-        adapters = Enumerator.singleton.children_find(lambda x: True)
+        adapters = Enumerator.singleton.children_of_class(Adapter)
 
         try:
             index = int(args.adapter)
@@ -72,7 +74,8 @@ class Interface(Adapter):
 
     def c20_interface_declare(self):
         if not self.forced_interface:
-            self.parser.add_argument('--interface', '-i', type = str, default = "swd")
+            self.parser.add_argument('--interface', '-i', type = str, default = "swd",
+                                     help = "Target insterface")
 
     def c20_interface_parse(self, args):
         interface = self.forced_interface or args.interface
@@ -80,14 +83,16 @@ class Interface(Adapter):
 
 class Speed(Interface):
     def c30_speed_declare(self):
-        self.parser.add_argument('--speed', '-s', type = float, default = 10000000)
+        self.parser.add_argument('--speed', '-s', type = float, default = 10000000,
+                                     help = "Target insterface speed (Hz)")
 
     def c30_speed_parse(self, args):
         self.interface.speed = args.speed
     
 class Power(Interface):
     def c24_power_declare(self):
-        self.parser.add_argument('--power', '-p', type = str, default = "")
+        self.parser.add_argument('--power', '-p', type = str, default = "",
+                                     help = "Target power (untouched if not specified)")
 
     def c24_power_parse(self, args):
         import time
@@ -97,16 +102,24 @@ class Power(Interface):
     
 class IcePick(Interface):
     def c25_icepick_declare(self):
-        self.parser.add_argument('--icepick', action = "store_true")
+        self.parser.add_argument('--icepick', action = "store_true",
+                                 help = "Use ICEPick initialization sequence (requires JTAG)")
 
     def c25_icepick_parse(self, args):
         self.interface.use_icepick = args.icepick
 
 class Programs:
+    program_count_needed = None
+
     def c40_program_declare(self):
-        self.parser.add_argument('programs', metavar = 'PROGRAMS',
-                                 type = str, nargs = '*',
-                                 help = 'Files to load')
+        if self.program_count_needed is None:
+            self.parser.add_argument('programs', metavar = 'PROGRAMS',
+                                     type = str, nargs = '*',
+                                     help = 'Files to load')
+        else:
+            self.parser.add_argument('programs', metavar = 'PROGRAM',
+                                     type = str, nargs = self.program_count_needed,
+                                     help = 'File to load')
 
     def c40_program_parse(self, args):
         from ..loadable.object import Program

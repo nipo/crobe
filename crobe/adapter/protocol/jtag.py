@@ -9,10 +9,10 @@ import time
 __all__ = []
 
 class Interface(base.Interface):
-    STATE_RESET = object()
-    STATE_RTI   = object()
-    STATE_SHIFT = object()
-    STATE_PAUSE = object()
+    STATE_RESET = "RESET"
+    STATE_RTI   = "RTI"
+    STATE_SHIFT = "SHIFT"
+    STATE_PAUSE = "PAUSE"
 
     def __init__(self, port):
         base.Interface.__init__(self, "JTAG Intf", port)
