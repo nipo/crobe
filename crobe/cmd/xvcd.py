@@ -128,6 +128,7 @@ class XvcdSession(object):
         while data:
             written = self.sock.send(data)
             data = data[written:]
+        self.sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
 
     def serve(self):
         try:
@@ -167,9 +168,9 @@ class XvcdSession(object):
         ns, = struct.unpack("<L", self.read(4))
         period = 1e9 * ns
         self.buffer = b""
-        self.interface.speed = 1 / period
-        logging.info("Setting speed to %d, had %d", int(1/period), int(self.interface.speed))
-        self.write(struct.pack("<L", int(self.interface.speed)))
+        self.jtag.interface.speed = 1 / period
+        logging.info("Setting speed to %d, had %d", int(1/period), int(self.jtag.interface.speed))
+        self.write(struct.pack("<L", int(self.jtag.interface.speed)))
 
 class XvcdServer(object):
     def __init__(self, port, interface):
@@ -183,7 +184,6 @@ class XvcdServer(object):
     def serve(self):
         while True:
             (clientsocket, address) = self.server_sock.accept()
-            clientsocket.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
             XvcdSession(clientsocket, self.interface).serve()
 
 def main():
