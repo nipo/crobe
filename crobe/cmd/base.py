@@ -137,6 +137,16 @@ class Programs:
             prog = Program.from_file(filename, offset)
 
             self.program += prog
+
+class File:
+    def c50_file_declare(self):
+        self.parser.add_argument('file', metavar = 'FILE',
+                                 type = str, nargs = 1,
+                                 help = 'File to load')
+
+    def c50_file_parse(self, args):
+        from ..loadable.object import Program
+        self.file = args.file[0]
         
 if __name__ == "__main__":
     class LolCommand:

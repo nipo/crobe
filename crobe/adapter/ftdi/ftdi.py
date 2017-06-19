@@ -83,7 +83,6 @@ class Device(object):
         self.model = model
         self.serial = serial
         self.connection_id = connection_id
-        self.logger = logging.getLogger(str(self.connection_id, "ascii"))
         
     def __str__(self):
         return "<%s %r %r %r>" % (self.connection_id, self.vendor, self.model, self.serial)
@@ -114,7 +113,6 @@ class Handle(Context):
         self.check(api.set_latency_timer(self.context, 1))
         self.check(api.set_bitmode(self.context, 0xfb, api.BITMODE[mode]))
 
-        self.device.logger.info("init")        
         self.execute(bytes([api.MPSSE_3_PHASE_DISABLE,
                             api.MPSSE_ADAPTIVE_DISABLE,
                             api.MPSSE_LOOPBACK_DISABLE])
@@ -219,11 +217,9 @@ class Handle(Context):
         return ret
     
     def execute(self, blob, rsize = 0):
-        self.device.logger.debug("MPSSE commands: %s", binascii.b2a_hex(blob))
         self.write(blob)
         if rsize:
             rsp = self.read(rsize)
-            self.device.logger.debug("MPSSE response: %s", binascii.b2a_hex(rsp))
             return rsp
         else:
             self.status()

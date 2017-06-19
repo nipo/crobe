@@ -270,8 +270,6 @@ class JtagInterface(BaseInterface, jtag.Interface):
                                 tdo += BitString(tdo_blob[base] >> (8 - bits), bits)
                             base += bytec
                         op.tdo = tdo
-            else:
-                self.logger.debug("MPSSE status: %r", tdo_blob)
 
             assert self.__state in (self.STATE_RTI, self.STATE_RESET, self.STATE_PAUSE)
 
