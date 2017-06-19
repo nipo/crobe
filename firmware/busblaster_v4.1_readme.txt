@@ -1,0 +1,46 @@
+Bus Blaster v4.1 features a XC2C64A as IO buffer.
+
+It can be set to "KTProg" mode for supporting both JTAG and SWD
+modes.  These are the modes supported by Crobe.
+
+For reference, firmware images and sources are stored here.
+
+Interface:
+
+FTDI  JTAG Mapping     SWD Mapping
+
+D0    -> TCK           -> SWCLK
+D1    -> TDI           -> SWDIO out
+D2    <- TDO           <- SWDIO in
+D3    -> TMS
+D4
+D5    -> 1             -> 0
+D6    <- SRST readback <- SRST readback
+D7    <- RTCK
+C0    -> nTRST value
+C1    -> nSRST value   -> nSRST value
+C2    -> nTRST /oe
+C3    -> nSRST /oe     -> nSRST /oe
+C4    -> TMS /oe       -> SWDIO /oe
+C5    -> TDI /oe
+C6    -> TCK /oe       -> SWCLK /oe
+C7    -> Activity      -> Activity
+
+
+For setting FTDI EEPROM to relevant values:
+
+python3 -m crobe.cmd.ftdi_eeprom_set \
+-c d:003/016 \
+--vid=0403 --pid=8878 --version=410 \
+--vendor="Dangerous Prototypes" --product="BusBlaster v4.1" \
+--serial=55 \
+--power=300 --mode=FIFO,FIFO 
+
+Replace -c to connection string to your actual board, and use
+something useful for serial.
+
+For loading firmware to the board, once serialized:
+
+python3 -m crobe.cmd.svfplayer -a bb-int:55 -v firmware/busblaster_v4.1.svf
+
+With "55" replaced with the actual serial number you set before.

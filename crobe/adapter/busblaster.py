@@ -22,7 +22,7 @@ class Enumerator(JtagAdapterEnumerator):
     def __init__(self):
         JtagAdapterEnumerator.__init__(self, "Busblaster",
                                        short_name = "bb",
-                                       vid = 0x0403, pid = 0x6010,
+                                       vid = 0x0403, pid = 0x8878,
                                        channel = "A",
                                        resetn_pin = 11,
                                        activity_pin = 15)
@@ -32,4 +32,5 @@ class Enumerator(JtagAdapterEnumerator):
     def __init__(self):
         JtagAdapterEnumerator.__init__(self, "Busblaster Internal",
                                        short_name = "bb-int",
-                                       vid = 0x0403, pid = 0x6010, channel = "B")
+                                       vid = 0x0403, pid = 0x8878,
+                                       channel = "B")

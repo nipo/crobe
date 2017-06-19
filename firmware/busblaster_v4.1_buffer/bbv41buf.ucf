@@ -1,0 +1,25 @@
+NET "ACBUS6"         LOC =  "P37";
+NET "FT_TCK"         LOC =  "P60";
+NET "ACBUS5"         LOC =  "P27";
+NET "FT_TDI"         LOC =  "P58";
+NET "ACBUS4"         LOC =  "P39";
+NET "FT_TMS"         LOC =  "P55";
+NET "ADBUS5"         LOC =  "P52";
+NET "FT_TDO"         LOC =  "P56";
+NET "ACBUS2"         LOC =  "P41";
+NET "FT_nTRST"       LOC =  "P43";
+NET "ACBUS3"         LOC =  "P40";
+NET "FT_nSRST_OUT"   LOC =  "P42";
+NET "FT_nSRST_IN"    LOC =  "P50";
+NET "FT_RTCK"        LOC =  "P49";
+
+NET "RTCK"           LOC =  "P81";
+NET "TDO"            LOC =  "P79";
+NET "TCK"            LOC =  "P91";
+NET "TDI"            LOC =  "P94";
+NET "TMS"            LOC =  "P92";
+NET "nSRST"          LOC =  "P78";
+NET "nTRST"          LOC =  "P97";
+
+NET "Activity"       LOC = "P36";
+NET "Activity_LED"   LOC = "P64";

@@ -1,0 +1,146 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no" ?>
+<generated_project xmlns="http://www.xilinx.com/XMLSchema" xmlns:xil_pn="http://www.xilinx.com/XMLSchema">
+
+  <!--                                                          -->
+
+  <!--             For tool use only. Do not edit.              -->
+
+  <!--                                                          -->
+
+  <!-- ProjectNavigator created generated project file.         -->
+
+  <!-- For use in tracking generated file and other information -->
+
+  <!-- allowing preservation of process status.                 -->
+
+  <!--                                                          -->
+
+  <!-- Copyright (c) 1995-2013 Xilinx, Inc.  All rights reserved. -->
+
+  <version xmlns="http://www.xilinx.com/XMLSchema">11.1</version>
+
+  <sourceproject xmlns="http://www.xilinx.com/XMLSchema" xil_pn:fileType="FILE_XISE" xil_pn:name="BusBlaster_v4.1_buffer.xise"/>
+
+  <files xmlns="http://www.xilinx.com/XMLSchema">
+    <file xil_pn:fileType="FILE_CMD" xil_pn:name="_impact.cmd"/>
+    <file xil_pn:fileType="FILE_LOG" xil_pn:name="_impact.log"/>
+    <file xil_pn:fileType="FILE_DIRECTORY" xil_pn:name="_ngo"/>
+    <file xil_pn:fileType="FILE_XMSGS" xil_pn:name="_xmsgs/ngdbuild.xmsgs"/>
+    <file xil_pn:fileType="FILE_XMSGS" xil_pn:name="_xmsgs/xst.xmsgs"/>
+    <file xil_pn:branch="Implementation" xil_pn:fileType="FILE_NGDBUILD_LOG" xil_pn:name="bbv41buf.bld"/>
+    <file xil_pn:branch="Implementation" xil_pn:fileType="FILE_CHK" xil_pn:name="bbv41buf.chk"/>
+    <file xil_pn:fileType="FILE_CMD_LOG" xil_pn:name="bbv41buf.cmd_log"/>
+    <file xil_pn:branch="Implementation" xil_pn:fileType="FILE_CXT" xil_pn:name="bbv41buf.cxt"/>
+    <file xil_pn:branch="Implementation" xil_pn:fileType="FILE_GYD" xil_pn:name="bbv41buf.gyd"/>
+    <file xil_pn:branch="Implementation" xil_pn:fileType="FILE_JEDEC" xil_pn:name="bbv41buf.jed"/>
+    <file xil_pn:fileType="FILE_JHD" xil_pn:name="bbv41buf.jhd"/>
+    <file xil_pn:fileType="FILE_LOG" xil_pn:name="bbv41buf.log"/>
+    <file xil_pn:branch="Implementation" xil_pn:fileType="FILE_LSO" xil_pn:name="bbv41buf.lso"/>
+    <file xil_pn:branch="Implementation" xil_pn:fileType="FILE_MFD" xil_pn:name="bbv41buf.mfd"/>
+    <file xil_pn:branch="Implementation" xil_pn:fileType="FILE_NGA" xil_pn:name="bbv41buf.nga"/>
+    <file xil_pn:branch="Implementation" xil_pn:fileType="FILE_NGC" xil_pn:name="bbv41buf.ngc"/>
+    <file xil_pn:branch="Implementation" xil_pn:fileType="FILE_NGD" xil_pn:name="bbv41buf.ngd"/>
+    <file xil_pn:branch="Implementation" xil_pn:fileType="FILE_NGR" xil_pn:name="bbv41buf.ngr"/>
+    <file xil_pn:fileType="FILE_PAD_MISC" xil_pn:name="bbv41buf.pad"/>
+    <file xil_pn:branch="Implementation" xil_pn:fileType="FILE_PNX" xil_pn:name="bbv41buf.pnx"/>
+    <file xil_pn:branch="Implementation" xil_pn:fileType="FILE_XST_PROJECT" xil_pn:name="bbv41buf.prj"/>
+    <file xil_pn:fileType="FILE_FITTER_REPORT" xil_pn:name="bbv41buf.rpt"/>
+    <file xil_pn:branch="Implementation" xil_pn:fileType="FILE_XST_STX" xil_pn:name="bbv41buf.stx"/>
+    <file xil_pn:branch="Implementation" xil_pn:fileType="FILE_XST_REPORT" xil_pn:name="bbv41buf.syr"/>
+    <file xil_pn:branch="Implementation" xil_pn:fileType="FILE_VERILOG" xil_pn:name="bbv41buf.vf"/>
+    <file xil_pn:branch="Implementation" xil_pn:fileType="FILE_VM6" xil_pn:name="bbv41buf.vm6"/>
+    <file xil_pn:fileType="FILE_FITTER_REPORT" xil_pn:name="bbv41buf.xml"/>
+    <file xil_pn:branch="Implementation" xil_pn:fileType="FILE_XST" xil_pn:name="bbv41buf.xst"/>
+    <file xil_pn:fileType="FILE_FITTER_REPORT" xil_pn:name="bbv41buf_build.xml"/>
+    <file xil_pn:fileType="FILE_DIRECTORY" xil_pn:name="bbv41buf_html"/>
+    <file xil_pn:fileType="FILE_XRPT" xil_pn:name="bbv41buf_ngdbuild.xrpt"/>
+    <file xil_pn:fileType="FILE_PAD_EXCEL_REPORT" xil_pn:name="bbv41buf_pad.csv"/>
+    <file xil_pn:fileType="FILE_HTML" xil_pn:name="bbv41buf_summary.html"/>
+    <file xil_pn:fileType="FILE_XRPT" xil_pn:name="bbv41buf_xst.xrpt"/>
+    <file xil_pn:fileType="FILE_FITTER_REPORT" xil_pn:name="webtalk_pn.xml"/>
+    <file xil_pn:fileType="FILE_DIRECTORY" xil_pn:name="xlnx_auto_0_xdb"/>
+    <file xil_pn:fileType="FILE_DIRECTORY" xil_pn:name="xst"/>
+  </files>
+
+  <transforms xmlns="http://www.xilinx.com/XMLSchema">
+    <transform xil_pn:end_ts="1497972872" xil_pn:name="TRAN_copyInitialToXSTAbstractSynthesis" xil_pn:start_ts="1497972872">
+      <status xil_pn:value="SuccessfullyRun"/>
+      <status xil_pn:value="ReadyToRun"/>
+    </transform>
+    <transform xil_pn:end_ts="1497972873" xil_pn:in_ck="5108773086877876520" xil_pn:name="TRAN_schematicsToHdl" xil_pn:prop_ck="-8691698391812315769" xil_pn:start_ts="1497972872">
+      <status xil_pn:value="SuccessfullyRun"/>
+      <status xil_pn:value="ReadyToRun"/>
+      <outfile xil_pn:name="bbv41buf.vf"/>
+    </transform>
+    <transform xil_pn:end_ts="1497972880" xil_pn:in_ck="154811305662966054" xil_pn:name="TRANEXT_xstsynthesize_xbr" xil_pn:prop_ck="8058317071064593544" xil_pn:start_ts="1497972873">
+      <status xil_pn:value="SuccessfullyRun"/>
+      <status xil_pn:value="ReadyToRun"/>
+      <outfile xil_pn:name="_xmsgs/xst.xmsgs"/>
+      <outfile xil_pn:name="bbv41buf.jhd"/>
+      <outfile xil_pn:name="bbv41buf.lso"/>
+      <outfile xil_pn:name="bbv41buf.ngc"/>
+      <outfile xil_pn:name="bbv41buf.ngr"/>
+      <outfile xil_pn:name="bbv41buf.prj"/>
+      <outfile xil_pn:name="bbv41buf.stx"/>
+      <outfile xil_pn:name="bbv41buf.syr"/>
+      <outfile xil_pn:name="bbv41buf.xst"/>
+      <outfile xil_pn:name="bbv41buf_xst.xrpt"/>
+      <outfile xil_pn:name="webtalk_pn.xml"/>
+      <outfile xil_pn:name="xst"/>
+    </transform>
+    <transform xil_pn:end_ts="1497972880" xil_pn:in_ck="5108773086877878696" xil_pn:name="TRAN_compileBCD2" xil_pn:prop_ck="4784893448623086814" xil_pn:start_ts="1497972880">
+      <status xil_pn:value="SuccessfullyRun"/>
+      <status xil_pn:value="ReadyToRun"/>
+    </transform>
+    <transform xil_pn:end_ts="1497972885" xil_pn:in_ck="-8840183763787802358" xil_pn:name="TRAN_ngdbuild" xil_pn:prop_ck="-753919792069077976" xil_pn:start_ts="1497972880">
+      <status xil_pn:value="SuccessfullyRun"/>
+      <status xil_pn:value="ReadyToRun"/>
+      <outfile xil_pn:name="_ngo"/>
+      <outfile xil_pn:name="_xmsgs/ngdbuild.xmsgs"/>
+      <outfile xil_pn:name="bbv41buf.bld"/>
+      <outfile xil_pn:name="bbv41buf.ngd"/>
+      <outfile xil_pn:name="bbv41buf_ngdbuild.xrpt"/>
+    </transform>
+    <transform xil_pn:end_ts="1497972891" xil_pn:in_ck="5108773086877871203" xil_pn:name="TRANEXT_vm6File_xbr" xil_pn:prop_ck="-7814485760440116949" xil_pn:start_ts="1497972885">
+      <status xil_pn:value="SuccessfullyRun"/>
+      <status xil_pn:value="ReadyToRun"/>
+      <outfile xil_pn:name="bbv41buf.chk"/>
+      <outfile xil_pn:name="bbv41buf.cxt"/>
+      <outfile xil_pn:name="bbv41buf.gyd"/>
+      <outfile xil_pn:name="bbv41buf.log"/>
+      <outfile xil_pn:name="bbv41buf.mfd"/>
+      <outfile xil_pn:name="bbv41buf.nga"/>
+      <outfile xil_pn:name="bbv41buf.pad"/>
+      <outfile xil_pn:name="bbv41buf.pnx"/>
+      <outfile xil_pn:name="bbv41buf.rpt"/>
+      <outfile xil_pn:name="bbv41buf.vm6"/>
+      <outfile xil_pn:name="bbv41buf.xml"/>
+      <outfile xil_pn:name="bbv41buf_build.xml"/>
+      <outfile xil_pn:name="bbv41buf_html"/>
+      <outfile xil_pn:name="bbv41buf_pad.csv"/>
+    </transform>
+    <transform xil_pn:end_ts="1497972893" xil_pn:in_ck="5108773086877880067" xil_pn:name="TRANEXT_crtProg_xbr" xil_pn:prop_ck="5245363024343" xil_pn:start_ts="1497972891">
+      <status xil_pn:value="SuccessfullyRun"/>
+      <status xil_pn:value="ReadyToRun"/>
+      <outfile xil_pn:name="bbv41buf.jed"/>
+    </transform>
+    <transform xil_pn:end_ts="1497973255" xil_pn:in_ck="5108773086877866781" xil_pn:name="TRAN_impactProgrammingTool_CPLD" xil_pn:prop_ck="-173801707503314095" xil_pn:start_ts="1497973255">
+      <status xil_pn:value="SuccessfullyRun"/>
+      <status xil_pn:value="ReadyToRun"/>
+      <outfile xil_pn:name="_impact.cmd"/>
+      <outfile xil_pn:name="_impact.log"/>
+    </transform>
+    <transform xil_pn:end_ts="1497973189" xil_pn:in_ck="5108773086877866781" xil_pn:name="TRAN_configureTargetDevice_CPLD" xil_pn:prop_ck="3990039742483918989" xil_pn:start_ts="1497973187">
+      <status xil_pn:value="SuccessfullyRun"/>
+      <status xil_pn:value="ReadyToRun"/>
+      <outfile xil_pn:name="_impact.cmd"/>
+      <outfile xil_pn:name="_impact.log"/>
+    </transform>
+    <transform xil_pn:end_ts="1497972891" xil_pn:in_ck="5108773086877880067" xil_pn:name="TRAN_timRpt" xil_pn:prop_ck="111903974446" xil_pn:start_ts="1497972890">
+      <status xil_pn:value="SuccessfullyRun"/>
+      <status xil_pn:value="WarningsGenerated"/>
+      <status xil_pn:value="ReadyToRun"/>
+    </transform>
+  </transforms>
+
+</generated_project>
