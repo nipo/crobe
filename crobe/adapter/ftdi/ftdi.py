@@ -83,6 +83,7 @@ class Device(object):
         self.model = model
         self.serial = serial
         self.connection_id = connection_id
+        self.logger = logging.getLogger(str(self.connection_id, "ascii"))
         
     def __str__(self):
         return "<%s %r %r %r>" % (self.connection_id, self.vendor, self.model, self.serial)
@@ -113,10 +114,10 @@ class Handle(Context):
         self.check(api.set_latency_timer(self.context, 1))
         self.check(api.set_bitmode(self.context, 0xfb, api.BITMODE[mode]))
 
+        self.device.logger.info("init")        
         self.execute(bytes([api.MPSSE_3_PHASE_DISABLE,
                             api.MPSSE_ADAPTIVE_DISABLE,
-                            api.MPSSE_LOOPBACK_DISABLE,
-                            api.MPSSE_CLK_DIV, 59, 0])
+                            api.MPSSE_LOOPBACK_DISABLE])
                      + self.cmd_gpio_mask_set(0xffff, gpio_oe, gpio_val))
 
         self.speed = 1000000
@@ -218,9 +219,14 @@ class Handle(Context):
         return ret
     
     def execute(self, blob, rsize = 0):
-        self.status()
+        self.device.logger.debug("MPSSE commands: %s", binascii.b2a_hex(blob))
         self.write(blob)
-        return self.read(rsize)
+        if rsize:
+            rsp = self.read(rsize)
+            self.device.logger.debug("MPSSE response: %s", binascii.b2a_hex(rsp))
+            return rsp
+        else:
+            self.status()
 
     def gpio_get(self, pin):
         if pin < 8:
@@ -236,7 +242,7 @@ class Handle(Context):
     def gpio_mask_set(self, change_mask, oe, val):
         cmd = self.cmd_gpio_mask_set(change_mask, oe, val)
         self.execute(cmd)
-
+        
     def cmd_gpio_mask_set(self, change_mask, oe, val):
         cmd = bytes()
 
@@ -261,7 +267,7 @@ class Mpsse(Handle):
         l = len(tms)
         
         for i in range(0, l, 6):
-            bits = tms[i : min((i + 6, l))]
+            bits = tms[i : min((i + 7, l))]
             ret += bytes([cmd | api.MPSSE_BITS, len(bits) - 1, int(bits) | (next << 7)])
 
         return ret
@@ -353,7 +359,57 @@ class Mpsse(Handle):
         ret += bytes([tms_cmd, 2, 0b01 | (last << 7)])
         
         return ret
-    
+
+    def cmd_out(self, tdi):
+        if not len(tdi):
+            return b''
+        
+        cmd = api.MPSSE_WRITE_NEG | api.MPSSE_LSB | api.MPSSE_WRITE
+
+        ret = bytes()
+        bits = len(tdi)
+        data = tdi.data
+        
+        if bits >= 8:
+            bytestring = data
+            if bits % 8:
+                bytestring = bytestring[:-1]
+
+            for i in range(0, len(bytestring), 1024):
+                chunk = bytestring[i : i+1024]
+                ret += struct.pack("<BH", cmd, len(chunk) - 1)
+                ret += chunk
+
+        if bits % 8:
+            ret += bytes([cmd | api.MPSSE_BITS, (bits % 8) - 1, data[-1]])
+            
+        return ret
+
+    def cmd_in(self, bits):
+        if not bits:
+            return b''
+
+        counts = []
+
+        cmd = api.MPSSE_LSB | api.MPSSE_READ
+
+        ret = bytes()
+        
+        if bits >= 8:
+            ret += struct.pack("<BH", cmd, (bits // 8) - 1)
+            counts.append((bits // 8, None))
+
+        if bits % 8:
+            ret += bytes([cmd | api.MPSSE_BITS, (bits % 8) - 1])
+            counts.append((1, bits % 8))
+        
+        return ret, counts
+
+    def cmd_idle(self, cycles, value):
+        assert cycles
+
+        return self.cmd_out(BitString(-value, cycles))
+        
 def main():
     import time
     adapters = Device.list_all(0x10eb, 0x26)

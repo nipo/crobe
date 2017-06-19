@@ -1,6 +1,7 @@
 from . import model
 from .ftdi.basic import JtagAdapterEnumerator, Adapter, JtagInterface
 from ..loadable.object import Program
+import logging
 import os
 import os.path
 import time
@@ -9,17 +10,11 @@ __all__ = []
 
 class ProbyAdapter(Adapter):
     base_path = os.path.join(os.path.dirname(__file__), "proby-fw")
+    supported_interfaces = ["jtag", "swd"]
 
     def __init__(self, enumerator, device):
         Adapter.__init__(self, enumerator, device)
-        self.supported_interfaces = ["jtag"]
         self.mode = None
-
-    def open(self, interface_name):
-        self.reprogram(interface_name)
-
-        if interface_name == "jtag":
-            return Adapter.open(self, "jtag", channel = "A", resetn_pin = 9, activity_pin = 4)
 
     def reprogram(self, mode):
         from ..component.fpga.spartan6 import Spartan6
@@ -35,12 +30,13 @@ class ProbyAdapter(Adapter):
         self.logger.info("Using internal chain of Proby, starting discovery")
 
         jtag_intf = Adapter.open(self, "jtag", channel = "B", resetn_pin = 9)
+        jtag_intf.logger.setLevel(logging.WARNING)
         jtag_intf.speed = 30e6
         jtag_intf.start()
         fpga, = jtag_intf.children_of_class(Spartan6)
 
         self.logger.info("Got FPGA in chain: %s", fpga)
-
+        
         obj = Program.from_file(filename)
 
         fpga.load(obj)
@@ -57,6 +53,21 @@ class ProbyAdapter(Adapter):
         self.mode = mode
 
         del jtag_intf
+
+    def open(self, interface_name):
+        self.reprogram("jtag_swd_raw")
+
+        if interface_name == "jtag":
+            return Adapter.open(self, interface_name, channel = "A",
+                                resetn_pin = 8,
+                                activity_pin = 14,
+                                gpio_output = 0x061b, gpio_value = 0x0210)
+        elif interface_name == "swd":
+            return Adapter.open(self, interface_name, channel = "A",
+                                resetn_pin = 8,
+                                activity_pin = 14,
+                                oe_pin = 5,
+                                gpio_output = 0x063b, gpio_value = 0x0610)
 
 @model.Enumerator.register
 class Enumerator(JtagAdapterEnumerator):

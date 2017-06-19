@@ -1,14 +1,15 @@
 from .. import model
-from ... import bitstring
-from ..protocol import jtag, base
+from ...bitstring import BitString
+from ..protocol import jtag, base, swd
 from . import ftdi
         
 class Adapter(model.Adapter):
+    supported_interfaces = ["jtag"]
+
     def __init__(self, enumerator, device):
         self.device = device
         self.enumerator = enumerator
         self.serial_number = enumerator.serial_mangle(self.device.serial)
-        self.supported_interfaces = ["jtag"]
         model.Adapter.__init__(self, "%s:%s" % (enumerator.short_name.lower(), self.serial_number or str(self.device.connection_id, 'ascii')[2:]))
         self.nickname = self.name
 
@@ -17,13 +18,19 @@ class Adapter(model.Adapter):
         return self.enumerator.name
 
     def open(self, interface_name, **defaults):
+        if not interface_name.lower() in self.supported_interfaces:
+            raise NotSupportedError("Unsupported interface %s" % interface_name)
+
         d = {}
         d.update(self.enumerator.defaults)
         d.update(defaults)
-
+        
         if interface_name.lower() == "jtag":
             return JtagInterface(self, **d)
 
+        if interface_name.lower() == "swd":
+            return SwdInterface(self, **d)
+        
         raise NotSupportedError("Unsupported interface %s" % interface_name)
 
 class JtagAdapterEnumerator(model.Enumerator):
@@ -46,17 +53,15 @@ class JtagAdapterEnumerator(model.Enumerator):
     def serial_mangle(self, serial):
         return serial
 
-class JtagInterface(jtag.Interface):
+class BaseInterface(object):
     def __init__(self, adapter,
                  channel = "A",
                  gpio_output = 0, gpio_value = 0,
                  resetn_pin = None, reset_pin = None,
                  powern_pin = None, power_pin = None,
                  activityn_pin = None, activity_pin = None):
-        jtag.Interface.__init__(self, adapter)
-
-        oe = 0xb
-        val = 0x0
+        oe = (gpio_output & 0xfff0) | 0xb
+        val = gpio_value
 
         self.__reset_pin = None
         self.__power_pin = None
@@ -85,10 +90,8 @@ class JtagInterface(jtag.Interface):
             self.__activity_pin = (activityn_pin, False)
             oe |= (1 << activityn_pin)
             val |= (1 << activityn_pin)
-
+            
         self.handle = adapter.device.open(interface = channel, gpio_oe = oe, gpio_val = val)
-
-        self.__state = None
 
     @property
     def reset(self):
@@ -137,6 +140,21 @@ class JtagInterface(jtag.Interface):
         self.handle.speed = speed
         self.logger.info("requested speed %dHz, had %dHz", speed, self.handle.speed)
 
+    def cmd_activity(self, value):
+        if self.__activity_pin:
+            pin, polarity = self.__activity_pin
+            return self.handle.cmd_gpio_mask_set(1 << pin, 1 << pin,
+                                                 (1 << pin) if polarity == bool(value) else 0)
+        else:
+            return b""
+        
+class JtagInterface(BaseInterface, jtag.Interface):
+    def __init__(self, adapter, **args):
+        jtag.Interface.__init__(self, adapter)
+        BaseInterface.__init__(self, adapter, **args)
+
+        self.__state = None
+
     def execute(self, operation_list):
         to_join = []
         ops = []
@@ -166,12 +184,7 @@ class JtagInterface(jtag.Interface):
         
         while ops:
             pending = []
-            if self.__activity_pin:
-                pin, polarity = self.__activity_pin
-                cmd = self.handle.cmd_gpio_mask_set(1 << pin, 1 << pin,
-                                                    (1 << pin) if polarity else 0)
-            else:
-                cmd = b''
+            cmd = self.cmd_activity(True)
             tdo_length = 0
 
             while ops and len(cmd) < 1024:
@@ -180,9 +193,9 @@ class JtagInterface(jtag.Interface):
 
                 if isinstance(op, jtag.CaptureDr):
                     if self.__state == self.STATE_RTI:
-                        cmd += self.handle.cmd_tms_shift(bitstring.BitString(0x1, 2))
+                        cmd += self.handle.cmd_tms_shift(BitString(0x1, 2))
                     elif self.__state == self.STATE_PAUSE:
-                        cmd += self.handle.cmd_tms_shift(bitstring.BitString(0x7, 4))
+                        cmd += self.handle.cmd_tms_shift(BitString(0x7, 4))
                     else:
                         raise model.ProtocolError("Bad state sequence")
 
@@ -190,32 +203,32 @@ class JtagInterface(jtag.Interface):
                         # Actually lie about that, this will do the same
                         self.__state = self.STATE_PAUSE
                     else:
-                        cmd += self.handle.cmd_tms_shift(bitstring.BitString(1, 2))
+                        cmd += self.handle.cmd_tms_shift(BitString(1, 2))
                         self.__state = self.STATE_PAUSE
 
                 elif isinstance(op, jtag.CaptureIr):
                     if self.__state == self.STATE_RTI:
-                        cmd += self.handle.cmd_tms_shift(bitstring.BitString(0x3, 3))
+                        cmd += self.handle.cmd_tms_shift(BitString(0x3, 3))
                     elif self.__state == self.STATE_PAUSE:
-                        cmd += self.handle.cmd_tms_shift(bitstring.BitString(0xf, 5))
+                        cmd += self.handle.cmd_tms_shift(BitString(0xf, 5))
                     else:
                         raise model.ProtocolError("Bad state sequence")
 
-                    cmd += self.handle.cmd_tms_shift(bitstring.BitString(0x1, 2))
+                    cmd += self.handle.cmd_tms_shift(BitString(0x1, 2))
                     self.__state = self.STATE_PAUSE
 
                 elif isinstance(op, jtag.Run):
                     if self.__state == self.STATE_PAUSE:
-                        cmd += self.handle.cmd_tms_shift(bitstring.BitString(0x3, 3))
+                        cmd += self.handle.cmd_tms_shift(BitString(0x3, 3))
                         self.__state = self.STATE_RTI
                     elif self.__state == self.STATE_RESET:
-                        cmd += self.handle.cmd_tms_shift(bitstring.BitString(0, 1))
+                        cmd += self.handle.cmd_tms_shift(BitString(0, 1))
                         self.__state = self.STATE_RTI
                         
                     if self.__state == self.STATE_RTI:
                         if op.cycles:
                             # TODO anything shorter ?
-                            cmd += self.handle.cmd_tms_shift(bitstring.BitString(0, op.cycles))
+                            cmd += self.handle.cmd_tms_shift(BitString(0, op.cycles))
                     else:
                         raise model.ProtocolError("Bad state sequence")
 
@@ -240,28 +253,21 @@ class JtagInterface(jtag.Interface):
                 else:
                     raise base.ProtocolError("Unknown JTAG operation %s" % type(op))
                 
-            self.logger.debug("MPSSE commands: %r", cmd)
-
-            if self.__activity_pin:
-                pin, polarity = self.__activity_pin
-                cmd += self.handle.cmd_gpio_mask_set(1 << pin, 1 << pin,
-                                                     0 if polarity else (1 << pin))
+            cmd += self.cmd_activity(False)
 
             tdo_blob = self.handle.execute(cmd, tdo_length)
 
             if tdo_length:
-                self.logger.debug("MPSSE response: %r", tdo_blob)
-
                 for op in pending:
                     if isinstance(op, jtag.Shift) and op.read_tdo:
                         base = op.__offset
-                        tdo = bitstring.BitString()
+                        tdo = BitString()
                         for i, (bytec, bits) in enumerate(op.__counts):
                             if bits is None:
-                                tdo += bitstring.BitString(tdo_blob[base : base + bytec])
+                                tdo += BitString(tdo_blob[base : base + bytec])
                             else:
                                 assert bytec == 1
-                                tdo += bitstring.BitString(tdo_blob[base] >> (8 - bits), bits)
+                                tdo += BitString(tdo_blob[base] >> (8 - bits), bits)
                             base += bytec
                         op.tdo = tdo
             else:
@@ -270,7 +276,121 @@ class JtagInterface(jtag.Interface):
             assert self.__state in (self.STATE_RTI, self.STATE_RESET, self.STATE_PAUSE)
 
         for o in to_join:
-            tdo = bitstring.BitString()
+            tdo = BitString()
             for op in o.__parts:
                 tdo += op.tdo
             o.tdo = tdo
+
+class SwdInterface(BaseInterface, swd.Interface):
+    def __init__(self, adapter, **args):
+        swd.Interface.__init__(self, adapter)
+        self.oe_pin = args.pop("oe_pin")
+        BaseInterface.__init__(self, adapter, **args)
+
+    def cmd_oe(self, val, tdi):
+        return self.handle.cmd_gpio_mask_set((1 << self.oe_pin) | 2,
+                                             (1 << self.oe_pin) | 2,
+                                              (int(val) << self.oe_pin) | (int(tdi) << 1))
+        
+    def execute(self, operation_list):
+        ops = list(operation_list)
+        
+        self.logger.debug("running %s", ops)
+
+        while ops:
+            pending = []
+
+            cmd = self.cmd_activity(True)
+
+            rsp_length = 0
+            with_rsp = []
+
+            while ops and len(cmd) < 4000:
+                op = ops.pop(0)
+                pending.append(op)
+
+                if isinstance(op, swd.Read):
+                    addr = op.addr & 0x3
+                    ap = int(bool(op.ap))
+                    parity = ap ^ (addr & 1) ^ (addr >> 1) ^ 1
+
+                    cmd += self.cmd_oe(True, 1)
+                    cmd += self.handle.cmd_out(BitString((ap << 2) | (addr << 4) | (parity << 6) | 0x10a, 9))
+                    cmd += self.cmd_oe(False, 0)
+                    cmd += self.handle.cmd_idle(1, 0)
+                    c, ack_off = self.handle.cmd_in(36)
+                    cmd += c
+                    cmd += self.handle.cmd_idle(1, 0)
+                    cmd += self.cmd_oe(True, 0)
+
+                    if ap:
+                        cmd += self.handle.cmd_idle(16, 0)
+
+                    op.__ack = ack_off
+                    op.__offset = rsp_length
+                    rsp_length += sum([bc for bc, bic in op.__ack])
+                    with_rsp.append(op)
+
+                elif isinstance(op, swd.Write):
+                    addr = op.addr & 0x3
+                    ap = int(bool(op.ap))
+                    parity = ap ^ (addr & 1) ^ (addr >> 1)
+                    dparity = (op.data ^ (op.data >> 16))
+                    dparity ^= (dparity >> 8)
+                    dparity ^= (dparity >> 4)
+                    dparity = (0x6996 >> (dparity & 0xf)) & 1
+
+                    cmd += self.handle.cmd_out(BitString((ap << 2) | (addr << 4) | (parity << 6) | 0x102, 9))
+                    cmd += self.cmd_oe(False, 1)
+                    cmd += self.handle.cmd_idle(1, 1)
+                    c, ack_off = self.handle.cmd_in(3)
+                    cmd += c
+                    cmd += self.handle.cmd_idle(1, 1)
+                    cmd += self.cmd_oe(True, op.data & 1)
+                    cmd += self.handle.cmd_out(BitString(op.data | (dparity << 32), 33))
+
+                    if ap:
+                        cmd += self.handle.cmd_idle(16, 0)
+
+                    op.__ack = ack_off
+                    op.__offset = rsp_length
+                    rsp_length += sum([bc for bc, bic in op.__ack])
+                    with_rsp.append(op)
+
+                elif isinstance(op, swd.Wakeup):
+                    cmd += self.cmd_oe(True, 1)
+                    cmd += self.handle.cmd_idle(50, 1)
+
+                elif isinstance(op, swd.Run):
+                    cmd += self.handle.cmd_idle(op.cycles, 0)
+
+                elif isinstance(op, swd.JtagToSwd):
+                    cmd += self.handle.cmd_out(op.out)
+
+                else:
+                    raise base.ProtocolError("Unknown SWD operation %s" % type(op))
+                
+            cmd += self.cmd_activity(False)
+
+            rsp = self.handle.execute(cmd, rsp_length)
+
+            if rsp_length:
+                for op in with_rsp:
+                    base = op.__offset
+                    tdo = BitString()
+                    for i, (bytec, bits) in enumerate(op.__ack):
+                        if bits is None:
+                            tdo += BitString(rsp[base : base + bytec])
+                        else:
+                            assert bytec == 1
+                            tdo += BitString(rsp[base] >> (8 - bits), bits)
+                        base += bytec
+                    ack = int(tdo[:3])
+
+                    if int(ack) != 1:
+                        self.logger.error("While running %s%s", pending[:i+1], ("..." if i < len(pending)-1 else ""))
+                        self.logger.error("Got ACK/Wait/Error = %s", ack)
+                        raise base.ProtocolError()
+                    
+                    if isinstance(op, swd.Read):
+                        op.data = int(tdo[3:35])
