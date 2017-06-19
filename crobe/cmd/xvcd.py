@@ -72,7 +72,7 @@ class JtagHandler(object):
                     self.pending.append(self.interface.cmd_run(point + 1 - last_new_state))
 
                 elif self.state == self.STATE_RESET:
-                    self.pending = [self.interface.cmd_tap_reset()]
+                    self.pending.append(self.interface.cmd_tap_reset())
                     
                 self.state = next_state
                 last_new_state = point + 1
