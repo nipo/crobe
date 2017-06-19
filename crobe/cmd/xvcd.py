@@ -176,9 +176,9 @@ class XvcdServer(object):
     def __init__(self, port, interface):
         self.interface = interface
         self.port = port
-        self.server_sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.server_sock = socket.socket(socket.AF_INET6, socket.SOCK_STREAM)
         self.server_sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        self.server_sock.bind((socket.gethostname(), port))
+        self.server_sock.bind(("::", port))
         self.server_sock.listen(1)
 
     def serve(self):
