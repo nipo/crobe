@@ -252,7 +252,7 @@ class JtagInterface(JLinkInterface, jtag.Interface):
 class SwdInterface(swd.Interface, JLinkInterface):
     def __init__(self, port):
         swd.Interface.__init__(self, port)
-        JLinkInterface.__init__(self, port, "JTAG")
+        JLinkInterface.__init__(self, port, "SWD")
 
     def execute(self, operation_list):
         ops = list(operation_list)
