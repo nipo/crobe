@@ -166,11 +166,11 @@ class XvcdSession(object):
 
     def handle_settck(self):
         ns, = struct.unpack("<L", self.read(4))
-        period = 1e9 * ns
+        period = 1e-9 * ns
         self.buffer = b""
         self.jtag.interface.speed = 1 / period
         logging.info("Setting speed to %d, had %d", int(1/period), int(self.jtag.interface.speed))
-        self.write(struct.pack("<L", int(self.jtag.interface.speed)))
+        self.write(struct.pack("<L", int(1e9 / self.jtag.interface.speed)))
 
 class XvcdServer(object):
     def __init__(self, port, interface):

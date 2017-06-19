@@ -51,7 +51,7 @@ class JtagInterface(jtag.Interface):
     def __init__(self, port):
         jtag.Interface.__init__(self, port)
         self.__state = None
-        self.__speed = 1000
+        self.__tck_period = 1e-6
 
         ais \
                 = socket.getaddrinfo(self.port.hostname, self.port.port,
