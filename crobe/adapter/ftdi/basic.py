@@ -149,7 +149,7 @@ class BaseInterface(object):
             return b""
         
 class JtagInterface(BaseInterface, jtag.Interface):
-    def __init__(self, adapter, **args):
+    def __init__(self, adapter, oe_pin = None, oen_pin = None, **args):
         jtag.Interface.__init__(self, adapter)
         BaseInterface.__init__(self, adapter, **args)
 
@@ -282,15 +282,21 @@ class JtagInterface(BaseInterface, jtag.Interface):
             o.tdo = tdo
 
 class SwdInterface(BaseInterface, swd.Interface):
-    def __init__(self, adapter, **args):
+    def __init__(self, adapter, oen_pin = None, oe_pin = None, **args):
         swd.Interface.__init__(self, adapter)
-        self.oe_pin = args.pop("oe_pin")
         BaseInterface.__init__(self, adapter, **args)
+        if oen_pin is None and oe_pin is not None:
+            self.oe_pin = (oe_pin, True)
+        elif oe_pin is None and oen_pin is not None:
+            self.oe_pin = (oen_pin, False)
+        else:
+            raise ValueError("Need oen_pin or oe_pin")
 
     def cmd_oe(self, val, tdi):
-        return self.handle.cmd_gpio_mask_set((1 << self.oe_pin) | 2,
-                                             (1 << self.oe_pin) | 2,
-                                              (int(val) << self.oe_pin) | (int(tdi) << 1))
+        pin, pol = self.oe_pin
+        return self.handle.cmd_gpio_mask_set((1 << pin) | 2,
+                                             (1 << pin) | 2,
+                                              (int(bool(val) == pol) << pin) | (int(tdi) << 1))
         
     def execute(self, operation_list):
         ops = list(operation_list)
@@ -375,7 +381,10 @@ class SwdInterface(BaseInterface, swd.Interface):
             rsp = self.handle.execute(cmd, rsp_length)
 
             if rsp_length:
-                for op in with_rsp:
+                for idx, op in enumerate(pending):
+                    if op not in with_rsp:
+                        continue
+
                     base = op.__offset
                     tdo = BitString()
                     for i, (bytec, bits) in enumerate(op.__ack):
@@ -388,7 +397,7 @@ class SwdInterface(BaseInterface, swd.Interface):
                     ack = int(tdo[:3])
 
                     if int(ack) != 1:
-                        self.logger.error("While running %s%s", pending[:i+1], ("..." if i < len(pending)-1 else ""))
+                        self.logger.error("While running %s%s", pending[:idx+1], ("..." if idx < len(pending)-1 else ""))
                         self.logger.error("Got ACK/Wait/Error = %s", ack)
                         raise base.ProtocolError()
                     
