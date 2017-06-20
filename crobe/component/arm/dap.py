@@ -21,7 +21,6 @@ class Dap(PortComponent):
         self.last_dp_bank = None
 
     def start(self):
-        from ..soc.arm_based.soc import SoC
         from .coresight.rom_table import RomTable
         from ...part_id import PartId
 

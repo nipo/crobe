@@ -1,15 +1,5 @@
 from ....part_id import PartId
-from ....adapter.protocol import jtag
 from .soc import SoC
-
-@jtag.Tap.db.register(PartId(0, 0x20, 0x6416),
-                      PartId(0, 0x20, 0x6418))
-class Stm32Bs(jtag.Tap):
-    irlen = 5
-
-    def __init__(self, port, index):
-        jtag.Tap.__init__(self, port, index)
-        self.name = "STM32 Boundary Scan"
 
 @SoC.db.register(PartId(0, 0x20, 0x449))
 def stm32f74x(dp):

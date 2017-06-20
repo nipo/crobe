@@ -1,6 +1,4 @@
-from ....part_id import PartId
-from ...arm.ap import Ap
-from .soc import SoC
+from ..arm.ap import Ap
 
 @Ap.db.register(0x02880000)
 class CtrlAp(Ap):
@@ -11,7 +9,7 @@ class CtrlAp(Ap):
 
     def __init__(self, dp, index):
         Ap.__init__(self, dp, index)
-        self.name = "nRF52 Ctrl-AP"
+        self.name = "Nordic Ctrl-AP"
 
     def erase_all(self):
         return self.reg_write(self.ERASEALL, 1)
@@ -29,15 +27,3 @@ class CtrlAp(Ap):
     @reset.setter
     def reset(self, value):
         return self.reg_write(self.RESET, int(bool(value)))
-
-@SoC.db.register(PartId(2, 0x44, 1))
-def nrf51x22(dp):
-    return SoC("nRF51x22", dp)
-
-@SoC.db.register(PartId(2, 0x44, 6))
-def nrf52832(dp):
-    return SoC("nRF52832", dp)
-
-@SoC.db.register(PartId(2, 0x44, 8))
-def nrf52840(dp):
-    return SoC("nRF52840", dp)

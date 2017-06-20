@@ -1,6 +1,6 @@
 def main():
     from . import base
-    from ..component.fpga.spartan6 import Spartan6
+    from ..component.xilinx.spartan6 import Spartan6
 
     class Tool(base.Speed, base.Programs):
         forced_interface = "jtag"

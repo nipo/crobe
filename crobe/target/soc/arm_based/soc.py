@@ -1,6 +1,6 @@
 from .. import model
 from ....part_id import PartId
-from ...arm.coresight.rom_table import RomTable
+from ....component.arm.coresight.rom_table import RomTable
 
 __all__ = ["SoC"]
 

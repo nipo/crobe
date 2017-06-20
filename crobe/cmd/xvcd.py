@@ -188,7 +188,6 @@ class XvcdServer(object):
 
 def main():
     from . import base
-    from ..component.fpga.spartan6 import Spartan6
 
     class Tool(base.Speed):
         forced_interface = "jtag"

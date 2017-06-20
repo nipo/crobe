@@ -17,7 +17,7 @@ class ProbyAdapter(Adapter):
         self.mode = None
 
     def reprogram(self, mode):
-        from ..component.fpga.spartan6 import Spartan6
+        from ..component.xilinx.spartan6 import Spartan6
 
         self.logger.info("Reprogramming FPGA to use mode %s", mode)
 

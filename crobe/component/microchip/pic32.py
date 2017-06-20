@@ -1,6 +1,6 @@
-from ....adapter.protocol import jtag
-from ....part_id import PartId
-from ...mips.ejtag import EjtagTap
+from ...adapter.protocol import jtag
+from ...part_id import PartId
+from ..mips.ejtag import EjtagTap
 
 parts = {
     0x0902: "PIC32MX320F032H",
