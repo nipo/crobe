@@ -92,22 +92,25 @@ class Device(object):
             return Mpsse(self, interface, **defaults)
 
 class Handle(Context):
-    def __init__(self, device, interface, mode, gpio_oe = 0, gpio_val = 0):
+    def __init__(self, connection_id, interface, mode, gpio_oe = 0, gpio_val = 0):
         Context.__init__(self)
-        self.device = device
-
         self.__gpio_oe = gpio_oe
         self.__gpio_val = gpio_val
         self.__speed = 1000000
 
         self.check(api.set_interface(self.context, api.INTERFACE[interface]))
-        self.check(api.usb_open_string(self.context, self.device.connection_id))
+        self.check(api.usb_open_string(self.context, connection_id))
+
+        self.__eeprom_data_valid = None
+
         try:
             self.check(api.read_eeprom(self.context))
+            self.__eeprom_data_valid = False
             self.check(api.eeprom_decode(self.context, 0))
-            self.__has_eeprom = True
+            self.__eeprom_data_valid = True
         except:
-            self.__has_eeprom = False
+            pass
+
         self.check(api.set_bitmode(self.context, 0, api.BITMODE["RESET"]))
         self.check(api.usb_purge_buffers(self.context))
         self.check(api.set_latency_timer(self.context, 1))
@@ -146,48 +149,101 @@ class Handle(Context):
             self.__speed = 120000000 // (d + 1)
         
         
-    def eeprom_dump(self):
-        for name in api.EEPROM_VALUE:
-            try:
-                print(name, self.eeprom_value_get(name))
-            except FtdiError:
-                pass
-            
+    EEPROM_VALUE_MAP = dict(
+        CHANNEL_A_TYPE = "CHANNEL_TYPE",
+        CHANNEL_B_TYPE = "CHANNEL_TYPE",
+        CHANNEL_A_DRIVER = "DRIVER",
+        CHANNEL_B_DRIVER = "DRIVER",
+        CHANNEL_C_DRIVER = "DRIVER",
+        CHANNEL_D_DRIVER = "DRIVER",
+        CBUS_FUNCTION_0 = "CBUS",
+        CBUS_FUNCTION_1 = "CBUS",
+        CBUS_FUNCTION_2 = "CBUS",
+        CBUS_FUNCTION_3 = "CBUS",
+        CBUS_FUNCTION_4 = "CBUS",
+        CBUS_FUNCTION_5 = "CBUS",
+        CBUS_FUNCTION_6 = "CBUS",
+        CBUS_FUNCTION_7 = "CBUS",
+        CBUS_FUNCTION_8 = "CBUS",
+        CBUS_FUNCTION_9 = "CBUS",
+        GROUP0_DRIVE = "DRIVE",
+        GROUP1_DRIVE = "DRIVE",
+        GROUP2_DRIVE = "DRIVE",
+        GROUP3_DRIVE = "DRIVE",
+        CHIP_TYPE = "CHIP_TYPE",
+        )
+
+
     def eeprom_value_get(self, name):
-        if not self.__has_eeprom:
-            raise KeyError("No valid eeprom")
+        if not self.__eeprom_data_valid:
+            raise KeyError("No valid eeprom data")
 
         value = ctypes.c_int()
         id = api.EEPROM_VALUE[name]
         self.check(api.get_eeprom_value(self.context, id, ctypes.byref(value)))
-        revmap = dict(
-            CHANNEL_A_TYPE = api.CHANNEL_TYPE_NAME,
-            CHANNEL_B_TYPE = api.CHANNEL_TYPE_NAME,
-            CHANNEL_A_DRIVER = api.DRIVER_NAME,
-            CHANNEL_B_DRIVER = api.DRIVER_NAME,
-            CHANNEL_C_DRIVER = api.DRIVER_NAME,
-            CHANNEL_D_DRIVER = api.DRIVER_NAME,
-            CBUS_FUNCTION_0 = api.CBUS_NAME,
-            CBUS_FUNCTION_1 = api.CBUS_NAME,
-            CBUS_FUNCTION_2 = api.CBUS_NAME,
-            CBUS_FUNCTION_3 = api.CBUS_NAME,
-            CBUS_FUNCTION_4 = api.CBUS_NAME,
-            CBUS_FUNCTION_5 = api.CBUS_NAME,
-            CBUS_FUNCTION_6 = api.CBUS_NAME,
-            CBUS_FUNCTION_7 = api.CBUS_NAME,
-            CBUS_FUNCTION_8 = api.CBUS_NAME,
-            CBUS_FUNCTION_9 = api.CBUS_NAME,
-            GROUP0_DRIVE = api.DRIVE_NAME,
-            GROUP1_DRIVE = api.DRIVE_NAME,
-            GROUP2_DRIVE = api.DRIVE_NAME,
-            GROUP3_DRIVE = api.DRIVE_NAME,
-            CHIP_TYPE = api.CHIP_TYPE_NAME,
-            )
-        try:
-            rev = revmap[name]
-            return rev[value.value]
-        except:
+        if name in self.EEPROM_VALUE_MAP:
+            
+            mapping = getattr(api, self.EEPROM_VALUE_MAP[name] + "_NAME")
+            return mapping.get(value.value, value.value)
+        else:
             return value.value
+
+    def eeprom_get(self):
+        if not self.__eeprom_data_valid:
+            raise KeyError("No valid eeprom data")
+
+        raw = (ctypes.c_ubyte * api.MAX_EEPROM_SIZE)()
+        self.check(api.get_eeprom_buf(self.context, raw, api.MAX_EEPROM_SIZE))
+        return bytes(raw)
+
+    def eeprom_reset(self):
+        self.check(api.erase_eeprom(self.context))
+        self.__eeprom_data_valid = True
+
+    def eeprom_strings_set(self, vendor, product, serial):
+        if not self.__eeprom_data_valid:
+            self.eeprom_reset()
+        self.check(api.eeprom_set_strings(self.context, vendor, product, serial))
+
+    def eeprom_vpv_set(self, vid, pid, version = 0):
+        if not self.__eeprom_data_valid:
+            self.eeprom_reset()
+        self.eeprom_value_set("VENDOR_ID", vid)
+        self.eeprom_value_set("PRODUCT_ID", pid)
+        self.eeprom_value_set("USB_VERSION", version)
+        self.eeprom_value_set("USE_USB_VERSION", int(version != 0))
+
+    def eeprom_power_set(self, ma = None):
+        if not self.__eeprom_data_valid:
+            self.eeprom_reset()
+        self.eeprom_value_set("SELF_POWERED", int(ma is None))
+        self.eeprom_value_set("MAX_POWER", ma)
+
+    def eeprom_channel_mode_set(self, a, b):
+        if not self.__eeprom_data_valid:
+            self.eeprom_reset()
+        self.eeprom_value_set("CHANNEL_A_TYPE", a)
+        self.eeprom_value_set("CHANNEL_B_TYPE", b)
+            
+    def eeprom_writeback(self):
+        if not self.__eeprom_data_valid:
+            raise RuntimeError("Need valid data to flash EEPROM")
+        self.check(api.eeprom_build(self.context))
+        self.check(api.write_eeprom(self.context))
+        self.check(api.read_eeprom(self.context))
+        
+    def eeprom_value_set(self, name, value):
+        id = api.EEPROM_VALUE[name]
+
+        if name in self.EEPROM_VALUE_MAP:
+            mapping = getattr(api, self.EEPROM_VALUE_MAP[name])
+            value = mapping.get(value, None)
+            if value is None:
+                value = int(value)
+        else:
+            value = int(value)
+
+        self.check(api.set_eeprom_value(self.context, id, value))
 
     def write(self, blob):
         raw = (ctypes.c_ubyte * len(blob)).from_buffer_copy(blob)
@@ -254,7 +310,7 @@ class Handle(Context):
 
 class Mpsse(Handle):
     def __init__(self, device, interface, **defaults):
-        Handle.__init__(self, device, interface, "MPSSE", **defaults)
+        Handle.__init__(self, device.connection_id, interface, "MPSSE", **defaults)
 
     def cmd_tms_shift(self, tms, next = 0):
         cmd = api.MPSSE_WRITE_NEG | api.MPSSE_LSB | api.MPSSE_TMS

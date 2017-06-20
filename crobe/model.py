@@ -46,8 +46,13 @@ class Component(object):
         """
         Retrieve childrens in the deep subtree matching predicate.
         """
-        ret = list(filter(predicate, self.children))
+        ret = []
         for c in self.children:
+            try:
+                if predicate(c):
+                    ret.append(c)
+            except Exception:
+                pass
             ret += c.children_find(predicate)
         return ret
     
