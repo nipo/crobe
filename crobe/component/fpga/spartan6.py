@@ -27,7 +27,7 @@ class Spartan6(jtag.Tap):
     IR_BYPASS      = 0x3f
     IR_ISC_ENABLE  = 0x10
     IR_ISC_PROGRAM = 0x11
-    IR_ISC_DNA     = 0x31
+    IR_ISC_DNA     = 0x30 # Doc says 0x31, iMPACT does 0x30
     IR_ISC_DISABLE = 0x16
     IR_JPROGRAM    = 0x0b
     IR_JSTART      = 0x0c
@@ -110,7 +110,7 @@ class Spartan6(jtag.Tap):
 
         self.execute(ops)
 
-        return ops[2].tdo >> 2
+        return ops[2].tdo
 
     def load(self, program):
         if len(program) != 1:
