@@ -14,7 +14,7 @@ class Enumerator(model.Enumerator):
 
     def start(self):
         for index, d in enumerate(self.ctx.devices()):
-            self.children.append(Adapter.from_device(d))
+            self.child_add(Adapter.from_device(d))
 
         model.Enumerator.start(self)
             

@@ -36,7 +36,7 @@ class Dap(PortComponent):
             if ap.idr == 0:
                 continue
             
-            self.children.append(ap.cast())
+            self.child_add(ap.cast())
 
         PortComponent.start(self)
 
@@ -182,7 +182,7 @@ class JtagDpTap(jtag.Tap):
         self.name = "JTAG-DP Tap"
 
     def start(self):
-        self.children.append(JtagDp(self))
+        self.child_add(JtagDp(self))
         jtag.Tap.start(self)
 
 class WaitError(Exception):

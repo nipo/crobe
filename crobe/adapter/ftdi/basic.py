@@ -47,7 +47,7 @@ class JtagAdapterEnumerator(model.Enumerator):
 
     def start(self):
         for device in ftdi.Device.list_all(self.vid, self.pid):
-            self.children.append(self.adapter_class(self, device))
+            self.child_add(self.adapter_class(self, device))
         model.Enumerator.start(self)
 
     def serial_mangle(self, serial):

@@ -49,7 +49,7 @@ class MemAp(ap.Ap, model.Bus):
         self.wrap_mask = 0x3ff
 
         from .coresight.model import MemoryMappedComponent
-        self.children.append(MemoryMappedComponent(self, self.base).cast())
+        self.child_add(MemoryMappedComponent(self, self.base).cast())
     
     def execute(self, ops):
         be_to_size_l2 = {0xf: 2, 0x3: 1, 0xc: 1, 0x1: 0, 0x2: 0, 0x4: 0, 0x8: 0}

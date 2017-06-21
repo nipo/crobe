@@ -67,7 +67,7 @@ class Interface(base.Interface):
 
         partid = PartId.from_idcode(ops[-1].data)
 
-        self.children.append(self.db.call(partid, self))
+        self.child_add(self.db.call(partid, self))
 
         base.Interface.start(self)
         

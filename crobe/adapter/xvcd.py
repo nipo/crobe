@@ -16,7 +16,7 @@ class Enumerator(model.Enumerator):
         servers = (os.getenv("CROBE_XVCD_SEVERS") or "").split()
 
         for i, s in enumerate(servers):
-            self.children.append(Adapter.from_target(str(i), s))
+            self.child_add(Adapter.from_target(str(i), s))
 
         model.Enumerator.start(self)
             

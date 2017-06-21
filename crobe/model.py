@@ -62,6 +62,9 @@ class Component(object):
         """
         return self.children_find(lambda x: isinstance(x, klass))
 
+    def child_add(self, obj):
+        self.children.append(obj)
+    
 class BusComponent(Component):
     """
     Component with a bus interface.

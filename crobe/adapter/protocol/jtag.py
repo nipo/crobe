@@ -74,7 +74,7 @@ class Interface(base.Interface):
 
     def start(self):
         chain = Chain(self)
-        self.children.append(chain)
+        self.child_add(chain)
         base.Interface.start(self)
 
     def execute(self, operation_list):
@@ -345,7 +345,7 @@ class Chain(PortComponent):
 
         for index, idcode in enumerate(id_codes):
             tap = Tap.db.call(idcode or PartId.from_idcode(1), self, index)
-            self.children.append(tap)
+            self.child_add(tap)
 
         self.logger.info("Discovered chain:")
         for i, tap in enumerate(self.children):
