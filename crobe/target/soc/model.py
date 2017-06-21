@@ -1,15 +1,12 @@
-from ... import model
-from ...db import Db
+from .. import model
 from ...part_id import PartId
 
 __all__ = ["SoC"]
 
-class SoC(model.Component):
+class SoC(model.Target):
     """
     A SoC component.
     """
-    
-    db = Db()
 
     def __init__(self, name):
-        model.Component.__init__(self, name)
+        model.Target.__init__(self, name)

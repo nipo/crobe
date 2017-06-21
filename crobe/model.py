@@ -42,25 +42,31 @@ class Component(object):
         self.__name = name
         self.logger = logging.getLogger(name[:10])
     
-    def children_find(self, predicate):
+    def children_find(self, predicate, include_self = False):
         """
         Retrieve childrens in the deep subtree matching predicate.
         """
         ret = []
+        if include_self:
+            try:
+                if predicate(self):
+                    ret.append(self)
+            except Exception as e:
+                self.logger.warning("children find predicate exception: %s", e)
         for c in self.children:
             try:
                 if predicate(c):
                     ret.append(c)
-            except Exception:
-                pass
+            except Exception as e:
+                self.logger.warning("children find predicate exception: %s", e)
             ret += c.children_find(predicate)
         return ret
     
-    def children_of_class(self, klass):
+    def children_of_class(self, klass, include_self = False):
         """
         Retrieve childrens in the deep subtree of class klass.
         """
-        return self.children_find(lambda x: isinstance(x, klass))
+        return self.children_find(lambda x: isinstance(x, klass), include_self)
 
     def child_add(self, obj):
         self.children.append(obj)
@@ -144,9 +150,9 @@ class Register(object):
         self.datatype = datatype
         self.group = group
 
-class Cpu(object):
+class Cpu(Component):
     def __init__(self, name, core_index):
-        self.name = name
+        Component.__init__(self, name)
         self.core_index = core_index
 
         # Register number of PC

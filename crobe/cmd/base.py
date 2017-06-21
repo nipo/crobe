@@ -62,11 +62,16 @@ class Adapter(Command):
         except ValueError as e:
             pass
 
-        adapters = [a for a in adapters if a.name.lower() == args.adapter.lower()]
+        adapters = [a for a in adapters if a.name.lower().startswith(args.adapter.lower())]
         if len(adapters) == 1:
             self.adapter = adapters[0]
             return
 
+        adapters = [a for a in adapters if a.name.lower() == args.adapter.lower()]
+        if len(adapters) == 1:
+            self.adapter = adapters[0]
+            return
+        
         raise ValueError("Adapter not found", args.adapter)
     
 class Interface(Adapter):

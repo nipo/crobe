@@ -113,6 +113,7 @@ class Dap(PortComponent):
                 count += 1
 
 @swd.Interface.db.register(PartId(4, 0x3b, 0xba01),
+                           PartId(4, 0x3b, 0xba02),
                            PartId(4, 0x3b, 0xbb11))
 class SwDp(Dap):
     IDCODE   = 0 # R

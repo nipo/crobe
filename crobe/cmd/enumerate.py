@@ -15,6 +15,14 @@ def main():
 
     component_dump(args.interface)
 
+    from ..target.model import Field
+
+    field = Field()
+
+    field.discover(args.interface)
+
+    component_dump(field)
+    
 def component_dump(comp, prefix = ""):
     print(prefix, comp)
     for c in comp.children:

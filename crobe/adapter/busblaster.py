@@ -31,6 +31,6 @@ class Enumerator(JtagAdapterEnumerator):
 class Enumerator(JtagAdapterEnumerator):
     def __init__(self):
         JtagAdapterEnumerator.__init__(self, "Busblaster Internal",
-                                       short_name = "bb-int",
+                                       short_name = "int-bb",
                                        vid = 0x0403, pid = 0x8878,
                                        channel = "B")

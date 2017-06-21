@@ -83,7 +83,7 @@ class Enumerator(JtagAdapterEnumerator):
 @model.Enumerator.register
 class Enumerator(JtagAdapterEnumerator):
     def __init__(self):
-        JtagAdapterEnumerator.__init__(self, "Proby-internal", "proby-int",
+        JtagAdapterEnumerator.__init__(self, "Proby-internal", "int-proby",
                                        vid = 0x10eb, pid = 0x0026,
                                        channel = "B",
                                        resetn_pin = 9)
