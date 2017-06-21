@@ -37,17 +37,30 @@ class JtagAdapterEnumerator(model.Enumerator):
     adapter_class = Adapter
 
     def __init__(self, name, short_name,
-                 vid = 0, pid = 0,
+                 vid = None, pid = None,
                  **defaults):
         model.Enumerator.__init__(self, name)
-        self.vid = vid
-        self.pid = pid
         self.short_name = short_name
         self.defaults = defaults
+        self.vid_pid = []
 
+        
+        if vid is not None and pid is not None:
+            self.add(vid, pid)
+
+    def add(self, vid, pid):
+        self.vid_pid.append((vid, pid))
+        
+    def filter(self, adapter):
+        return True
+        
     def start(self):
-        for device in ftdi.Device.list_all(self.vid, self.pid):
-            self.child_add(self.adapter_class(self, device))
+        for vid, pid in self.vid_pid:
+            for device in ftdi.Device.list_all(vid, pid):
+                a = self.adapter_class(self, device)
+                if not self.filter(a):
+                    continue
+                self.child_add(a)
         model.Enumerator.start(self)
 
     def serial_mangle(self, serial):

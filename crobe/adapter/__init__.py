@@ -1,4 +1,4 @@
-from . import hs2
+from . import digilent
 from . import proby
 from . import busblaster
 from . import jlink
