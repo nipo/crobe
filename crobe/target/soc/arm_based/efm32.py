@@ -6,6 +6,7 @@ from ....memory.region import *
                  PartId(6, 0x73, 0x81),
                  PartId(6, 0x73, 0x82),
                  PartId(6, 0x73, 0xc9),
+                 PartId(6, 0x73, 0x101),
                  PartId(6, 0x73, 0x901))
 class Gecko(SoC):
     DI_UNIQUE = 0x0fe081f0

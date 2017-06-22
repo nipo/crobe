@@ -12,7 +12,7 @@ class CtrlAp(Ap):
         self.name = "Nordic Ctrl-AP"
 
     def erase_all(self):
-        return self.reg_write(self.ERASEALL, 1)
+        self.reg_write(self.ERASEALL, 1)
         while self.reg_read(self.ERASEALLSTATUS):
             pass
 

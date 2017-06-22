@@ -1,5 +1,6 @@
 from . import xilinx
 from . import atmel
+from . import energy_micro
 from . import ti
 from . import st
 from . import arm

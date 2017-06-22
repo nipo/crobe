@@ -114,7 +114,8 @@ class Dap(PortComponent):
 
 @swd.Interface.db.register(PartId(4, 0x3b, 0xba01),
                            PartId(4, 0x3b, 0xba02),
-                           PartId(4, 0x3b, 0xbb11))
+                           PartId(4, 0x3b, 0xbb11),
+                           PartId(4, 0x3b, 0xbc11))
 class SwDp(Dap):
     IDCODE   = 0 # R
     ABORT    = 0 # W
