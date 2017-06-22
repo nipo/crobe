@@ -1,5 +1,6 @@
 import struct
 import logging
+from enum import Enum
 
 class Component(object):
     """
@@ -143,6 +144,14 @@ class Bus(object):
         raise NotImplementedError()
 
 class Register(object):
+    class Type(Enum):
+        GPR = 0
+        FLOAT = 1
+        PC = 2
+        LR = 3
+        SP = 4
+        SYSTEM = 5
+
     def __init__(self, number, name, width, datatype, group):
         self.number = number
         self.name = name
@@ -150,7 +159,29 @@ class Register(object):
         self.datatype = datatype
         self.group = group
 
+    def __lt__(self, other):
+        return self.number < other.number
+
+    def __lte__(self, other):
+        return self.number <= other.number
+        
 class Cpu(Component):
+    class State(Enum):
+        RUN     = 0
+        HALT    = 1
+        SLEEP   = 2
+        FAULT   = 3
+        LOCKUP  = 4
+        UNKNOWN = 5
+
+    class HaltCause(Enum):
+        EXCEPTION   = 0
+        INSTRUCTION = 1
+        BREAKPOINT  = 2
+        WATCHPOINT  = 3
+        DEBUGGER    = 4
+        UNKNOWN     = 5
+
     def __init__(self, name, core_index):
         Component.__init__(self, name)
         self.core_index = core_index
@@ -159,13 +190,21 @@ class Cpu(Component):
         self.pc = None
         self.registers = [] # List of Register objects
 
+    @property
+    def state(self):
+        return self.State.UNKNOWN
+
+    @property
+    def halt_cause(self):
+        return self.HaltCause.UNKNOWN
+
     def step(self):
         raise NotImplementedError()
 
-    def run(self):
+    def resume(self):
         raise NotImplementedError()
 
-    def stop(self):
+    def halt(self):
         raise NotImplementedError()
 
     def reset(self, stop = True):
