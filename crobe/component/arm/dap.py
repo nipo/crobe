@@ -138,11 +138,11 @@ class SwDp(Dap):
     def cmd_ctrl_stat(self, data = None):
         return SwdCtrlStat(data)
 
-    def cmd_ap_read(self, addr, ap = 0, be = 0xf):
-        return SwdApRead(addr, ap, be)
+    def cmd_ap_read(self, addr, ap = 0):
+        return SwdApRead(addr, ap)
 
-    def cmd_ap_write(self, addr, data, ap = 0, be = 0xf):
-        return SwdApWrite(addr, data, ap, be)
+    def cmd_ap_write(self, addr, data, ap = 0):
+        return SwdApWrite(addr, data, ap)
 
 class JtagDp(Dap):
     IDCODE  = 0xe
@@ -168,11 +168,11 @@ class JtagDp(Dap):
     def cmd_ctrl_stat(self, data = None):
         return JtagCtrlStat(data)
 
-    def cmd_ap_read(self, addr, ap = 0, be = 0xf):
-        return JtagApRead(addr, ap, be)
+    def cmd_ap_read(self, addr, ap = 0):
+        return JtagApRead(addr, ap)
 
-    def cmd_ap_write(self, addr, data, ap = 0, be = 0xf):
-        return JtagApWrite(addr, data, ap, be)
+    def cmd_ap_write(self, addr, data, ap = 0):
+        return JtagApWrite(addr, data, ap)
 
 @jtag.Tap.db.register(PartId(4, 0x3b, 0xba00))
 class JtagDpTap(jtag.Tap):
@@ -348,24 +348,23 @@ class JtagRdBuff(Operation):
         self.data = ops[-1].tdo >> 3
 
 class ApAccess(Operation):
-    def __init__(self, is_read, addr, ap, be):
+    def __init__(self, is_read, addr, ap):
         self.is_read = is_read
         self.addr = addr
         self.ap = ap
-        self.be = be
 
     def operations(self, dp):
         return dp.cmd_select(ap = self.ap, ap_bank = self.addr >> 4).operations(dp)
 
     def __repr__(self):
         if self.is_read:
-            return "dap.ApRead(0x%x, %d, 0x%x)" % (self.addr, self.ap, self.be)
+            return "dap.ApRead(0x%x, %d)" % (self.addr, self.ap)
         else:
-            return "dap.ApWrite(0x%x, 0x%x, %d, 0x%x)" % (self.addr, self.data, self.ap, self.be)
+            return "dap.ApWrite(0x%x, 0x%x, %d)" % (self.addr, self.data, self.ap)
 
 class SwdApRead(ApAccess):
-    def __init__(self, addr, ap = 0, be = 0xf):
-        ApAccess.__init__(self, True, addr, ap, be)
+    def __init__(self, addr, ap = 0):
+        ApAccess.__init__(self, True, addr, ap)
 
     def operations(self, dp):
         ret = ApAccess.operations(self, dp)
@@ -378,8 +377,8 @@ class SwdApRead(ApAccess):
         self.data = ops[-1].data
 
 class SwdApWrite(ApAccess):
-    def __init__(self, addr, data, ap = 0, be = 0xf):
-        ApAccess.__init__(self, False, addr, ap, be)
+    def __init__(self, addr, data, ap = 0):
+        ApAccess.__init__(self, False, addr, ap)
         self.data = data
 
     def operations(self, dp):
@@ -388,8 +387,8 @@ class SwdApWrite(ApAccess):
         return ret + [swd.Write(True, (self.addr >> 2) & 3, self.data)]
 
 class JtagApRead(ApAccess):
-    def __init__(self, addr, ap = 0, be = 0xf):
-        ApAccess.__init__(self, True, addr, ap, be)
+    def __init__(self, addr, ap = 0):
+        ApAccess.__init__(self, True, addr, ap)
 
     def operations(self, dp):
         ret = ApAccess.operations(self, dp)
@@ -405,8 +404,8 @@ class JtagApRead(ApAccess):
         self.data = ops[-1].tdo >> 3
 
 class JtagApWrite(ApAccess):
-    def __init__(self, addr, data, ap = 0, be = 0xf):
-        ApAccess.__init__(self, False, addr, ap, be)
+    def __init__(self, addr, data, ap = 0):
+        ApAccess.__init__(self, False, addr, ap)
         self.data = data
 
     def operations(self, dp):

@@ -44,47 +44,109 @@ class MemAp(ap.Ap, model.Bus):
         model.Bus.__init__(self, "Mem-AP")
         self.width = 0
         self.increment = 0
-        self.csw = (self.csw & ~0x00000307) | 0x00000142
-        self.csw_base = self.reg_read(self.CSW) & ~0x00000307
+        self.csw_base = self.reg_read(self.CSW) & ~0x00000f37
         self.wrap_mask = 0x3ff
 
         from .coresight.model import MemoryMappedComponent
         self.child_add(MemoryMappedComponent(self, self.base).cast())
     
-    def execute(self, ops):
+    def execute(self, transfers):
+        transfers = list(transfers)
         be_to_size_l2 = {0xf: 2, 0x3: 1, 0xc: 1, 0x1: 0, 0x2: 0, 0x4: 0, 0x8: 0}
-        dops = []
 
-        for o in ops:
-            o.__ops = list(o.operations(self))
-            dops += o.__ops
-            self.logger.debug("%s translated to %s", o, o.__ops)
-
-        access_size_l2 = None
         address = None
-        for i in range(-len(dops), 0):
-            o = dops[i]
+        csw_dirty = False
+        csw = 0
 
-            if not o.is_read and o.addr == self.TAR:
-                if o.data == address:
-                    del dops[i]
+        operations = []
+
+        self.logger.debug("Executing %s", transfers)
+        
+        for i, t in enumerate(transfers):
+            if not address:
+                address_dirty = True
+                address = t.address
+
+            if (csw & 0x7) != t.size_l2:
+                csw = (csw & 0xff0) | t.size_l2
+                csw_dirty = True
+
+            reg = MemAp.DRW
+
+            # First, handle non-word accesses, they can only use DRW
+            if t.size_l2 != 2:
+                if address != t.address:
+                    address_dirty = True
+                    address = t.address
+
+                if len(transfers) > i+1:
+                    nt = t[i+1]
+                    if nt.size_l2 == t.size_l2 and nt.address == t.address + (1 << t.size_l2):
+                        csw = (csw & ~0x030) | 0x10
+                        csw_dirty = True
+                    elif nt.address == t.address:
+                        csw = (csw & ~0x030)
+                        csw_dirty = True
+                        
+            else:
+                # Word access only, they may use DRW and BDx
+                # first, see whether auto increment could be useful
+                in_next_16 = 0
+                incrementing = 0
+                for si, nt in enumerate(transfers[i+1:]):
+                    if nt.address < t.address + 16:
+                        in_next_16 += 1
+                    if nt.address == t.address + (si + 1) * 4:
+                        incrementing += 1
+
+                    if nt.size_l2 != 2:
+                        break
+                    
+                if csw & 0x030 == 0x000:
+                    if incrementing > in_next_16:
+                        csw_dirty = True
+                        csw = (csw & ~0x030) | 0x010
                 else:
-                    address = o.data
+                    if incrementing < in_next_16:
+                        csw_dirty = True
+                        csw = csw & ~0x030
+                        
+                if i+1 >= len(transfers) \
+                   or (csw & 0x030 == 0x010 \
+                       and address == t.address \
+                       and transfers[i + 1].address == address + 4):
+                    reg = MemAp.DRW
+                elif address <= t.address < address + 16:
+                    offset = t.address - address
+                    reg = MemAp.BD0 + offset
+                else:
+                    address_dirty = True
+                    address = t.address
+                    
+            if address_dirty:
+                address_dirty = False
+                operations.append(self.cmd_write(MemAp.TAR, address))
+                
+            if csw_dirty:
+                csw_dirty = False
+                operations.append(self.cmd_write(MemAp.CSW, self.csw_base | csw))
 
-            elif o.addr == self.DRW:
-                size_l2 = be_to_size_l2[o.be]
-                if size_l2 != access_size_l2:
-                    access_size_l2 = size_l2
-                    dops.insert(i, self.port.cmd_ap_write(self.CSW, self.csw_base | 0x00000000 | 0x10 | access_size_l2))
+            if isinstance(t, ReadAccess):
+                t.__op = self.cmd_read(reg)
+                operations.append(t.__op)
+            else:
+                operations.append(self.cmd_write(reg, t.data << ((t.address & 3) * 8)))
 
-                address += 1 << access_size_l2
-                if address & self.wrap_mask == 0:
-                    address -= self.wrap_mask + 1
+            if (csw & 0x030) >> 4 == 1 and reg == MemAp.DRW:
+                address += 1 << t.size_l2
 
-        self.port.execute(dops)
+        self.logger.debug("-> translated to %s", operations)
+                
+        self.port.execute(operations)
 
-        for o in ops:
-            o.update(o.__ops)
+        for t in transfers:
+            if isinstance(t, ReadAccess):
+                t.data = (t.__op.data >> ((t.address & 3) * 8)) & ((1 << (8 << t.size_l2)) - 1)
 
     @property
     def csw(self):
@@ -134,54 +196,27 @@ class MemAp(ap.Ap, model.Bus):
 class Operation(object):
     pass
                 
-class AccessMode(Operation):
-    pass
-                
 class MemoryAccess(Operation):
-    def update(self, ops):
-        pass
-    
-class ReadAccess(MemoryAccess):
-    def __init__(self, address, auto_increment = True):
+    def __init__(self, address):
         self.address = address
-        self.auto_increment = auto_increment
 
-    def operations(self, ap):
-        if self.auto_increment or self.size_l2 != 2:
-            return [ap.cmd_write(MemAp.TAR, self.address),
-                    ap.cmd_read(MemAp.DRW,
-                               be = ((1 << (1 << self.size_l2)) - 1) << (self.address & 0x3))]
-        else:
-            return [ap.cmd_write(MemAp.TAR, self.address),
-                    ap.cmd_read(MemAp.BD0,
-                               be = ((1 << (1 << self.size_l2)) - 1) << (self.address & 0x3))]
-
-    def update(self, ops):
-        self.data = ops[-1].data >> (8 * (self.address & 0x3))
-
+class ReadAccess(MemoryAccess):
     def __str__(self):
         return "<MemAP %s 0x%08x>" % (self.__class__.__name__, self.address)
-        
-class WriteAccess(MemoryAccess):
-    def __init__(self, address, data, auto_increment = True):
-        self.address = address
-        self.data = data
-        self.auto_increment = auto_increment
 
-    def operations(self, ap):
-        if self.auto_increment or self.size_l2 != 2:
-            return [ap.cmd_write(MemAp.TAR, self.address),
-                    ap.cmd_write(MemAp.DRW,
-                                data = self.data << (8 * (self.address & 0x3)),
-                                be = ((1 << (1 << self.size_l2)) - 1) << (self.address & 0x3))]
-        else:
-            return [ap.cmd_write(MemAp.TAR, self.address),
-                    ap.cmd_write(MemAp.BD0,
-                                data = self.data << (8 * (self.address & 0x3)),
-                                be = ((1 << (1 << self.size_l2)) - 1) << (self.address & 0x3))]
+    def __repr__(self):
+        return "mem_ap.%s(0x%08x)" % (self.__class__.__name__, self.address)
+    
+class WriteAccess(MemoryAccess):
+    def __init__(self, address, data):
+        MemoryAccess.__init__(self, address)
+        self.data = data
 
     def __str__(self):
         return "<MemAP %s 0x%08x 0x%08x>" % (self.__class__.__name__, self.address, self.data)
+
+    def __repr__(self):
+        return "mem_ap.%s(0x%08x, 0x%08x)" % (self.__class__.__name__, self.address, self.data)
 
 class Read8(ReadAccess):
     size_l2 = 0
