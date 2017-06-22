@@ -32,8 +32,8 @@ class Ap(PortComponent):
         except NoMatch:
             return self
 
-    def cmd_write(self, addr, data, be = 0xf):
-        return self.port.cmd_ap_write(addr, data, ap = self.index, be = be)
+    def cmd_write(self, addr, data):
+        return self.port.cmd_ap_write(addr, data, ap = self.index)
 
-    def cmd_read(self, addr, be = 0xf):
-        return self.port.cmd_ap_read(addr, ap = self.index, be = be)
+    def cmd_read(self, addr):
+        return self.port.cmd_ap_read(addr, ap = self.index)

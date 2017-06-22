@@ -3,9 +3,7 @@ from .. import model
 from ....part_id import PartId
 from ....component.arm.coresight.rom_table import RomTable
 from ....component.arm.coresight.scs import Scs
-from ....component.arm.coresight.dwt import Dwt
-from ....component.arm.coresight.fpb import Fpb
-from ....component.arm import cortex
+from ....component.arm.cortex import Cortex
 from ....component.arm.dap import SwDp, JtagDp
 from ....component.arm.mem_ap import MemAp
 from ....db import Db
@@ -24,23 +22,8 @@ class SoC(model.SoC):
         for mem_ap in self.buses:
             for s in mem_ap.children_of_class(Scs):
                 rt, = port.children_find(lambda x: isinstance(x, RomTable) and s in x.children)
-                self.child_add(self.cpu_for_romtable(idx, rt))
+                self.child_add(Cortex.from_romtable(rt, idx))
                 idx += 1
-
-    def cpu_for_romtable(self, index, rt):
-        scs, = rt.children_of_class(Scs)
-
-        try:
-            fpb, = rt.children_of_class(Fpb)
-        except:
-            fpb = None
-
-        try:
-            dwt, = rt.children_of_class(Dwt)
-        except:
-            dwt = None
-
-        return cortex.cpu_for(index, scs, fpb, dwt)
             
 @SoC.db.register_default
 def default_soc(ap):

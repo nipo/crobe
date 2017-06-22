@@ -61,10 +61,13 @@ class MemoryMappedComponent(model.BusComponent):
         return self
 
     def reg_read(self, offset):
-        return self.bus.u32_read(self.base + offset)
+        op = self.bus.cmd_u32_read(self.base + offset)
+        self.bus.execute([op])
+        return op.data
 
-    def reg_write(self, offset, value):
-        self.bus.u32_write(self.base + offset, value)
+    def reg_write(self, offset, data):
+        op = self.bus.cmd_u32_write(self.base + offset, data)
+        self.bus.execute([op])
 
     def cmd_reg_read(self, offset):
         return self.bus.cmd_u32_read(self.base + offset)

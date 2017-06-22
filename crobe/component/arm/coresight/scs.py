@@ -1,4 +1,5 @@
 from .model import MemoryMappedComponent
+from ....model import Cpu
 from .. import cpuid
 from ....part_id import PartId
 
@@ -10,7 +11,7 @@ from ....part_id import PartId
 class Scs(MemoryMappedComponent):
     def __init__(self, ap, base):
         MemoryMappedComponent.__init__(self, ap, base)
-        self.reg_write(self.DHCSR, self.DHCSR_KEY | self.DHCSR_DEBUGEN | self.DHCSR_HALT)
+        self.reg_write(self.DHCSR, self.DHCSR_KEY | self.DHCSR_C_DEBUGEN | self.DHCSR_C_HALT)
         self.reg_write(self.DEMCR, self.reg_read(self.DEMCR) | self.DEMCR_TRCENA)
 
         self.cpu_name = cpuid.decode(self.cpuid)
@@ -38,6 +39,121 @@ class Scs(MemoryMappedComponent):
     def cpuid(self):
         return self.reg_read(self.CPUID)
 
+    @property
+    def cpu_state(self):
+        r = self.reg_read(self.DHCSR)
+
+        if r & self.DHCSR_S_LOCKUP:
+            return Cpu.State.LOCKUP
+
+        if r & self.DHCSR_S_SLEEP:
+            return Cpu.State.SLEEP
+
+        if r & self.DHCSR_S_HALT:
+            return Cpu.State.HALT
+
+        return Cpu.State.RUN
+
+    @property
+    def cpu_halt_cause(self):
+        r = self.reg_read(self.DFSR)
+
+        if r & self.DFSR_HALTED:
+            return Cpu.HaltCause.DEBUGGER
+
+        if r & (self.DFSR_BKPT | self.DFSR_VCATCH):
+            return Cpu.HaltCause.BREAKPOINT
+
+        if r & self.DFSR_DWTTRAP:
+            return Cpu.HaltCause.WATCHPOINT
+        
+        return Cpu.HaltCause.UNKNOWN
+
+    def cpu_halt(self):
+        self.reg_write(self.DHCSR, self.DHCSR_KEY | self.DHCSR_C_DEBUGEN | self.DHCSR_C_HALT)
+
+        if self.cpu_state == Cpu.State.RUN:
+            raise RuntimeError("Unable to halt core")
+
+    def cpu_step(self):
+        if self.cpu_state == Cpu.State.RUN:
+            raise RuntimeError("Cannot single-step a running core")
+
+        ops = [
+            self.cmd_reg_write(self.DFSR, self.DFSR_CLEAR),
+            self.cmd_reg_write(self.DHCSR, self.DHCSR_KEY | self.DHCSR_C_DEBUGEN
+                            | self.DHCSR_C_HALT | self.DHCSR_C_MASKINTS),
+            self.cmd_reg_write(self.DHCSR, self.DHCSR_KEY | self.DHCSR_C_DEBUGEN
+                            | self.DHCSR_C_MASKINTS | self.DHCSR_C_STEP),
+            ]
+        self.bus.execute(ops)
+
+    def cpu_resume(self):
+        ops = [
+            self.cmd_reg_write(self.DFSR, self.DFSR_CLEAR),
+            self.cmd_reg_write(self.DHCSR, self.DHCSR_KEY | self.DHCSR_C_DEBUGEN),
+            ]
+        self.bus.execute(ops)
+
+    def cpu_reg_set(self, reg_no, data):
+        ops = [
+            self.cmd_reg_write(self.DCRDR, data),
+            self.cmd_reg_write(self.DCRSR, reg_no | self.DCRSR_WRITE),
+            self.cmd_reg_read(self.DHCSR),
+            ]
+        self.bus.execute(ops)
+
+    def cpu_reg_get(self, reg_no):
+        ops = [
+            self.cmd_reg_write(self.DCRSR, reg_no),
+            self.cmd_reg_read(self.DHCSR),
+            self.cmd_reg_read(self.DCRDR),
+            ]
+        self.bus.execute(ops)
+
+        return ops[-1].data
+
+    def cpu_reg_get_all(self, reg_nos):
+        ops = []
+        read_op = []
+
+        for r in reg_nos:
+            ops.append(self.cmd_reg_write(self.DCRSR, r))
+            ops.append(self.cmd_reg_read(self.DHCSR))
+            ro = self.cmd_reg_read(self.DCRDR)
+            read_op.append(ro)
+            ops.append(ro)
+
+        self.bus.execute(ops)
+
+        return [op.data for op in read_op]
+
+    @property
+    def demcr(self):
+        return self.reg_read(self.DEMCR)
+
+    @demcr.setter
+    def demcr(self, value):
+        self.reg_write(self.DEMCR, value)
+
+    @property
+    def cpu_reset_catch(self):
+        return self.demcr & self.DEMCR_VC_CORERESET
+
+    @cpu_reset_catch.setter
+    def cpu_reset_catch(self, value):
+        tmp = self.demcr & ~self.DEMCR_VC_CORERESET
+        if value:
+            tmp |= self.DEMCR_VC_CORERESET
+        self.demcr = tmp
+
+    def cpu_reset(self):
+        ops = [
+            self.cmd_reg_write(self.DFSR, self.DFSR_CLEAR),
+            self.cmd_reg_write(self.AIRCR, self.AIRCR_KEY | self.AIRCR_SYSRESETREQ),
+            ]
+        self.bus.execute(ops)
+    
     # System control and ID registers
     # 0x000-0x00f  Interrupts, Auxilary control
     MCR   = 0x000
@@ -45,22 +161,31 @@ class Scs(MemoryMappedComponent):
     ACTLR = 0x008
 
     # 0xd00-0xd8f  SCB
-    CPUID = 0xd00
-    ICSR  = 0xd04
-    VTOR  = 0xd08
-    AIRCR = 0xd0c
-    SCR   = 0xd10
-    CCR   = 0xd14
-    SHPR1 = 0xd18
-    SHPR2 = 0xd1c
-    SHPR3 = 0xd20
-    SHCSR = 0xd24
-    CFSR  = 0xd28
-    HFSR  = 0xd2c
-    DFSR  = 0xd30
-    MMFAR = 0xd34
-    BFAR  = 0xd38
-    AFSR  = 0xd3c
+    CPUID             = 0xd00
+    ICSR              = 0xd04
+    VTOR              = 0xd08
+    AIRCR             = 0xd0c
+    AIRCR_KEY         = 0x05fa0000
+    AIRCR_VECTRESET   = 1 << 0
+    AIRCR_SYSRESETREQ = 1 << 2
+    SCR               = 0xd10
+    CCR               = 0xd14
+    SHPR1             = 0xd18
+    SHPR2             = 0xd1c
+    SHPR3             = 0xd20
+    SHCSR             = 0xd24
+    CFSR              = 0xd28
+    HFSR              = 0xd2c
+    DFSR              = 0xd30
+    DFSR_CLEAR        = 0x1f
+    DFSR_HALTED       = 1 << 0
+    DFSR_BKPT         = 1 << 1
+    DFSR_DWTTRAP      = 1 << 2
+    DFSR_VCATCH       = 1 << 3
+    DFSR_EXTERNAL     = 1 << 4
+    MMFAR             = 0xd34
+    BFAR              = 0xd38
+    AFSR              = 0xd3c
 
     # Processor Feature Registers
     ID_PFR = staticmethod(lambda x: 0xd40 + 4 * x)
@@ -79,22 +204,23 @@ class Scs(MemoryMappedComponent):
     # 0xdf0-0xeff  Debug
     DHCSR = 0xdf0
     DHCSR_KEY = 0xa05f0000
-    DHCSR_RESET_ST  = 1 << 25
-    DHCSR_RETIRE_ST = 1 << 24
-    DHCSR_LOCKUP    = 1 << 19
-    DHCSR_SLEEP     = 1 << 18
-    DHCSR_HALT      = 1 << 17
-    DHCSR_REGRDY    = 1 << 16
-    DHCSR_SNAPSTALL = 1 << 5
-    DHCSR_MASKINTS  = 1 << 3
-    DHCSR_STEP      = 1 << 2
-    DHCSR_HALT      = 1 << 1
-    DHCSR_DEBUGEN   = 1 << 0
+    DHCSR_S_RESET_ST  = 1 << 25
+    DHCSR_S_RETIRE_ST = 1 << 24
+    DHCSR_S_LOCKUP    = 1 << 19
+    DHCSR_S_SLEEP     = 1 << 18
+    DHCSR_S_HALT      = 1 << 17
+    DHCSR_C_REGRDY    = 1 << 16
+    DHCSR_C_SNAPSTALL = 1 << 5
+    DHCSR_C_MASKINTS  = 1 << 3
+    DHCSR_C_STEP      = 1 << 2
+    DHCSR_C_HALT      = 1 << 1
+    DHCSR_C_DEBUGEN   = 1 << 0
 
 
-    DCRSR = 0xdf4
-    DCRDR = 0xdf8
-    DEMCR = 0xdfc
+    DCRSR              = 0xdf4
+    DCRSR_WRITE        = 0x10000
+    DCRDR              = 0xdf8
+    DEMCR              = 0xdfc
     DEMCR_TRCENA       = 1 << 24
     DEMCR_MON_REQ      = 1 << 19
     DEMCR_MON_STEP     = 1 << 18
