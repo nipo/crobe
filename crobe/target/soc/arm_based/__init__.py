@@ -1,4 +1,4 @@
-from . import nrf
+from . import nrf5
 from . import lpc11u
 from . import efm32
 from . import stm32
