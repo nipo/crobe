@@ -10,3 +10,4 @@ class SoC(model.Target):
 
     def __init__(self, name):
         model.Target.__init__(self, name)
+        self.uid = 0
