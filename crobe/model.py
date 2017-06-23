@@ -125,6 +125,22 @@ class Bus(object):
         self.execute(ops)
         return ops[0].data
 
+    def u16_write(self, address, data):
+        self.execute([self.cmd_u16_write(address, data)])
+
+    def u16_read(self, address):
+        ops = [self.cmd_u16_read(address)]
+        self.execute(ops)
+        return ops[0].data
+
+    def u8_write(self, address, data):
+        self.execute([self.cmd_u8_write(address, data)])
+
+    def u8_read(self, address):
+        ops = [self.cmd_u8_read(address)]
+        self.execute(ops)
+        return ops[0].data
+
     def cmd_u8_read(self, address):
         raise NotImplementedError()
 
