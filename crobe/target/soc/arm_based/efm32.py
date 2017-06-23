@@ -24,7 +24,7 @@ class Gecko(SoC):
         self.logger.info("MCU UID: %016x", self.uid)
 
     def device_identify(self):
-        self.uid = struct.unpack("<Q", self.buses[0].mem_read(self.DI_UNIQUE, 8))
+        self.uid, = struct.unpack("<Q", self.buses[0].mem_read(self.DI_UNIQUE, 8))
         pack_info = self.buses[0].u32_read(self.DI_PART_INFO)
         mem_info = self.buses[0].u32_read(self.DI_MEM_INFO)
         part_info = self.buses[0].u32_read(self.DI_PART_INFO)
