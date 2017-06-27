@@ -1,4 +1,4 @@
-from ...model import Cpu, Register
+from ..model import Cpu, Register
 from .coresight.dwt import Dwt
 from .coresight.fpb import Fpb
 from .coresight.scs import Scs
@@ -6,6 +6,11 @@ from .coresight.scs import Scs
 __all__ = []
 
 class Cortex(Cpu):
+    gdb_feature_name = "org.gnu.gdb.arm.m-profile"
+    gdb_byteorder = "little"
+    cpu_pc_name = "cp"
+    cpu_sp_name = "sp"
+
     def __init__(self, index, scs,
                  fpb = None,
                  dwt = None):
@@ -13,6 +18,7 @@ class Cortex(Cpu):
         self.scs = scs
         self.dwt = dwt
         self.fpb = fpb
+        self.bus = scs.bus
 
         self.registers = [
             Register(0, "r0", 32, Register.Type.GPR, None),
@@ -32,8 +38,8 @@ class Cortex(Cpu):
             Register(14, "lr", 32, Register.Type.LR, None),
             Register(15, "pc", 32, Register.Type.PC, None),
             Register(16, "xpsr", 32, Register.Type.SYSTEM, None),
-            Register(17, "msp", 32, Register.Type.SYSTEM, None),
-            Register(18, "psp", 32, Register.Type.SYSTEM, None),
+            Register(17, "msp", 32, Register.Type.SP, None),
+            Register(18, "psp", 32, Register.Type.SP, None),
             Register(20, "cfbp", 32, Register.Type.SYSTEM, None),
             ]
 
@@ -60,14 +66,11 @@ class Cortex(Cpu):
 
         return cls(index, scs = scs, **others)
 
-    def reg_get_all(self):
-        return dict(zip(self.registers, self.scs.cpu_reg_get_all([r.number for r in self.registers])))
+    def reg_read(self, reg_list):
+        return self.scs.cpu_reg_get_many(reg_list)
 
-    def reg_get(self, reg):
-        return self.scs.cpu_reg_get(self.register_get(reg).number)
-
-    def reg_set(self, reg, value):
-        return self.scs.cpu_reg_set(self.register_get(reg).number, value)
+    def reg_write(self, reg_value_map):
+        return self.scs.cpu_reg_set_many(reg_value_map)
 
     @property
     def halt_cause(self):

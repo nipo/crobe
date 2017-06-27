@@ -1,4 +1,5 @@
 from . import coresight
 from . import mem_ap
-from . import dap
+from . import jtag_dp
+from . import sw_dp
 

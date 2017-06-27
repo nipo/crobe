@@ -1,5 +1,5 @@
 from .model import MemoryMappedComponent
-from ....model import Cpu
+from ...model import Cpu
 from .. import cpuid
 from ....part_id import PartId
 
@@ -95,30 +95,19 @@ class Scs(MemoryMappedComponent):
             ]
         self.bus.execute(ops)
 
-    def cpu_reg_set(self, reg_no, data):
-        ops = [
-            self.cmd_reg_write(self.DCRDR, data),
-            self.cmd_reg_write(self.DCRSR, reg_no | self.DCRSR_WRITE),
-            self.cmd_reg_read(self.DHCSR),
-            ]
-        self.bus.execute(ops)
+    def cpu_reg_set(self, reg, data):
+        self.cpu_reg_set_many({reg: data})
 
-    def cpu_reg_get(self, reg_no):
-        ops = [
-            self.cmd_reg_write(self.DCRSR, reg_no),
-            self.cmd_reg_read(self.DHCSR),
-            self.cmd_reg_read(self.DCRDR),
-            ]
-        self.bus.execute(ops)
+    def cpu_reg_get(self, reg):
+        values = self.cpu_reg_get_many([reg])
+        return values[reg]
 
-        return ops[-1].data
-
-    def cpu_reg_get_all(self, reg_nos):
+    def cpu_reg_get_many(self, regs):
         ops = []
         read_op = []
 
-        for r in reg_nos:
-            ops.append(self.cmd_reg_write(self.DCRSR, r))
+        for r in regs:
+            ops.append(self.cmd_reg_write(self.DCRSR, r.number))
             ops.append(self.cmd_reg_read(self.DHCSR))
             ro = self.cmd_reg_read(self.DCRDR)
             read_op.append(ro)
@@ -126,7 +115,19 @@ class Scs(MemoryMappedComponent):
 
         self.bus.execute(ops)
 
-        return [op.data for op in read_op]
+        return dict([(r, op.data) for (r, op) in zip(regs, read_op)])
+
+    def cpu_reg_set_many(self, regs):
+        ops = []
+
+        for r, value in regs.items():
+            ops += [
+                self.cmd_reg_write(self.DCRDR, value),
+                self.cmd_reg_write(self.DCRSR, r.number | self.DCRSR_WRITE),
+                self.cmd_reg_read(self.DHCSR),
+            ]
+
+        self.bus.execute(ops)
 
     @property
     def demcr(self):

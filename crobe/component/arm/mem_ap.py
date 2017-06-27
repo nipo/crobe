@@ -1,8 +1,9 @@
 from ...part_id import PartId
 from . import ap
 from ... import bitfield
-from ... import model
+from .. import model
 import struct
+import math
 
 __all__ = ["MemAp"]
 
@@ -61,6 +62,8 @@ class MemAp(ap.Ap, model.Bus):
         operations = []
 
         self.logger.debug("Executing %s", transfers)
+
+        speed = self.port.port.speed
         
         for i, t in enumerate(transfers):
             if not address:
@@ -136,7 +139,10 @@ class MemAp(ap.Ap, model.Bus):
                 operations.append(t.__op)
             else:
                 operations.append(self.cmd_write(reg, t.data << ((t.address & 3) * 8)))
-
+                cycles = int(math.ceil(t.interval * speed))
+                if cycles:
+                    operations.append(self.cmd_run(cycles))
+                
             if (csw & 0x030) >> 4 == 1 and reg == MemAp.DRW:
                 address += 1 << t.size_l2
 
@@ -172,9 +178,6 @@ class MemAp(ap.Ap, model.Bus):
     def cfg(self):
         return self.reg_read(self.CFG)
 
-    def cmd_mem_read(self, address, size):
-        return MemoryRead(address, data)
-
     def cmd_u8_read(self, address):
         return Read8(address)
 
@@ -184,14 +187,14 @@ class MemAp(ap.Ap, model.Bus):
     def cmd_u32_read(self, address):
         return Read32(address)
 
-    def cmd_u8_write(self, address, data):
-        return Write8(address, data)
+    def cmd_u8_write(self, address, data, interval = 0):
+        return Write8(address, data, interval)
 
-    def cmd_u16_write(self, address, data):
-        return Write16(address, data)
+    def cmd_u16_write(self, address, data, interval = 0):
+        return Write16(address, data, interval)
 
-    def cmd_u32_write(self, address, data):
-        return Write32(address, data)
+    def cmd_u32_write(self, address, data, interval = 0):
+        return Write32(address, data, interval)
 
 class Operation(object):
     pass
@@ -208,9 +211,10 @@ class ReadAccess(MemoryAccess):
         return "mem_ap.%s(0x%08x)" % (self.__class__.__name__, self.address)
     
 class WriteAccess(MemoryAccess):
-    def __init__(self, address, data):
+    def __init__(self, address, data, interval = 0):
         MemoryAccess.__init__(self, address)
         self.data = data
+        self.interval = interval
 
     def __str__(self):
         return "<MemAP %s 0x%08x 0x%08x>" % (self.__class__.__name__, self.address, self.data)
