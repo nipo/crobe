@@ -1,6 +1,7 @@
 from ...adapter.protocol import swd
 from ...part_id import PartId
 from . import dp
+import math
 
 parts = []
 for model in (0xba, 0xbb, 0xbc):
@@ -102,6 +103,7 @@ class SwDp(dp.Dp):
         ap_read_pending = None
         select = 0
         select_dirty = True
+        speed = self.port.speed
         
         for o in operations:
             if isinstance(o, dp.Run):
@@ -144,8 +146,7 @@ class SwDp(dp.Dp):
                 else:
                     ops.append(self.port.cmd_write(True, (o.addr >> 2) & 3, o.data))
 
-            if insert_run:
-                ops.append(self.port.cmd_run(insert_run))
+            ops.append(self.port.cmd_run(insert_run + int(math.ceil(o.interval * speed))))
                     
         if ap_read_pending:
             ap_read_pending.__value_op = self.port.cmd_read(False, self.RDBUFF)
