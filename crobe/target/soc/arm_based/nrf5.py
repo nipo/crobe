@@ -33,7 +33,7 @@ class nRFFlash(NandFlash):
             while not (self.bus.u32_read(self.NVMC_READY) & self.NVMC_READY_READY):
                 pass
 
-            self.bus.mem_write(page.address, page.data, 1e-6)
+            self.bus.mem_write(page.address, page.data, 5e-6)
 
         while not (self.bus.u32_read(self.NVMC_READY) & self.NVMC_READY_READY):
             pass
@@ -65,7 +65,7 @@ class UicrFlash(nRFFlash):
         nRFFlash.__init__(self, soc, self.UICR_ADDRESS, size, page_size)
 
     def erase(self, address, size):
-        if not (address <= UICR_ADDRESS < address + size):
+        if not (address <= self.UICR_ADDRESS < address + size):
             return
 
         self.soc.logger.info("Erasing UICR")
