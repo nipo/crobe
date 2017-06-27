@@ -46,6 +46,12 @@ class Flash(Region):
         Region.__init__(self, bus, name, address, size)
         self.page_size = page_size
 
+    def erase(self, addr, size):
+        raise NotImplementedError()
+
+    def flash(self, program):
+        raise NotImplementedError()
+        
 class NandFlash(Flash):
     flags = Flash.flags | set([Flag.ERASE_ONE])
 
