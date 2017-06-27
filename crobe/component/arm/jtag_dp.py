@@ -1,65 +1,7 @@
 from ...adapter.protocol import jtag
 from ...part_id import PartId
 from . import dp
-
-class Operation:
-    def __init__(self):
-        pass
-
-    def __repr__(self):
-        return "dap.%s()" % (self.__class__.__name__)
-
-    def update(self, ops):
-        pass
-
-class Select(Operation):
-    def __init__(self, ap = None, ap_bank = None, dp_bank = None):
-        self.ap = ap
-        self.ap_bank = ap_bank
-        self.dp_bank = dp_bank
-
-    def data(self, dp):
-        sel = (dp.last_ap, dp.last_ap_bank, dp.last_dp_bank)
-        if self.ap is not None or dp.last_ap is None:
-            dp.last_ap = self.ap or 0
-        if self.ap_bank is not None or dp.last_ap_bank is None:
-            dp.last_ap_bank = self.ap_bank or 0
-        if self.dp_bank is not None or dp.last_dp_bank is None:
-            dp.last_dp_bank = self.dp_bank or 0
-        nsel = (dp.last_ap, dp.last_ap_bank, dp.last_dp_bank)
-        if sel == nsel:
-            return None
-        return (nsel[0] << 24) | (nsel[1] << 4) | (nsel[2])
-
-    def __repr__(self):
-        return "dap.Select(%d, %d, %d)" % (self.ap, self.ap_bank, self.dp_bank)
-
-class DpBankedOperation(Operation):
-    def __init__(self, address, data = None):
-        self.address = address
-        self.data = data
-        self.is_read = data is None
-
-    def __repr__(self):
-        if self.is_read:
-            return "dap.CtrlStat()"
-        else:
-            return "dap.CtrlStat(0x%x)" % self.data
-
-class ApAccess(Operation):
-    def __init__(self, is_read, addr, ap):
-        self.is_read = is_read
-        self.addr = addr
-        self.ap = ap
-
-    def operations(self, dp):
-        return dp.cmd_select(ap = self.ap, ap_bank = self.addr >> 4).operations(dp)
-
-    def __repr__(self):
-        if self.is_read:
-            return "dap.ApRead(0x%x, %d)" % (self.addr, self.ap)
-        else:
-            return "dap.ApWrite(0x%x, 0x%x, %d)" % (self.addr, self.data, self.ap)
+from enum import IntEnum
 
 class JtagDp(dp.Dp):
     IDCODE  = 0xe
@@ -67,48 +9,167 @@ class JtagDp(dp.Dp):
     APACC   = 0xb
     ABORT   = 0x8
 
+    class Ack(IntEnum):
+        OK = 2
+        WAIT = 1
+        INVALID = 3
+
     def __init__(self, port):
         dp.Dp.__init__(self, "JTAG-DP", port)
 
-    def cmd_idcode(self):
-        return IdCode()
+    def _cmd_shift(self, acc, a, d = None):
+        rnw = 1 if d is None else 0
+        return self.port.cmd_dr_shift(acc, ((d or 0) << 3) | ((a & 3) << 1) | rnw, 35)
 
-    def cmd_rdbuff(self):
-        return RdBuff()
+    def _rsp_split(self, rsp):
+        ack = rsp.tdo & 0x7
+        ack = {2: self.Ack.OK, 1: self.Ack.WAIT}.get(ack, self.Ack.INVALID)
+        data = rsp.tdo >> 3
+        return ack, data
 
-    def cmd_select(self, ap = None, ap_bank = None, dp_bank = None):
-        return Select(ap, ap_bank, dp_bank)
+    @property
+    def idcode(self):
+        return PartId.from_idcode(self.port.dr_shift(self.IDCODE, 0, 32))
 
-    def cmd_abort(self, what = 0x1f):
-        return Abort(what)
+    @property
+    def idr(self):
+        cmd = self._cmd_shift(self.DPACC, self.DPIDR)
+        rsp = self._cmd_shift(self.DPACC, self.SELECT, 0)
 
-    def cmd_ctrl_stat(self, data = None):
-        return CtrlStat(data)
+        self.port.execute([cmd, rsp])
 
-    def cmd_ap_read(self, addr, ap = 0):
-        return ApRead(addr, ap)
+        ack, data = self._rsp_split(rsp)
+        
+        if ack != self.Ack.OK:
+            raise dp.DpAccessFailure("Read failed")
 
-    def cmd_ap_write(self, addr, data, ap = 0):
-        return ApWrite(addr, data, ap)
+        return data
+
+    def abort(self, what = 0x1):
+        cmd = self._cmd_shift(self.ABORT, 0, what)
+        self.port.execute([cmd])
+
+    def banked_reg_read(self, regno):
+        sel = self._cmd_shift(self.DPACC, self.SELECT, regno >> 2)
+        cmd = self._cmd_shift(self.DPACC, regno)
+        rsp = self._cmd_shift(self.DPACC, self.SELECT, 0)
+
+        if self.version < 1:
+            assert regno & ~0x3 == 0
+            self.port.execute([cmd, rsp])
+        else:
+            self.port.execute([sel, cmd, rsp])
+
+        ack, data = self._rsp_split(rsp)
+        
+        if ack != self.Ack.OK:
+            raise dp.DpAccessFailure("Read failed")
+
+        return data
+
+    def banked_reg_write(self, regno, data):
+        sel = self._cmd_shift(self.DPACC, self.SELECT, regno >> 2)
+        cmd = self._cmd_shift(self.DPACC, regno, data)
+        rsp = self._cmd_shift(self.DPACC, self.SELECT, 0)
+
+        if self.version < 1:
+            assert regno & ~0x3 == 0
+            self.port.execute([cmd, rsp])
+        else:
+            self.port.execute([sel, cmd, rsp])
+
+        ack, data = self._rsp_split(rsp)
+        
+        if ack != self.Ack.OK:
+            raise dp.DpAccessFailure("Write failed")
 
     def execute(self, operations):
+        must_restart = True
+        insert_run = 0
+        while must_restart:
+            must_restart = False
+
+            ops = self.lower(operations, insert_run)
+            self.port.execute(ops)
+
+            self.logger.debug("Done:")
+            for i, o in enumerate(operations):
+                if not isinstance(o, dp.ApRead):
+                    self.logger.debug("- %d, %s", i, o)
+                    continue
+
+                ack, data = self._rsp_split(o.__value_op)
+                self.logger.debug("- %d, %s -> %s %s 0x%08x", i, o, o.__value_op, ack, data)
+
+                if ack == self.Ack.OK:
+                    o.data = data
+                    continue
+
+                if ack == self.Ack.WAIT:
+                    operations = operations[i:]
+                    self.ctrlstat = self.ctrlstat | 2
+                    must_restart = True
+                    insert_run += 1
+                    self.logger.info("Delaying subsequent operations by %d", insert_run)
+                    break
+
+                raise dp.DpAccessFailure("Invalid ACK")
+
+    def lower(self, operations, insert_run = 0):
         ops = []
+
+        ap_read_pending = None
+        select = 0
+        select_dirty = True
+        
         for o in operations:
-            o.__ops = list(o.operations(self))
-            ops += o.__ops
+            if isinstance(o, dp.Run):
+                ops.append(self.port.cmd_run(o.cycles))
+                continue
 
-        self.port.execute(ops)
+            assert isinstance(o, (dp.ApWrite, dp.ApRead))
 
-        self.logger.debug("Done:")
-        for i, o in enumerate(operations):
-            self.logger.debug("- %d, %s: %s", i, o, o.__ops)
+            if o.ap != select >> 24:
+                select = (select & 0xff) | (o.ap << 24)
+                select_dirty = True
 
-        for i, o in enumerate(operations):
-            try:
-                o.update(o.__ops)
-            except WaitError as e:
-                self.logger.error("Failed at operation #%d", i)
-                raise
+            if o.addr >> 4 != (select >> 4) & 0xf:
+                select = (select & ~0xf0) | (o.addr & 0xf0)
+                select_dirty = True
+
+            if select_dirty:
+                if ap_read_pending:
+                    ap_read_pending.__value_op = self._cmd_shift(self.DPACC, self.RDBUFF)
+                    ops.append(ap_read_pending.__value_op)
+                    ap_read_pending = None
+
+                ops.append(self._cmd_shift(self.DPACC, self.SELECT, select))
+                select_dirty = False
+
+            if ap_read_pending:
+                if isinstance(o, dp.ApRead):
+                    ap_read_pending.__value_op = self._cmd_shift(self.APACC, o.addr >> 2)
+                    ops.append(ap_read_pending.__value_op)
+                    ap_read_pending = o
+                else:
+                    ap_read_pending.__value_op = self._cmd_shift(self.DPACC, self.RDBUFF)
+                    ops.append(ap_read_pending.__value_op)
+                    ap_read_pending = None
+                    ops.append(self._cmd_shift(self.APACC, o.addr >> 2, o.data))
+            else:
+                if isinstance(o, dp.ApRead):
+                    ops.append(self._cmd_shift(self.APACC, o.addr >> 2))
+                    ap_read_pending = o
+                else:
+                    ops.append(self._cmd_shift(self.APACC, o.addr >> 2, o.data))
+
+            ops.append(self.port.cmd_run(8 + insert_run))
+                    
+        if ap_read_pending:
+            ap_read_pending.__value_op = self._cmd_shift(self.DPACC, self.RDBUFF)
+            ops.append(ap_read_pending.__value_op)
+
+        return ops
 
 @jtag.Tap.db.register(PartId(4, 0x3b, 0xba00))
 class JtagDpTap(jtag.Tap):
@@ -121,91 +182,3 @@ class JtagDpTap(jtag.Tap):
     def start(self):
         self.child_add(JtagDp(self))
         jtag.Tap.start(self)
-
-class Idcode(Operation):
-    def operations(self, port):
-        return [port.port.cmd_dr_shift(JtagDp.IDCODE, 0, 32)]
-
-    def update(self, ops):
-        self.data = ops[-1].tdo
-
-class Abort(Operation):
-    def __init__(self, what = 0x1f):
-        self.what = what
-
-    def operations(self, port):
-        return [port.port.cmd_dr_shift(JtagDp.ABORT, (self.what << 3) | 1, 35)]
-
-    def __repr__(self):
-        return "dap.Abort(0x%x)" % (self.what)
-
-class Select(Select):
-    def operations(self, port):
-        data = self.data(port)
-        if data is None:
-            return []
-        return [port.port.cmd_dr_shift(JtagDp.DPACC, (data << 3) | (dp.Dp.SELECT << 1), 35)]
-
-class DpBankedOperation(DpBankedOperation):
-    def operations(self, port):
-        ret = port.cmd_select(dp_bank = self.address >> 2).operations(port)
-        
-        if self.is_read:
-            return ret + [port.port.cmd_dr_shift(JtagDp.DPACC, ((self.address & 3) << 1) | 1, 35),
-                          port.port.cmd_run(40),
-                          port.port.cmd_dr_shift(JtagDp.DPACC, 1, 35)]
-        else:
-            return ret + [port.port.cmd_dr_shift(JtagDp.DPACC, (self.data << 3) | ((self.address & 3) << 1), 35)]
-
-    def update(self, ops):
-        if ops[-1].tdo & 7 != 2:
-            raise WaitError()
-        if self.is_read:
-            self.data = ops[-1].tdo >> 3
-
-class CtrlStat(DpBankedOperation):
-    def __init__(self, data = None):
-        DpBankedOperation.__init__(self, dp.Dp.CTRLSTAT, data)
-        
-    def __repr__(self):
-        if self.is_read:
-            return "dap.CtrlStat()"
-        else:
-            return "dap.CtrlStat(0x%x)" % self.data
-
-class RdBuff(Operation):
-    def operations(self, port):
-        return [port.port.cmd_dr_shift(JtagDp.DPACC, (dp.Dp.RDBUFF << 1) | 1, 35)]
-
-    def update(self, ops):
-        if ops[-1].tdo & 7 != 2:
-            raise WaitError()
-        self.data = ops[-1].tdo >> 3
-
-class ApRead(ApAccess):
-    def __init__(self, addr, ap = 0):
-        ApAccess.__init__(self, True, addr, ap)
-
-    def operations(self, port):
-        ret = ApAccess.operations(self, port)
-        
-        ret.append(port.port.cmd_dr_shift(JtagDp.APACC, ((self.addr >> 1) & 0x6) | 1, 35))
-        ret.append(port.port.cmd_run(40))
-
-        return ret + port.cmd_rdbuff().operations(port)
-
-    def update(self, ops):
-        if ops[-1].tdo & 7 != 2:
-            raise WaitError()
-        self.data = ops[-1].tdo >> 3
-
-class ApWrite(ApAccess):
-    def __init__(self, addr, data, ap = 0):
-        ApAccess.__init__(self, False, addr, ap)
-        self.data = data
-
-    def operations(self, port):
-        ret = ApAccess.operations(self, port)
-        
-        return ret + [port.port.cmd_dr_shift(JtagDp.APACC, (self.data << 3) | ((self.addr >> 1) & 0x6), 35),
-                      port.port.cmd_run(40)]

@@ -1,7 +1,7 @@
 from ...db import Db, NoMatch
 from ...model import PortComponent
 
-__all__ = ["Ap"]
+__all__ = ["Ap", "db"]
 
 class Ap(PortComponent):
     IDR = 0xfc
@@ -15,9 +15,9 @@ class Ap(PortComponent):
         self.name = "AP (idr: 0x%08x)" % self.idr
 
     def reg_read(self, addr):
-        op = self.cmd_read(addr)
-        self.port.execute([op])
-        return op.data
+        ops = [self.cmd_read(addr)]
+        self.port.execute(ops)
+        return ops[0].data
 
     def reg_write(self, addr, data):
         self.port.execute([self.cmd_write(addr, data)])
@@ -32,11 +32,10 @@ class Ap(PortComponent):
         except NoMatch:
             return self
 
-    def cmd_write(self, addr, data):
-        return self.port.cmd_ap_write(self.index, addr, data)
+    def cmd_write(self, addr, data, interval = 0):
+        return self.port.cmd_ap_write(self.index, addr, data,
+                                      interval = interval)
 
-    def cmd_read(self, addr):
-        return self.port.cmd_ap_read(self.index, addr)
-
-    def cmd_run(self, cycles):
-        return self.port.cmd_run(cycles)
+    def cmd_read(self, addr, interval = 0):
+        return self.port.cmd_ap_read(self.index, addr,
+                                     interval = interval)

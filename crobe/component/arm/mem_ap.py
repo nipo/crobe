@@ -3,7 +3,6 @@ from . import ap
 from ... import bitfield
 from .. import model
 import struct
-import math
 
 __all__ = ["MemAp"]
 
@@ -42,7 +41,10 @@ class MemAp(ap.Ap, model.Bus):
 
     def __init__(self, dp, index = 0):
         ap.Ap.__init__(self, dp, index)
-        model.Bus.__init__(self, "Mem-AP")
+
+        name = {1: "AHB-AP", 2: "APB-AP", 4: "AXI-AP"}.get(self.idr & 0xf, "Mem-AP")
+        
+        model.Bus.__init__(self, name)
         self.width = 0
         self.increment = 0
         self.csw_base = self.reg_read(self.CSW) & ~0x00000f37
@@ -63,8 +65,6 @@ class MemAp(ap.Ap, model.Bus):
 
         self.logger.debug("Executing %s", transfers)
 
-        speed = self.port.port.speed
-        
         for i, t in enumerate(transfers):
             if not address:
                 address_dirty = True
@@ -138,10 +138,8 @@ class MemAp(ap.Ap, model.Bus):
                 t.__op = self.cmd_read(reg)
                 operations.append(t.__op)
             else:
-                operations.append(self.cmd_write(reg, t.data << ((t.address & 3) * 8)))
-                cycles = int(math.ceil(t.interval * speed))
-                if cycles:
-                    operations.append(self.cmd_run(cycles))
+                operations.append(self.cmd_write(reg, t.data << ((t.address & 3) * 8),
+                                                 t.interval))
                 
             if (csw & 0x030) >> 4 == 1 and reg == MemAp.DRW:
                 address += 1 << t.size_l2

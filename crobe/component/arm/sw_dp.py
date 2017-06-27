@@ -2,19 +2,20 @@ from ...adapter.protocol import swd
 from ...part_id import PartId
 from . import dp
 
+parts = []
+for model in (0xba, 0xbb, 0xbc):
+    for version in (0, 1, 2):
+        parts.append(PartId(4, 0x3b, (model << 8) | version))
+        parts.append(PartId(4, 0x3b, (model << 8) | version | 0x10))
+
+@swd.Interface.db.register(*parts)
 class SwDp(dp.Dp):
     IDCODE   = 0 # R
     ABORT    = 0 # W
     RESEND   = 2 # R
     
-    def __init__(self, port, minimal, version):
-        name = "SW-DPv%d" % version
-        dp.Dp.__init__(self, name, port)
-        self.minimal = minimal
-        self.version = version
-
-        if minimal:
-            self.logger.info("Is a minimal implementation")
+    def __init__(self, port):
+        dp.Dp.__init__(self, "SW-DP", port)
 
     def debug_enable(self, enable):
         dp.Dp.debug_enable(self, enable)
@@ -22,42 +23,38 @@ class SwDp(dp.Dp):
         if self.version >= 1 and not self.minimal and enable:
             self.dlcr = (self.dlcr & ~0x300) | 0x300
             self.port.turnaround_cycles = 4
+        if enable:
+            self.abort(0x1f)
             
     @property
+    def idr(self):
+        op = self.port.cmd_read(False, self.DPIDR)
+        self.port.execute([self.port.cmd_write(False, self.ABORT, 0x1f), op])
+        if op.ack != swd.Ack.OK:
+            raise dp.DpAccessFailure(op.ack)
+        return op.data
+
     def idcode(self):
-        op = self.port.cmd_read(False, self.IDCODE)
-        self.port.execute([op])
+        return PartId.from_idcode(self.idr)
+
+    def banked_reg_read(self, regno):
+        op = self.port.cmd_read(False, regno & 0x3)
+        if self.version < 1:
+            assert regno & ~0x3 == 0
+            self.port.execute([op])
+        else:
+            self.port.execute([self.port.cmd_write(False, self.SELECT, regno >> 2), op])
         if op.ack != swd.Ack.OK:
             raise dp.DpAccessFailure(op.ack)
         return op.data
 
-    @property
-    def ctrlstat(self):
-        op = self.port.cmd_read(False, self.CTRLSTAT)
-        self.port.execute([self.port.cmd_write(False, self.SELECT, self.CTRLSTAT >> 2), op])
-        if op.ack != swd.Ack.OK:
-            raise dp.DpAccessFailure(op.ack)
-        return op.data
-
-    @ctrlstat.setter
-    def ctrlstat(self, data):
-        op = self.port.cmd_write(False, self.CTRLSTAT, data)
-        self.port.execute([self.port.cmd_write(False, self.SELECT, self.CTRLSTAT >> 2), op])
-        if op.ack != swd.Ack.OK:
-            raise dp.DpAccessFailure(op.ack)
-
-    @property
-    def dlcr(self):
-        op = self.port.cmd_read(False, self.DLCR)
-        self.port.execute([self.port.cmd_write(False, self.SELECT, self.DLCR >> 2), op])
-        if op.ack != swd.Ack.OK:
-            raise dp.DpAccessFailure(op.ack)
-        return op.data
-
-    @dlcr.setter
-    def dlcr(self, data):
-        op = self.port.cmd_write(False, self.DLCR, data)
-        self.port.execute([self.port.cmd_write(False, self.SELECT, self.DLCR >> 2), op])
+    def banked_reg_write(self, regno, data):
+        op = self.port.cmd_write(False, regno & 0x3, data)
+        if self.version < 1:
+            assert regno & ~0x3 == 0
+            self.port.execute([op])
+        else:
+            self.port.execute([self.port.cmd_write(False, self.SELECT, regno >> 2), op])
         if op.ack != swd.Ack.OK:
             raise dp.DpAccessFailure(op.ack)
 
@@ -155,9 +152,3 @@ class SwDp(dp.Dp):
             ops.append(ap_read_pending.__value_op)
 
         return ops
-
-for model in (0xba, 0xbb, 0xbc):
-    for version in (0, 1, 2):
-        base = (model << 8) | version
-        swd.Interface.db.register(PartId(4, 0x3b, base))(lambda port: SwDp(port, False, version))
-        swd.Interface.db.register(PartId(4, 0x3b, base | 0x10))(lambda port: SwDp(port, True, version))
