@@ -4,7 +4,8 @@ from ....part_id import PartId
 from ....component.arm.coresight.rom_table import RomTable
 from ....component.arm.coresight.scs import Scs
 from ....component.arm.cortex import Cortex
-from ....component.arm.dap import SwDp, JtagDp
+from ....component.arm.sw_dp import SwDp
+from ....component.arm.jtag_dp import JtagDp
 from ....component.arm.mem_ap import MemAp
 from ....db import Db
 

@@ -1,7 +1,7 @@
 from ... import model as target_model
 from ....part_id import PartId
 from .soc import SoC
-from ....component.arm.dap import JtagDpTap
+from ....component.arm.jtag_dp import JtagDpTap
 from ....component.ti.icepick import IcePick
 from ....memory.region import *
 

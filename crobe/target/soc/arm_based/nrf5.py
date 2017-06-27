@@ -6,6 +6,79 @@ import binascii
 import math
 import struct
 
+class nRFFlash(NandFlash):
+    NVMC_READY       = 0x4001e400
+    NVMC_READY_BUSY  = 0
+    NVMC_READY_READY = 1
+    NVMC_CONFIG      = 0x4001e504
+    NVMC_CONFIG_NONE = 0
+    NVMC_CONFIG_WEN  = 1
+    NVMC_CONFIG_EEN  = 2
+    NVMC_ERASEPAGE   = 0x4001e508
+    NVMC_ERASEUICR   = 0x4001e514
+
+    def __init__(self, soc, base, size, page_size):
+        NandFlash.__init__(self, soc.buses[0], "code", base, size, page_size)
+        self.soc = soc
+    
+    def write(self, program):
+        self.bus.u32_write(self.NVMC_CONFIG, self.NVMC_CONFIG_WEN)
+
+        for page in program.paged(self.page_size, fill = b'\xff'):
+            if not (self.address <= page.address < self.address + self.size):
+                continue
+
+            self.soc.logger.info("Writing flash 0x%08x-0x%08x", page.address, page.address + len(page))
+
+            while not (self.bus.u32_read(self.NVMC_READY) & self.NVMC_READY_READY):
+                pass
+
+            self.bus.mem_write(page.address, page.data, 1e-6)
+
+        while not (self.bus.u32_read(self.NVMC_READY) & self.NVMC_READY_READY):
+            pass
+        self.bus.u32_write(self.NVMC_CONFIG, self.NVMC_CONFIG_NONE)
+
+class CodeFlash(nRFFlash):
+    def __init__(self, soc, size, page_size):
+        nRFFlash.__init__(self, soc, 0, size, page_size)
+
+    def erase(self, address, size):
+        aligned_address = address & ~(self.page_size - 1)
+        end = address + size
+        aligned_end = ((end | (self.page_size - 1)) + 1) if (end & (self.page_size - 1)) else end
+
+        self.bus.u32_write(self.NVMC_CONFIG, self.NVMC_CONFIG_EEN)
+        for page in range(aligned_address, aligned_end, self.page_size):
+            self.soc.logger.info("Erasing page at 0x%08x", page)
+            while not (self.bus.u32_read(self.NVMC_READY) & self.NVMC_READY_READY):
+                pass
+            self.bus.u32_write(self.NVMC_ERASEPAGE, page)
+        while not (self.bus.u32_read(self.NVMC_READY) & self.NVMC_READY_READY):
+            pass
+        self.bus.u32_write(self.NVMC_CONFIG, self.NVMC_CONFIG_NONE)
+
+class UicrFlash(nRFFlash):
+    UICR_ADDRESS = 0x10001000
+
+    def __init__(self, soc, size, page_size):
+        nRFFlash.__init__(self, soc, self.UICR_ADDRESS, size, page_size)
+
+    def erase(self, address, size):
+        if not (address <= UICR_ADDRESS < address + size):
+            return
+
+        self.soc.logger.info("Erasing UICR")
+        
+        self.bus.u32_write(self.NVMC_CONFIG, self.NVMC_CONFIG_EEN)
+        while not (self.bus.u32_read(self.NVMC_READY) & self.NVMC_READY_READY):
+            pass
+        self.bus.u32_write(self.NVMC_ERASEUICR, 1)
+        while not (self.bus.u32_read(self.NVMC_READY) & self.NVMC_READY_READY):
+            pass
+        self.bus.u32_write(self.NVMC_CONFIG, self.NVMC_CONFIG_NONE)
+            
+        
 class nRF5(SoC):
     def __init__(self, name, dp):
         SoC.__init__(self, name, dp)
@@ -34,8 +107,8 @@ class nRF5(SoC):
         page_size = self.buses[0].u32_read(self.FICR_CODEPAGESIZE)
         code_size = self.buses[0].u32_read(self.FICR_CODESIZE)
 
-        self.child_add(NandFlash(self.buses[0], "code", 0, page_size * code_size, page_size))
-        self.child_add(NandFlash(self.buses[0], "uicr", 0x10001000, page_size, page_size))
+        self.child_add(CodeFlash(self, page_size * code_size, page_size))
+        self.child_add(UicrFlash(self, page_size, page_size))
 
     NVMC_BASE = 0x4001e000
     NVMC_READY = NVMC_BASE + 0x400
