@@ -45,6 +45,7 @@ class Program:
     """Program memory contents"""
     def __init__(self):
         self.segments = []
+        self.info = {}
 
     def append(self, seg):
         self.segments.append(seg)
@@ -171,6 +172,10 @@ class Program:
                 addr = section["sh_addr"]
 
                 self.append(Segment(addr - vma + lma + offset, data))
+
+        self.info["device"] = elf.get_machine_arch()
+        self.info["entry"] = elf.header["e_entry"]
+
         return self
 
     @classmethod
@@ -186,6 +191,7 @@ class Program:
         """Load a Program from an Xilinx bit file"""
         HEADER = bytes([0x00, 0x09, 0x0f, 0xf0, 0x0f, 0xf0, 0x0f, 0xf0, 0x0f, 0xf0, 0x00, 0x00, 0x01])
         import struct
+        import datetime
         
         self = cls()
 
@@ -198,7 +204,8 @@ class Program:
         header = fd.read(len(HEADER))
         if header != HEADER:
             raise ValueError("Bad header in %s" % filename)
-        
+        info = {}
+
         while True:
             section = fd.read(1)
             if not section:
@@ -211,12 +218,21 @@ class Program:
                     raise ValueError("Short payload in %s" % filename, len(blob), size)
             
                 self.append(Segment(offset, blob))
+
+                date = info[b'c'].strip() + " " + info[b'd'].strip()
+                self.info["build_date"] = datetime.datetime.strptime(date, "%Y/%m/%d %H:%M:%S")
+                self.info["device"] = info[b'b']
+                self.info["project"] = info[b'a']
+                
                 return self
 
             size, = struct.unpack(">H", fd.read(2))
             blob = fd.read(size)
             if len(blob) != size:
                 raise ValueError("Short payload in %s" % filename, len(blob), size)
+
+            info[section] = str(blob.rstrip(b'\x00'), 'utf-8', 'ignore')
+
         raise ValueError("Not bitstream data in %s" % filename)
 
     @classmethod

@@ -45,7 +45,7 @@ class Spartan6(jtag.Tap):
 
     def __init__(self, port, index):
         jtag.Tap.__init__(self, port, index)
-        self.name = parts.get(int(port.idcode_at(index).drop_revision()), "Spartan-6")
+        self.name = parts[int(port.idcode_at(index).drop_revision())]
 
     def start(self):
         if not (self.ir_status & self.IR_STATUS_DONE):
@@ -115,6 +115,13 @@ class Spartan6(jtag.Tap):
     def load(self, program):
         if len(program) != 1:
             raise ValueError("Bitstream programming only supports one config payload")
+
+        if "device" in program.info:
+            target = program.info["device"].lower()
+            cur = self.name[2:].lower()
+
+            if not target.startswith(cur):
+                raise ValueError("Bitstream is for a %s, device is a %s" % (target, cur))
 
         blob = program[0].data
         if len(blob) % 1:
