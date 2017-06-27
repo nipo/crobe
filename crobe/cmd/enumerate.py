@@ -1,7 +1,7 @@
 def main():
     from . import base
     
-    class Tool(base.Speed, base.Power, base.IcePick):
+    class Tool(base.Speed, base.Power, base.IcePick, base.Field):
         pass
 
     args = Tool("Target enumerator")
@@ -11,17 +11,8 @@ def main():
     print("Nickname:", args.interface.port.nickname)
     print("Speed:", args.interface.speed)
     
-    args.interface.start()
-
     component_dump(args.interface)
-
-    from ..target.model import Field
-
-    field = Field()
-
-    field.discover(args.interface)
-
-    component_dump(field)
+    component_dump(args.field)
     
 def component_dump(comp, prefix = ""):
     print(prefix, comp)

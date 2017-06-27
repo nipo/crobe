@@ -2,6 +2,7 @@ import socket
 import logging
 import struct
 from ..bitstring import BitString
+from ..util.socket_server import *
 
 class JtagHandler(object):
     STATE_RESET = 0
@@ -101,53 +102,25 @@ class JtagHandler(object):
 
         return tdo
 
-
-class SocketClosed(Exception):
-    pass
-
-class XvcdSession(object):
+class XvcdSession(SocketSession):
     def __init__(self, socket, interface):
-        self.sock = socket
+        SocketSession.__init__(self, socket)
         self.jtag = JtagHandler(interface)
-        self.buffer = b''
-
-    def refill(self, count = 1):
-        while len(self.buffer) < count:
-            d = self.sock.recv(1024)
-            if not d:
-                raise SocketClosed()
-            self.buffer += d
-
-    def read(self, count):
-        self.refill(count)
-        blob = self.buffer[:count]
-        self.buffer = self.buffer[count:]
-        return blob
-
-    def write(self, data):
-        while data:
-            written = self.sock.send(data)
-            data = data[written:]
-        self.sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
 
     def serve(self):
-        try:
-            while True:
-                self.refill(8)
+        self.refill(8)
 
-                if self.buffer.startswith(b"shift:"):
-                    self.read(6)
-                    self.handle_shift()
-                elif self.buffer.startswith(b"getinfo:"):
-                    self.Read(8)
-                    self.handle_getinfo()
-                elif self.buffer.startswith(b"settck:"):
-                    self.read(7)
-                    self.handle_settck()
-                else:
-                    raise ValueError("Unknown command: %r" % (self.buffer.split(b':')[0]))
-        except SocketClosed:
-            pass
+        if self.buffer.startswith(b"shift:"):
+            self.read(6)
+            self.handle_shift()
+        elif self.buffer.startswith(b"getinfo:"):
+            self.Read(8)
+            self.handle_getinfo()
+        elif self.buffer.startswith(b"settck:"):
+            self.read(7)
+            self.handle_settck()
+        else:
+            raise ValueError("Unknown command: %r" % (self.buffer.split(b':')[0]))
 
     def handle_shift(self):
         bits, = struct.unpack("<L", self.read(4))
@@ -172,19 +145,13 @@ class XvcdSession(object):
         logging.info("Setting speed to %d, had %d", int(1/period), int(self.jtag.interface.speed))
         self.write(struct.pack("<L", int(1e9 / self.jtag.interface.speed)))
 
-class XvcdServer(object):
+class XvcdServer(SocketServer):
     def __init__(self, port, interface):
+        SocketServer.__init__(port)
         self.interface = interface
-        self.port = port
-        self.server_sock = socket.socket(socket.AF_INET6, socket.SOCK_STREAM)
-        self.server_sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        self.server_sock.bind(("::", port))
-        self.server_sock.listen(1)
 
-    def serve(self):
-        while True:
-            (clientsocket, address) = self.server_sock.accept()
-            XvcdSession(clientsocket, self.interface).serve()
+    def spawn(self, socket):
+        return XvcdSession(socket, self.interface)
 
 def main():
     from . import base

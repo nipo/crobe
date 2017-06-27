@@ -152,7 +152,16 @@ class File:
     def c50_file_parse(self, args):
         from ..loadable.object import Program
         self.file = args.file[0]
-        
+
+class Field(Interface):
+    def c60_field_parse(self, args):
+        self.interface.start()
+
+        from ..target.model import Field
+
+        self.field = Field()
+        self.field.discover(self.interface)
+
 if __name__ == "__main__":
     class LolCommand:
         def __init__(self):
