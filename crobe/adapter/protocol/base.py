@@ -1,4 +1,5 @@
 from ... import model
+import threading
 
 __all__ = ["Interface", "ProtocolError", "CommunicationError"]
 
@@ -8,10 +9,18 @@ class Interface(model.PortComponent):
     """
     def __init__(self, name, port):
         model.PortComponent.__init__(self, name, port)
+        self._lock = threading.Lock()
 
     def close(self):
         pass
 
+    def _execute(self, commands):
+        pass
+
+    def execute(self, commands):
+        with self._lock:
+            self._execute(commands)
+    
     # property, writable, Hz
     speed = None
 

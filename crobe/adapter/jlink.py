@@ -100,7 +100,7 @@ class JtagInterface(JLinkInterface, jtag.Interface):
         self.handle.tresetn = True
         self.__state = None
 
-    def execute(self, operation_list):
+    def _execute(self, operation_list):
         to_join = []
         ops = []
 
@@ -254,7 +254,7 @@ class SwdInterface(swd.Interface, JLinkInterface):
         swd.Interface.__init__(self, port)
         JLinkInterface.__init__(self, port, "SWD")
 
-    def execute(self, operation_list):
+    def _execute(self, operation_list):
         ops = list(operation_list)
 
         self.logger.debug("running %s", ops)

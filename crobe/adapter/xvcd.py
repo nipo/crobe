@@ -110,7 +110,7 @@ class JtagInterface(jtag.Interface):
     def power(self, power):
         self.logger.warning("Power %s ignored", "enabling" if power else "disabling")
 
-    def execute(self, operation_list):
+    def _execute(self, operation_list):
         to_join = []
         ops = []
 

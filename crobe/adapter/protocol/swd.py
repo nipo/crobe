@@ -71,7 +71,7 @@ class Interface(base.Interface):
 
         base.Interface.start(self)
         
-    def execute(self, operation_list):
+    def _execute(self, operation_list):
         """
         Executes a row of operations.
         """

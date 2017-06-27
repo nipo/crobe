@@ -77,7 +77,7 @@ class Interface(base.Interface):
         self.child_add(chain)
         base.Interface.start(self)
 
-    def execute(self, operation_list):
+    def _execute(self, operation_list):
         raise NotImplementedError()
 
     def cmd_shift(self, tdi, read_tdo = True):

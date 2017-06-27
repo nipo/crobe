@@ -168,7 +168,7 @@ class JtagInterface(BaseInterface, jtag.Interface):
 
         self.__state = None
 
-    def execute(self, operation_list):
+    def _execute(self, operation_list):
         to_join = []
         ops = []
 
@@ -309,7 +309,7 @@ class SwdInterface(BaseInterface, swd.Interface):
                                              (1 << pin) | 2,
                                               (int(bool(val) == pol) << pin) | (int(tdi) << 1))
         
-    def execute(self, operation_list):
+    def _execute(self, operation_list):
         ops = list(operation_list)
         
         self.logger.debug("running %s", ops)
