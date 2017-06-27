@@ -5,16 +5,16 @@ __doc__ = """Program memory"""
 class Segment:
     """A blob with a base address"""
 
-    def __init__(self, address = 0, data = ""):
+    def __init__(self, address = 0, data = b""):
         self.data = data
         self.address = address
 
-    def __getslice__(self, begin, end):
-        return self.data[begin:end]
-
-    def __setslice__(self, begin, end, data):
-        assert len(data) == end - begin
-        self.data = self.data[:begin] + data + self.data[end:]
+    def __setitem__(self, index, data):
+        if isinstance(index, slice):
+            assert len(data) == index.stop - index.start
+            self.data = self.data[:index.start] + data + self.data[index.stop:]
+        else:
+            self.data = self.data[:index] + data + self.data[index + 1:]
 
     def __getitem__(self, index):
         return self.data[index]
@@ -35,9 +35,12 @@ class Segment:
     def __lte__(self, other):
         return self.address <= other.address
 
+    def __str__(self):
+        return "<0x%08x:0x%08x (%d bytes)>" % (self.address, self.end, len(self))
+    
     def indexof(self, blob):
         return self.data.index(blob)
-
+    
 class Program:
     """Program memory contents"""
     def __init__(self):
@@ -46,6 +49,18 @@ class Program:
     def append(self, seg):
         self.segments.append(seg)
 
+    def segment_at(self, addr):
+        for s in self.segments:
+            if s.address <= addr < s.address + len(s):
+                return s
+
+    def within(self, begin, end):
+        ret = self.__class__()
+        for s in self.segments:
+            if begin <= s.address and s.address + len(s) <= end:
+                ret.append(s)
+        return ret
+        
     def __getitem__(self, index):
         return self.segments[index]
 
@@ -83,24 +98,31 @@ class Program:
             self.append(s)
         return self
 
-    def pprint(self):
-        print("Program:")
-        for s in sorted(self.segments):
-            print(" - 0x%08x:0x%08x (%d bytes)" % (s.address, s.end, len(s)))
+    def pprint(self, out = print):
+        out("Program:")
+        for s in self.segments:
+            out(" - %s" % s)
 
-    def simplified(self, page_size = 1024, fill = "\xff"):
+    def paged(self, page_size = 1024, fill = b"\xff"):
         ret = self.__class__()
 
-        last = None
-        for cur in sorted(self.segments):
-            if last and last.end + page_size >= cur.address:
-                padding = fill * (cur.address - last.end)
-                ret.segments.pop()
-                last = Segment(last.address, last.data + padding + cur.data)
-            else:
-                last = cur
+        for s in self.segments:
+            aligned_address = s.address & ~(page_size - 1)
+            end = s.address + len(s)
+            aligned_end = ((end | (page_size - 1)) + 1) if (end & (page_size - 1)) else end
 
-            ret.segments.append(last)
+            print("%s 0x%08x 0x%08x" % (s, aligned_address, aligned_end))
+            
+            for page_addr in range(aligned_address, aligned_end, page_size):
+                t = ret.segment_at(page_addr)
+                if not t:
+                    t = Segment(page_addr, fill * page_size)
+                    ret.append(t)
+                source_offset = max((page_addr - s.address, 0))
+                target_offset = (s.address & (page_size - 1)) if page_addr == aligned_address else 0
+                size = min((len(s) - source_offset, page_size - target_offset, page_size))
+                print("%s 0x%08x 0x%08x 0x%08x" % (t, source_offset, target_offset, size))
+                t[target_offset : target_offset + size] = s[source_offset : source_offset + size]
 
         return ret
 
