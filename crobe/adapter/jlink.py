@@ -267,7 +267,6 @@ class SwdInterface(swd.Interface, JLinkInterface):
             while ops and len(out_buf) < 4032:
                 op = ops.pop(0)
                 pending.append(op)
-                op.__offset = len(out_buf)
 
                 # Out: _SpRaax_P.-------------------------------------.
                 # In:  _-------.OWFddddddddddddddddddddddddddddddddp.._
@@ -276,9 +275,12 @@ class SwdInterface(swd.Interface, JLinkInterface):
                     ap = int(bool(op.ap))
                     parity = ap ^ (addr & 1) ^ (addr >> 1) ^ 1
 
-                    oe_buf.append(0x4000000001ff, 1 + 8 + 4 + 33 + 1)
-                    out_buf.append((ap << 2) | (addr << 4) | (parity << 6) | 0x10a,
-                                   1 + 8 + 4 + 33 + 1)
+                    n = 1 + 8 + self.turnaround_cycles + 3 + 33 + self.turnaround_cycles
+
+                    op.__offset = len(out_buf) + 1 + 8 + self.turnaround_cycles - 1
+                    
+                    oe_buf.append(0x1ff | (1 << (n - 1)), n)
+                    out_buf.append((ap << 2) | (addr << 4) | (parity << 6) | 0x10a, n)
 
                     if ap:
                         oe_buf.append(-1, 16)
@@ -295,10 +297,16 @@ class SwdInterface(swd.Interface, JLinkInterface):
                     dparity ^= (dparity >> 4)
                     dparity = (0x6996 >> (dparity & 0xf)) & 1
 
-                    oe_buf.append(0x7fffffffc1ff, 1 + 8 + 5 + 33)
+                    n = 1 + 8 + self.turnaround_cycles + 3 + self.turnaround_cycles + 33
+                    n2 = 1 + 8 + self.turnaround_cycles + 3 + self.turnaround_cycles
+                    m = (1 << n) - (1 << n2)
+
+                    op.__offset = len(out_buf) + 1 + 8 + self.turnaround_cycles - 1
+                    
+                    oe_buf.append(m | 0x1ff, n)
                     out_buf.append((ap << 2) | (addr << 4) | (parity << 6) | 0x102
-                                   | (op.data << 14) | (dparity << 46),
-                                   1 + 8 + 5 + 33)
+                                   | (op.data << n2) | (dparity << (n2 + 32)),
+                                   n)
 
                     if ap:
                         oe_buf.append(-1, 16)
@@ -331,12 +339,11 @@ class SwdInterface(swd.Interface, JLinkInterface):
 
             for idx, op in enumerate(pending):
                 if isinstance(op, (swd.Read, swd.Write)):
-                    ack = in_buf[op.__offset + 9 : op.__offset + 12]
-                    if int(ack) != 1:
-                        self.logger.error("While running %s%s", pending[:idx+1], ("..." if idx < len(pending)-1 else ""))
-                        self.logger.error("Got ACK/Wait/Error = %s", ack)
-                        raise base.ProtocolError()
+                    try:
+                        ack = swd.Ack(int(in_buf[op.__offset : op.__offset + 3]))
+                    except ValueError:
+                        ack = swd.Ack.INVALID
 
+                    op.ack = ack
                     if isinstance(op, swd.Read):
-                        op.data = int(in_buf[op.__offset + 12 : op.__offset + 44])
-        
+                        op.data = int(in_buf[op.__offset + 3 : op.__offset + 35])

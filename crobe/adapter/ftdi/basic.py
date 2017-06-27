@@ -334,10 +334,10 @@ class SwdInterface(BaseInterface, swd.Interface):
                     cmd += self.cmd_oe(True, 1)
                     cmd += self.handle.cmd_out(BitString((ap << 2) | (addr << 4) | (parity << 6) | 0x10a, 9))
                     cmd += self.cmd_oe(False, 0)
-                    cmd += self.handle.cmd_idle(1, 0)
+                    cmd += self.handle.cmd_idle(self.turnaround_cycles, 0)
                     c, ack_off = self.handle.cmd_in(36)
                     cmd += c
-                    cmd += self.handle.cmd_idle(1, 0)
+                    cmd += self.handle.cmd_idle(self.turnaround_cycles, 0)
                     cmd += self.cmd_oe(True, 0)
 
                     if ap:
@@ -359,10 +359,10 @@ class SwdInterface(BaseInterface, swd.Interface):
 
                     cmd += self.handle.cmd_out(BitString((ap << 2) | (addr << 4) | (parity << 6) | 0x102, 9))
                     cmd += self.cmd_oe(False, 1)
-                    cmd += self.handle.cmd_idle(1, 1)
+                    cmd += self.handle.cmd_idle(self.turnaround_cycles, 1)
                     c, ack_off = self.handle.cmd_in(3)
                     cmd += c
-                    cmd += self.handle.cmd_idle(1, 1)
+                    cmd += self.handle.cmd_idle(self.turnaround_cycles, 1)
                     cmd += self.cmd_oe(True, op.data & 1)
                     cmd += self.handle.cmd_out(BitString(op.data | (dparity << 32), 33))
 
@@ -405,12 +405,11 @@ class SwdInterface(BaseInterface, swd.Interface):
                             assert bytec == 1
                             tdo += BitString(rsp[base] >> (8 - bits), bits)
                         base += bytec
-                    ack = int(tdo[:3])
 
-                    if int(ack) != 1:
-                        self.logger.error("While running %s%s", pending[:idx+1], ("..." if idx < len(pending)-1 else ""))
-                        self.logger.error("Got ACK/Wait/Error = %s", ack)
-                        raise base.ProtocolError()
-                    
+                    try:
+                        ack = swd.Ack(int(tdo[:3]))
+                    except ValueError:
+                        ack = swd.Ack.INVALID
+                    op.ack = ack
                     if isinstance(op, swd.Read):
                         op.data = int(tdo[3:35])

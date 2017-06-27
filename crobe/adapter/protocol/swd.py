@@ -3,8 +3,17 @@ from ... import bitstring
 from ...db import Db
 from ...part_id import PartId
 import time
+from enum import IntEnum
 
-__all__ = ["Interface"]
+__all__ = ["Interface", "Ack"]
+
+class Ack(IntEnum):
+    OK = 1
+    WAIT = 2
+    ERROR = 4
+    HIGH = 7
+    LOW = 0
+    INVALID = 5
 
 class Interface(base.Interface):
     """
@@ -53,6 +62,7 @@ class Interface(base.Interface):
 
     def __init__(self, port):
         base.Interface.__init__(self, "SWD Intf", port)
+        self.turnaround_cycles = 1
 
     def start(self):
         self.port.reset = True
@@ -162,6 +172,7 @@ class Read(Operation):
 
     # When executed
     data = None
+    ack = None
 
     def __str__(self):
         if self.ap:
@@ -175,6 +186,9 @@ class Write(Operation):
         self.addr = addr
         self.data = data
 
+    # When executed
+    ack = None
+        
     def __str__(self):
         if self.ap:
             return "<Write AP 0x%x 0x%08x>" % (self.addr * 4, self.data)
