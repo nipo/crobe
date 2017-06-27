@@ -81,11 +81,11 @@ class Program:
     
     @property
     def address(self):
-        return min([s.address for s in self.segments], 0)
+        return min([s.address for s in self.segments], default = 0)
 
     @property
     def end(self):
-        return max([s.end for s in self.segments], 0)
+        return max([s.end for s in self.segments], default = 0)
 
     def __add__(self, other):
         ret = self.__class__()
