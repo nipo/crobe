@@ -25,26 +25,26 @@ class Db(object):
                 self.registry[i].append(obj)
         return obj
 
-    def get(self, id):
+    def get(self, id, allow_default = True):
         for k in self.registry.keys():
             if self.eq_func(k, id):
                 return self.registry[k]
 
-        if self.default is not None:
+        if self.default is not None and allow_default:
             return [self.default]
 
         raise NoMatch(id)
 
-    def call(self, id, *args, **kwargs):
-        poss = self.get(id)
+    def call(self, id, *args, allow_default = True):
+        poss = self.get(id, allow_default = allow_default)
         
         for i, f in enumerate(poss):
             try:
-                return f(*args, **kwargs)
+                return f(*args)
             except NoMatch:
                 pass
 
-        if self.default is not None:
-            return self.default(*args, **kwargs)
+        if self.default is not None and allow_default:
+            return self.default(*args)
 
         raise NoMatch(id)
