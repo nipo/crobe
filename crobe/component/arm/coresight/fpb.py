@@ -18,5 +18,11 @@ class Fpb(MemoryMappedComponent):
         self.lit_count = (ctrl >> 8) & 0xf
         self.code_count = ((ctrl >> 4) & 0xf) | ((ctrl >> 12) & 0x3)
 
+    def enable(self):
+        self.reg_write(self.CTRL, 0x3)
+
+    def disable(self):
+        self.reg_write(self.CTRL, 0x2)
+        
     def __str__(self):
         return "Flash Patch and Breakpoint unit (%d litteral, %d code)" % (self.lit_count, self.code_count)

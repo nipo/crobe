@@ -61,19 +61,19 @@ class MemoryMappedComponent(model.BusComponent):
         return self
 
     def reg_read(self, offset):
-        op = self.bus.cmd_u32_read(self.base + offset)
+        op = self.cmd_reg_read(offset)
         self.bus.execute([op])
         return op.data
 
     def reg_write(self, offset, data):
-        op = self.bus.cmd_u32_write(self.base + offset, data)
+        op = self.cmd_reg_write(offset, data)
         self.bus.execute([op])
 
     def cmd_reg_read(self, offset):
         return self.bus.cmd_u32_read(self.base + offset)
 
-    def cmd_reg_write(self, offset, data):
-        return self.bus.cmd_u32_write(self.base + offset, data)
+    def cmd_reg_write(self, offset, data, interval = 0):
+        return self.bus.cmd_u32_write(self.base + offset, data, interval)
 
     class9_names = {
         0x00: "Other",

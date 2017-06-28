@@ -11,8 +11,8 @@ from ....part_id import PartId
 class Scs(MemoryMappedComponent):
     def __init__(self, ap, base):
         MemoryMappedComponent.__init__(self, ap, base)
-        self.reg_write(self.DHCSR, self.DHCSR_KEY | self.DHCSR_C_DEBUGEN | self.DHCSR_C_HALT)
-        self.reg_write(self.DEMCR, self.reg_read(self.DEMCR) | self.DEMCR_TRCENA)
+        self.reg_write(self.DHCSR, self.DHCSR_KEY | self.DHCSR_C_MASKINTS | self.DHCSR_C_DEBUGEN | self.DHCSR_C_HALT)
+        self.demcr = self.DEMCR_TRCENA
 
         self.cpu_name = cpuid.decode(self.cpuid)
 
@@ -29,7 +29,7 @@ class Scs(MemoryMappedComponent):
             self.logger.info("ISAR%d: 0x%08x", i, self.reg_read(self.ID_ISAR(i)))
         for i in range(4):
             self.logger.info("MVFR%d: 0x%08x", i, self.reg_read(self.MVFR(i)))
-        
+            
     @property
     def has_fpu(self):
         # Has single or double precision implemented ?
@@ -75,56 +75,53 @@ class Scs(MemoryMappedComponent):
         if self.cpu_state == Cpu.State.RUN:
             raise RuntimeError("Unable to halt core")
 
-    def cpu_step(self):
+    def cpu_step(self, allow_interrupts = False):
+        maskints = self.DHCSR_C_MASKINTS if not allow_interrupts else 0
+        base = self.DHCSR_KEY | self.DHCSR_C_DEBUGEN | maskints
+        
         if self.cpu_state == Cpu.State.RUN:
             raise RuntimeError("Cannot single-step a running core")
 
-        ops = [
+        self.bus.execute([
             self.cmd_reg_write(self.DFSR, self.DFSR_CLEAR),
-            self.cmd_reg_write(self.DHCSR, self.DHCSR_KEY | self.DHCSR_C_DEBUGEN
-                            | self.DHCSR_C_HALT | self.DHCSR_C_MASKINTS),
-            self.cmd_reg_write(self.DHCSR, self.DHCSR_KEY | self.DHCSR_C_DEBUGEN
-                            | self.DHCSR_C_MASKINTS | self.DHCSR_C_STEP),
-            ]
-        self.bus.execute(ops)
+            self.cmd_reg_write(self.DHCSR, base | self.DHCSR_C_HALT),
+            self.cmd_reg_write(self.DHCSR, base | self.DHCSR_C_STEP),
+            ])
 
-    def cpu_resume(self):
-        ops = [
+    def cpu_resume(self, allow_interrupts = True):
+        maskints = self.DHCSR_C_MASKINTS if not allow_interrupts else 0
+        base = self.DHCSR_KEY | self.DHCSR_C_DEBUGEN | maskints
+        
+        self.bus.execute([
             self.cmd_reg_write(self.DFSR, self.DFSR_CLEAR),
-            self.cmd_reg_write(self.DHCSR, self.DHCSR_KEY | self.DHCSR_C_DEBUGEN),
-            ]
-        self.bus.execute(ops)
+            self.cmd_reg_write(self.DHCSR, base | self.DHCSR_C_HALT),
+            self.cmd_reg_write(self.DHCSR, base),
+            ])
 
-    def cpu_reg_set(self, reg, data):
-        self.cpu_reg_set_many({reg: data})
-
-    def cpu_reg_get(self, reg):
-        values = self.cpu_reg_get_many([reg])
-        return values[reg]
-
-    def cpu_reg_get_many(self, regs):
+    def cpu_regs_get(self, regs):
         ops = []
-        read_op = []
+        read_ops = []
 
         for r in regs:
-            ops.append(self.cmd_reg_write(self.DCRSR, r.number))
-            ops.append(self.cmd_reg_read(self.DHCSR))
             ro = self.cmd_reg_read(self.DCRDR)
-            read_op.append(ro)
-            ops.append(ro)
+
+            read_ops.append(ro)
+            ops += [
+                self.cmd_reg_write(self.DCRSR, r.number, interval = 1e-6),
+                ro,
+                ]
 
         self.bus.execute(ops)
 
-        return dict([(r, op.data) for (r, op) in zip(regs, read_op)])
+        return dict(zip(regs, map(lambda x:x.data, read_ops)))
 
-    def cpu_reg_set_many(self, regs):
+    def cpu_regs_set(self, regs):
         ops = []
 
         for r, value in regs.items():
             ops += [
                 self.cmd_reg_write(self.DCRDR, value),
-                self.cmd_reg_write(self.DCRSR, r.number | self.DCRSR_WRITE),
-                self.cmd_reg_read(self.DHCSR),
+                self.cmd_reg_write(self.DCRSR, r.number | self.DCRSR_WRITE, interval = 1e-6),
             ]
 
         self.bus.execute(ops)
@@ -148,13 +145,28 @@ class Scs(MemoryMappedComponent):
             tmp |= self.DEMCR_VC_CORERESET
         self.demcr = tmp
 
+    @property
+    def hard_error_catch(self):
+        return self.demcr & self.DEMCR_VC_HARDERR
+
+    @hard_error_catch.setter
+    def hard_error_catch(self, value):
+        tmp = self.demcr & ~self.DEMCR_VC_HARDERR
+        if value:
+            tmp |= self.DEMCR_VC_HARDERR
+        self.demcr = tmp
+
     def cpu_reset(self):
-        ops = [
+        self.bus.execute([
             self.cmd_reg_write(self.DFSR, self.DFSR_CLEAR),
             self.cmd_reg_write(self.AIRCR, self.AIRCR_KEY | self.AIRCR_SYSRESETREQ),
-            ]
-        self.bus.execute(ops)
-    
+            ])
+
+        while True:
+            dhcsr = self.reg_read(self.DHCSR)
+            if not (dhcsr & self.DHCSR_S_RESET_ST):
+                break
+
     # System control and ID registers
     # 0x000-0x00f  Interrupts, Auxilary control
     MCR   = 0x000
@@ -226,10 +238,10 @@ class Scs(MemoryMappedComponent):
     DEMCR_MON_REQ      = 1 << 19
     DEMCR_MON_STEP     = 1 << 18
     DEMCR_MON_PEND     = 1 << 17
-    DEMCR_VC_HARDERR   = 1 << 16
-    DEMCR_VC_INTERR    = 1 << 10
-    DEMCR_VC_BUSERR    = 1 << 9
-    DEMCR_MON_EN       = 1 << 8
+    DEMCR_MON_EN       = 1 << 16
+    DEMCR_VC_HARDERR   = 1 << 10
+    DEMCR_VC_INTERR    = 1 << 9
+    DEMCR_VC_BUSERR    = 1 << 8
     DEMCR_VC_STATERR   = 1 << 7
     DEMCR_VC_CHKERR    = 1 << 6
     DEMCR_VC_NOCPERR   = 1 << 5

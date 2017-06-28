@@ -2,6 +2,7 @@ from ..model import Cpu, Register
 from .coresight.dwt import Dwt
 from .coresight.fpb import Fpb
 from .coresight.scs import Scs
+import time
 
 __all__ = []
 
@@ -45,6 +46,8 @@ class Cortex(Cpu):
 
         self.register_by_name = dict([(r.name, r) for r in self.registers])
         self.register_by_number = dict([(r.number, r) for r in self.registers])
+
+        self.fpb.enable()
         
     def register_get(self, thing):
         if isinstance(thing, Register):
@@ -67,10 +70,10 @@ class Cortex(Cpu):
         return cls(index, scs = scs, **others)
 
     def reg_read(self, reg_list):
-        return self.scs.cpu_reg_get_many(reg_list)
+        return self.scs.cpu_regs_get(reg_list)
 
     def reg_write(self, reg_value_map):
-        return self.scs.cpu_reg_set_many(reg_value_map)
+        return self.scs.cpu_regs_set(reg_value_map)
 
     @property
     def halt_cause(self):
@@ -81,10 +84,12 @@ class Cortex(Cpu):
         return self.scs.cpu_state
 
     def step(self):
+        self.scs.hard_error_catch = True
         self.scs.cpu_step()
 
-    def resume(self):
-        return self.scs.cpu_resume()
+    def resume(self, allow_interrupts = False):
+        self.scs.hard_error_catch = True
+        return self.scs.cpu_resume(allow_interrupts = allow_interrupts)
     
     def halt(self):
         return self.scs.cpu_halt()
@@ -94,6 +99,7 @@ class Cortex(Cpu):
             tmp = self.scs.cpu_reset_catch
             self.scs.cpu_reset_catch = True
             self.scs.cpu_reset()
+            time.sleep(.1)
             while self.scs.cpu_state == Cpu.State.RUN:
                 pass
             self.scs.cpu_reset_catch = tmp
