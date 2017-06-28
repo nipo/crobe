@@ -63,22 +63,18 @@ def default_soc(ap):
 
     raise NotImplementedError()
 
-@target_model.Target.register(SwDp)
-def arm_soc_probe(ap):
-    rom_tables = ap.children_of_class(RomTable)
+@target_model.Target.register(SwDp, JtagDp)
+def arm_soc_probe(dp):
+    if dp.target_id:
+        try:
+            return SoC.db.call(dp.target_id, dp, allow_default = False)
+        except:
+            pass
+
+    rom_tables = dp.children_of_class(RomTable)
     if rom_tables:
         partid = rom_tables[0].partid
 
-        return SoC.db.call(partid, ap)
-
-    raise NotImplementedError()
-
-@target_model.Target.register(JtagDp)
-def arm_soc_probe(ap):
-    rom_tables = ap.children_of_class(RomTable)
-    if rom_tables:
-        partid = rom_tables[0].partid
-
-        return SoC.db.call(partid, ap)
+        return SoC.db.call(partid, dp)
 
     raise NotImplementedError()
