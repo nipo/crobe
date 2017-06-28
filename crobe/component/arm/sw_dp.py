@@ -146,7 +146,9 @@ class SwDp(dp.Dp):
                 else:
                     ops.append(self.port.cmd_write(True, (o.addr >> 2) & 3, o.data))
 
-            ops.append(self.port.cmd_run(insert_run + int(math.ceil(o.interval * speed))))
+            c = insert_run + int(math.ceil(o.interval * speed))
+            if c:
+                ops.append(self.port.cmd_run(c))
                     
         if ap_read_pending:
             ap_read_pending.__value_op = self.port.cmd_read(False, self.RDBUFF)
