@@ -94,11 +94,11 @@ class MemAp(ap.Ap, model.Bus):
             else:
                 # Word access only, they may use DRW and BDx
                 # first, see whether auto increment could be useful
-                in_next_16 = 0
+                in_16 = 0
                 incrementing = 0
                 for si, nt in enumerate(transfers[i+1:]):
-                    if nt.address < t.address + 16:
-                        in_next_16 += 1
+                    if nt.address & ~0xf == t.address & ~0xf:
+                        in_16 += 1
                     if nt.address == t.address + (si + 1) * 4:
                         incrementing += 1
 
@@ -106,21 +106,20 @@ class MemAp(ap.Ap, model.Bus):
                         break
                     
                 if csw & 0x030 == 0x000:
-                    if incrementing > in_next_16:
+                    if incrementing > in_16:
                         csw_dirty = True
                         csw = (csw & ~0x030) | 0x010
                 else:
-                    if incrementing < in_next_16:
+                    if incrementing < in_16:
                         csw_dirty = True
                         csw = csw & ~0x030
                         
-                if i+1 >= len(transfers) \
-                   or (csw & 0x030 == 0x010 \
-                       and address == t.address \
-                       and transfers[i + 1].address == address + 4):
+                if address == t.address \
+                   and (i >= len(transfers) - 1 \
+                        or (csw & 0x030 == 0x010 and transfers[i + 1].address == address + 4)):
                     reg = MemAp.DRW
                 elif address <= t.address < address + 16:
-                    offset = t.address - address
+                    offset = t.address - (address & ~0xf)
                     reg = MemAp.BD0 + offset
                 else:
                     address_dirty = True
