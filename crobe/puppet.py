@@ -60,7 +60,7 @@ class Puppet(Component):
         self.ram_allocator.free(zone.range)
 
     def prepare(self, pc, *args):
-        self.logger.debug("CPU State: %s", self.cpu.state)
+        #self.logger.debug("CPU State: %s", self.cpu.state)
 
         assert self.cpu.state != self.cpu.State.RUN
         assert len(args) <= len(self.arg_regs)
@@ -75,44 +75,44 @@ class Puppet(Component):
 
         self.trampoline.write(self.trampoline_code + struct.pack("<L", pc))
 
-        for r, v in sorted(regs.items()):
-            self.logger.debug("Setting %s: 0x%08x", r.name, v)
+        #for r, v in sorted(regs.items()):
+            #self.logger.debug("Setting %s: 0x%08x", r.name, v)
 
         self.cpu.reg_write(regs)
 
         self.logger.debug("Running code trampoline at 0x%08x, target PC 0x%08x", self.trampoline.address, pc)
-        self.logger.debug("Registers before run:")
+        #self.logger.debug("Registers before run:")
 
-        regs = self.cpu.reg_read(self.cpu.registers)
-        for r, v in sorted(regs.items()):
-            self.logger.debug(" %s: 0x%08x", r.name, v)
+        #regs = self.cpu.reg_read(self.cpu.registers)
+        #for r, v in sorted(regs.items()):
+            #self.logger.debug(" %s: 0x%08x", r.name, v)
 
     def run(self):
         self.cpu.resume(allow_interrupts = False)
-        self.logger.debug("CPU State: %s", self.cpu.state)
+        #self.logger.debug("CPU State: %s", self.cpu.state)
 
     def step(self):
         self.cpu.step()
-        poll_regs = [self.pc_reg, self.lr_reg, self.sp_reg] + self.arg_regs
-        regs = self.cpu.reg_read(poll_regs)
-        self.logger.debug(", ".join(["%s: 0x%08x" % (r.name, value) for (r, value) in sorted(regs.items())]))
+        #poll_regs = [self.pc_reg, self.lr_reg, self.sp_reg] + self.arg_regs
+        #regs = self.cpu.reg_read(poll_regs)
+        #self.logger.debug(", ".join(["%s: 0x%08x" % (r.name, value) for (r, value) in sorted(regs.items())]))
         
     def wait(self, interval = .01):
-        self.logger.debug("Waiting for CPU to stop...")
+        #self.logger.debug("Waiting for CPU to stop...")
 
-        poll_regs = [self.pc_reg, self.lr_reg, self.sp_reg] + self.arg_regs
+        #poll_regs = [self.pc_reg, self.lr_reg, self.sp_reg] + self.arg_regs
 
         tries = 20
         while self.cpu.state == self.cpu.State.RUN and tries:
-            regs = self.cpu.reg_read(poll_regs)
-            self.logger.debug(", ".join(["%s: 0x%08x" % (r.name, value) for (r, value) in sorted(regs.items())]))
+            #regs = self.cpu.reg_read(poll_regs)
+            #self.logger.debug(", ".join(["%s: 0x%08x" % (r.name, value) for (r, value) in sorted(regs.items())]))
             time.sleep(interval)
             tries -= 1
 
         self.cpu.halt()
 
-        self.logger.debug("Done, registers after run:")
-        regs = self.cpu.reg_read(self.cpu.registers)
-        for r, v in sorted(regs.items()):
-            self.logger.debug(" %s: 0x%08x", r.name, v)
+        #self.logger.debug("Done, registers after run:")
+        #regs = self.cpu.reg_read(self.cpu.registers)
+        #for r, v in sorted(regs.items()):
+            #self.logger.debug(" %s: 0x%08x", r.name, v)
         

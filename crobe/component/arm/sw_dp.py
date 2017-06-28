@@ -74,13 +74,13 @@ class SwDp(dp.Dp):
             ops = self.lower(operations, insert_run)
             self.port.execute(ops)
 
-            self.logger.debug("Done:")
+            #self.logger.debug("Done:")
             for i, o in enumerate(operations):
                 if not isinstance(o, dp.ApRead):
-                    self.logger.debug("- %d, %s", i, o)
+                    #self.logger.debug("- %d, %s", i, o)
                     continue
 
-                self.logger.debug("- %d, %s -> %s %s 0x%08x", i, o, o.__value_op, o.__value_op.ack, o.__value_op.data)
+                #self.logger.debug("- %d, %s -> %s %s 0x%08x", i, o, o.__value_op, o.__value_op.ack, o.__value_op.data)
                 oo = o.__value_op
 
                 if oo.ack == swd.Ack.OK:
@@ -92,7 +92,7 @@ class SwDp(dp.Dp):
                     self.abort(0x10)
                     must_restart = True
                     insert_run += 1
-                    self.logger.info("Delaying subsequent operations by %d", insert_run)
+                    #self.logger.warning("Delaying subsequent operations by %d", insert_run)
                     break
 
                 raise dp.DpAccessFailure(o)

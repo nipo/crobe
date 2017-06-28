@@ -63,7 +63,7 @@ class MemAp(ap.Ap, model.Bus):
 
         operations = []
 
-        self.logger.debug("Executing %s", transfers)
+        #self.logger.debug("Executing %s", transfers)
 
         for i, t in enumerate(transfers):
             if not address:
@@ -143,7 +143,7 @@ class MemAp(ap.Ap, model.Bus):
             if (csw & 0x030) >> 4 == 1 and reg == MemAp.DRW:
                 address += 1 << t.size_l2
 
-        self.logger.debug("-> translated to %s", operations)
+        #self.logger.debug("-> translated to %s", operations)
                 
         self.port.execute(operations)
 

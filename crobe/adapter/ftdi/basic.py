@@ -191,7 +191,7 @@ class JtagInterface(BaseInterface, jtag.Interface):
             else:
                 ops.append(o)
 
-        self.logger.debug("running %s", operation_list)
+        #self.logger.debug("running %s", operation_list)
 
         assert self.__state in (self.STATE_RESET, self.STATE_PAUSE, self.STATE_RTI, None)
         
@@ -312,7 +312,7 @@ class SwdInterface(BaseInterface, swd.Interface):
     def _execute(self, operation_list):
         ops = list(operation_list)
         
-        self.logger.debug("running %s", ops)
+        #self.logger.debug("running %s", ops)
 
         while ops:
             pending = []
