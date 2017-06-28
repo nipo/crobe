@@ -1,4 +1,5 @@
 from ...model import Component, PortComponent
+from ...part_id import PartId
 import time
 
 __all__ = ["Dp", "Run", "ApRead", "ApWrite", "DpAccessFailure"]
@@ -39,6 +40,16 @@ class Dp(PortComponent):
 
         self.debug_enable(True)
 
+        self.target_id = None
+
+        if self.version >= 2:
+            try:
+                self.target_id = PartId.from_idcode(self.banked_reg_read(self.TARGETID))
+            except:
+                pass
+
+            self.logger.info("DP Target ID %s", self.target_id)
+        
         from .ap import Ap
 
         for i in range(16):
