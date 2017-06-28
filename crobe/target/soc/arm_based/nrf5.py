@@ -6,6 +6,11 @@ import binascii
 import math
 import struct
 
+flash_write_code = binascii.a2b_hex(b'f0b501240b1ca4460b4d0c4f92082c60'+
+                                    b'0a4e002a09d064463e682642fbd01c68'+
+                                    b'5e1a3450013a0433f2e7012332681a42'+
+                                    b'fcd000232b60f0bd04e5014000e40140')
+
 class nRFFlash(NandFlash):
     NVMC_READY       = 0x4001e400
     NVMC_READY_BUSY  = 0
@@ -21,7 +26,7 @@ class nRFFlash(NandFlash):
         NandFlash.__init__(self, soc.buses[0], "code", base, size, page_size)
         self.soc = soc
     
-    def write(self, program):
+    def write_direct(self, program):
         self.bus.u32_write(self.NVMC_CONFIG, self.NVMC_CONFIG_WEN)
 
         for page in program.paged(self.page_size, fill = b'\xff'):
@@ -39,6 +44,41 @@ class nRFFlash(NandFlash):
             pass
         self.bus.u32_write(self.NVMC_CONFIG, self.NVMC_CONFIG_NONE)
 
+    def write_puppet(self, program):
+        puppet = self.soc.puppet()
+        code_zone = puppet.allocate(len(flash_write_code))
+        page_zone = puppet.allocate(self.page_size), puppet.allocate(self.page_size)
+        code_zone.write(flash_write_code)
+
+        running = None
+        for i, page in enumerate(program.paged(self.page_size, fill = b'\xff')):
+            self.logger.info("Loading page at 0x%08x...", page.address)
+            z = page_zone[i % 2]
+
+            chunk = 256
+            for i in range(0, self.page_size, chunk):
+                z.write(page.data[i:i+chunk], i)
+
+            if running is not None:
+                self.logger.info("Done writing page at 0x%08x...", running)
+                puppet.wait()
+                running = None
+
+            puppet.prepare(code_zone.address, page.address, z.address, self.page_size)
+            puppet.run()
+            running = page.address
+
+        if running:
+            puppet.wait()
+            self.logger.info("Done writing page at 0x%08x...", running)
+
+        puppet.unallocate(code_zone)
+        puppet.unallocate(page_zone[0])
+        puppet.unallocate(page_zone[1])
+
+    def write(self, program):
+        self.write_puppet(program)
+        
 class CodeFlash(nRFFlash):
     def __init__(self, soc, size, page_size):
         nRFFlash.__init__(self, soc, 0, size, page_size)
