@@ -123,7 +123,7 @@ class JtagInterface(JLinkInterface, jtag.Interface):
             else:
                 ops.append(o)
 
-        self.logger.debug("running %s", operation_list)
+        #self.logger.debug("running %s", operation_list)
 
         assert self.__state in (self.STATE_RESET, self.STATE_PAUSE, self.STATE_RTI, None)
         
@@ -229,13 +229,13 @@ class JtagInterface(JLinkInterface, jtag.Interface):
 
                 assert len(tms_buf) == len(tdi_buf)
 
-            self.logger.debug("tms: %s", tms_buf)
-            self.logger.debug("tdi: %s", tdi_buf)
+            #self.logger.debug("tms: %s", tms_buf)
+            #self.logger.debug("tdi: %s", tdi_buf)
             
             tdo_blob = self.handle.jtag_io(tms_buf.data, tdi_buf.data, len(tms_buf))
             tdo_buf = bitstring.BitString(tdo_blob, len(tms_buf))
 
-            self.logger.debug("tdo: %s", tdo_buf)
+            #self.logger.debug("tdo: %s", tdo_buf)
 
             for idx, op in enumerate(pending):
                 if isinstance(op, jtag.Shift) and op.read_tdo:
@@ -257,7 +257,7 @@ class SwdInterface(swd.Interface, JLinkInterface):
     def _execute(self, operation_list):
         ops = list(operation_list)
 
-        self.logger.debug("running %s", ops)
+        #self.logger.debug("running %s", ops)
         
         while ops:
             oe_buf = bitstring.BitString()
@@ -329,13 +329,13 @@ class SwdInterface(swd.Interface, JLinkInterface):
 
                 assert len(out_buf) == len(oe_buf)
 
-            self.logger.debug("out: %s", out_buf)
-            self.logger.debug("oe : %s", oe_buf)
+            #self.logger.debug("out: %s", out_buf)
+            #self.logger.debug("oe : %s", oe_buf)
             
             in_blob = self.handle.swd_io(out_buf.data, oe_buf.data, len(out_buf))
             in_buf = bitstring.BitString(in_blob, len(out_buf))
 
-            self.logger.debug("in : %s", in_buf)
+            #self.logger.debug("in : %s", in_buf)
 
             for idx, op in enumerate(pending):
                 if isinstance(op, (swd.Read, swd.Write)):

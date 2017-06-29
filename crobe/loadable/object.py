@@ -111,8 +111,6 @@ class Program:
             aligned_address = s.address & ~(page_size - 1)
             end = s.address + len(s)
             aligned_end = ((end | (page_size - 1)) + 1) if (end & (page_size - 1)) else end
-
-            print("%s 0x%08x 0x%08x" % (s, aligned_address, aligned_end))
             
             for page_addr in range(aligned_address, aligned_end, page_size):
                 t = ret.segment_at(page_addr)
@@ -122,7 +120,6 @@ class Program:
                 source_offset = max((page_addr - s.address, 0))
                 target_offset = (s.address & (page_size - 1)) if page_addr == aligned_address else 0
                 size = min((len(s) - source_offset, page_size - target_offset, page_size))
-                print("%s 0x%08x 0x%08x 0x%08x" % (t, source_offset, target_offset, size))
                 t[target_offset : target_offset + size] = s[source_offset : source_offset + size]
 
         return ret

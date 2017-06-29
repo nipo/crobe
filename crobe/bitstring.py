@@ -1,3 +1,76 @@
+class BitStringSlice:
+    def __init__(self, bs, begin, end):
+        self.__bs = bs
+        self.__begin = begin
+        self.__end = end
+        self.__length = end - begin
+
+    def __int__(self):
+        begin_byte = self.__begin // 8
+        begin_bit = self.__begin & 7
+        end_byte = (self.__end + 7) // 8
+
+        blob = self.__bs.data[begin_byte : end_byte]
+
+        return (int.from_bytes(blob, byteorder = 'little') >> begin_bit) & ((1 << (self.__length)) - 1)
+
+    @property
+    def data(self):
+        return int(self).to_bytes(length = (self.__length + 7)//8, byteorder = 'little')
+
+    def __len__(self):
+        return self.__length
+    
+    def __bool__(self):
+        return bool(self.__length)
+
+    def __add__(self, other):
+        n = self.__class__(int(self), self.__length)
+        n.append(other)
+        return n
+
+    def __getitem__(self, offset):
+        if isinstance(offset, slice):
+            b, e = offset.start, offset.stop
+            if b is None:
+                b = 0
+            elif b < 0:
+                b += self.__length
+
+            if e is None:
+                e = self.__length
+            elif e < 0:
+                e += self.__length
+
+            b = max(0, min(b, self.__length))
+            e = max(0, min(e, self.__length))
+
+            if e <= b:
+                return BitString(0, 0)
+
+            return BitStringSlice(self.__bs, self.__begin + b, self.__begin + e)
+
+        if offset < 0:
+            offset += self.__length
+
+        offset = self.__begin + offset
+        data = self.__bs.data
+
+        return bool(data[offset // 8] & (1 << (offset & 7)))
+
+    def __str__(self):
+        if self.__length > 1024:
+            return "[%d bits]" % self.__length
+
+        if self.__length:
+            return bin(int(self))[2:][::-1].ljust(self.__length, '0')
+        return "."
+        
+    def __repr__(self):
+        if self.__length > 1024:
+            return "BitString([...], %d)" % (self.__length)
+        return "BitString(%r, %d)" % (self.data, self.__length)
+
 class BitString:
     """
     A bitstring.
@@ -9,8 +82,10 @@ class BitString:
         """
         Creates a new bit string, uses prototype of append().
         """
-        self.__data = 0
+        self.__bytes = []
+        self.__last_byte = 0
         self.__length = 0
+        self.__data_cache = None
         if args or kwargs:
             self.append(*args, **kwargs)
 
@@ -25,40 +100,73 @@ class BitString:
         If data is an integer, it is used LSB first, providing length
         is mandatory.
         """
+        if isinstance(data, BitString):
+            length = len(data)
+            if self.__length & 7:
+                data = int(data)
+            else:
+                data = data.data
+
         if isinstance(data, bytes):
             if length is None:
                 length = len(data) * 8
-            data = int.from_bytes(data, byteorder = "little")
-        elif data < 0:
-            data += 1 << length
 
-        if length % 8:
-            data = data & ((1 << length) - 1)
-        self.__data |= data << self.__length
+            if self.__length & 7:
+                data = int.from_bytes(data, byteorder = "little")
+                data <<= (self.__length & 7)
+                data |= self.__last_byte
+                length += self.__length & 7
+                self.__length &= ~7
+                data = data.to_bytes(length = (length + 7) // 8, byteorder = "little")
+        elif isinstance(data, int):
+            if data < 0:
+                data += 1 << length
+            data &= (1 << length) - 1
+
+            if self.__length & 7:
+                data <<= (self.__length & 7)
+                data |= self.__last_byte
+                length += self.__length & 7
+                self.__length &= ~7
+            data = data.to_bytes(length = (length + 7) // 8, byteorder = "little")
+            
         self.__length += length
+        if self.__length & 7:
+            self.__last_byte = data[-1]
+            self.__bytes.append(data[:-1])
+        else:
+            self.__bytes.append(data)
+            self.__last_byte = 0
+
+        self.__data_cache = None
 
     def __iadd__(self, other):
-        self.append(other.__data, other.__length)
+        if not self.__length and isinstance(other, BitString):
+            self.__length = other.__length
+            self.__bytes = other.__bytes
+            self.__last_byte = other.__last_byte
+            self.__data_cache = other.__data_cache
+            return self
+        self.append(other)
         return self
 
     def __add__(self, other):
-        n = self.__class__(self.__data, self.__length)
-        n.append(other.__data, other.__length)
+        n = self.__class__(self.data, len(self))
+        n.append(other)
         return n
-
-    def enlarge(self, length):
-        """
-        Append zeroes to length
-        """
-        assert self.__length <= length
-        self.__length = length
 
     @property
     def data(self):
         """
         Binary representation of bit string as a blob. LSB first, little-endian.
         """
-        return self.__data.to_bytes(length = (self.__length + 7) // 8, byteorder = "little")
+        if self.__data_cache is None:
+            if self.__length & 7:
+                self.__data_cache = b''.join(self.__bytes + [bytes([self.__last_byte])])
+            else:
+                self.__data_cache = b''.join(self.__bytes)
+
+        return self.__data_cache
 
     def __len__(self):
         """
@@ -73,6 +181,8 @@ class BitString:
         If used to retrieve a slice, a BitString is returned.
         Negative indices are supported, stride is not.
         """
+        data = self.data
+
         if isinstance(offset, slice):
             b, e = offset.start, offset.stop
             if b is None:
@@ -91,12 +201,12 @@ class BitString:
             if e <= b:
                 return self.__class__(0, 0)
 
-            return self.__class__((self.__data >> b) & ((1 << (e - b)) - 1), e - b)
+            return BitStringSlice(self, b, e)
 
         if offset < 0:
             offset += self.__length
 
-        return bool((self.__data >> offset) & 1)
+        return bool(data[offset // 8] & (1 << (offset & 7)))
 
     def __str__(self):
         """
@@ -104,14 +214,15 @@ class BitString:
         """
         if self.__length > 1024:
             return "[%d bits]" % self.__length
+
         if self.__length:
-            return bin(self.__data)[2:][::-1].ljust(self.__length, '0')
+            return bin(int(self))[2:][::-1].ljust(self.__length, '0')
         return "."
 
     def __repr__(self):
         if self.__length > 1024:
             return "BitString([...], %d)" % (self.__length)
-        return "BitString(0x%x, %d)" % (self.__data, self.__length)
+        return "BitString(%r, %d)" % (self.data, self.__length)
 
     def __bool__(self):
         """
@@ -123,4 +234,19 @@ class BitString:
         """
         Integer representation of data.
         """
-        return self.__data
+        return int.from_bytes(self.data, byteorder = 'little')
+
+if __name__ == "__main__":
+    a = BitString(0x1234, 16)
+    print(a)
+    b = BitString(0x3456, 15)
+    print(b)
+    c = a + b
+    print(c)
+    d = BitString(0xff, 8)
+    print(d)
+    e = c + d
+    print(e)
+
+    print(e[2:10])
+    

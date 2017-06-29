@@ -312,7 +312,8 @@ class Mpsse(Handle):
     def __init__(self, device, interface, **defaults):
         Handle.__init__(self, device.connection_id, interface, "MPSSE", **defaults)
 
-    def cmd_tms_shift(self, tms, next = 0):
+    @classmethod
+    def cmd_tms_shift(cls, tms, next = 0):
         cmd = api.MPSSE_WRITE_NEG | api.MPSSE_LSB | api.MPSSE_TMS
         ret = bytes()
 
@@ -324,22 +325,28 @@ class Mpsse(Handle):
 
         return ret
 
-    def cmd_reset(self):
-        return self.cmd_tms_shift(BitString(-1, 5))
+    @classmethod
+    def cmd_reset(cls):
+        return cls.cmd_tms_shift(BitString(-1, 5))
 
-    def cmd_run(self, count):
-        return self.cmd_tms_shift(BitString(0, count))
+    @classmethod
+    def cmd_run(cls, count):
+        return cls.cmd_tms_shift(BitString(0, count))
 
-    def cmd_ir(self):
-        return self.cmd_tms_shift(BitString(0b01011, 5))
+    @classmethod
+    def cmd_ir(cls):
+        return cls.cmd_tms_shift(BitString(0b01011, 5))
 
-    def cmd_dr(self):
-        return self.cmd_tms_shift(BitString(0b0101, 4))
+    @classmethod
+    def cmd_dr(cls):
+        return cls.cmd_tms_shift(BitString(0b0101, 4))
 
-    def cmd_update(self):
-        return self.cmd_tms_shift(BitString(0b011, 3))
+    @classmethod
+    def cmd_update(cls):
+        return cls.cmd_tms_shift(BitString(0b011, 3))
 
-    def cmd_shift_io(self, tdi):
+    @classmethod
+    def cmd_shift_io(cls, tdi):
         if not len(tdi):
             return b'', []
 
@@ -379,7 +386,8 @@ class Mpsse(Handle):
         
         return ret, counts
 
-    def cmd_shift_out(self, tdi):
+    @classmethod
+    def cmd_shift_out(cls, tdi):
         if not len(tdi):
             return b''
 
@@ -412,7 +420,8 @@ class Mpsse(Handle):
         
         return ret
 
-    def cmd_out(self, tdi):
+    @classmethod
+    def cmd_out(cls, tdi):
         if not len(tdi):
             return b''
         
@@ -437,7 +446,8 @@ class Mpsse(Handle):
             
         return ret
 
-    def cmd_in(self, bits):
+    @classmethod
+    def cmd_in(cls, bits):
         if not bits:
             return b''
 
@@ -457,10 +467,11 @@ class Mpsse(Handle):
         
         return ret, counts
 
-    def cmd_idle(self, cycles, value):
+    @classmethod
+    def cmd_idle(cls, cycles, value):
         assert cycles
 
-        return self.cmd_out(BitString(-value, cycles))
+        return cls.cmd_out(BitString(-value, cycles))
         
 def main():
     import time
