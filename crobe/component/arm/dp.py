@@ -32,6 +32,7 @@ class Dp(PortComponent):
             ver = self.idcode
             self.logger.info("Bad IDR, falling back to IDCODE")
 
+        self.idr_or_idcode = ver
         self.minimal = bool(ver.part_no & 0x10)
         self.version = ver.part_no & 0x3
 
@@ -64,6 +65,14 @@ class Dp(PortComponent):
 
         PortComponent.start(self)
 
+    def __str__(self):
+        ret = "%s v.%dr%d" % (self.name, self.version, self.idr_or_idcode.revision)
+        if self.minimal:
+            ret += ", minimal"
+        if self.target_id:
+            ret += ", Target ID: %s" % self.target_id.pretty()
+        return ret
+        
     def debug_enable(self, enabled):
         if not enabled:
             self.ctrlstat = 0

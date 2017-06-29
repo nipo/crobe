@@ -7,8 +7,7 @@ class RomTable(MemoryMappedComponent):
         if self.component_class != 0x1:
             raise ValueError("Component is not a RomTable")
 
-        self.name = "RomTable for 0x%08x (%s, part 0x%04x,v%d)" % (int(self.partid),
-            self.partid.manufacturer_name, self.partid.part_no, self.partid.revision)
+        self.name = "RomTable for %s" % self.partid.pretty()
 
     def start(self):
         for i in range(0, 960):

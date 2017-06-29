@@ -37,6 +37,11 @@ class PartId(object):
             | (self.jep106_bank << 8) \
             | (self.part_no << 12) \
             | ((self.revision or 0) << 28)
+
+    def pretty(self):
+        return "0x%08x (%s, 0x%04x, r%d)" % (
+            int(self),
+            self.manufacturer_name, self.part_no, self.revision)
     
     def is_same_part(self, other):
         """
