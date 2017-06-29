@@ -1,7 +1,9 @@
+from ..util.pretty import sci
+
 def main():
     from . import base
     
-    class Tool(base.Speed, base.Power, base.IcePick, base.Field):
+    class Tool(base.Freq, base.Power, base.IcePick, base.Field):
         pass
 
     args = Tool("Target enumerator")
@@ -9,7 +11,7 @@ def main():
     print("Adapter:", args.interface.port.firmware_info)
     print("Serial:", args.interface.port.serial_number)
     print("Nickname:", args.interface.port.nickname)
-    print("Speed:", args.interface.speed)
+    print("Freq:", sci(args.interface.freq, "Hz"))
     
     component_dump(args.interface)
     component_dump(args.field)

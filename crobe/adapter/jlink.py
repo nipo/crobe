@@ -1,6 +1,7 @@
 from . import model
 from .protocol import swd, jtag, base
 from .. import bitstring
+from ..util.pretty import sci
 import struct
 
 __all__ = []
@@ -67,13 +68,13 @@ class JLinkInterface(object):
         self.handle.interface = interface.upper()
 
     @property
-    def speed(self):
+    def freq(self):
         return int(self.handle.speed * 1000.)
 
-    @speed.setter
-    def speed(self, speed):
-        self.logger.info("speed %dHz", speed)
-        self.handle.speed = speed / 1000.
+    @freq.setter
+    def freq(self, freq):
+        self.logger.info("freq", sci(freq, 'Hz'))
+        self.handle.speed = float(freq) / 1000.
 
     @property
     def reset(self):

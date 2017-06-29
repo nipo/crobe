@@ -31,7 +31,7 @@ class ProbyAdapter(Adapter):
 
         jtag_intf = Adapter.open(self, "jtag", channel = "B", resetn_pin = 9)
         jtag_intf.logger.setLevel(logging.WARNING)
-        jtag_intf.speed = 30e6
+        jtag_intf.freq = 40e6
         jtag_intf.start()
         fpga, = jtag_intf.children_of_class(Spartan6)
 

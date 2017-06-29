@@ -100,7 +100,7 @@ class BitString:
         If data is an integer, it is used LSB first, providing length
         is mandatory.
         """
-        if isinstance(data, BitString):
+        if isinstance(data, (BitString, BitStringSlice)):
             length = len(data)
             if self.__length & 7:
                 data = int(data)

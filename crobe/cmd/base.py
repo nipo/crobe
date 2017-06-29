@@ -86,13 +86,14 @@ class Interface(Adapter):
         interface = self.forced_interface or args.interface
         self.interface = self.adapter.open(interface)
 
-class Speed(Interface):
-    def c30_speed_declare(self):
-        self.parser.add_argument('--speed', '-s', type = float, default = 10000000,
-                                     help = "Target insterface speed (Hz)")
+class Freq(Interface):
+    def c30_freq_declare(self):
+        self.parser.add_argument('--freq', '-f', type = str, default = "10e6",
+                                     help = "Target insterface freq (Hz)")
 
-    def c30_speed_parse(self, args):
-        self.interface.speed = args.speed
+    def c30_freq_parse(self, args):
+        from ..util.pretty import sci_parse
+        self.interface.freq = sci_parse(args.freq)
     
 class Power(Interface):
     def c24_power_declare(self):

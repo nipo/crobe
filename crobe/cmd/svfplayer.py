@@ -3,7 +3,7 @@ def main():
     from ..svf.player import Player
     from ..svf.svf import SvfParser
 
-    class Tool(base.Speed, base.File):
+    class Tool(base.Freq, base.File):
         forced_interface = "jtag"
 
     args = Tool("SVF player")

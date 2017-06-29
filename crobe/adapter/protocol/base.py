@@ -22,7 +22,7 @@ class Interface(model.PortComponent):
             self._execute(commands)
     
     # property, writable, Hz
-    speed = None
+    freq = None
 
     # property read-write
     # Active high

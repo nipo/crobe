@@ -2,7 +2,7 @@ def main():
     from . import base
     from ..component.xilinx.spartan6 import Spartan6
 
-    class Tool(base.Speed, base.Programs):
+    class Tool(base.Freq, base.Programs):
         forced_interface = "jtag"
         program_count_needed = 1
 

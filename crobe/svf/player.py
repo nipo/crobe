@@ -157,4 +157,4 @@ class Player:
 
     def freq(self, f):
         self.flush()
-        self.intf.speed = f
+        self.intf.freq = f

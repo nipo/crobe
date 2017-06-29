@@ -2,6 +2,7 @@ from .. import model
 from ...bitstring import BitString
 from ..protocol import jtag, base, swd
 from . import ftdi
+from ...util.pretty import sci
         
 class Adapter(model.Adapter):
     supported_interfaces = ["jtag"]
@@ -145,13 +146,13 @@ class BaseInterface(object):
                                   (1 << pin) if bool(reset) == polarity else 0)
         
     @property
-    def speed(self):
-        return int(self.handle.speed)
+    def freq(self):
+        return int(self.handle.freq)
 
-    @speed.setter
-    def speed(self, speed):
-        self.handle.speed = speed
-        self.logger.info("requested speed %dHz, had %dHz", speed, self.handle.speed)
+    @freq.setter
+    def freq(self, freq):
+        self.handle.freq = freq
+        self.logger.info("requested freq %s, had %s", sci(freq, "Hz"), sci(self.handle.freq, "Hz"))
 
     def cmd_activity(self, value):
         if self.__activity_pin:

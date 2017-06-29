@@ -7,6 +7,9 @@ import struct
 
 __all__ = []
 
+class SocketClosed(Exception):
+    pass
+
 @model.Enumerator.register
 class Enumerator(model.Enumerator):
     def __init__(self):
@@ -84,12 +87,12 @@ class JtagInterface(jtag.Interface):
         return rsp
 
     @property
-    def speed(self):
+    def freq(self):
         return 1 / self.__tck_period
 
-    @speed.setter
-    def speed(self, speed):
-        tck_period = 1. / speed
+    @freq.setter
+    def freq(self, freq):
+        tck_period = 1. / freq
         rsp = self.send_command(4, b"settck:", struct.pack("<L", int(1e9 * tck_period)))
         tck_period_ns, = struct.unpack("<L", rsp)
         self.__tck_period = tck_period_ns * 1e-9

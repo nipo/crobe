@@ -202,15 +202,15 @@ class Chain(PortComponent):
             
     def reset(self):
         import time
-        speed_before = self.port.speed
-        self.port.speed = 1000000
+        freq_before = self.port.freq
+        self.port.freq = 1000000
         self.port.tap_reset()
         self.port.trst = True
         self.port.tap_reset()
         self.port.trst = False
         self.port.tap_reset()
         self.port.run(0)
-        self.port.speed = speed_before
+        self.port.freq = freq_before
 
     def swd_to_jtag(self):
         self.port.swd_to_jtag()
@@ -218,8 +218,8 @@ class Chain(PortComponent):
         self.port.run(50)
         
     def icepick_enable(self):
-        speed_before = self.port.speed
-        self.port.speed = 100000
+        freq_before = self.port.freq
+        self.port.freq = 100000
         time.sleep(.001)
         ops = [CaptureIr(), Shift(BitString(-1, 6)), Run(1), CaptureDr()]
         for lengths in [(0, 0, 1), (2, 9)]:
@@ -228,7 +228,7 @@ class Chain(PortComponent):
         ops += [CaptureIr(), Shift(BitString(-1, 16)), Run(0)]
         ops += [Run(5), CaptureIr(), Shift(BitString(0x4, 6)), Run(3)]
         self.port.execute(ops)
-        self.port.speed = speed_before
+        self.port.freq = freq_before
         self.discover([PartId(0, 0x17, 0x1ce)])
 
     def discover(self, forced_idcodes = []):

@@ -3,6 +3,7 @@ import logging
 import struct
 from ..bitstring import BitString
 from ..util.socket_server import *
+from ..util.pretty import sci
 
 class JtagHandler(object):
     STATE_RESET = 0
@@ -94,9 +95,9 @@ class JtagHandler(object):
 
         tdo = BitString()
         for op, off in tdo_parts:
-            tdo.enlarge(off)
+            tdo += BitString(0, off - len(tdo))
             tdo += op.tdo
-        tdo.enlarge(len(tdi))
+        tdo += BitString(0, len(tdi) - len(tdo))
 
         self.pending = []
 
@@ -141,13 +142,13 @@ class XvcdSession(SocketSession):
         ns, = struct.unpack("<L", self.read(4))
         period = 1e-9 * ns
         self.buffer = b""
-        self.jtag.interface.speed = 1 / period
-        logging.info("Setting speed to %d, had %d", int(1/period), int(self.jtag.interface.speed))
-        self.write(struct.pack("<L", int(1e9 / self.jtag.interface.speed)))
+        self.jtag.interface.freq = 1 / period
+        logging.info("Setting freq to %s, had %s", sci(1/period, "Hz"), sci(self.jtag.interface.freq, "Hz"))
+        self.write(struct.pack("<L", int(1e9 / self.jtag.interface.freq)))
 
 class XvcdServer(SocketServer):
     def __init__(self, port, interface):
-        SocketServer.__init__(port)
+        SocketServer.__init__(self, port)
         self.interface = interface
 
     def spawn(self, socket):
@@ -156,7 +157,7 @@ class XvcdServer(SocketServer):
 def main():
     from . import base
 
-    class Tool(base.Speed):
+    class Tool(base.Freq):
         forced_interface = "jtag"
         def c32_port_declare(self):
             self.parser.add_argument('--port', '-p', type = int, default = 2542,
@@ -169,7 +170,7 @@ def main():
 
     print("Adapter:", args.interface.port.firmware_info)
     print("Serial:", args.interface.port.serial_number)
-    print("Speed:", args.interface.speed)
+    print("Freq:", sci(args.interface.freq, "Hz"))
 
     try:
         args.interface.reset = False

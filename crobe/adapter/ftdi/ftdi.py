@@ -96,7 +96,7 @@ class Handle(Context):
         Context.__init__(self)
         self.__gpio_oe = gpio_oe
         self.__gpio_val = gpio_val
-        self.__speed = 1000000
+        self.__freq = 1e6
 
         self.check(api.set_interface(self.context, api.INTERFACE[interface]))
         self.check(api.usb_open_string(self.context, connection_id))
@@ -121,32 +121,32 @@ class Handle(Context):
                             api.MPSSE_LOOPBACK_DISABLE])
                      + self.cmd_gpio_mask_set(0xffff, gpio_oe, gpio_val))
 
-        self.speed = 1000000
+        self.freq = 1e6
         
     @property
     def last_gpio(self):
         return self.__gpio_oe & self.__gpio_val
         
     @property
-    def speed(self):
-        return self.__speed
+    def freq(self):
+        return self.__freq
 
-    @speed.setter
-    def speed(self, speed):
-        divisor = 120000000 / speed
+    @freq.setter
+    def freq(self, freq):
+        divisor = 120000000 / freq
         if divisor >= 65535:
             divisor /= 5
             d = min((max((int(divisor) - 1, 0)), 65535))
             self.execute(struct.pack("<BBH",
                                      api.MPSSE_CLK_DIV5_ENABLE,
                                      api.MPSSE_CLK_DIV, d))
-            self.__speed = 24000000 // (d + 1)
+            self.__freq = 24000000 // (d + 1)
         else:
             d = min((max((int(divisor) - 1, 0)), 65535))
             self.execute(struct.pack("<BBH",
                                      api.MPSSE_CLK_DIV5_DISABLE,
                                      api.MPSSE_CLK_DIV, int(divisor - 1)))
-            self.__speed = 120000000 // (d + 1)
+            self.__freq = 120000000 // (d + 1)
         
         
     EEPROM_VALUE_MAP = dict(
@@ -479,7 +479,7 @@ def main():
     mpsse = adapters[0].open()
 #    mpsse.gpio_mask_set(0xffff, 0x60eb, 0x00e8)
 #
-#    mpsse.speed = 1000
+#    mpsse.freq = 1000
 #    
 #    cmd = bytes([api.MPSSE_LOOPBACK_ENABLE])
 #    print("cmd", binascii.b2a_hex(cmd))

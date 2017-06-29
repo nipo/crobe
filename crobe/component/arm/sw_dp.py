@@ -103,7 +103,7 @@ class SwDp(dp.Dp):
         ap_read_pending = None
         select = 0
         select_dirty = True
-        speed = self.port.speed
+        freq = self.port.freq
         
         for o in operations:
             if isinstance(o, dp.Run):
@@ -146,7 +146,7 @@ class SwDp(dp.Dp):
                 else:
                     ops.append(self.port.cmd_write(True, (o.addr >> 2) & 3, o.data))
 
-            c = insert_run + int(math.ceil(o.interval * speed))
+            c = insert_run + int(math.ceil(o.interval * float(freq)))
             if c:
                 ops.append(self.port.cmd_run(c))
                     
