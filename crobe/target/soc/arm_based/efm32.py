@@ -1,72 +1,20 @@
 from ....part_id import PartId
-from .soc import SoC
+from .soc import SoC, StubFlash
 import binascii
 import struct
 from ....memory.region import *
 from .puppet_code import efm32_flash_erase, efm32_flash_write
 
-class EfmFlash(NandFlash):
-    def __init__(self, soc, name, base, size, page_size):
-        NandFlash.__init__(self, soc.buses[0], name, base, size, page_size)
-        self.soc = soc
+class EfmFlash(StubFlash):
+    RANGE_ERASE = efm32_flash_erase
+    PAGE_WRITE = efm32_flash_write
 
-    def clock_enable(self):
+    def prepare(self):
         self.soc.buses[0].u32_write(0x400c8084, 0x580e)
         self.soc.buses[0].u32_write(0x400c8020, 0x10)
         while not (self.soc.buses[0].u32_read(0x400c802c) & 0x20):
             pass
         self.soc.buses[0].u32_write(0x400c8084, 0)
-
-    def erase(self, addr, size):
-        self.clock_enable()
-        
-        puppet = self.soc.puppet()
-        code = puppet.stub(efm32_flash_erase)
-        code.call(addr, size, self.page_size)
-        self.logger.info("Done erasing 0x%08x-0x%08x...", addr, addr + size)
-
-    def write(self, program):
-        self.clock_enable()
-
-        puppet = self.soc.puppet()
-        code = puppet.stub(efm32_flash_write)
-
-        if False:
-            page_zone = puppet.allocate(self.page_size), puppet.allocate(self.page_size)
-
-            running = None
-            for i, page in enumerate(program.paged(self.page_size, fill = b'\xff')):
-                self.logger.info("Loading page at 0x%08x...", page.address)
-                z = page_zone[i % 2]
-
-                chunk = 256
-                for i in range(0, self.page_size, chunk):
-                    z.write(page.data[i:i+chunk], i)
-
-                if running is not None:
-                    self.logger.info("Done writing page at 0x%08x...", running)
-                    code.wait()
-                    running = None
-
-                code.prepare(page.address, z.address, self.page_size)
-                code.run()
-                running = page.address
-
-            if running:
-                code.wait()
-                self.logger.info("Done writing page at 0x%08x...", running)
-            puppet.unallocate(page_zone[0])
-            puppet.unallocate(page_zone[1])
-        else:
-            page_zone = puppet.allocate(self.page_size)
-            for i, page in enumerate(program.paged(self.page_size, fill = b'\xff')):
-                self.logger.info("Loading page at 0x%08x...", page.address)
-                chunk = 256
-                for i in range(0, self.page_size, chunk):
-                    page_zone.write(page.data[i:i+chunk], i)
-                code.call(page.address, page_zone.address, self.page_size)
-                self.logger.info("Done writing page at 0x%08x", page.address)
-            puppet.unallocate(page_zone)
 
 @SoC.db.register(PartId(6, 0x73, 0x1),
                  PartId(6, 0x73, 0x81),

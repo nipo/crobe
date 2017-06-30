@@ -7,11 +7,12 @@ from ....component.arm.cortex import Cortex
 from ....component.arm.sw_dp import SwDp
 from ....component.arm.jtag_dp import JtagDp
 from ....component.arm.mem_ap import MemAp
-from ....memory.region import Ram
+from ....component.nordic.ctrl_ap import CtrlAp
+from ....memory.region import Ram, NandFlash
 from ....puppet import Puppet
 from ....db import Db
 
-__all__ = ["SoC", 'ArmMPuppet']
+__all__ = ["SoC", 'ArmMPuppet', 'StubFlash']
 
 class PuppetStub:
     def __init__(self, puppet, code):
@@ -53,6 +54,71 @@ class ArmMPuppet(Puppet):
     def stub(self, code):
         return PuppetStub(self, code)
 
+class StubFlash(NandFlash):
+    def __init__(self, soc, name, base, size, page_size):
+        NandFlash.__init__(self, soc.buses[0], name, base, size, page_size)
+        self.soc = soc
+        self.__prepared = False
+
+    def _prepare(self):
+        if self.__prepared:
+            return
+        self.prepare()
+        self.__prepared = True
+
+    def prepare(self):
+        pass
+
+    def erase(self, addr, size):
+        self.prepare()
+        
+        puppet = self.soc.puppet()
+        code = puppet.stub(self.RANGE_ERASE)
+        code.call(addr, size, self.page_size)
+        self.logger.info("Done erasing 0x%08x-0x%08x...", addr, addr + size)
+
+    def write(self, program):
+        self.prepare()
+
+        puppet = self.soc.puppet()
+        code = puppet.stub(self.PAGE_WRITE)
+
+        if True:
+            page_zone = puppet.allocate(self.page_size, self.page_size), \
+                        puppet.allocate(self.page_size, self.page_size)
+
+            running = None
+            for i, page in enumerate(program.paged(self.page_size, fill = b'\xff')):
+                self.logger.info("Loading page at 0x%08x...", page.address)
+                z = page_zone[i % 2]
+
+                z.write(page.data)
+
+                if running is not None:
+                    self.logger.info("Done writing page at 0x%08x...", running)
+                    code.wait()
+                    running = None
+
+                code.prepare(page.address, z.address, self.page_size)
+                code.run()
+                running = page.address
+
+            if running:
+                code.wait()
+                self.logger.info("Done writing page at 0x%08x...", running)
+            puppet.unallocate(page_zone[0])
+            puppet.unallocate(page_zone[1])
+        else:
+            page_zone = puppet.allocate(self.page_size, self.page_size)
+            for i, page in enumerate(program.paged(self.page_size, fill = b'\xff')):
+                self.logger.info("Loading page at 0x%08x...", page.address)
+                chunk = 256
+                for i in range(0, self.page_size, chunk):
+                    page_zone.write(page.data[i:i+chunk], i)
+                code.call(page.address, page_zone.address, self.page_size)
+                self.logger.info("Done writing page at 0x%08x", page.address)
+            puppet.unallocate(page_zone)
+
 class SoC(model.SoC):
     db = Db()
 
@@ -68,6 +134,9 @@ class SoC(model.SoC):
                 self.child_add(Cortex.from_romtable(rt, idx))
                 idx += 1
 
+    def erase_all(self):
+        raise NotImplementedError()
+                
     def puppet(self):
         return ArmMPuppet(self)
                 

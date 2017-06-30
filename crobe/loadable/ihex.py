@@ -2,6 +2,7 @@
 # Public Domain
 
 import struct
+import binascii
 
 class IHex(object):
   @classmethod
@@ -45,7 +46,7 @@ class IHex(object):
 
   @classmethod
   def read_file(cls, fname):
-    f = open(fname, "r")
+    f = open(fname, "rb")
     ihex = cls.read(f)
     f.close()
     return ihex
@@ -70,7 +71,7 @@ class IHex(object):
       end = 0
       result = b""
       
-      for addr, data in self.areas.iteritems():
+      for addr, data in self.areas.items():
         if addr >= start:
           end = max(end, addr + len(data))
           result = result[:start] + data[start-addr:end-addr] + result[end:]
@@ -80,7 +81,7 @@ class IHex(object):
     else:
       result = b""
       
-      for addr, data in self.areas.iteritems():
+      for addr, data in self.areas.items():
         if addr >= start and addr < end:
           result = result[:start] + data[start-addr:end-addr] + result[end:]
       
@@ -93,7 +94,7 @@ class IHex(object):
     self.mode = mode
 
   def get_area(self, addr):
-    for start, data in self.areas.iteritems():
+    for start, data in self.areas.items():
       end = start + len(data)
       if addr >= start and addr <= end:
         return start
@@ -113,15 +114,14 @@ class IHex(object):
       self.areas[area] = data[:istart-area] + idata + data[iend-area:]
 
   def calc_checksum(self, bytes):
-    total = sum(map(ord, bytes))
-    return (-total) & 0xFF
+    return (-sum(bytes)) & 0xFF
 
   def parse_line(self, rawline):
-    if rawline[0] != ":":
+    if rawline[:1] != b":":
       raise ValueError("Invalid line start character (%r)" % rawline[0])
 
     try:
-      line = rawline[1:].decode("hex")
+      line = binascii.a2b_hex(rawline[1:])
     except:
       raise ValueError("Invalid hex data")
 
@@ -130,8 +130,7 @@ class IHex(object):
     dataend = length + 4
     data = line[4:dataend]
 
-    #~ print line[dataend:dataend + 2], repr(line)
-    cs1 = ord(line[dataend])
+    cs1 = line[dataend]
     cs2 = self.calc_checksum(line[:dataend])
 
     if cs1 != cs2:
@@ -143,13 +142,12 @@ class IHex(object):
     line = struct.pack(">BHB", len(data), addr, type)
     line += data
     line += chr(self.calc_checksum(line))
-    #~ return ":" + line.encode("hex")
-    return ":" + line.encode("hex").upper() + "\r\n"
+    return b":" + binascii.b2a_hex(line).upper() + b"\r\n"
 
   def write(self):
     output = ""
     
-    for start, data in sorted(self.areas.iteritems()):
+    for start, data in sorted(self.areas.items()):
       i = 0
       segbase = 0
 
@@ -194,6 +192,6 @@ class IHex(object):
     return output
 
   def write_file(self, fname):
-    f = open(fname, "w")
+    f = open(fname, "wb")
     f.write(self.write())
     f.close()

@@ -30,8 +30,10 @@ class Command:
             hook(args)
 
     def c00_verbose_declare(self):
-        self.parser.add_argument('--verbose', '-v', action='count', default = 0,
+        self.parser.add_argument('-v', action='count', default = 1,
                                  help = "Increase verbosity (Error -> Warning -> Info -> Debug)")
+        self.parser.add_argument('-q', action='count', default = 0,
+                                 help = "Decrease verbosity (Error <- Warning <- Info <- Debug)")
 
     def c00_verbose_parse(self, args):
         handler = logging.StreamHandler()
@@ -39,7 +41,7 @@ class Command:
         handler.setFormatter(formatter)
         root = logging.getLogger()
         root.addHandler(handler)
-        root.setLevel(10 * (5 - args.verbose))
+        root.setLevel(10 * (5 - args.v + args.q))
 
         root.info("Starting at %s", formatter.start)
 

@@ -24,13 +24,15 @@ class Zone(object):
         return self.range.size
         
     def write(self, blob, offset = 0):
-        assert offset + len(blob) <= self.size
+        if offset + len(blob) > self.size:
+            raise ValueError("Blob does not fit the zone")
         self.bus.mem_write(self.address + offset, blob)
 
     def read(self, size, offset = 0):
-        assert offset + size <= self.size
+        if offset + size > self.size:
+            raise ValueError("Addresses do not fit the zone")
         return self.bus.mem_read(self.address + offset, size)
-        
+
 class Puppet(Component):
     def __init__(self, cpu, ram,
                  pc_reg, sp_reg,
@@ -53,8 +55,8 @@ class Puppet(Component):
 
         self.logger.info("ready, trampoline at 0x%08x", self.trampoline.address)
         
-    def allocate(self, size):
-        return Zone(self.cpu.bus, self.ram_allocator.allocate(size))
+    def allocate(self, size, align = 1):
+        return Zone(self.cpu.bus, self.ram_allocator.allocate(size, align))
         
     def unallocate(self, zone):
         self.ram_allocator.free(zone.range)

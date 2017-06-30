@@ -13,12 +13,24 @@ class SoC(model.Target):
         model.Target.__init__(self, name)
         self.uid = 0
 
-    def load(self, program):
+    def load(self, program, erase = True):
         regions = self.children_of_class(region.Region)
         for r in regions:
             if not isinstance(r, region.Flash):
                 continue
 
             pages = program.within(r.address, r.address + r.size)
-            r.erase(pages.address, pages.end - pages.address)
+            if erase:
+                r.erase(pages.address, pages.end - pages.address)
             r.write(pages)
+
+    def verify(self, program):
+        regions = self.children_of_class(region.Region)
+        for r in regions:
+            if not isinstance(r, region.Flash):
+                continue
+
+            pages = program.within(r.address, r.address + r.size)
+            if not r.verify(pages):
+                return False
+        return True

@@ -54,22 +54,36 @@ class Allocator:
         self.__free = set([Range(address, size)])
         self.__used = set()
 
-    def allocate(self, size):
+    def allocate(self, size, align = 1):
         target = None
 
         for i, r in enumerate(self.__free):
-            if r.size >= size and (not target or target.size > r.size):
+            if r.address % align:
+                pre = -r.address % align
+            else:
+                pre = 0
+            if r.size >= size + pre and (not target or target.size > r.size):
                 target = r
 
         if not target:
             raise ValueError("No space left")
 
+        if target.address % align:
+            pre = -target.address % align
+        else:
+            pre = 0
+
         self.__free.remove(target)
+        if pre:
+            crumb, target = target.split(pre)
+            self.__free.add(crumb)
         ret, crumb = target.split(size)
         if crumb:
             self.__free.add(crumb)
         self.__used.add(ret)
 
+        assert ret.address % align == 0
+        
         return ret
 
     def free(self, r):

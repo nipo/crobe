@@ -2,56 +2,65 @@ typedef unsigned long uint32_t;
 typedef unsigned long uintptr_t;
 typedef unsigned long size_t;
 
-#define NVMC_READY       *((volatile uint32_t *)0x4001e400)
-#define NVMC_READY_BUSY  0
-#define NVMC_READY_READY 1
-#define NVMC_CONFIG      *((volatile uint32_t *)0x4001e504)
+struct nvmc_s {
+    volatile uint32_t  reserved0[256];
+    volatile uint32_t  ready;
+    volatile uint32_t  reserved1[64];
+    volatile uint32_t  config;
+    volatile uint32_t  erasepage;
+    volatile uint32_t  eraseall;
+    volatile uint32_t  eraseprotectedpage;
+    volatile uint32_t  eraseuicr;
+};
+
+#define NVMC_ADDR (void*)0x4001e000
+#define NVMC_READY 1
 #define NVMC_CONFIG_NONE 0
 #define NVMC_CONFIG_WEN  1
 #define NVMC_CONFIG_EEN  2
-#define NVMC_ERASEPAGE   *((volatile uint32_t *)0x4001e508)
-#define NVMC_ERASEUICR   *((volatile uint32_t *)0x4001e514)
-#define FICR_CODEPAGESIZE *((volatile uint32_t *)0x10000010)
 
-void flash_erase(uintptr_t addr, size_t size)
+void flash_erase(uintptr_t addr, size_t size, size_t page_size)
 {
-    size_t code_page_size = FICR_CODEPAGESIZE;
     uintptr_t end = addr + size;
+    struct nvmc_s *nvmc = NVMC_ADDR;
+    
+    addr = addr & (page_size - 1);
 
-    addr = addr & (code_page_size - 1);
-
-    NVMC_CONFIG = NVMC_CONFIG_EEN;
+    nvmc->config = NVMC_CONFIG_EEN;
 
     while (addr < end) {
-        while (!(NVMC_READY & NVMC_READY_READY))
+        while (!(nvmc->ready & NVMC_READY))
             ;
 
-        NVMC_ERASEPAGE = addr;
+        nvmc->erasepage = addr;
+        addr += page_size;
     }
 
-    while (!(NVMC_READY & NVMC_READY_READY))
+    while (!(nvmc->ready & NVMC_READY))
         ;
 
-    NVMC_CONFIG = NVMC_CONFIG_NONE;
+    nvmc->config = NVMC_CONFIG_NONE;
 }
 
 void flash_write(uintptr_t dest_, const void *src_, size_t bytes)
 {
     const uint32_t *src = src_;
-    uint32_t *dst = (void *)dest_;
+    volatile uint32_t *dst = (void *)dest_;
     size_t words = bytes / 4;
+    size_t i;
+    struct nvmc_s *nvmc = NVMC_ADDR;
 
-    NVMC_CONFIG = NVMC_CONFIG_WEN;
+    nvmc->config = NVMC_CONFIG_WEN;
     
-    while (words) {
-        while (!(NVMC_READY & NVMC_READY_READY))
+    for (i = 0; i < words; ++i) {
+        while (!(nvmc->ready & NVMC_READY))
             ;
-        *dst++ = *src++;
-        words--;
+        
+        dst[i] = src[i];
     }
 
-    while (!(NVMC_READY & NVMC_READY_READY))
+    while (!(nvmc->ready & NVMC_READY))
         ;
 
-    NVMC_CONFIG = NVMC_CONFIG_NONE;
+    nvmc->config = NVMC_CONFIG_NONE;
 }

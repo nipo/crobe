@@ -140,8 +140,10 @@ class MemAp(ap.Ap, model.Bus):
                 operations.append(self.cmd_write(reg, t.data << ((t.address & 3) * 8),
                                                  t.interval))
                 
-            if (csw & 0x030) >> 4 == 1 and reg == MemAp.DRW:
+            if (csw & 0x030) == 0x010 and reg == MemAp.DRW:
                 address += 1 << t.size_l2
+                if address & self.wrap_mask == 0:
+                    address_dirty = True
 
         #self.logger.debug("-> translated to %s", operations)
                 

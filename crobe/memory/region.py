@@ -52,6 +52,19 @@ class Flash(Region):
     def flash(self, program):
         raise NotImplementedError()
 
+    def verify(self, program):
+        for s in program.paged(self.page_size):
+            self.logger.info("Checking range 0x%08x-0x%08x", s.address, s.address + len(s))
+            flash_data = self.bus.mem_read(s.address, len(s))
+            diffs = 0
+            for orig, found in zip(s.data, flash_data):
+                diffs += int(orig != found)
+
+            if diffs:
+                self.logger.error("Comparison for %s failed: %d/%d bytes differ", s, diffs, len(s))
+                return False
+        return True
+    
     def __str__(self):
         return Region.__str__(self) + ", %dB pages" % self.page_size
 

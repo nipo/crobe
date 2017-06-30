@@ -73,8 +73,8 @@ class JLinkInterface(object):
 
     @freq.setter
     def freq(self, freq):
-        self.logger.info("freq", sci(freq, 'Hz'))
         self.handle.speed = float(freq) / 1000.
+        self.logger.info("Frequency requested %s, had %s", sci(freq, 'Hz'), sci(self.freq, 'Hz'))
 
     @property
     def reset(self):
@@ -256,7 +256,7 @@ class JtagInterface(JLinkInterface, jtag.Interface):
                 tdo += op.tdo
             o.tdo = tdo
 
-class SwdInterface(swd.Interface, JLinkInterface):
+class SwdInterface(JLinkInterface, swd.Interface):
     def __init__(self, port):
         swd.Interface.__init__(self, port)
         JLinkInterface.__init__(self, port, "SWD")

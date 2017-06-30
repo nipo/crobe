@@ -1,104 +1,21 @@
 from ....part_id import PartId
-from .soc import SoC
+from .soc import SoC, StubFlash
 from ....component.nordic.ctrl_ap import CtrlAp
+from ....component.model import Cpu
 from ....memory.region import *
 import binascii
 import math
 import struct
 from .puppet_code import nrf51_flash_erase, nrf51_flash_write
+import time
 
-class nRFFlash(NandFlash):
-    NVMC_READY       = 0x4001e400
-    NVMC_READY_BUSY  = 0
-    NVMC_READY_READY = 1
-    NVMC_CONFIG      = 0x4001e504
-    NVMC_CONFIG_NONE = 0
-    NVMC_CONFIG_WEN  = 1
-    NVMC_CONFIG_EEN  = 2
-    NVMC_ERASEPAGE   = 0x4001e508
-    NVMC_ERASEUICR   = 0x4001e514
+class CodeFlash(StubFlash):
+    RANGE_ERASE = nrf51_flash_erase
+    PAGE_WRITE = nrf51_flash_write
 
-    def __init__(self, soc, base, size, page_size):
-        NandFlash.__init__(self, soc.buses[0], "code", base, size, page_size)
-        self.soc = soc
-    
-    def write_direct(self, program):
-        self.bus.u32_write(self.NVMC_CONFIG, self.NVMC_CONFIG_WEN)
-
-        for page in program.paged(self.page_size, fill = b'\xff'):
-            if not (self.address <= page.address < self.address + self.size):
-                continue
-
-            self.soc.logger.info("Writing flash 0x%08x-0x%08x", page.address, page.address + len(page))
-
-            while not (self.bus.u32_read(self.NVMC_READY) & self.NVMC_READY_READY):
-                pass
-
-            self.bus.mem_write(page.address, page.data, 5e-6)
-
-        while not (self.bus.u32_read(self.NVMC_READY) & self.NVMC_READY_READY):
-            pass
-        self.bus.u32_write(self.NVMC_CONFIG, self.NVMC_CONFIG_NONE)
-
-    def write_puppet(self, program):
-        puppet = self.soc.puppet()
-        code_zone = puppet.allocate(len(nrf51_flash_write))
-        page_zone = puppet.allocate(self.page_size), puppet.allocate(self.page_size)
-        code_zone.write(nrf51_flash_write)
-
-        running = None
-        for i, page in enumerate(program.paged(self.page_size, fill = b'\xff')):
-            self.logger.info("Loading page at 0x%08x...", page.address)
-            z = page_zone[i % 2]
-
-            chunk = 256
-            for i in range(0, self.page_size, chunk):
-                z.write(page.data[i:i+chunk], i)
-
-            if running is not None:
-                self.logger.info("Done writing page at 0x%08x...", running)
-                puppet.wait()
-                running = None
-
-            puppet.prepare(code_zone.address, page.address, z.address, self.page_size)
-            puppet.run()
-            running = page.address
-
-        if running:
-            puppet.wait()
-            self.logger.info("Done writing page at 0x%08x...", running)
-
-        puppet.unallocate(code_zone)
-        puppet.unallocate(page_zone[0])
-        puppet.unallocate(page_zone[1])
-
-    def write(self, program):
-        self.write_puppet(program)
-        
-class CodeFlash(nRFFlash):
-    def __init__(self, soc, size, page_size):
-        nRFFlash.__init__(self, soc, 0, size, page_size)
-
-    def erase(self, address, size):
-        aligned_address = address & ~(self.page_size - 1)
-        end = address + size
-        aligned_end = ((end | (self.page_size - 1)) + 1) if (end & (self.page_size - 1)) else end
-
-        self.bus.u32_write(self.NVMC_CONFIG, self.NVMC_CONFIG_EEN)
-        for page in range(aligned_address, aligned_end, self.page_size):
-            self.soc.logger.info("Erasing page at 0x%08x", page)
-            while not (self.bus.u32_read(self.NVMC_READY) & self.NVMC_READY_READY):
-                pass
-            self.bus.u32_write(self.NVMC_ERASEPAGE, page)
-        while not (self.bus.u32_read(self.NVMC_READY) & self.NVMC_READY_READY):
-            pass
-        self.bus.u32_write(self.NVMC_CONFIG, self.NVMC_CONFIG_NONE)
-
-class UicrFlash(nRFFlash):
+class UicrFlash(StubFlash):
+    PAGE_WRITE = nrf51_flash_write
     UICR_ADDRESS = 0x10001000
-
-    def __init__(self, soc, size, page_size):
-        nRFFlash.__init__(self, soc, self.UICR_ADDRESS, size, page_size)
 
     def erase(self, address, size):
         if not (address <= self.UICR_ADDRESS < address + size):
@@ -106,14 +23,13 @@ class UicrFlash(nRFFlash):
 
         self.soc.logger.info("Erasing UICR")
         
-        self.bus.u32_write(self.NVMC_CONFIG, self.NVMC_CONFIG_EEN)
-        while not (self.bus.u32_read(self.NVMC_READY) & self.NVMC_READY_READY):
+        self.bus.u32_write(nRF5.NVMC_CONFIG, nRF5.NVMC_CONFIG_EEN)
+        while not (self.bus.u32_read(nRF5.NVMC_READY) & nRF5.NVMC_READY_READY):
             pass
-        self.bus.u32_write(self.NVMC_ERASEUICR, 1)
-        while not (self.bus.u32_read(self.NVMC_READY) & self.NVMC_READY_READY):
+        self.bus.u32_write(nRF5.NVMC_ERASEUICR, 1)
+        while not (self.bus.u32_read(nRF5.NVMC_READY) & nRF5.NVMC_READY_READY):
             pass
-        self.bus.u32_write(self.NVMC_CONFIG, self.NVMC_CONFIG_NONE)
-            
+        self.bus.u32_write(nRF5.NVMC_CONFIG, nRF5.NVMC_CONFIG_REN)
         
 class nRF5(SoC):
     def __init__(self, name, dp):
@@ -143,11 +59,22 @@ class nRF5(SoC):
         page_size = self.buses[0].u32_read(self.FICR_CODEPAGESIZE)
         code_size = self.buses[0].u32_read(self.FICR_CODESIZE)
 
-        self.child_add(CodeFlash(self, page_size * code_size, page_size))
-        self.child_add(UicrFlash(self, page_size, page_size))
+        self.child_add(CodeFlash(self, "code", 0, page_size * code_size, page_size))
+        self.child_add(UicrFlash(self, "uicr", self.UICR_BASE, page_size, page_size))
+
+    def erase_all(self):
+        bus = self.buses[0]
+        bus.u32_write(self.NVMC_CONFIG, self.NVMC_CONFIG_EEN)
+        while not (bus.u32_read(self.NVMC_READY) & self.NVMC_READY_READY):
+            pass
+        bus.u32_write(self.NVMC_ERASEALL, 1)
+        while not (bus.u32_read(self.NVMC_READY) & self.NVMC_READY_READY):
+            pass
+        bus.u32_write(self.NVMC_CONFIG, self.NVMC_CONFIG_REN)
 
     NVMC_BASE = 0x4001e000
     NVMC_READY = NVMC_BASE + 0x400
+    NVMC_READY_READY = 1
     NVMC_CONFIG = NVMC_BASE + 0x504
     NVMC_CONFIG_EEN = 2
     NVMC_CONFIG_WEN = 1
@@ -184,11 +111,21 @@ def nrf51x22(dp):
     return nRF51("nRF51x22", dp)
 
 class nRF52(nRF5):
+    def __init__(self, name, dp):
+        nRF5.__init__(self, name, dp)
+
+        self.ctrl_ap, = dp.children_of_class(CtrlAp)
+
     def ram_probe(self):
         ram_kb = self.buses[0].u32_read(self.FICR_PARTINFO + 0xc)
 
         self.child_add(Ram(self.buses[0], "ram", 0x20000000, ram_kb * 1024))
 
+    def erase_all(self):
+        cpu, = self.children_of_class(Cpu)
+        self.ctrl_ap.erase_all()
+        cpu.reset()
+        
 @SoC.db.register(PartId(2, 0x44, 6))
 def nrf52832(dp):
     return nRF52("nRF52832", dp)
