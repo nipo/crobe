@@ -1,7 +1,30 @@
 from ...adapter.jlink import JLinkInterface
 import struct
+import binascii
+import time
+import threading
 
 __all__ = ["EfmStk"]
+
+class EnergyMonitorThread(threading.Thread):
+    def __init__(self, stk, callback):
+        threading.Thread.__init__(self, name = "EFM32 Energy Monitor")
+        self.stk = stk
+        self.callback = callback
+        self.done = False
+
+    def run(self):
+        while not self.done:
+            ret = self.stk.energy_monitor_data_get()
+            if ret is None:
+                continue
+            self.callback(*ret)
+
+    def stop(self):
+        self.done = True
+            
+    def join(self):
+        threading.Thread.join(self)
 
 class EfmStk(object):
     def __init__(self, jlink_intf):
@@ -71,3 +94,22 @@ class EfmStk(object):
     COMMAND_SET_DEBUG_MODE = 0x303
 
     COM_CHANNEL_COMMANDS = 0x10000
+    COM_CHANNEL_ENERGY_MONITOR = 0x10001
+    COM_CHANNEL_ENERGY_MONITOR_FAST = 0x10002
+
+    def energy_monitor(self, callable):
+        t = EnergyMonitorThread(self, callable)
+        t.start()
+        return t
+    
+    def energy_monitor_data_get(self):
+        blob = self.interface.emucom_read(self.COM_CHANNEL_ENERGY_MONITOR_FAST, 2048)
+
+        if not any(blob[96:]):
+            self.logger.info("Calibrating...")
+            return
+
+        voltage, = struct.unpack("<f", blob[64:68])
+        count = (len(blob) - 96) // 4
+        currents = struct.unpack("<" + "f" * count, blob[96:])
+        return voltage, [(ma * 1e-3 if ma > 0. else 0.) for ma in currents]
