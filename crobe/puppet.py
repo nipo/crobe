@@ -3,6 +3,7 @@ from .component.model import Cpu, Register
 from .loadable.object import Program, Segment
 from .util.allocator import Allocator
 import time
+import binascii
 import struct
 
 class Zone(object):
@@ -32,7 +33,7 @@ class Zone(object):
         
 class Puppet(Component):
     def __init__(self, cpu, ram,
-                 pc_reg, sp_reg, lr_reg,
+                 pc_reg, sp_reg,
                  arg_regs, trampoline_code,
                  stack_size = 1024, stack_direction = -1):
         Component.__init__(self, "puppet")
@@ -41,17 +42,16 @@ class Puppet(Component):
         self.ram_allocator = Allocator(ram.address, ram.size)
         self.pc_reg = pc_reg
         self.sp_reg = sp_reg
-        self.lr_reg = lr_reg
         self.arg_regs = arg_regs
         self.stack = self.allocate(stack_size)
         if stack_direction < 0:
-            self.stack_init = self.stack.end
+            self.stack_init = self.stack.end - 8
         else:
             self.stack_init = self.stack.address
         self.trampoline = self.allocate(len(trampoline_code) + 4)
         self.trampoline_code = trampoline_code
 
-        self.logger.info("ready")
+        self.logger.info("ready, trampoline at 0x%08x", self.trampoline.address)
         
     def allocate(self, size):
         return Zone(self.cpu.bus, self.ram_allocator.allocate(size))
@@ -60,8 +60,6 @@ class Puppet(Component):
         self.ram_allocator.free(zone.range)
 
     def prepare(self, pc, *args):
-        #self.logger.debug("CPU State: %s", self.cpu.state)
-
         assert self.cpu.state != self.cpu.State.RUN
         assert len(args) <= len(self.arg_regs)
 
@@ -73,46 +71,36 @@ class Puppet(Component):
         for r, v in zip(self.arg_regs, args):
             regs[r] = v
 
-        self.trampoline.write(self.trampoline_code + struct.pack("<L", pc))
-
-        #for r, v in sorted(regs.items()):
-            #self.logger.debug("Setting %s: 0x%08x", r.name, v)
-
+        tc = self.trampoline_code + struct.pack("<L", pc)
+        self.trampoline.write(tc)
         self.cpu.reg_write(regs)
-
-        self.logger.debug("Running code trampoline at 0x%08x, target PC 0x%08x", self.trampoline.address, pc)
-        #self.logger.debug("Registers before run:")
-
-        #regs = self.cpu.reg_read(self.cpu.registers)
-        #for r, v in sorted(regs.items()):
-            #self.logger.debug(" %s: 0x%08x", r.name, v)
 
     def run(self):
         self.cpu.resume(allow_interrupts = False)
-        #self.logger.debug("CPU State: %s", self.cpu.state)
 
     def step(self):
         self.cpu.step()
-        #poll_regs = [self.pc_reg, self.lr_reg, self.sp_reg] + self.arg_regs
-        #regs = self.cpu.reg_read(poll_regs)
-        #self.logger.debug(", ".join(["%s: 0x%08x" % (r.name, value) for (r, value) in sorted(regs.items())]))
         
     def wait(self, interval = .01):
-        #self.logger.debug("Waiting for CPU to stop...")
-
-        #poll_regs = [self.pc_reg, self.lr_reg, self.sp_reg] + self.arg_regs
-
         tries = 20
         while self.cpu.state == self.cpu.State.RUN and tries:
-            #regs = self.cpu.reg_read(poll_regs)
-            #self.logger.debug(", ".join(["%s: 0x%08x" % (r.name, value) for (r, value) in sorted(regs.items())]))
             time.sleep(interval)
             tries -= 1
 
-        self.cpu.halt()
+        self.logger.debug("state %s reason %s", self.cpu.state, self.cpu.halt_cause)
 
-        #self.logger.debug("Done, registers after run:")
+        if self.cpu.state == self.cpu.State.RUN:
+            self.cpu.halt()
+            self.logger.warning("Forced stop of target")
+
         #regs = self.cpu.reg_read(self.cpu.registers)
         #for r, v in sorted(regs.items()):
-            #self.logger.debug(" %s: 0x%08x", r.name, v)
-        
+        #    self.logger.info("After stop %s: 0x%08x", r.name, v)
+            
+    def call(self, pc, *args):
+        self.prepare(pc, *args)
+        self.run()
+        self.wait()
+        r0 = self.arg_regs[0]
+        return self.cpu.reg_read([r0])[r0]
+

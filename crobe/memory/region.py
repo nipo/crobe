@@ -51,7 +51,10 @@ class Flash(Region):
 
     def flash(self, program):
         raise NotImplementedError()
-        
+
+    def __str__(self):
+        return Region.__str__(self) + ", %dB pages" % self.page_size
+
 class NandFlash(Flash):
     flags = Flash.flags | set([Flag.ERASE_ONE])
 
