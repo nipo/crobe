@@ -13,6 +13,31 @@ from ....db import Db
 
 __all__ = ["SoC", 'ArmMPuppet']
 
+class PuppetStub:
+    def __init__(self, puppet, code):
+        self.puppet = puppet
+        self.code = code
+        self.zone = self.puppet.allocate(len(code))
+
+    def call(self, *args):
+        self.zone.write(self.code)
+        return self.puppet.call(self.zone.address + 1, *args)
+
+    def prepare(self, *args):
+        self.zone.write(self.code)
+        return self.puppet.prepare(self.zone.address + 1, *args)
+
+    def run(self):
+        return self.puppet.run()
+
+    def wait(self):
+        self.puppet.wait()
+        r0 = self.puppet.arg_regs[0]
+        return self.puppet.cpu.reg_read([r0])[r0]
+
+    def __del__(self):
+        self.puppet.unallocate(self.zone)
+    
 class ArmMPuppet(Puppet):
     def __init__(self, soc):
         cpu = soc.children_of_class(Cortex)[0]
@@ -20,18 +45,13 @@ class ArmMPuppet(Puppet):
 
         Puppet.__init__(self, cpu, ram,
                         pc_reg = cpu.registers[15],
-                        lr_reg = cpu.registers[14],
                         sp_reg = cpu.registers[13],
                         arg_regs = cpu.registers[:4],
-                        trampoline_code = b'\x10\xb5\x01L\xa0\x47\xbe\xbe',
+                        trampoline_code = b'\x01L\xa0\x47\xbe\xbe\xbe\xbe',
         )
 
-    def call(self, pc, *args):
-        self.prepare(pc, *args)
-        self.run()
-        self.wait()
-        r0 = self.arg_regs[0]
-        return self.cpu.reg_read([r0])[r0]
+    def stub(self, code):
+        return PuppetStub(self, code)
 
 class SoC(model.SoC):
     db = Db()

@@ -3,10 +3,75 @@ from .soc import SoC
 import binascii
 import struct
 from ....memory.region import *
+from .puppet_code import efm32_flash_erase, efm32_flash_write
+
+class EfmFlash(NandFlash):
+    def __init__(self, soc, name, base, size, page_size):
+        NandFlash.__init__(self, soc.buses[0], name, base, size, page_size)
+        self.soc = soc
+
+    def clock_enable(self):
+        self.soc.buses[0].u32_write(0x400c8084, 0x580e)
+        self.soc.buses[0].u32_write(0x400c8020, 0x10)
+        while not (self.soc.buses[0].u32_read(0x400c802c) & 0x20):
+            pass
+        self.soc.buses[0].u32_write(0x400c8084, 0)
+
+    def erase(self, addr, size):
+        self.clock_enable()
+        
+        puppet = self.soc.puppet()
+        code = puppet.stub(efm32_flash_erase)
+        code.call(addr, size, self.page_size)
+        self.logger.info("Done erasing 0x%08x-0x%08x...", addr, addr + size)
+
+    def write(self, program):
+        self.clock_enable()
+
+        puppet = self.soc.puppet()
+        code = puppet.stub(efm32_flash_write)
+
+        if False:
+            page_zone = puppet.allocate(self.page_size), puppet.allocate(self.page_size)
+
+            running = None
+            for i, page in enumerate(program.paged(self.page_size, fill = b'\xff')):
+                self.logger.info("Loading page at 0x%08x...", page.address)
+                z = page_zone[i % 2]
+
+                chunk = 256
+                for i in range(0, self.page_size, chunk):
+                    z.write(page.data[i:i+chunk], i)
+
+                if running is not None:
+                    self.logger.info("Done writing page at 0x%08x...", running)
+                    code.wait()
+                    running = None
+
+                code.prepare(page.address, z.address, self.page_size)
+                code.run()
+                running = page.address
+
+            if running:
+                code.wait()
+                self.logger.info("Done writing page at 0x%08x...", running)
+            puppet.unallocate(page_zone[0])
+            puppet.unallocate(page_zone[1])
+        else:
+            page_zone = puppet.allocate(self.page_size)
+            for i, page in enumerate(program.paged(self.page_size, fill = b'\xff')):
+                self.logger.info("Loading page at 0x%08x...", page.address)
+                chunk = 256
+                for i in range(0, self.page_size, chunk):
+                    page_zone.write(page.data[i:i+chunk], i)
+                code.call(page.address, page_zone.address, self.page_size)
+                self.logger.info("Done writing page at 0x%08x", page.address)
+            puppet.unallocate(page_zone)
 
 @SoC.db.register(PartId(6, 0x73, 0x1),
                  PartId(6, 0x73, 0x81),
                  PartId(6, 0x73, 0x82),
+                 PartId(6, 0x73, 0xc1),
                  PartId(6, 0x73, 0xc9),
                  PartId(6, 0x73, 0x101),
                  PartId(6, 0x73, 0x901))
@@ -25,9 +90,9 @@ class Gecko(SoC):
 
     def device_identify(self):
         self.uid, = struct.unpack("<Q", self.buses[0].mem_read(self.DI_UNIQUE, 8))
-        pack_info = self.buses[0].u32_read(self.DI_PART_INFO)
-        mem_info = self.buses[0].u32_read(self.DI_MEM_INFO)
         part_info = self.buses[0].u32_read(self.DI_PART_INFO)
+        mem_info = self.buses[0].u32_read(self.DI_MEM_INFO)
+        pack_info = self.buses[0].u32_read(self.DI_PACKAGE_INFO)
 
         prod_ref = (part_info >> 24) & 0xff
         family = (part_info >> 16) & 0xff
@@ -37,10 +102,12 @@ class Gecko(SoC):
 
         name = self.PART_NAMES.get(family, "EFM32[%d]" % family) + str(dev_number) + "F" + str(flash_size)
 
+        self.logger.info("DI_PART_INFO: %08x", part_info)
+        
         flash_page_size = 2 ** (((pack_info >> 24) + 10) & 0xff)
 
-        self.child_add(NandFlash(self.buses[0], "code", 0, flash_size * 1024, flash_page_size))
-        self.child_add(Ram(self.buses[0], "ram", 0, ram_size * 1024))
+        self.child_add(EfmFlash(self, "code", 0, flash_size * 1024, flash_page_size))
+        self.child_add(Ram(self.buses[0], "ram", 0x20000000, ram_size * 1024))
 
         self.name = name
         
@@ -58,7 +125,7 @@ class Gecko(SoC):
         72: "EFM32GG",
         73: "EFM32TG",
         74: "EFM32LG",
-        75: "EFM32XG",
+        75: "EFM32WG",
         76: "EFM32ZG",
         77: "EFM32HG",
         81: "EFM32PG1B",

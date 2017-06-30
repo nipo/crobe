@@ -5,11 +5,7 @@ from ....memory.region import *
 import binascii
 import math
 import struct
-
-flash_write_code = binascii.a2b_hex(b'f0b501240b1ca4460b4d0c4f92082c60'+
-                                    b'0a4e002a09d064463e682642fbd01c68'+
-                                    b'5e1a3450013a0433f2e7012332681a42'+
-                                    b'fcd000232b60f0bd04e5014000e40140')
+from .puppet_code import nrf51_flash_erase, nrf51_flash_write
 
 class nRFFlash(NandFlash):
     NVMC_READY       = 0x4001e400
@@ -46,9 +42,9 @@ class nRFFlash(NandFlash):
 
     def write_puppet(self, program):
         puppet = self.soc.puppet()
-        code_zone = puppet.allocate(len(flash_write_code))
+        code_zone = puppet.allocate(len(nrf51_flash_write))
         page_zone = puppet.allocate(self.page_size), puppet.allocate(self.page_size)
-        code_zone.write(flash_write_code)
+        code_zone.write(nrf51_flash_write)
 
         running = None
         for i, page in enumerate(program.paged(self.page_size, fill = b'\xff')):
