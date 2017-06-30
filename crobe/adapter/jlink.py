@@ -94,6 +94,12 @@ class JLinkInterface(object):
         self.logger.info("%s target power", ["disabling", "enabling"][int(power)])
         self.handle.power = power
 
+    def emucom_read(self, channel, size):
+        return self.handle.emucom_read(channel, size)
+
+    def emucom_write(self, channel, data):
+        return self.handle.emucom_write(channel, data)
+    
 class JtagInterface(JLinkInterface, jtag.Interface):
     def __init__(self, port):
         JLinkInterface.__init__(self, port, "JTAG")
