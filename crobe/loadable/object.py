@@ -153,7 +153,7 @@ class Program:
             lma = seg["p_paddr"]
             vma = seg["p_vaddr"]
 
-            for secno in range(elf.num_segments()):
+            for secno in range(elf.num_sections()):
                 section = elf.get_section(secno)
 
                 if not seg.section_in_segment(section):
