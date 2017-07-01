@@ -1,6 +1,4 @@
-typedef unsigned long uint32_t;
-typedef unsigned long uintptr_t;
-typedef unsigned long size_t;
+#include "common.h"
 
 #define MSC (struct msc_s*)0x400c0000
 
@@ -73,9 +71,16 @@ void flash_write(uintptr_t dst, const void *src_, size_t bytes)
     msc->lock = LOCK_KEY;
     msc->writectrl = WRITECTRL_WREN;
 
+#ifndef GECKO
+    msc->addrb = dst;
+    msc->writecmd = WRITECMD_LADDRIM;
+#endif
+    
     for (i = 0; i < words; ++i) {
+#ifdef GECKO
         msc->addrb = dst + i * 4;
         msc->writecmd = WRITECMD_LADDRIM;
+#endif
 
         while (!(msc->status & STATUS_WDATAREADY))
             ;

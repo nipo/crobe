@@ -139,6 +139,28 @@ class SoC(model.SoC):
                 
     def puppet(self):
         return ArmMPuppet(self)
+
+    def ram_size_probe(self, address, size):
+        import random
+
+        begin = 0
+        end = size
+
+        while end - begin >= 1024:
+            token = random.randint(0, 1<<32)
+            target = ((begin + end) // 2) & ~0x3ff
+            try:
+                self.buses[0].u32_write(address + target, token)
+                rb = self.buses[0].u32_read(address + target)
+            except Exception as e:
+                rb = ~token
+
+            if rb == token:
+                begin = target + 1024
+            else:
+                end = target
+
+        return begin
                 
 @SoC.db.register_default
 def default_soc(ap):

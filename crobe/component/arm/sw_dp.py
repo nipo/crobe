@@ -95,6 +95,7 @@ class SwDp(dp.Dp):
                     #self.logger.warning("Delaying subsequent operations by %d", insert_run)
                     break
 
+                self.abort()
                 raise dp.DpAccessFailure(o)
 
     def lower(self, operations, insert_run = 0):

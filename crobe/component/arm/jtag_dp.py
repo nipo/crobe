@@ -113,6 +113,7 @@ class JtagDp(dp.Dp):
                     self.logger.info("Delaying subsequent operations by %d", insert_run)
                     break
 
+                self.abort()
                 raise dp.DpAccessFailure("Invalid ACK")
 
     def lower(self, operations, insert_run = 0):

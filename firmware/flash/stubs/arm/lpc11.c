@@ -1,3 +1,4 @@
+#include "common.h"
 
 #define IAP_LOCATION 0x1fff1ff1
 

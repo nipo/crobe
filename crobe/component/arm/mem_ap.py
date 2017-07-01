@@ -1,5 +1,5 @@
 from ...part_id import PartId
-from . import ap
+from . import ap, dp
 from ... import bitfield
 from .. import model
 import struct
@@ -146,7 +146,7 @@ class MemAp(ap.Ap, model.Bus):
                     address_dirty = True
 
         #self.logger.debug("-> translated to %s", operations)
-                
+
         self.port.execute(operations)
 
         for t in transfers:

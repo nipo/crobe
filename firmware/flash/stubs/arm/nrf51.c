@@ -1,6 +1,4 @@
-typedef unsigned long uint32_t;
-typedef unsigned long uintptr_t;
-typedef unsigned long size_t;
+#include "common.h"
 
 struct nvmc_s {
     volatile uint32_t  reserved0[256];

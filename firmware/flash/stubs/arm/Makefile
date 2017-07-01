@@ -1,4 +1,4 @@
-targets = efm32 nrf51 iap
+targets = efm32 efm32g nrf51 lpc11 stm32f1
 arm-prefix = arm-mutekh-eabi-
 
 efm32-src = efm32.c
@@ -11,15 +11,20 @@ efm32g-sections = flash_erase flash_write
 efm32g-cflags = -mcpu=cortex-m0 -mthumb -Os -fPIC -DGECKO
 efm32g-arch = arm
 
+stm32f1-src = stm32f1.c
+stm32f1-sections = flash_erase flash_write
+stm32f1-cflags = -mcpu=cortex-m3 -mthumb -Os -fPIC
+stm32f1-arch = arm
+
 nrf51-src = nrf51.c
 nrf51-sections = flash_erase flash_write
 nrf51-cflags = -mcpu=cortex-m0 -mthumb -Os -fPIC
 nrf51-arch = arm
 
-iap-src = iap.c
-iap-sections = iap_call
-iap-cflags = -mcpu=cortex-m0 -mthumb -Os -fPIC
-iap-arch = arm
+lpc11-src = lpc11.c
+lpc11-sections = iap_call
+lpc11-cflags = -mcpu=cortex-m0 -mthumb -Os -fPIC
+lpc11-arch = arm
 
 target = ../../../../crobe/target/soc/arm_based/puppet_code.py
 
@@ -38,15 +43,15 @@ clean-files = code.py
 
 define section_expand
 
-$1-$2.py: $1.o
-	> $$@
-	echo -n "$1_$2 = b'" >> $$@
-	$($($1-arch)-prefix)objcopy $$< -j .text.$2 -O binary /dev/stdout \
-	| hexdump -v -e '/1 "_x%02x"' | tr _ "\\" >> $$@
-	echo "'" >> $$@
+$1-$2.bin: $1.o
+	$($($1-arch)-prefix)objcopy $$< -j .text.$2 -O binary $$@
+
+$1-$2.py: $1-$2.bin dump_code.py
+	python3 dump_code.py $1_$2 $$< > $$@
 
 all: $1-$2.py
 
+clean-files += $1-$2.bin
 clean-files += $1-$2.py
 code-files += $1-$2.py
 
@@ -55,7 +60,7 @@ endef
 define target_expand
 
 $1.o: $($1-src) $(MAKEFILE_LIST)
-	$($($1-arch)-prefix)gcc -c -o $$@ $$< $($(1)-cflags) -ffunction-sections
+	$($($1-arch)-prefix)gcc -c -o $$@ $$< $($(1)-cflags) -std=c99 -ffunction-sections
 
 clean-files += $1.o
 
