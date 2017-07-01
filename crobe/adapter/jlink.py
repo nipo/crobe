@@ -1,4 +1,5 @@
 from . import model
+from collections import deque
 from .protocol import swd, jtag, base
 from .. import bitstring
 from ..util.pretty import sci
@@ -108,8 +109,8 @@ class JtagInterface(JLinkInterface, jtag.Interface):
         self.__state = None
 
     def _execute(self, operation_list):
-        to_join = []
-        ops = []
+        to_join = deque()
+        ops = deque()
 
         max_shift_bits = 4096*8
         
@@ -137,10 +138,10 @@ class JtagInterface(JLinkInterface, jtag.Interface):
         while ops:
             tdi_buf = bitstring.BitString()
             tms_buf = bitstring.BitString()
-            pending = []
+            pending = deque()
 
             while ops and len(tms_buf) < 4032:
-                op = ops.pop(0)
+                op = ops.popleft()
                 pending.append(op)
 
                 if isinstance(op, jtag.CaptureDr):
@@ -258,99 +259,130 @@ class JtagInterface(JLinkInterface, jtag.Interface):
 
 class SwdInterface(JLinkInterface, swd.Interface):
     def __init__(self, port):
+        self.__turnaround_cycles = None
+        self.__commands = {}
         swd.Interface.__init__(self, port)
         JLinkInterface.__init__(self, port, "SWD")
 
+    @property
+    def turnaround_cycles(self):
+        return self.__turnaround_cycles
+
+    @turnaround_cycles.setter
+    def turnaround_cycles(self, cycles):
+        self.__turnaround_cycles = cycles
+        for ap in (0, 1):
+            for addr in range(4):
+                # Read
+                #      01234567N123
+                # Out: _SpRaax_P.-------------------------------------.
+                # In:  _-------.OWFddddddddddddddddddddddddddddddddp.._
+                parity = ap ^ (addr & 1) ^ (addr >> 1) ^ 1
+                cmdval = (ap << 9) | (addr << 11) | (parity << 13) | 0x8500
+                cmd = (cmdval >> (cycles + 2)).to_bytes(7, 'little')
+                cmd_begin_mask = 0xffff >> (cycles + 2)
+                cmd_end_mask = (1 << 56) - (1 << (48 + 1 + cycles))
+                oe = (cmd_end_mask | cmd_begin_mask).to_bytes(7, 'little')
+                self.__commands[(1, ap, addr)] = cmd, oe
+
+                # Write
+                #      012345678N123N
+                # Out: _Spwaax_P.---.ddddddddddddddddddddddddddddddddp
+                # In:  _--------OWF---------------------------------__
+                parity = ap ^ (addr & 1) ^ (addr >> 1)
+                cmdval = (ap << 17) | (addr << 19) | (parity << 21) | 0x810000
+                cmd = (cmdval >> (cycles + 3 + cycles)).to_bytes(3, 'little')
+                cmd_begin_mask = 0xffffff >> (cycles + 3 + cycles)
+                cmd_end_mask = (1 << 64) - (1 << 24)
+                oe = (cmd_end_mask | cmd_begin_mask).to_bytes(8, 'little')
+                self.__commands[(0, ap, addr)] = cmd, oe
+    
+
     def _execute(self, operation_list):
-        ops = list(operation_list)
+        ops = deque(operation_list)
+        c = self.__turnaround_cycles
 
         #self.logger.debug("running %s", ops)
         
         while ops:
-            oe_buf = bitstring.BitString()
-            out_buf = bitstring.BitString()
-            pending = []
+            oe_list = deque()
+            out_list = deque()
+            used = 0
+            pending = deque()
 
-            while ops and len(out_buf) < 4032:
-                op = ops.pop(0)
+            while ops and used < 2048 - 16:
+                op = ops.popleft()
                 pending.append(op)
 
-                # Out: _SpRaax_P.-------------------------------------.
-                # In:  _-------.OWFddddddddddddddddddddddddddddddddp.._
                 if isinstance(op, swd.Read):
                     addr = op.addr & 0x3
                     ap = int(bool(op.ap))
-                    parity = ap ^ (addr & 1) ^ (addr >> 1) ^ 1
+                    out, oe = self.__commands[(1, ap, addr)]
+                    oe_list.append(oe)
+                    out_list.append(out)
 
-                    n = 1 + 8 + self.turnaround_cycles + 3 + 33 + self.turnaround_cycles
-
-                    op.__offset = len(out_buf) + 1 + 8 + self.turnaround_cycles - 1
-                    
-                    oe_buf.append(0x1ff | (1 << (n - 1)), n)
-                    out_buf.append((ap << 2) | (addr << 4) | (parity << 6) | 0x10a, n)
+                    op.__offset = used + 1, 5
+                    used += 7
 
                     if ap:
-                        oe_buf.append(-1, 16)
-                        out_buf.append(0, 16)
+                        oe_list.append(b"\xff\xff")
+                        out_list.append(b'\x00\x00')
+                        used += 2
                     
-                # Out: _Spwaax_P.---.ddddddddddddddddddddddddddddddddp
-                # In:  _--------OWF---------------------------------__
                 elif isinstance(op, swd.Write):
                     addr = op.addr & 0x3
                     ap = int(bool(op.ap))
-                    parity = ap ^ (addr & 1) ^ (addr >> 1)
+
                     dparity = (op.data ^ (op.data >> 16))
                     dparity ^= (dparity >> 8)
                     dparity ^= (dparity >> 4)
                     dparity = (0x6996 >> (dparity & 0xf)) & 1
 
-                    n = 1 + 8 + self.turnaround_cycles + 3 + self.turnaround_cycles + 33
-                    n2 = 1 + 8 + self.turnaround_cycles + 3 + self.turnaround_cycles
-                    m = (1 << n) - (1 << n2)
+                    out, oe = self.__commands[(0, ap, addr)]
+                    oe_list.append(oe)
+                    out_list.append(out + struct.pack("<LB", op.data, dparity))
 
-                    op.__offset = len(out_buf) + 1 + 8 + self.turnaround_cycles - 1
-                    
-                    oe_buf.append(m | 0x1ff, n)
-                    out_buf.append((ap << 2) | (addr << 4) | (parity << 6) | 0x102
-                                   | (op.data << n2) | (dparity << (n2 + 32)),
-                                   n)
+                    op.__offset = used + 2, 4 - c
+                    used += 8
 
                     if ap:
-                        oe_buf.append(-1, 16)
-                        out_buf.append(0, 16)
+                        oe_list.append(b"\xff\xff")
+                        out_list.append(b'\x00\x00')
+                        used += 2
 
                 elif isinstance(op, swd.Wakeup):
-                    oe_buf.append(-1, 50)
-                    out_buf.append(-1, 50)
+                    oe_list.append(b"\xff" * 7)
+                    out_list.append(b'\xff' * 7)
+                    used += 7
 
                 elif isinstance(op, swd.Run):
-                    oe_buf.append(-1, op.cycles)
-                    out_buf.append(0, op.cycles)
+                    c = (op.cycles + 7) // 8
+                    oe_list.append(b"\xff" * c)
+                    out_list.append(b'\x00' * c)
+                    used += c
 
                 elif isinstance(op, swd.JtagToSwd):
-                    oe_buf.append(-1, len(op.out))
-                    out_buf += op.out
+                    d = op.out.data
+                    out_list.append(d)
+                    oe_list.append(b'\xff' * len(d))
+                    used += len(d)
 
                 else:
                     raise base.ProtocolError("Unknown SWD operation %s" % type(op))
 
-                assert len(out_buf) == len(oe_buf)
+            out = b''.join(out_list)
+            oe = b''.join(oe_list)
 
-            #self.logger.debug("out: %s", out_buf)
-            #self.logger.debug("oe : %s", oe_buf)
-            
-            in_blob = self.handle.swd_io(out_buf.data, oe_buf.data, len(out_buf))
-            in_buf = bitstring.BitString(in_blob, len(out_buf))
-
-            #self.logger.debug("in : %s", in_buf)
+            in_blob = self.handle.swd_io(out, oe, used * 8)
 
             for idx, op in enumerate(pending):
                 if isinstance(op, (swd.Read, swd.Write)):
+                    byte, bit = op.__offset
                     try:
-                        ack = swd.Ack(int(in_buf[op.__offset : op.__offset + 3]))
+                        ack = swd.Ack(0x7 & (in_blob[byte] >> bit))
                     except ValueError:
                         ack = swd.Ack.INVALID
 
                     op.ack = ack
                     if isinstance(op, swd.Read):
-                        op.data = int(in_buf[op.__offset + 3 : op.__offset + 35])
+                        op.data, = struct.unpack("<L", in_blob[byte + 1 : byte + 5])
