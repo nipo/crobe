@@ -35,6 +35,11 @@ class Spartan6(jtag.Tap):
     IR_CFG_IN      = 0x5
     IR_CFG_OUT     = 0x4
 
+    IR_USER1 = 0x02
+    IR_USER2 = 0x03
+    IR_USER3 = 0x1a
+    IR_USER4 = 0x1b
+
     CFG_STATUS = 0x8
     CFG_IDCODE = 0xe
 
