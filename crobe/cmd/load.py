@@ -3,6 +3,7 @@ import struct
 from ..target.soc.model import SoC
 from ..component.model import Cpu
 from ..util.pretty import sci
+from ..util.info import TimedLogger
 
 def main():
     from . import base
@@ -41,20 +42,17 @@ def main():
         pass
 
     if args.erase_all:
-        print("Erasing all...", end = "", flush = True)
-        soc.erase_all()
-        print(" done")
+        with TimedLogger(logging, "erasing all"):
+            soc.erase_all()
     
-    print("Writing flash...", end = "", flush = True)
-    soc.load(args.program, erase = not args.erase_all)
-    print(" done")
+    with TimedLogger(logging, "writing flash"):
+        soc.load(args.program, erase = not args.erase_all)
 
     if args.check:
-        print("Checking...", end = "", flush = True)
-        ok = soc.verify(args.program)
-        print(" done" if ok else " FAIL")
-        if not ok:
-            return 1
+        with TimedLogger(logging, "checking flash"):
+            ok = soc.verify(args.program)
+            if not ok:
+                return 1
         
     cpu.reset()
     cpu.resume()
