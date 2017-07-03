@@ -250,6 +250,36 @@ class Program:
             pass
         raise RuntimeError("Format of %s not .bin, .hex or ELF" % filename)
 
+    def save(self, filename):
+        if filename.endswith(".bin"):
+            return self.save_bin(filename)
+        if filename.endswith(".hex"):
+            return self.save_hex(filename)
+        raise ValueError("Cannot guess file format")
+
+    def save_bin(self, filename):
+        fd = open(filename, "wb")
+
+        begin = self.address
+        end = self.end
+
+        blob = b'\x00' * (end - begin)
+        for s in self.segments:
+            blob = blob[: s.address - begin] + s.data + blob[s.address - begin + len(s):]
+
+        fd.write(blob)
+        fd.close()
+
+    def save_hex(self, filename):
+        from .ihex import IHex
+
+        f = IHex()
+
+        for s in self.segments:
+            f.insert_data(s.address, s.data)
+
+        f.write_file(filename)
+
 if __name__ == "__main__":
     import sys
     
