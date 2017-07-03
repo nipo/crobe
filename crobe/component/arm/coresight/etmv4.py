@@ -4,9 +4,11 @@ from .model import CoresightComponent
 class Etmv4(CoresightComponent):
     def __init__(self, ap, base):
         CoresightComponent.__init__(self, ap, base)
+        self.id = self.reg_read(self.ID)
+        self.version = "%d.%dr%d" % ((self.id >> 8) & 0xf, (self.id >> 4) & 0xf, self.id & 0xf)
 
     def __str__(self):
-        return "Embedded Trace Macrocell v4"
+        return "Embedded Trace Macrocell v4 (%s) v%s" % (cpuid.implementer_name(self.id), self.version)
 
     PRGCTLR    = 0x004
     PROCSELR   = 0x008
