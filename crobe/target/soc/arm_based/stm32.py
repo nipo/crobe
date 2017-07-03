@@ -18,21 +18,14 @@ class Stm(SoC):
         self.info = Info.from_soc(self)
         self.name = self.info.name
 
-        if self.info.uid_blob_addr:
-            uid_blob = self.buses[0].mem_read(self.info.uid_blob_addr, 12)
-        else:
-            uid_blob = b"\x00" * 12
+        uid_blob = self.info.uid_read(self)
         self.uid = int.from_bytes(uid_blob, byteorder = "little")
         self.logger.info("MCU UID: %024x", self.uid)
 
-        flash_size = self.info.flash_kb_get(self)
-
         ram_size = self.ram_size_probe(0x20000000, 512 * 1024)
+        self.info.flash_add(self, Stm32f1Flash)
 
-        if self.info.flash_page_size and flash_size:
-            self.child_add(Stm32f1Flash(self, "code", 0x08000000, 1024 * flash_size,
-                                        self.info.flash_page_size))
-            self.child_add(Ram(self.buses[0], "ram", 0x20000000, ram_size))
+        self.child_add(Ram(self.buses[0], "ram", 0x20000000, ram_size))
 
         if self.info.uid_blob_is_coords:
             x, y, no, self.lot_number = struct.unpack("<HHB7s", uid_blob)
