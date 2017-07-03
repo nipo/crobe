@@ -60,7 +60,7 @@ endef
 define target_expand
 
 $1.o: $($1-src) $(MAKEFILE_LIST)
-	$($($1-arch)-prefix)gcc -c -o $$@ $$< $($(1)-cflags) -std=c99 -ffunction-sections
+	$($($1-arch)-prefix)gcc -c -o $$@ $$< $($(1)-cflags) -std=c99 -ffunction-sections -g
 
 clean-files += $1.o
 

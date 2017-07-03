@@ -29,7 +29,15 @@ struct flash_s {
 #define CONTROL_START      0x40
 #define CONTROL_LOCK       0x80
 
-#define unlock() do { if (flash->control & CONTROL_LOCK)  { flash->key = KEY_1; flash->key = KEY_2; } } while (0)
+static inline
+void unlock(struct flash_s *flash)
+{
+    if (!(flash->control & CONTROL_LOCK))
+        return;
+    
+    flash->key = KEY_1;
+    flash->key = KEY_2;
+}
 
 void flash_erase(uintptr_t addr, size_t bytes, size_t page_size)
 {
@@ -38,7 +46,10 @@ void flash_erase(uintptr_t addr, size_t bytes, size_t page_size)
 
     addr &= ~(page_size - 1);
 
-    unlock();
+    unlock(flash);
+
+    while (flash->status & STATUS_BUSY)
+        ;
 
     while (addr < end) {
         flash->control = CONTROL_ERASE;
@@ -60,13 +71,13 @@ void flash_write(uintptr_t dest_, const void *src_, size_t size)
 {
     struct flash_s *flash = FLASH;
     volatile uint16_t *dest = (uint16_t*)(dest_);
-    uint16_t *src = (uint16_t*)src_;
+    const uint16_t *src = (uint16_t*)src_;
 
-    unlock();
-
-    flash->control = CONTROL_PROG;
+    unlock(flash);
 
     for (size_t i = 0; i < size / 2; i++) {
+        flash->control = CONTROL_PROG;
+
         dest[i] = src[i];
 
         while (flash->status & STATUS_BUSY)
