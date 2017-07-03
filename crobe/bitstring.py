@@ -25,7 +25,7 @@ class BitStringSlice:
         return bool(self.__length)
 
     def __add__(self, other):
-        n = self.__class__(int(self), self.__length)
+        n = BitString(int(self), self.__length)
         n.append(other)
         return n
 
@@ -151,7 +151,7 @@ class BitString:
         return self
 
     def __add__(self, other):
-        n = self.__class__(self.data, len(self))
+        n = BitString(self.data, len(self))
         n.append(other)
         return n
 
