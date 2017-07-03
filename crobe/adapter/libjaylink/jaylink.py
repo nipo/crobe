@@ -266,7 +266,7 @@ class Handle(model.Component):
     def speed_range(self):
         value = api.speed()
         checked(api.get_speeds(self.handle, ctypes.byref(value)))
-        return (1000, value.freq / value.div)
+        return (value.freq / 256, value.freq / value.div)
 
     @property
     def interface(self):
@@ -444,6 +444,8 @@ class Context(object):
         return str(s)
 
 if __name__ == "__main__":
+    from ...util.pretty import sci
+    
     ctx = Context()
 
     print(ctx.package_version)
@@ -456,7 +458,8 @@ if __name__ == "__main__":
         h = d.open()
         print("hw:", repr(h.hardware_version))
         print("fw:", repr(h.firmware_version))
-        print(h.caps)
+        print(list(sorted(h.caps)))
+        print(list(sorted(h.available_interfaces)))
 
         if "GET_HW_INFO" in h.caps:
             for name in api.HW_INFO.keys():
@@ -477,8 +480,13 @@ if __name__ == "__main__":
         if "READ_CONFIG" in h.caps:
             print(binascii.b2a_hex(h.config))
             
-        for i in h.available_interfaces:
-            h.interface = i
-            print(i, h.speed_range)
+        for i in sorted(h.available_interfaces):
+            print(i, end = " ", flush = True)
+            try:
+                h.interface = i
+                low, high = h.speed_range
+                print(sci(low, 'Hz'), sci(high, 'Hz'))
+            except:
+                print()
 
         h.power = False

@@ -56,6 +56,7 @@ DEV_CAP = dict(
     GET_HW_INFO = 12,
     SET_TARGET_POWER = 13,
     RESET_STOP_TIMED = 14,
+    SHORTEN_LIFE = 15,
     MEASURE_RTCK_REACT = 16,
     SELECT_TIF = 17,
     RW_MEM_ARM79 = 18,
@@ -74,9 +75,42 @@ DEV_CAP = dict(
     GET_EXT_CAPS = 31,
     JTAG_WRITE = 32,
     EMUCOM = 33,
+    EXEC_CPU2_CMD = 34,
+    GET_CPU2_CAPS = 35,
+    TEST_NET = 36,
+    POWERTRACE = 37,
     ETHERNET = 38,
+    SET_SWDIO_DIR = 39,
+    ENABLE_DISABLE_SWCLK = 40,
+    ENABLE_DISABLE_JTAG_IF = 41,
+    SET_CLEAR_TCK = 42,
+    GET_CPU2_CAPS_VERSION = 43,
+    PCODE_EXEC = 44,
+    PROT_VERSION = 45,
+    SET_EMU_OPTION = 46,
+    CDC_EXEC = 47,
+    CDC_SET_HOOK_FUNCS = 48,
+    HANDLE_BMI = 49,
+    HANDLE_GPIO = 50,
+    MERGE_COMMANDS = 51,
 )
 DEV_CAP_NAME = dict([(v, k) for (k, v) in DEV_CAP.items()])
+
+cpu2_capability = _c.c_int
+CPU2_CAP = dict(
+    READ_MEM = 0x01,
+    WRITE_MEM = 0x02,
+    READ_REGS = 0x03,
+    WRITE_REGS = 0x04,
+    GO = 0x05,
+    STEP = 0x06,
+    HALT = 0x07,
+    IS_HALTED = 0x08,
+    RESET = 0x09,
+    RUN_STOP = 0x0a,
+    TERMINAL = 0x0b,
+)
+CPU2_CAP_NAME = dict([(v, k) for (k, v) in CPU2_CAP.items()])
 
 hardware_info = _c.c_int
 HW_INFO = dict(
@@ -109,7 +143,9 @@ TIF = dict(
     SWD = 1,
     BDM3 = 2,
     FINE = 3,
-    CJTAG_PIC32 = 4,
+    ICSP = 4,
+    SPI = 5,
+    C2 = 6,
 )
 TIF_NAME = dict([(v, k) for (k, v) in TIF.items()])
 
