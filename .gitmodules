@@ -1,0 +1,3 @@
+[submodule "nsl"]
+	path = nsl
+	url = https://code.ssji.net/git/nipo/nsl

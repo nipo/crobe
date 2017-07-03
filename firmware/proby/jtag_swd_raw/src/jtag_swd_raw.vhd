@@ -2,9 +2,6 @@ library ieee;
 use ieee.std_logic_1164.all;
 use work.all;
 
-library unisim;
-use unisim.vcomponents.all;
-
 entity top is
   port (
     clk: in std_ulogic;
@@ -50,9 +47,6 @@ architecture arch of top is
   signal ft_tdi, ft_tms, ft_tck, ft_srst, ft_trst, ft_tdo, ft_rtck, ft_srst_in : std_logic;
   signal tp_tdi, tp_tms, tp_tck, tp_srst, tp_trst, tp_tdo, tp_rtck : std_logic;
   signal ft_activity, ft_jtag_en, ft_tms_oe : std_logic;
-
-  signal r_design_id : std_ulogic_vector(31 downto 0);
-  signal s_tap_dr_clk, s_tap_capture, s_tap_tdi : std_ulogic;
 
 begin
 
@@ -148,27 +142,5 @@ begin
   ram_cenn <= '1';
   ram_oen <= '1';
   ram_clk <= '0';
-
-   design_identifier : bscan_spartan6
-   generic map (
-      jtag_chain => 1
-   )
-   port map (
-      capture => s_tap_capture,
-      drck => s_tap_dr_clk,
-      tdi => s_tap_tdi,
-      tdo => r_design_id(0)
-   );
-
-  process(s_tap_dr_clk)
-  begin
-    if rising_edge(s_tap_dr_clk) then
-      r_design_id <= s_tap_tdi & r_design_id(31 downto 1);
-
-      if s_tap_capture = '1' then
-        r_design_id <= x"bcc464b8";
-      end if;
-    end if;
-  end process;
 
 end arch;

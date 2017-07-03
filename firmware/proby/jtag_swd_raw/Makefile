@@ -1,6 +1,7 @@
 libraries = work
 work-srcdir = src
 target = jtag_swd_raw
+user_id = 0xbcc464b8
 
 all: ../../../crobe/adapter/proby-fw/jtag_swd_raw.bit.gz
 

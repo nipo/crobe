@@ -16,23 +16,32 @@ class ProbyAdapter(Adapter):
         Adapter.__init__(self, enumerator, device)
         self.mode = None
 
-    def reprogram(self, mode, design_id = None):
+    def reprogram(self, mode):
         """
         Loads a design into proby. Try to optimize not reloading by
         first doing an internal cache of last loaded design, and also
         try to check USER1 TAP register with a magic value.
         
         :param str mode: Base name of design bitstream
-        :param int design_id: ID magic value to check against USER1
         """
         from ..component.xilinx.spartan6 import Spartan6
-
-        self.logger.info("Reprogramming FPGA to use mode %s", mode)
 
         if self.mode == mode:
             self.logger.info("Already in mode %s, doing nothing", self.mode)
             return
 
+        self.logger.info("Reprogramming FPGA to use mode %s", mode)
+
+        filename = os.path.join(self.base_path, mode + ".bit.gz")
+        obj = Program.from_file(filename)
+
+        expected_userid = obj.info.get("userid", None)
+        if expected_userid == 0xffffffff:
+            expected_userid = None
+
+        if expected_userid:
+            self.logger.info("Expected UserID=0x%08x", expected_userid)
+                 
         self.logger.info("Using internal chain of Proby, starting discovery")
 
         jtag_intf = Adapter.open(self, "jtag", channel = "B", resetn_pin = 9)
@@ -43,17 +52,13 @@ class ProbyAdapter(Adapter):
 
         self.logger.info("Got FPGA in chain: %s", fpga)
 
-        if design_id is not None:
-            did = fpga.dr_shift(fpga.IR_USER1, 0, 32)
-            self.logger.info("Current design ID: %08x", did)
-            if design_id == did:
-                self.logger.info("Design ID from USER1 matches, doing nothing")
+        if expected_userid:
+            userid = fpga.dr_shift(fpga.IR_USERCODE, 0, 32)
+            self.logger.info("Current User ID: 0x%08x", userid)
+            if userid == expected_userid:
+                self.logger.info("UserID matches, doing nothing")
                 del jtag_intf
                 return
-
-        filename = os.path.join(self.base_path, mode + ".bit.gz")
-        
-        obj = Program.from_file(filename)
 
         fpga.load(obj)
 
@@ -71,7 +76,7 @@ class ProbyAdapter(Adapter):
         del jtag_intf
 
     def open(self, interface_name):
-        self.reprogram("jtag_swd_raw", 0xbcc464b8)
+        self.reprogram("jtag_swd_raw")
 
         if interface_name == "jtag":
             return Adapter.open(self, interface_name, channel = "A",

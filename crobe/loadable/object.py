@@ -219,7 +219,14 @@ class Program:
                 date = info[b'c'].strip() + " " + info[b'd'].strip()
                 self.info["build_date"] = datetime.datetime.strptime(date, "%Y/%m/%d %H:%M:%S")
                 self.info["device"] = info[b'b']
-                self.info["project"] = info[b'a']
+                parts = info[b'a'].split(';')
+                self.info["project"] = parts[0]
+                for p in parts[1:]:
+                    k, v = p.split('=')
+                    k = k.lower()
+                    if k == 'userid':
+                        v = int(v, 16)
+                    self.info[k] = v
                 
                 return self
 
