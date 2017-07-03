@@ -174,8 +174,10 @@ class SoC(model.SoC):
             token = random.randint(0, 1<<32)
             target = ((begin + end) // 2) & ~0x3ff
             try:
-                self.buses[0].u32_write(address + target, token)
-                rb = self.buses[0].u32_read(address + target)
+                cmd = [self.buses[0].cmd_u32_write(address + target, token),
+                       self.buses[0].cmd_u32_read(address + target)]
+                self.buses[0].execute(cmd)
+                rb = cmd[-1].data
             except Exception as e:
                 rb = ~token
 
