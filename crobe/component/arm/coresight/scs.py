@@ -21,14 +21,25 @@ class Scs(MemoryMappedComponent):
 
         self.name = "System Control Space, " + self.cpu_name
 
-        for i in range(4):
-            self.logger.info("PFR%d: 0x%08x", i, self.reg_read(self.ID_PFR(i)))
-        for i in range(4):
-            self.logger.info("MMFR%d: 0x%08x", i, self.reg_read(self.ID_MMFR(i)))
-        for i in range(5):
-            self.logger.info("ISAR%d: 0x%08x", i, self.reg_read(self.ID_ISAR(i)))
-        for i in range(4):
-            self.logger.info("MVFR%d: 0x%08x", i, self.reg_read(self.MVFR(i)))
+        self.__cpuid_read()
+
+        self.logger.info("PFR: %s", ', '.join(["0x%08x" % x for x in self.pfr]))
+        self.logger.info("MMFR: %s", ', '.join(["0x%08x" % x for x in self.mmfr]))
+        self.logger.info("ISAR: %s", ', '.join(["0x%08x" % x for x in self.isar]))
+        self.logger.info("MVFR: %s", ', '.join(["0x%08x" % x for x in self.mvfr]))
+
+    def __cpuid_read(self):
+        cmds = []
+        cmds += [self.cmd_reg_read(self.ID_PFR(i)) for i in range(4)]
+        cmds += [self.cmd_reg_read(self.ID_MMFR(i)) for i in range(4)]
+        cmds += [self.cmd_reg_read(self.ID_ISAR(i)) for i in range(5)]
+        cmds += [self.cmd_reg_read(self.MVFR(i)) for i in range(4)]
+        self.bus.execute(cmds)
+
+        self.pfr = [op.data for op in cmds[0:4]]
+        self.mmfr = [op.data for op in cmds[4:8]]
+        self.isar = [op.data for op in cmds[8:13]]
+        self.mvfr = [op.data for op in cmds[13:17]]
             
     @property
     def has_fpu(self):

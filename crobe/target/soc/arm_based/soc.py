@@ -8,9 +8,10 @@ from ....component.arm.sw_dp import SwDp
 from ....component.arm.jtag_dp import JtagDp
 from ....component.arm.mem_ap import MemAp
 from ....component.nordic.ctrl_ap import CtrlAp
-from ....memory.region import Ram, NandFlash
+from ....memory.region import Ram, NandFlash, Flash
 from ....puppet import Puppet
 from ....db import Db
+from ....util.info import TimedLogger
 
 __all__ = ["SoC", 'ArmMPuppet', 'StubFlash']
 
@@ -69,15 +70,36 @@ class StubFlash(NandFlash):
     def prepare(self):
         pass
 
-    def erase(self, addr, size):
+    def erase(self, offset, size):
         self.prepare()
-        
-        puppet = self.soc.puppet()
-        code = puppet.stub(self.RANGE_ERASE)
-        code.call(addr, size, self.page_size)
-        self.logger.info("Done erasing 0x%08x-0x%08x...", addr, addr + size)
 
-    def write(self, program):
+        with TimedLogger(self.logger,
+                         "erase 0x%08x-0x%08x" % (
+            self.address + offset, self.address + offset + size)):
+            puppet = self.soc.puppet()
+            code = puppet.stub(self.RANGE_ERASE)
+            code.call(self.address + offset, size, self.page_size)
+
+    def read(self, offset, size):
+        return self.bus.mem_read(self.address + offset, size)
+
+    def write(self, offset, data):
+        assert offset % self.page_size == 0
+
+        with TimedLogger(self.logger,
+                         "write 0x%08x-0x%08x" % (
+            self.address + offset, self.address + offset + len(data))):
+            puppet = self.soc.puppet()
+            code = puppet.stub(self.PAGE_WRITE)
+
+            page_zone = puppet.allocate(self.page_size, self.page_size)
+            for off in len(0, data, self.page_size):
+                chunk = page.data[off : off + self.page_size]
+                page_zone.write(chunk)
+                code.call(self.address + off, page_zone.address, len(chunk))
+            puppet.unallocate(page_zone)
+
+    def load(self, program):
         self.prepare()
 
         puppet = self.soc.puppet()
@@ -135,8 +157,10 @@ class SoC(model.SoC):
                 idx += 1
 
     def erase_all(self):
-        raise NotImplementedError()
-                
+        flashes = self.children_of_class(Flash)
+        for f in flashes:
+            f.erase(0, f.size)
+
     def puppet(self):
         return ArmMPuppet(self)
 

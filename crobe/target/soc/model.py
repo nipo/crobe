@@ -21,8 +21,8 @@ class SoC(model.Target):
 
             pages = program.within(r.address, r.address + r.size)
             if erase:
-                r.erase(pages.address, pages.end - pages.address)
-            r.write(pages)
+                r.erase(pages.address - r.address, pages.end - pages.address)
+            r.load(pages)
 
     def verify(self, program):
         regions = self.children_of_class(region.Region)

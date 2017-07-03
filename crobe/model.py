@@ -19,8 +19,6 @@ class Component(object):
     def start(self):
         assert not self.__started
         self.__started = True
-
-        self.logger.info("started")
         
         for c in self.children[:]:
             c.start()
