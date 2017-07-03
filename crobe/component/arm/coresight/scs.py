@@ -24,22 +24,34 @@ class Scs(MemoryMappedComponent):
         self.__cpuid_read()
 
         self.logger.info("PFR: %s", ', '.join(["0x%08x" % x for x in self.pfr]))
+        self.logger.info("DFR: 0x%08x", self.dfr)
+        self.logger.info("AFR: 0x%08x", self.afr)
         self.logger.info("MMFR: %s", ', '.join(["0x%08x" % x for x in self.mmfr]))
         self.logger.info("ISAR: %s", ', '.join(["0x%08x" % x for x in self.isar]))
         self.logger.info("MVFR: %s", ', '.join(["0x%08x" % x for x in self.mvfr]))
+        self.logger.info("CLIDR: 0x%08x", self.clidr)
+        self.logger.info("CCSIDR: 0x%08x", self.ccsidr)
 
     def __cpuid_read(self):
         cmds = []
-        cmds += [self.cmd_reg_read(self.ID_PFR(i)) for i in range(4)]
+        cmds += [self.cmd_reg_read(self.ID_PFR(i)) for i in range(2)]
+        cmds += [self.cmd_reg_read(self.ID_DFR)]
+        cmds += [self.cmd_reg_read(self.ID_AFR)]
         cmds += [self.cmd_reg_read(self.ID_MMFR(i)) for i in range(4)]
         cmds += [self.cmd_reg_read(self.ID_ISAR(i)) for i in range(5)]
-        cmds += [self.cmd_reg_read(self.MVFR(i)) for i in range(4)]
+        cmds += [self.cmd_reg_read(self.MVFR(i)) for i in range(3)]
+        cmds += [self.cmd_reg_read(self.CLIDR)]
+        cmds += [self.cmd_reg_read(self.CCSIDR)]
         self.bus.execute(cmds)
 
-        self.pfr = [op.data for op in cmds[0:4]]
+        self.pfr = [op.data for op in cmds[0:2]]
+        self.dfr = cmds[2].data
+        self.afr = cmds[3].data
         self.mmfr = [op.data for op in cmds[4:8]]
         self.isar = [op.data for op in cmds[8:13]]
-        self.mvfr = [op.data for op in cmds[13:17]]
+        self.mvfr = [op.data for op in cmds[13:16]]
+        self.clidr = cmds[16].data
+        self.ccsidr = cmds[17].data
             
     @property
     def has_fpu(self):
@@ -213,6 +225,8 @@ class Scs(MemoryMappedComponent):
 
     # Processor Feature Registers
     ID_PFR = staticmethod(lambda x: 0xd40 + 4 * x)
+    ID_DFR = 0xd48
+    ID_AFR = 0xd4c
     # Memory Model Feature Registers
     ID_MMFR = staticmethod(lambda x: 0xd50 + 4 * x)
     # Instruction Set Attribute Registers

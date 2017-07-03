@@ -60,11 +60,11 @@ class Register:
     def __init__(self, value):
         self.value = value
         
-    def dump(self):
-        print(" %s" % self.name)
-        print("   0x%08x" % self.value)
+    def dump(self, output = print):
+        output(" %s" % self.name)
+        output("   0x%08x" % self.value)
         for f in sorted(self.fields, key = lambda x:x.pos):
             v = f.value(self.value)
-            print("   % 10s % 10s % 8d %s %s" % (
+            output("   % 10s % 10s % 8d %s %s" % (
                 "%x" % (v << (f.pos % 4)) + " " * (f.pos // 4),
                 hex(v), v, f.name, f.pretty(v)))
