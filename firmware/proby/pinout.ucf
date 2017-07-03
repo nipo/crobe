@@ -1,0 +1,121 @@
+# FTDI Synchronous FIFO (Port A)
+NET "fifo_data<0>" LOC = "P70";
+NET "fifo_data<1>" LOC = "P69";
+NET "fifo_data<2>" LOC = "P67";
+NET "fifo_data<3>" LOC = "P66";
+NET "fifo_data<4>" LOC = "P65";
+NET "fifo_data<5>" LOC = "P64";
+NET "fifo_data<6>" LOC = "P62";
+NET "fifo_data<7>" LOC = "P61";
+NET "fifo_rxfn"    LOC = "P60";              # Data ready in RX buffer (act low)
+NET "fifo_txen"    LOC = "P59";              # Room available in TX buffer (act low)
+NET "fifo_rdn"     LOC = "P58";              # Read data from FTDI (oen must be low 1 cycle before, act low)
+NET "fifo_wrn"     LOC = "P57";              # Put date to FTDI (oen must be high one cycle before, act low)
+NET "fifo_clk"     LOC = "P56" | BUFG = CLK;
+NET "fifo_oen"     LOC = "P51";              # when low, fifo_data[] is ftdi -> fpga
+
+# 12MHz oscillator input
+NET "clk"          LOC =  "P55" | BUFG = CLK;
+
+# JTAG from FTDI (MPSSE Port B)
+NET "jtag_en"      LOC =  "P35";     # Route JTAG to FPGA IO pins rather than dedicated programming pins
+NET "jtag_tdi"     LOC =  "P40";     # Always connected to FTDI
+NET "jtag_tms"     LOC =  "P38";     # Always connected to FTDI
+NET "jtag_tdo"     LOC =  "P39";     # Routed to FTDI when jtag_en is high
+NET "jtag_tck"     LOC =  "P33";     # Routed from FTDI when jtag_en is high
+
+# User IF
+NET "user_led"     LOC =  "P34";     # Active low, hardware debounce
+NET "user_btn"     LOC =  "P127";    # Active high
+
+# IOs
+NET "io_en"        LOC =  "P32";     # Enable buffers, if any, active high
+
+NET "io0<0>"       LOC =  "P50";
+NET "io0<1>"       LOC =  "P48";     # RST
+NET "io0<2>"       LOC =  "P47";     # TDO   SWO
+NET "io0<3>"       LOC =  "P46";     # RTCK
+NET "io0<4>"       LOC =  "P45";     # TCK   SWCLK
+NET "io0<5>"       LOC =  "P44";     # TMS   SWDIO
+NET "io0<6>"       LOC =  "P43";     # TDI
+NET "io0<7>"       LOC =  "P41";     # TRST
+
+NET "io1<0>"       LOC = "P74";
+NET "io1<1>"       LOC = "P75";
+NET "io1<2>"       LOC = "P78";
+NET "io1<3>"       LOC = "P79";
+NET "io1<4>"       LOC = "P80";
+NET "io1<5>"       LOC = "P81";
+NET "io1<6>"       LOC = "P82";
+NET "io1<7>"       LOC = "P83";
+NET "io1<8>"       LOC = "P84";
+NET "io1<9>"       LOC = "P85" | BUFG = CLK;
+NET "io1<10>"      LOC = "P87";
+NET "io1<11>"      LOC = "P88";
+NET "io1<12>"      LOC = "P92";
+NET "io1<13>"      LOC = "P93";
+NET "io1<14>"      LOC = "P94";
+NET "io1<15>"      LOC = "P95";
+NET "io1<16>"      LOC = "P97";
+NET "io1<17>"      LOC = "P98";
+NET "io1<18>"      LOC = "P99";
+NET "io1<19>"      LOC = "P100";
+NET "io1<20>"      LOC = "P101";
+NET "io1<21>"      LOC = "P102";
+NET "io1<22>"      LOC = "P104";
+NET "io1<23>"      LOC = "P105";
+
+# Ram
+
+# addr[2..19] may be reorganized
+NET "ram_addr<0>"   LOC = "P8";    # Fixed, A0
+NET "ram_addr<1>"   LOC = "P7";    # Fixed, A1
+NET "ram_addr<2>"   LOC = "P6";
+NET "ram_addr<3>"   LOC = "P5";
+NET "ram_addr<4>"   LOC = "P2";
+NET "ram_addr<5>"   LOC = "P1";
+NET "ram_addr<6>"   LOC = "P111";
+NET "ram_addr<7>"   LOC = "P112";
+NET "ram_addr<8>"   LOC = "P132";
+NET "ram_addr<9>"   LOC = "P133";
+NET "ram_addr<10>"  LOC = "P16";
+NET "ram_addr<11>"  LOC = "P15";
+NET "ram_addr<12>"  LOC = "P14";
+NET "ram_addr<13>"  LOC = "P12";
+NET "ram_addr<14>"  LOC = "P11";
+NET "ram_addr<15>"  LOC = "P124";
+NET "ram_addr<16>"  LOC = "P126";
+NET "ram_addr<17>"  LOC = "P121";
+NET "ram_addr<18>"  LOC = "P120";
+NET "ram_addr<19>"  LOC = "P119";
+NET "ram_addr<20>"  LOC = "P10";   # Fixed, NC_36M
+NET "ram_addr<21>"  LOC = "P9";    # Fixed, NC_72M
+
+# Bits in byte may be reorganized
+NET "ram_da<0>"     LOC = "P30";
+NET "ram_da<1>"     LOC = "P29";
+NET "ram_da<2>"     LOC = "P27";
+NET "ram_da<3>"     LOC = "P26";
+NET "ram_da<4>"     LOC = "P24";
+NET "ram_da<5>"     LOC = "P23";
+NET "ram_da<6>"     LOC = "P22";
+NET "ram_da<7>"     LOC = "P21";
+NET "ram_dap"       LOC = "P17";
+
+NET "ram_db<0>"     LOC = "P134";
+NET "ram_db<1>"     LOC = "P137";
+NET "ram_db<2>"     LOC = "P138";
+NET "ram_db<3>"     LOC = "P139";
+NET "ram_db<4>"     LOC = "P140";
+NET "ram_db<5>"     LOC = "P141";
+NET "ram_db<6>"     LOC = "P142";
+NET "ram_db<7>"     LOC = "P143";
+NET "ram_dbp"       LOC = "P144";
+
+NET "ram_cen"       LOC = "P114";  # Chip enable, active low, hardware pullup
+NET "ram_bwbn"      LOC = "P115";
+NET "ram_bwan"      LOC = "P116";
+NET "ram_wen"       LOC = "P117";
+NET "ram_cenn"      LOC = "P118";  # Clock enable
+NET "ram_oen"       LOC = "P131";
+NET "ram_clk"       LOC = "P123" | BUFG = CLK;
