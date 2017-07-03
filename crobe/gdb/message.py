@@ -111,7 +111,7 @@ class Response(Message):
     def to_packet(self):
         if isinstance(self.data, str):
             data = self.data.encode('ascii', 'ignore')
-        elif isinstance(self.data, bytes):
+        elif isinstance(self.data, (bytes, bytearray)):
             data = self.data
         else:
             ValueError("Unhandle response data type %s" % type(self.data))

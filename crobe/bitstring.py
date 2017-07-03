@@ -107,7 +107,7 @@ class BitString:
             else:
                 data = data.data
 
-        if isinstance(data, bytes):
+        if isinstance(data, (bytes, bytearray)):
             if length is None:
                 length = len(data) * 8
 

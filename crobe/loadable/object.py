@@ -6,15 +6,11 @@ class Segment:
     """A blob with a base address"""
 
     def __init__(self, address = 0, data = b""):
-        self.data = data
+        self.data = bytearray(data)
         self.address = address
 
     def __setitem__(self, index, data):
-        if isinstance(index, slice):
-            assert len(data) == index.stop - index.start
-            self.data = self.data[:index.start] + data + self.data[index.stop:]
-        else:
-            self.data = self.data[:index] + data + self.data[index + 1:]
+        self.data[index] = data
 
     def __getitem__(self, index):
         return self.data[index]
@@ -106,16 +102,17 @@ class Program:
 
     def paged(self, page_size = 1024, fill = b"\xff"):
         ret = self.__class__()
+        page_fill = fill * page_size
 
         for s in self.segments:
             aligned_address = s.address & ~(page_size - 1)
             end = s.address + len(s)
             aligned_end = ((end | (page_size - 1)) + 1) if (end & (page_size - 1)) else end
-            
+
             for page_addr in range(aligned_address, aligned_end, page_size):
                 t = ret.segment_at(page_addr)
                 if not t:
-                    t = Segment(page_addr, fill * page_size)
+                    t = Segment(page_addr, page_fill)
                     ret.append(t)
                 source_offset = max((page_addr - s.address, 0))
                 target_offset = (s.address & (page_size - 1)) if page_addr == aligned_address else 0

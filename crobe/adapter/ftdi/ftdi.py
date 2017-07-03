@@ -257,10 +257,10 @@ class Handle(Context):
     def _read(self, size = 4096):
         blob = (ctypes.c_ubyte * size)()
         size = self.check(api.read_data(self.context, blob, size))
-        return bytes(blob[:size])
+        return bytearray(blob[:size])
 
     def read(self, rsize):
-        ret = b""
+        ret = bytearray()
         retries = 1000
         while len(ret) < rsize:
             chunk = self._read(rsize - len(ret))
@@ -296,7 +296,7 @@ class Handle(Context):
         self.execute(cmd)
         
     def cmd_gpio_mask_set(self, change_mask, oe, val):
-        cmd = bytes()
+        cmd = bytearray()
 
         self.__gpio_oe = (self.__gpio_oe & ~change_mask) | (change_mask & oe)
         self.__gpio_val = (self.__gpio_val & ~change_mask) | (change_mask & val)
@@ -315,7 +315,7 @@ class Mpsse(Handle):
     @classmethod
     def cmd_tms_shift(cls, tms, next = 0):
         cmd = api.MPSSE_WRITE_NEG | api.MPSSE_LSB | api.MPSSE_TMS
-        ret = bytes()
+        ret = bytearray()
 
         l = len(tms)
         
@@ -355,7 +355,7 @@ class Mpsse(Handle):
         cmd = api.MPSSE_WRITE_NEG | api.MPSSE_LSB | api.MPSSE_WRITE
         read = api.MPSSE_READ
 
-        ret = bytes()
+        ret = bytearray()
         
         bits = len(tdi) - 1
         last = int(tdi[-1])
@@ -394,7 +394,7 @@ class Mpsse(Handle):
         tms_cmd = api.MPSSE_WRITE_NEG | api.MPSSE_LSB | api.MPSSE_TMS | api.MPSSE_BITS
         cmd = api.MPSSE_WRITE_NEG | api.MPSSE_LSB | api.MPSSE_WRITE
 
-        ret = bytes()
+        ret = bytearray()
         
         bits = len(tdi) - 1
         last = int(tdi[-1])
@@ -427,7 +427,7 @@ class Mpsse(Handle):
         
         cmd = api.MPSSE_WRITE_NEG | api.MPSSE_LSB | api.MPSSE_WRITE
 
-        ret = bytes()
+        ret = bytearray()
         bits = len(tdi)
         data = tdi.data
         
@@ -455,7 +455,7 @@ class Mpsse(Handle):
 
         cmd = api.MPSSE_LSB | api.MPSSE_READ
 
-        ret = bytes()
+        ret = bytearray()
         
         if bits >= 8:
             ret += struct.pack("<BH", cmd, (bits // 8) - 1)

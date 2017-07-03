@@ -241,7 +241,7 @@ class Handle(model.Component):
 
         checked(api.swd_io(self.handle, oe_buf, out_buf, input_buf, count))
 
-        return bytes(bytearray(input_buf))
+        return bytes(input_buf)
 
     @property
     def speed(self):
