@@ -14,7 +14,7 @@ class SwDp(dp.Dp):
     IDCODE   = 0 # R
     ABORT    = 0 # W
     RESEND   = 2 # R
-    
+
     def __init__(self, port):
         dp.Dp.__init__(self, "SW-DP", port)
 
@@ -26,7 +26,7 @@ class SwDp(dp.Dp):
             self.port.turnaround_cycles = 4
         if enable:
             self.abort(0x1f)
-            
+
     @property
     def idr(self):
         op = self.port.cmd_read(False, self.DPIDR)
@@ -37,6 +37,14 @@ class SwDp(dp.Dp):
 
     def idcode(self):
         return PartId.from_idcode(self.idr)
+
+    def cmd_banked_reg_read(self, regno):
+        op = self.port.cmd_read(False, regno & 0x3)
+        if self.version < 1:
+            assert regno & ~0x3 == 0
+            return [op]
+        else:
+            return [self.port.cmd_write(False, self.SELECT, regno >> 2), op]
 
     def banked_reg_read(self, regno):
         op = self.port.cmd_read(False, regno & 0x3)
@@ -64,7 +72,7 @@ class SwDp(dp.Dp):
         self.port.execute([op])
         if op.ack != swd.Ack.OK:
             raise dp.DpAccessFailure(op.ack)
-    
+
     def execute(self, operations):
         must_restart = True
         insert_run = 0
@@ -76,8 +84,11 @@ class SwDp(dp.Dp):
 
             #self.logger.debug("Done:")
             for i, o in enumerate(operations):
-                if not isinstance(o, dp.ApRead):
-                    #self.logger.debug("- %d, %s", i, o)
+                if not isinstance(o, (dp.ApRead, dp.ApWrite)):
+                    continue
+
+                if isinstance(o, dp.ApWrite):
+                    #self.logger.debug("- %d, %s, %s", i, o, o.__op.ack)
                     continue
 
                 #self.logger.debug("- %d, %s -> %s %s 0x%08x", i, o, o.__value_op, o.__value_op.ack, o.__value_op.data)
@@ -95,7 +106,8 @@ class SwDp(dp.Dp):
                     #self.logger.warning("Delaying subsequent operations by %d", insert_run)
                     break
 
-                self.abort()
+                #self.logger.debug("Had an error, aborting")
+                self.abort(0x15)
                 raise dp.DpAccessFailure(o)
 
     def lower(self, operations, insert_run = 0):
@@ -105,7 +117,7 @@ class SwDp(dp.Dp):
         select = 0
         select_dirty = True
         freq = self.port.freq
-        
+
         for o in operations:
             if isinstance(o, dp.Run):
                 ops.append(self.port.cmd_run(o.cycles))
@@ -130,27 +142,28 @@ class SwDp(dp.Dp):
                 ops.append(self.port.cmd_write(False, self.SELECT, select))
                 select_dirty = False
 
+            if isinstance(o, dp.ApRead):
+                o.__op = self.port.cmd_read(True, (o.addr >> 2) & 3)
+            else:
+                o.__op = self.port.cmd_write(True, (o.addr >> 2) & 3, o.data)
+
             if ap_read_pending:
                 if isinstance(o, dp.ApRead):
-                    ap_read_pending.__value_op = self.port.cmd_read(True, (o.addr >> 2) & 3)
-                    ops.append(ap_read_pending.__value_op)
-                    ap_read_pending = o
+                    ap_read_pending.__value_op = o.__op
                 else:
                     ap_read_pending.__value_op = self.port.cmd_read(False, self.RDBUFF)
                     ops.append(ap_read_pending.__value_op)
-                    ap_read_pending = None
-                    ops.append(self.port.cmd_write(True, (o.addr >> 2) & 3, o.data))
+
+            if isinstance(o, dp.ApRead):
+                ap_read_pending = o
             else:
-                if isinstance(o, dp.ApRead):
-                    ops.append(self.port.cmd_read(True, (o.addr >> 2) & 3))
-                    ap_read_pending = o
-                else:
-                    ops.append(self.port.cmd_write(True, (o.addr >> 2) & 3, o.data))
+                ap_read_pending = None
+            ops.append(o.__op)
 
             c = insert_run + int(math.ceil(o.interval * float(freq)))
             if c:
                 ops.append(self.port.cmd_run(c))
-                    
+
         if ap_read_pending:
             ap_read_pending.__value_op = self.port.cmd_read(False, self.RDBUFF)
             ops.append(ap_read_pending.__value_op)

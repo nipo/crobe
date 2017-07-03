@@ -43,7 +43,7 @@ class MemAp(ap.Ap, model.Bus):
         ap.Ap.__init__(self, dp, index)
 
         name = {1: "AHB-AP", 2: "APB-AP", 4: "AXI-AP"}.get(self.idr & 0xf, "Mem-AP")
-        
+
         model.Bus.__init__(self, name)
         self.width = 0
         self.increment = 0
@@ -52,7 +52,7 @@ class MemAp(ap.Ap, model.Bus):
 
         from .coresight.model import MemoryMappedComponent
         self.child_add(MemoryMappedComponent(self, self.base).cast())
-    
+
     def execute(self, transfers):
         transfers = list(transfers)
         be_to_size_l2 = {0xf: 2, 0x3: 1, 0xc: 1, 0x1: 0, 0x2: 0, 0x4: 0, 0x8: 0}
@@ -90,7 +90,7 @@ class MemAp(ap.Ap, model.Bus):
                     elif nt.address == t.address:
                         csw = (csw & ~0x030)
                         csw_dirty = True
-                        
+
             else:
                 # Word access only, they may use DRW and BDx
                 # first, see whether auto increment could be useful
@@ -104,7 +104,7 @@ class MemAp(ap.Ap, model.Bus):
 
                     if nt.size_l2 != 2:
                         break
-                    
+
                 if csw & 0x030 == 0x000:
                     if incrementing > in_16:
                         csw_dirty = True
@@ -113,7 +113,7 @@ class MemAp(ap.Ap, model.Bus):
                     if incrementing < in_16:
                         csw_dirty = True
                         csw = csw & ~0x030
-                        
+
                 if address == t.address \
                    and (i >= len(transfers) - 1 \
                         or (csw & 0x030 == 0x010 and transfers[i + 1].address == address + 4)):
@@ -124,11 +124,11 @@ class MemAp(ap.Ap, model.Bus):
                 else:
                     address_dirty = True
                     address = t.address
-                    
+
             if address_dirty:
                 address_dirty = False
                 operations.append(self.cmd_write(MemAp.TAR, address))
-                
+
             if csw_dirty:
                 csw_dirty = False
                 operations.append(self.cmd_write(MemAp.CSW, self.csw_base | csw))
@@ -139,7 +139,7 @@ class MemAp(ap.Ap, model.Bus):
             else:
                 operations.append(self.cmd_write(reg, t.data << ((t.address & 3) * 8),
                                                  t.interval))
-                
+
             if (csw & 0x030) == 0x010 and reg == MemAp.DRW:
                 address += 1 << t.size_l2
                 if address & self.wrap_mask == 0:
@@ -197,7 +197,7 @@ class MemAp(ap.Ap, model.Bus):
 
 class Operation(object):
     pass
-                
+
 class MemoryAccess(Operation):
     def __init__(self, address):
         self.address = address
@@ -208,7 +208,7 @@ class ReadAccess(MemoryAccess):
 
     def __repr__(self):
         return "mem_ap.%s(0x%08x)" % (self.__class__.__name__, self.address)
-    
+
 class WriteAccess(MemoryAccess):
     def __init__(self, address, data, interval = 0):
         MemoryAccess.__init__(self, address)

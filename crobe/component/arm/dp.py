@@ -17,7 +17,7 @@ class Dp(PortComponent):
     DPIDR     = 0 # R
     SELECT    = 2 # W
     RDBUFF    = 3 # R
-    
+
     def __init__(self, name, port):
         PortComponent.__init__(self, name, port)
 
@@ -50,7 +50,7 @@ class Dp(PortComponent):
                 pass
 
             self.logger.info("DP Target ID %s", self.target_id)
-        
+
         from .ap import Ap
 
         for i in range(16):
@@ -60,7 +60,7 @@ class Dp(PortComponent):
 
             if ap.idr == 0:
                 continue
-            
+
             self.child_add(ap.cast())
 
         PortComponent.start(self)
@@ -72,7 +72,7 @@ class Dp(PortComponent):
         if self.target_id:
             ret += ", Target ID: %s" % self.target_id.pretty()
         return ret
-        
+
     def debug_enable(self, enabled):
         if not enabled:
             self.ctrlstat = 0

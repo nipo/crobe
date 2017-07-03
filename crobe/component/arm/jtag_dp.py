@@ -39,7 +39,7 @@ class JtagDp(dp.Dp):
         self.port.execute([cmd, rsp])
 
         ack, data = self._rsp_split(rsp)
-        
+
         if ack != self.Ack.OK:
             raise dp.DpAccessFailure("Read failed")
 
@@ -61,7 +61,7 @@ class JtagDp(dp.Dp):
             self.port.execute([sel, cmd, rsp])
 
         ack, data = self._rsp_split(rsp)
-        
+
         if ack != self.Ack.OK:
             raise dp.DpAccessFailure("Read failed")
 
@@ -79,7 +79,7 @@ class JtagDp(dp.Dp):
             self.port.execute([sel, cmd, rsp])
 
         ack, data = self._rsp_split(rsp)
-        
+
         if ack != self.Ack.OK:
             raise dp.DpAccessFailure("Write failed")
 
@@ -91,6 +91,9 @@ class JtagDp(dp.Dp):
 
             ops = self.lower(operations, insert_run)
             self.port.execute(ops)
+
+            ack, ctrlstat = self._rsp_split(ops[-1])
+            has_error = bool(ctrlstat & 0x20)
 
             self.logger.debug("Done:")
             for i, o in enumerate(operations):
@@ -116,13 +119,17 @@ class JtagDp(dp.Dp):
                 self.abort()
                 raise dp.DpAccessFailure("Invalid ACK")
 
+            if has_error:
+                self.ctrlstat = ctrlstat | 0x20
+                raise dp.DpAccessFailure()
+
     def lower(self, operations, insert_run = 0):
         ops = []
 
         ap_read_pending = None
         select = 0
         select_dirty = True
-        
+
         for o in operations:
             if isinstance(o, dp.Run):
                 ops.append(self.port.cmd_run(o.cycles))
@@ -165,10 +172,14 @@ class JtagDp(dp.Dp):
                     ops.append(self._cmd_shift(self.APACC, o.addr >> 2, o.data))
 
             ops.append(self.port.cmd_run(8 + insert_run))
-                    
+
         if ap_read_pending:
-            ap_read_pending.__value_op = self._cmd_shift(self.DPACC, self.RDBUFF)
+            self._cmd_shift(self.DPACC, self.RDBUFF)
+            ap_read_pending.__value_op = self._cmd_shift(self.DPACC, self.CTRLSTAT)
             ops.append(ap_read_pending.__value_op)
+        else:
+            ops.append(self._cmd_shift(self.DPACC, self.CTRLSTAT))
+        ops.append(self._cmd_shift(self.DPACC, self.CTRLSTAT))
 
         return ops
 
