@@ -3,28 +3,29 @@ import binascii
 class Message(object):
     @staticmethod
     def unescape(data):
-        ret = []
-        esc = False
-        for b in data:
-            if esc:
-                ret.append(b ^ 0x20)
-                esc = False
-            elif b == 0x7d:
-                esc = True
-            else:
-                ret.append(b)
-        return bytes(ret)
+        ret = bytestring()
+        point = 0
+        while point < len(data):
+            try:
+                escpos = data.index(0x7d)
+            except:
+                return ret + data[point:]
+            ret += data[point : escpos]
+            ret += bytes([data[escpos + 1] ^ 0x20])
+            point = escpos + 2
 
     @staticmethod
     def escape(data):
-        ret = []
-        esc = False
-        for b in data:
-            if b in [0x7d, 0x23, 0x24, 0x2a]:
-                ret += [0x7d, b ^ 0x20]
-            else:
-                ret.append(b)
-        return bytes(ret)
+        ret = bytestring()
+        last = 0
+        for escpos in range(len(data)):
+            if data[escpos] not in [0x7d, 0x23, 0x24, 0x2a]:
+                continue
+            ret += data[last : escpos]
+            ret += bytes([0x7d, data[escpos] ^ 0x20])
+            last = escpos + 1
+
+        return ret + data[last :]
 
     @staticmethod
     def unframe(packet):
