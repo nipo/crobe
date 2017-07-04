@@ -64,22 +64,40 @@ class CpuidDumper(object):
     class PFR0(bitfield.Register):
         name = "PFR0"
         fields = [
-            bitfield.Field("State3", (12, 15), {3: "Thumb-2"}),
-            bitfield.Field("State2", (8, 11), {3: "Thumb-2"}),
-            bitfield.Field("State1", (4, 7), {3: "Thumb-2"}),
-            bitfield.Field("State0", (0, 3), {0: "Not ARM"}),
+            bitfield.Field("TnumbEE", (12, 15), {0: "None",
+                                                 3: "Thumb-2"}),
+            bitfield.Field("Acceleration", (8, 11), {1: "Software",
+                                                     3: "Thumb-2"}),
+            bitfield.Field("Thumb ISA", (4, 7), {0: "None",
+                                                 1: "Thumb",
+                                                 3: "Thumb-2"}),
+            bitfield.Field("ARM ISA", (0, 3), {0: "None",
+                                               1: "ARM"}),
             ]
 
     class PFR1(bitfield.Register):
         name = "PFR1"
         fields = [
-            bitfield.Field("Programmer's model", (8, 11), {2: "Two stack"}),
+            bitfield.Field("Microcontroller Prog. model", (8, 11), {0: "None",
+                                                                    2: "Two stack"}),
+            bitfield.Field("Security extensions", (4, 7), {0: "None"}),
+            bitfield.Field("ARMv4 Prog. model", (0, 3), {0: "None",
+                                                         1: "ARMv4"}),
             ]
 
     class DFR(bitfield.Register):
         name = "DFR"
         fields = [
-            bitfield.Field("Debug model", (20, 23), {1: "Memory mapped access"}),
+            bitfield.Field("Microcontroller debug model", (20, 23), {0: "None",
+                                                                     1: "Memory mapped"}),
+            bitfield.Field("Trace debug model - MM", (16, 19), {0: "None",
+                                                                1: "Memory mapped"}),
+            bitfield.Field("Trace debug model - Cop", (12, 15), {0: "None"}),
+            bitfield.Field("Core debug model - MM", (8, 11), {0: "None",
+                                                              1: "ARMv4 MM",
+                                                              4: "ARMv7 MM"}),
+            bitfield.Field("Secure debug model", (4, 7), {0: "None"}),
+            bitfield.Field("Core debug model - Cop", (0, 3), {0: "None"}),
             ]
 
     class AFR(bitfield.Register):
@@ -90,27 +108,57 @@ class CpuidDumper(object):
     class MMFR0(bitfield.Register):
         name = "MMFR0"
         fields = [
-            bitfield.Field("Aux regs", (20, 23), {1: "ACR only"}),
+            bitfield.Field("Innermost shareability", (28, 31), {}),
+            bitfield.Field("FSCE", (24, 27), {0: "None"}),
+            bitfield.Field("Aux regs", (20, 23), {0: "None",
+                                                  1: "ACR only",
+                                                  2:"AIFSR, ADFSR"}),
             bitfield.Field("TCM", (16, 19), {0: "None", 1: "implementation-defined control"}),
             bitfield.Field("Shareability levels", (12, 15), {0: "One level"}),
             bitfield.Field("Outermost shareability", (8, 11), {0: "Non-cacheable", 15: "Ignored"}),
-            bitfield.Field("PMSA support", (4, 7), {0: "Not supported", 3:"PMSAv7 with subregions"}),
+            bitfield.Field("PMSA support", (4, 7), {0: "Not supported",
+                                                    3:"PMSAv7 with subregions"}),
+            bitfield.Field("VMSA support", (0, 3), {0: "Not supported"}),
             ]
 
     class MMFR1(bitfield.Register):
         name = "MMFR1"
         fields = [
+            bitfield.Field("Branch predictor", (28, 31), {0: "None"}),
+            bitfield.Field("L1 test clean", (24, 27), {0: "None"}),
+            bitfield.Field("L1 unified cache maint.", (20, 23), {0: "None"}),
+            bitfield.Field("L1 Harvard cache maint.", (16, 19), {0: "None"}),
+            bitfield.Field("L1 Set/Way unified maint.", (12, 15), {0: "None"}),
+            bitfield.Field("L1 Set/Way Harvard maint.", (8, 11), {0: "None"}),
+            bitfield.Field("L1 MVA unified maint.", (4, 7), {0: "None"}),
+            bitfield.Field("L1 MVA Harvard maint.", (0, 3), {0: "None"}),
             ]
 
     class MMFR2(bitfield.Register):
         name = "MMFR2"
         fields = [
+            bitfield.Field("Hardw. access flag", (28, 31), {0: "Not supported"}),
             bitfield.Field("WFI stall", (24, 27), {0: "Not supported", 1: "Supported"}),
+            bitfield.Field("Barriers", (20, 23), {0: "Not supported", 2: "DSB, ISB, DMB"}),
+            bitfield.Field("TLB unified maint.", (16, 19), {0: "Not supported"}),
+            bitfield.Field("TLB Harvard maint.", (12, 15), {0: "Not supported"}),
+            bitfield.Field("L1 cache maint.", (8, 11), {0: "Not supported"}),
+            bitfield.Field("L1 background prefetch", (4, 7), {0: "Not supported"}),
+            bitfield.Field("L1 foreground prefetch", (0, 3), {0: "Not supported"}),
             ]
 
     class MMFR3(bitfield.Register):
         name = "MMFR3"
         fields = [
+            bitfield.Field("Supersection", (28, 31), {0: "Not supported"}),
+            bitfield.Field("Coherent walk", (20, 23), {0: "Not supported"}),
+            bitfield.Field("Maintainance Bcast", (12, 15), {0: "Not supported"}),
+            bitfield.Field("Branch Pred. Maint.", (8, 11), {0: "Not supported",
+                                                            2: "Invalidate by MVA"}),
+            bitfield.Field("Hier. Set/Way Cache Maint.", (4, 7), {0: "Not supported",
+                                                                  1:"Invalidate/clean"}),
+            bitfield.Field("Hier. MVA Cache Maint.", (0, 3), {0: "Not supported",
+                                                              1:"Invalidate/clean"}),
             ]
 
     class ISAR0(bitfield.Register):
@@ -127,21 +175,35 @@ class CpuidDumper(object):
             bitfield.Field("CmpBranch", (12, 15), {0: "", 1:"CBNZ, CBZ"}),
             bitfield.Field("Bitfield", (8, 11), {0: "", 1:"BFC, BFI, SBFX, UBFX"}),
             bitfield.Field("Bitcount", (4, 7), {0: "", 1:"CLZ"}),
+            bitfield.Field("Atomics", (0, 3), {0: "", 1:"SWP, SWPB"}),
             ]
 
     class ISAR1(bitfield.Register):
         name = "ISAR1"
         fields = [
+            bitfield.Field("Jazelle Interwork", (24, 27), {0: "",
+                                                           1:"BXJ"}),
             bitfield.Field("Interwork", (24, 27), {0: "",
                                                    1:"BX",
-                                                   2: "BX, BLX"}),
-            bitfield.Field("Immediate", (20, 23), {0: "", 1:"ADDW, MOVW, MOVT, SUBW"}),
+                                                   2: "BX, BLX",
+                                                   3: "BX, BLX, dp insts"}),
+            bitfield.Field("Immediate", (20, 23), {0: "",
+                                                   1:"ADDW, MOVW, MOVT, SUBW"}),
             bitfield.Field("If-Then", (16, 19), {0: "",
                                                  1: "IT"
                                                 }),
             bitfield.Field("Extend", (12, 15), {0: "",
                                                 1:"SXTB, SXTH, UXTB, UXTH",
                                                 2:"SXTB, SXTH, UXTB, UXTH, SXTAB, SXTAB16, SXTAH, SXTB16, UXTAB, UXTAB16, UXTAH, UXTB16"}),
+            bitfield.Field("Except 2", (8, 11), {0: "",
+                                                 1: "RFE, SRS, CPS"
+                                                }),
+            bitfield.Field("Except 1", (4, 7), {0: "",
+                                                 1: "LDM (exc), STM (user)"
+                                                }),
+            bitfield.Field("Endian", (0, 3), {0: "",
+                                                 1: "SETEND"
+                                                }),
             ]
 
     class ISAR2(bitfield.Register):
@@ -150,6 +212,9 @@ class CpuidDumper(object):
             bitfield.Field("Reversal", (28, 31), {0: "",
                                                   1: "REV, REV16, REVSH",
                                                   2: "REV, REV16, REVSH, RBIT",
+                                                  }),
+            bitfield.Field("PSR", (24, 27), {0: "",
+                                                  1: "MSR, MRS",
                                                   }),
             bitfield.Field("MultU", (20, 23), {0: "",
                                                1:"UMULL, UMLAL",
@@ -168,9 +233,10 @@ class CpuidDumper(object):
                                               2:"LDM, STM continuable",
                                               }),
             bitfield.Field("MemHint", (4, 7), {0: "",
-                                              1:"PLD",
-                                              2:"PLD",
-                                              3:"PLD, PLI",
+                                               1:"PLD",
+                                               2:"PLD",
+                                               3:"PLD, PLI",
+                                               4:"PLD, PLI, PLDW",
                                               }),
             bitfield.Field("LoadStore", (0, 3), {0: "",
                                                  1:"LDRD, STRD",
@@ -180,6 +246,7 @@ class CpuidDumper(object):
     class ISAR3(bitfield.Register):
         name = "ISAR3"
         fields = [
+            bitfield.Field("ThumbEE", (28, 31), {0: ""}),
             bitfield.Field("TrueNOP", (24, 27), {0: "",
                                                  1:"NOP"}),
             bitfield.Field("ThumbCopy", (20, 23), {0: "",
@@ -187,28 +254,34 @@ class CpuidDumper(object):
             bitfield.Field("TabBranch", (16, 19), {0: "",
                                                    1:"TBB, TBH",
                                                    }),
-            bitfield.Field("SynchPrim", (12, 15), {}),
+            bitfield.Field("SynchPrim", (12, 15), {0: "",
+                                                   2: "LDREX[BH], STREX[BH], CLREX"}),
             bitfield.Field("SVC", (8, 11), {0: "", 1:"SVC"}),
-            bitfield.Field("SIMD", (4, 7), {0: "", 1:"SSAT, USAT", 3: "SSAT, USAT, PKHBT, PKHTB, QADD16, QADD8, QASX, QSUB16, QSUB8, QSAX, SADD16, SADD8, SASX, SEL, SHADD16, SHADD8, SHASX, SHSUB16, SHSUB8, SHSAX, SSAT16, SSUB16, SSUB8, SSAX, SXTAB16, SXTB16, UADD16, UADD8, UASX, UHADD16, UHADD8, UHASX, UHSUB16, UHSUB8, UHSAX, UQADD16, UQADD8, UQASX, UQSUB16, UQSUB8, UQSAX, USAD8, USADA8, USAT16, USUB16, USUB8, USAX, UXTAB16, UXTB16"}),
+            bitfield.Field("SIMD", (4, 7), {0: "",
+                                            1:"SSAT, USAT",
+                                            3: "SSAT, USAT, PKHBT, PKHTB, QADD16, QADD8, QASX, QSUB16, QSUB8, QSAX, SADD16, SADD8, SASX, SEL, SHADD16, SHADD8, SHASX, SHSUB16, SHSUB8, SHSAX, SSAT16, SSUB16, SSUB8, SSAX, SXTAB16, SXTB16, UADD16, UADD8, UASX, UHADD16, UHADD8, UHASX, UHSUB16, UHSUB8, UHSAX, UQADD16, UQADD8, UQASX, UQSUB16, UQSUB8, UQSAX, USAD8, USADA8, USAT16, USUB16, USUB8, USAX, UXTAB16, UXTB16"}),
             bitfield.Field("Saturate", (0, 3), {0: "", 1:"QADD, QDADD, QDSUB, QSUB"}),
             ]
 
     class ISAR4(bitfield.Register):
         name = "ISAR4"
         fields = [
+            bitfield.Field("SWP", (28, 31), {0: ""}),
             bitfield.Field("PSR_M", (24, 27), {0: "",
                                                1:"CPS, MRS, MSR"}),
             bitfield.Field("SynchPrim_frac", (20, 23), {}),
             bitfield.Field("Barrier", (16, 19), {0: "",
                                                  1:"DMB, DSB, ISB",
                                                  }),
-            bitfield.Field("Writeback", (8, 11), {0: "STM, STM, PUSH, POP only", 1:"All v7-M insts"}),
+            bitfield.Field("Writeback", (8, 11), {0: "STM, STM, PUSH, POP only",
+                                                  1:"All v7-M insts"}),
             bitfield.Field("WithShifts", (4, 7), {0: "MOV and shift only",
                                                   1: "MOV, shift, load, store (lsl 0-3)",
-                                                  3: "MOV, shift, load, store (lsl 0-3 & constants)"}),
+                                                  3: "MOV, shift, load, store (lsl 0-3 & constants)",
+                                                  4: "Full",}),
             bitfield.Field("Unpriv", (0, 3), {0: "",
                                               1:"LDRBT, LDRT, STRBT, STRT",
-                                              2:"LDRBT, LDRT, STRBT, STRT, LDRHT, LDRSBT, LDRSHT, STRHT",
+                                              2:"LDR{SB,B,SH,H}T, STR{B,H}T",
                                               }),
             ]
 
@@ -250,14 +323,18 @@ class CpuidDumper(object):
                                               4: "Unified I+D",
                                               })
             for n in range(8)] + [
-            bitfield.ValueField("Level of Unification Inner Shareable", (21, 23)),
-            bitfield.ValueField("Level of Coherency", (24, 26)),
-            bitfield.ValueField("Level of Unification Uniprocessor", (27, 29)),
+            bitfield.ValueField("Level of Unification Inner Shareable", (21, 23), z_offset = 1),
+            bitfield.ValueField("Level of Coherency", (24, 26), z_offset = 1),
+            bitfield.ValueField("Level of Unification Uniprocessor", (27, 29), z_offset = 1),
             ]
 
     class CCSIDR(bitfield.Register):
         name = "CCSIDR"
         fields = [
+            bitfield.BinaryField("Write through", 31, "Not available", "Available"),
+            bitfield.BinaryField("Wribe back", 30, "Not available", "Available"),
+            bitfield.BinaryField("Read allocation", 29, "Not available", "Available"),
+            bitfield.BinaryField("Write allocation", 28, "Not available", "Available"),
             bitfield.ValueField("Sets", (13, 27), z_offset = 1),
             bitfield.ValueField("Associativity", (3, 12), z_offset = 1),
             bitfield.Log2ValueField("Line size", (0, 2), log_offset = 2),
