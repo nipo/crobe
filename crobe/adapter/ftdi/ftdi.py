@@ -2,10 +2,12 @@ from . import api
 from ...bitstring import BitString
 from ... import model
 from ..protocol import base, jtag
+from collections import deque
 import ctypes
 import struct
 import logging
 import binascii
+import threading
 
 class FtdiError(base.CommunicationError):
     pass
@@ -90,16 +92,42 @@ class Device(object):
     def open(self, interface = "A", mode = "mpsse", **defaults):
         if mode == "mpsse":
             return Mpsse(self, interface, **defaults)
+        elif mode == "ft245_sync_fifo":
+            return Ft245SyncFifo(self, interface, **defaults)
+        elif mode == "reset":
+            return Handle(self.connection_id, interface, "RESET")
+        
+class StreamerThread(threading.Thread):
+    def __init__(self, handle):
+        threading.Thread.__init__(self)
+        self.handle = handle
+        self.running = False
 
+    @staticmethod
+    @api.stream_callback_fn
+    def _callback(buf, size, progress_info, self):
+        if buf and size:
+            self.handle.stream_data(bytes(buf[:size]))
+        if progress_info:
+            self.handle.stream_progress(progress_info)
+        return int(not self.running)
+
+    def run(self):
+        self.running = True
+        api.readstream(self.handle.context, self._callback, ctypes.py_object(self), 1, 4)
+
+    def stop(self):
+        self.running = False
+        self.join()
+        
 class Handle(Context):
-    def __init__(self, connection_id, interface, mode, gpio_oe = 0, gpio_val = 0):
+    def __init__(self, connection_id, interface, mode):
         Context.__init__(self)
-        self.__gpio_oe = gpio_oe
-        self.__gpio_val = gpio_val
-        self.__freq = 1e6
+        self.logger = logging.getLogger(str(connection_id, 'ascii'))
 
         self.check(api.set_interface(self.context, api.INTERFACE[interface]))
         self.check(api.usb_open_string(self.context, connection_id))
+        self.opened = True
 
         self.__eeprom_data_valid = None
 
@@ -111,43 +139,23 @@ class Handle(Context):
         except:
             pass
 
+        if mode == 'SYNCFF':
+            assert self.eeprom_value_get("CHANNEL_A_TYPE") == "FIFO" \
+                and self.eeprom_value_get("CHANNEL_B_TYPE") == "FIFO"
+        
         self.check(api.set_bitmode(self.context, 0, api.BITMODE["RESET"]))
         self.check(api.usb_purge_buffers(self.context))
         self.check(api.set_latency_timer(self.context, 1))
         self.check(api.set_bitmode(self.context, 0xfb, api.BITMODE[mode]))
 
-        self.execute(bytes([api.MPSSE_3_PHASE_DISABLE,
-                            api.MPSSE_ADAPTIVE_DISABLE,
-                            api.MPSSE_LOOPBACK_DISABLE])
-                     + self.cmd_gpio_mask_set(0xffff, gpio_oe, gpio_val))
-
-        self.freq = 1e6
+    def close(self):
+        if self.opened:
+            self.check(api.usb_close(self.context))
+            self.opened = False
         
-    @property
-    def last_gpio(self):
-        return self.__gpio_oe & self.__gpio_val
-        
-    @property
-    def freq(self):
-        return self.__freq
-
-    @freq.setter
-    def freq(self, freq):
-        divisor = 120000000 / freq
-        if divisor >= 65535:
-            divisor /= 5
-            d = min((max((int(divisor) - 1, 0)), 65535))
-            self.execute(struct.pack("<BBH",
-                                     api.MPSSE_CLK_DIV5_ENABLE,
-                                     api.MPSSE_CLK_DIV, d))
-            self.__freq = 24000000 // (d + 1)
-        else:
-            d = min((max((int(divisor) - 1, 0)), 65535))
-            self.execute(struct.pack("<BBH",
-                                     api.MPSSE_CLK_DIV5_DISABLE,
-                                     api.MPSSE_CLK_DIV, int(divisor - 1)))
-            self.__freq = 120000000 // (d + 1)
-        
+    def __del__(self):
+        self.close()
+        Context.__del__(self)
         
     EEPROM_VALUE_MAP = dict(
         CHANNEL_A_TYPE = "CHANNEL_TYPE",
@@ -246,6 +254,7 @@ class Handle(Context):
         self.check(api.set_eeprom_value(self.context, id, value))
 
     def write(self, blob):
+        self.logger.info("< %s", binascii.b2a_hex(blob))
         raw = (ctypes.c_ubyte * len(blob)).from_buffer_copy(blob)
         self.check(api.write_data(self.context, raw, len(blob)))
 
@@ -257,7 +266,7 @@ class Handle(Context):
     def _read(self, size = 4096):
         blob = (ctypes.c_ubyte * size)()
         size = self.check(api.read_data(self.context, blob, size))
-        return bytearray(blob[:size])
+        return bytes(blob[:size])
 
     def read(self, rsize):
         ret = bytearray()
@@ -279,6 +288,91 @@ class Handle(Context):
             return rsp
         else:
             self.status()
+
+class Ft245SyncFifo(Handle):
+    def __init__(self, device, interface, **defaults):
+        Handle.__init__(self, device.connection_id, interface, "RESET", **defaults)
+
+        self.stream_rx_queue_cond = threading.Condition()
+        self.stream_rx_queue = b""
+
+        self.streamer = StreamerThread(self)
+        self.streamer.start()
+
+    def read(self, size):
+        ret = bytearray()
+        needed = size
+
+        with self.stream_rx_queue_cond:
+            while True:
+                while self.stream_rx_queue and needed:
+                    if len(self.stream_rx_queue) <= needed:
+                        ret += self.stream_rx_queue
+                        self.stream_rx_queue = b''
+                        needed = size - len(ret)
+                    else:
+                        ret += self.stream_rx_queue[:needed]
+                        self.stream_rx_queue = self.stream_rx_queue[needed:]
+                        needed = 0
+
+                if not needed:
+                    return ret
+
+                self.stream_rx_queue_cond.wait()
+        
+    def stream_data(self, buf):
+        with self.stream_rx_queue_cond:
+            self.logger.info("> %s", binascii.b2a_hex(buf))
+            self.stream_rx_queue += buf
+            self.stream_rx_queue_cond.notify_all()
+
+    def stream_progress(self, progress):
+        pass
+
+class Mpsse(Handle):
+    def __init__(self, device, interface, gpio_oe = 0, gpio_val = 0, **defaults):
+        Handle.__init__(self, device.connection_id, interface, "MPSSE", **defaults)
+
+        self.__gpio_oe = gpio_oe
+        self.__gpio_val = gpio_val
+        self.__freq = 1e6
+        
+        self.execute(bytes([api.MPSSE_3_PHASE_DISABLE,
+                            api.MPSSE_ADAPTIVE_DISABLE,
+                            api.MPSSE_LOOPBACK_DISABLE])
+                     + self.cmd_gpio_mask_set(0xffff, gpio_oe, gpio_val))
+        
+        self.freq = 1e6
+
+    def close(self):
+        if self.opened:
+            self.gpio_mask_set(0xffff, 0, 0)
+        Handle.close(self)
+        
+    @property
+    def last_gpio(self):
+        return self.__gpio_oe & self.__gpio_val
+
+    @property
+    def freq(self):
+        return self.__freq
+
+    @freq.setter
+    def freq(self, freq):
+        divisor = 120000000 / freq
+        if divisor >= 65535:
+            divisor /= 5
+            d = min((max((int(divisor) - 1, 0)), 65535))
+            self.execute(struct.pack("<BBH",
+                                     api.MPSSE_CLK_DIV5_ENABLE,
+                                     api.MPSSE_CLK_DIV, d))
+            self.__freq = 24000000 // (d + 1)
+        else:
+            d = min((max((int(divisor) - 1, 0)), 65535))
+            self.execute(struct.pack("<BBH",
+                                     api.MPSSE_CLK_DIV5_DISABLE,
+                                     api.MPSSE_CLK_DIV, int(divisor - 1)))
+            self.__freq = 120000000 // (d + 1)
 
     def gpio_get(self, pin):
         if pin < 8:
@@ -307,10 +401,6 @@ class Handle(Context):
             cmd += bytes([api.MPSSE_SET_BITS_HIGH, (self.__gpio_val >> 8), (self.__gpio_oe >> 8)])
 
         return cmd
-
-class Mpsse(Handle):
-    def __init__(self, device, interface, **defaults):
-        Handle.__init__(self, device.connection_id, interface, "MPSSE", **defaults)
 
     @classmethod
     def cmd_tms_shift(cls, tms, next = 0):

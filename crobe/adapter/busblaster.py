@@ -1,26 +1,26 @@
 from . import model
-from .ftdi.basic import JtagAdapterEnumerator, Adapter
+from .ftdi import basic
 
 __all__ = []
 
-class BBAdapter(Adapter):
+class Adapter(basic.Adapter):
     supported_interfaces = ["jtag", "swd"]
 
     def open(self, interface_name):
         if interface_name == "jtag":
-            return Adapter.open(self, interface_name,
-                                gpio_output = 0x7c2d, gpio_value = 0x0c20)
+            return basic.Adapter.open(self, interface_name,
+                                      gpio_output = 0x7c2d, gpio_value = 0x0c20)
         elif interface_name == "swd":
-            return Adapter.open(self, interface_name,
-                                oen_pin = 12,
-                                gpio_output = 0x7c25, gpio_value = 0x0c00)
+            return basic.Adapter.open(self, interface_name,
+                                      oen_pin = 12,
+                                      gpio_output = 0x7c25, gpio_value = 0x0c00)
 
 @model.Enumerator.register
-class Enumerator(JtagAdapterEnumerator):
-    adapter_class = BBAdapter
+class Enumerator(basic.AdapterEnumerator):
+    adapter_class = Adapter
 
     def __init__(self):
-        JtagAdapterEnumerator.__init__(self, "Busblaster",
+        basic.AdapterEnumerator.__init__(self, "Busblaster",
                                        short_name = "bb",
                                        vid = 0x0403, pid = 0x8878,
                                        channel = "A",
@@ -28,9 +28,9 @@ class Enumerator(JtagAdapterEnumerator):
                                        activity_pin = 15)
 
 @model.Enumerator.register
-class Enumerator(JtagAdapterEnumerator):
+class Enumerator(basic.AdapterEnumerator):
     def __init__(self):
-        JtagAdapterEnumerator.__init__(self, "Busblaster Internal",
+        basic.AdapterEnumerator.__init__(self, "Busblaster Internal",
                                        short_name = "int-bb",
                                        vid = 0x0403, pid = 0x8878,
                                        channel = "B")

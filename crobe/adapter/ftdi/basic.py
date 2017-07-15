@@ -25,6 +25,11 @@ class Adapter(model.Adapter):
         d = {}
         d.update(self.enumerator.defaults)
         d.update(defaults)
+
+        b = self.device.open(interface = "B", mode = "reset")
+        a = self.device.open(interface = "A", mode = "reset")
+        b.close()
+        a.close()
         
         if interface_name.lower() == "jtag":
             return JtagInterface(self, **d)
@@ -34,7 +39,7 @@ class Adapter(model.Adapter):
         
         raise NotSupportedError("Unsupported interface %s" % interface_name)
 
-class JtagAdapterEnumerator(model.Enumerator):
+class AdapterEnumerator(model.Enumerator):
     adapter_class = Adapter
 
     def __init__(self, name, short_name,
@@ -54,7 +59,7 @@ class JtagAdapterEnumerator(model.Enumerator):
         
     def filter(self, adapter):
         return True
-        
+
     def start(self):
         for vid, pid in self.vid_pid:
             for device in ftdi.Device.list_all(vid, pid):

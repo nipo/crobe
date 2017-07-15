@@ -296,7 +296,7 @@ class progress_info(_c.Structure):
     ]
 
 stream_callback_fn = _c.CFUNCTYPE(_c.c_int, _c.POINTER(_c.c_uint8), _c.c_int,
-                                  _c.POINTER(progress_info), _c.POINTER(None))
+                                  _c.POINTER(progress_info), _c.py_object)
 
 class version_info(_c.Structure):
     _fields_ = [
@@ -311,7 +311,7 @@ libusb_get_bus_number = _libusb.libusb_get_bus_number
 libusb_get_bus_number.argtypes = [_c.POINTER(libusb_device)]
 libusb_get_bus_number.restype = _c.c_uint8
 
-libusb_get_device_address = _lib.libusb_get_device_address
+libusb_get_device_address = _libusb.libusb_get_device_address
 libusb_get_device_address.argtypes = [_c.POINTER(libusb_device)]
 libusb_get_device_address.restype = _c.c_uint8
 
@@ -444,7 +444,7 @@ write_data_get_chunksize.argtypes = [_c.POINTER(context), _c.POINTER(_c.c_uint)]
 write_data_get_chunksize.restype = _c.c_int
 
 readstream = _lib.ftdi_readstream
-readstream.argtypes = [_c.POINTER(context), _c.POINTER(stream_callback_fn), _c.POINTER(None), _c.c_int, _c.c_int]
+readstream.argtypes = [_c.POINTER(context), stream_callback_fn, _c.py_object, _c.c_int, _c.c_int]
 readstream.restype = _c.c_int
 
 write_data_submit = _lib.ftdi_write_data_submit

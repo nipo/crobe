@@ -35,6 +35,7 @@ class SwDp(dp.Dp):
             raise dp.DpAccessFailure(op.ack)
         return op.data
 
+    @property
     def idcode(self):
         return PartId.from_idcode(self.idr)
 

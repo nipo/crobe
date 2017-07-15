@@ -1,12 +1,12 @@
 from . import model
-from .ftdi.basic import JtagAdapterEnumerator
+from .ftdi import basic
 
 __all__ = []
 
 @model.Enumerator.register
-class Enumerator(JtagAdapterEnumerator):
+class Enumerator(basic.AdapterEnumerator):
     def __init__(self):
-        JtagAdapterEnumerator.__init__(self, "Digilent HS2", "hs2",
+        basic.AdapterEnumerator.__init__(self, "Digilent HS2", "hs2",
                                        vid = 0x0403, pid = 0x6014, channel = "A",
                                        gpio_output = 0xe0, gpio_value = 0xe0)
 
@@ -14,9 +14,9 @@ class Enumerator(JtagAdapterEnumerator):
         return adapter.device.vendor == "Digilent" and adapter.device.model == "Digilent USB Device"
 
 @model.Enumerator.register
-class Enumerator(JtagAdapterEnumerator):
+class Enumerator(basic.AdapterEnumerator):
     def __init__(self):
-        JtagAdapterEnumerator.__init__(self, "Digilent board", "dig",
+        basic.AdapterEnumerator.__init__(self, "Digilent board", "dig",
                                        vid = 0x0403, pid = 0x6010, channel = "A",
                                        gpio_output = 0x80, gpio_value = 0x80)
 
