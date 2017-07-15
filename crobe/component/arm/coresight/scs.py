@@ -10,7 +10,7 @@ from ....part_id import PartId
     )
 class Scs(MemoryMappedComponent):
     def __init__(self, ap, base):
-        MemoryMappedComponent.__init__(self, ap, base)
+        MemoryMappedComponent.__init__(self, ap, base, "SCS")
         self.reg_write(self.DHCSR, self.DHCSR_KEY | self.DHCSR_C_MASKINTS | self.DHCSR_C_DEBUGEN | self.DHCSR_C_HALT)
         self.demcr = self.DEMCR_TRCENA
 
@@ -19,7 +19,7 @@ class Scs(MemoryMappedComponent):
         if self.has_fpu:
             self.cpu_name += " with FPU"
 
-        self.name = "System Control Space, " + self.cpu_name
+        self.name = cpuid.short_name(self.cpuid) + "-SCS"
 
         self.__cpuid_read()
 
@@ -52,6 +52,9 @@ class Scs(MemoryMappedComponent):
         self.mvfr = [op.data for op in cmds[13:16]]
         self.clidr = cmds[16].data
         self.ccsidr = cmds[17].data
+
+    def __str__(self):
+        return "System Control Space for %s" % self.cpu_name
             
     @property
     def has_fpu(self):

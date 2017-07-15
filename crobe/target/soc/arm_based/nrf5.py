@@ -45,7 +45,6 @@ class nRF5(SoC):
 
     def id_probe(self):
         addr = self.buses[0].mem_read(self.FICR_DEVICEADDRTYPE, 12)
-        self.logger.info(binascii.b2a_hex(addr))
         ble_addr = addr[9:3:-1]
         if addr[0] & 1:
             ble_addr = bytes([ble_addr[0] | 0xc0]) + ble_addr[1:]
@@ -96,6 +95,14 @@ class nRF5(SoC):
     FICR_RAMINFO = 0x10000034
     FICR_CONFIGID = 0x1000005c
 
+    GPIO_PIN_CNF = staticmethod(lambda x: 0x50000700 + x * 4)
+    GPIO_PIN_CNF_DIR_OUTPUT       = 0x01
+    GPIO_PIN_CNF_INPUT_DISCONNECT = 0x02
+    GPIO_PIN_CNF_PULL_DOWN        = 0x04
+    GPIO_PIN_CNF_PULL_UP          = 0x0c
+    GPIO_PIN_CNF_DRIVE_S0S1       = 0x000
+    GPIO_PIN_CNF_DRIVE_H0H1       = 0x300
+
 class nRF51(nRF5):
     def ram_probe(self):
         ram = [self.buses[0].u32_read(self.FICR_RAMINFO + d) for d in range(0, 4*5, 4)]
@@ -125,6 +132,35 @@ class nRF52(nRF5):
         cpu, = self.children_of_class(Cpu)
         self.ctrl_ap.erase_all()
         cpu.reset()
+
+    def trace_enable(self, width, traceclk_rate, formatted):
+        if width not in (None, 1, 2, 4):
+            raise ValueError("Unsupported trace width: %s" % width)
+
+        if width is not None:
+            self.buses[0].u32_write(self.CLOCK_TRACECONFIG, 1)
+            pins = [18]
+            div = int(32e6 / traceclk_rate) or 1
+        else:
+            clk = {16:0, 8:0x10000, 4:0x20000, 2:0x30000}
+            mhz = int(traceclk_rate / 1e6 + .5)
+            if mhz not in clk:
+                raise ValueError("Unsupported trace clock %s" % traceclk_rate)
+            cfg = clk[mhz]
+            self.buses[0].u32_write(self.CLOCK_TRACECONFIG, cfg | 2)
+            pins = [20] + ([18, 16, 15, 24][:width])
+            
+            div = 1
+
+        for p in pins:
+            self.buses[0].u32_write(self.GPIO_PIN_CNF(p), 0
+                                    | self.GPIO_PIN_CNF_DIR_OUTPUT
+                                    | self.GPIO_PIN_CNF_DRIVE_H0H1
+                                    )
+
+        SoC.trace_enable(self, width, div, formatted)
+
+    CLOCK_TRACECONFIG = 0x4000055c
         
 @SoC.db.register(PartId(2, 0x44, 6))
 def nrf52832(dp):

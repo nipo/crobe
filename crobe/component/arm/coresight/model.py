@@ -14,8 +14,8 @@ class MemoryMappedComponent(model.BusComponent):
     class_db = Db()
     db = Db()
 
-    def __init__(self, bus, base):
-        model.BusComponent.__init__(self, "Memory Component", bus)
+    def __init__(self, bus, base, name = None):
+        model.BusComponent.__init__(self, name or "Memory Component", bus)
         self.base = base & ~0x3ff
 
         blob = bus.mem_read(self.base | self.DEVID, 16 * 4)
@@ -29,22 +29,23 @@ class MemoryMappedComponent(model.BusComponent):
 
         self.component_class = (self.cid >> 12) & 0xf
         self.dev_type = self.devid >> 24
-        
-        self.name = "Unknown"
-        if self.component_class == 0x0:
-            self.name = "Generic"
-        elif self.component_class == 0x1:
-            self.name = "ROM Table"
-        elif self.component_class == 0x9:
-            self.name = "Coresight " + self.class9_names.get(self.dev_type, "Other")
-        elif self.component_class == 0xb:
-            self.name = "Peripheral test block"
-        elif self.component_class == 0xe:
-            self.name = "Generic " + self.classe_names.get(self.pid, "Other 0x%08x" % self.pid)
-        elif self.component_class == 0xf:
-            self.name = "System"
 
-        self.name = "<0x%08x: %s (0x%08x/0x%08x)>" % (self.base, self.name, self.pid, self.cid)
+        if not name:
+            self.name = "Unknown"
+            if self.component_class == 0x0:
+                self.name = "Generic"
+            elif self.component_class == 0x1:
+                self.name = "ROM Table"
+            elif self.component_class == 0x9:
+                self.name = "Coresight " + self.class9_names.get(self.dev_type, "Other")
+            elif self.component_class == 0xb:
+                self.name = "Peripheral test block"
+            elif self.component_class == 0xe:
+                self.name = "Generic " + self.classe_names.get(self.pid, "Other 0x%08x" % self.pid)
+            elif self.component_class == 0xf:
+                self.name = "System"
+
+            self.name = "<0x%08x: %s (0x%08x/0x%08x)>" % (self.base, self.name, self.pid, self.cid)
 
     def cast(self):
         try:
@@ -119,15 +120,45 @@ class MemoryMappedComponent(model.BusComponent):
         0x4000bb00b: "FPB",
     }
 
+class CoresightAccess:
+    def __init__(self, component):
+        self.component = component
+        state = self.component.reg_read(CoresightComponent.LOCKS)
+        self.implemented = bool(state & 1)
+        self.should_unlock = False
+
+    def __enter__(self):
+        if not self.implemented:
+            return
+
+        state = self.component.reg_read(CoresightComponent.LOCKS)
+
+        if state & 2 == 0:
+            return
+
+        self.component.reg_write(CoresightComponent.LOCK, CoresightComponent.LOCK_KEY)
+        self.should_unlock = True
+
+    def __exit__(self, type, value, traceback):
+        if not self.implemented or not self.should_unlock:
+            return
+
+        self.component.reg_write(CoresightComponent.LOCK, 0)
+        self.should_unlock = False
+
 class CoresightComponent(MemoryMappedComponent):
     IMCR = 0xf00
     CTS = 0xfa0
     CTC = 0xfa4
     LOCKS = 0xfb4
     LOCK = 0xfb0
+    LOCK_KEY = 0xc5acce55
     AUTHS = 0xfb8
 
     db = Db()
 
-    def __init__(self, bus, base):
-        MemoryMappedComponent.__init__(self, bus, base)
+    def __init__(self, bus, base, name = None):
+        MemoryMappedComponent.__init__(self, bus, base, name)
+
+    def access(self):
+        return CoresightAccess(self)

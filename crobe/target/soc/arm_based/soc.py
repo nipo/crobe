@@ -187,7 +187,18 @@ class SoC(model.SoC):
                 end = target
 
         return begin
-                
+
+    def trace_enable(self, width, clkdiv, formatted):
+        cpu, = self.children_of_class(Cortex)
+        if not cpu.tpiu or not cpu.etm:
+            raise NotSupportedError("Incapable hardware")
+
+        cpu.tpiu.stop()
+        cpu.tpiu.output_mode_set(width, clkdiv, formatted)
+        cpu.dwt.trace_enable()
+        cpu.itm.trace_enable(1)
+        cpu.etm.trace_enable(2)
+
 @SoC.db.register_default
 def default_soc(ap):
     rom_tables = ap.children_of_class(RomTable)

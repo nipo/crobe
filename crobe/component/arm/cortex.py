@@ -2,6 +2,9 @@ from ..model import Cpu, Register
 from .coresight.dwt import Dwt
 from .coresight.fpb import Fpb
 from .coresight.scs import Scs
+from .coresight.tpiu import Tpiu
+from .coresight.etm import Etm
+from .coresight.itm import Itm
 import time
 
 __all__ = []
@@ -14,11 +17,17 @@ class Cortex(Cpu):
 
     def __init__(self, index, scs,
                  fpb = None,
-                 dwt = None):
+                 dwt = None,
+                 tpiu = None,
+                 etm = None,
+                 itm = None):
         Cpu.__init__(self, scs.cpu_name, index)
         self.scs = scs
         self.dwt = dwt
         self.fpb = fpb
+        self.tpiu = tpiu
+        self.etm = etm
+        self.itm = itm
         self.bus = scs.bus
 
         self.registers = [
@@ -61,7 +70,11 @@ class Cortex(Cpu):
         scs, = rt.children_of_class(Scs)
 
         others = {}
-        for name, type in [("fpb", Fpb), ("dwt", Dwt)]:
+        for name, type in [("fpb", Fpb),
+                           ("dwt", Dwt),
+                           ("tpiu", Tpiu),
+                           ("etm", Etm),
+                           ("itm", Itm)]:
             try:
                 others[name], = rt.children_of_class(type)
             except ValueError:

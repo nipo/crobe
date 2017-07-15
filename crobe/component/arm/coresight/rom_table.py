@@ -3,11 +3,12 @@ from .model import MemoryMappedComponent
 @MemoryMappedComponent.class_db.register(0x1)
 class RomTable(MemoryMappedComponent):
     def __init__(self, bus, base):
-        MemoryMappedComponent.__init__(self, bus, base)
+        MemoryMappedComponent.__init__(self, bus, base, "RomTable")
         if self.component_class != 0x1:
             raise ValueError("Component is not a RomTable")
 
-        self.name = "RomTable for %s" % self.partid.pretty()
+    def __str__(self):
+        return "RomTable for %s" % self.partid.pretty()
 
     def start(self):
         for i in range(0, 960):

@@ -46,6 +46,27 @@ def decode(cpuid):
 
     return "%s %s r%dp%d" % (impl_name, part_name, variant, revision)
 
+def short_name(cpuid):
+    implementer = cpuid >> 24
+    variant = (cpuid >> 20) & 0xf
+    arch = (cpuid >> 16) & 0xf
+    partno = (cpuid >> 4) & 0xfff
+    revision = cpuid & 0xf
+
+    if implementer == 0x41:
+        if partno & 0xf00 == 0xc00:
+            cortex_table = {0: "CA%d",
+                            1: "CR%d",
+                            2: "CM%d",
+                            6: "CM%d+",
+                            }
+            cno = (partno >> 4) & 0xf
+            
+            if cno in cortex_table:
+                return cortex_table[cno] % (partno & 0xf)
+
+    return "Part_%02x/%03x" % (implementer, partno)
+
 class CpuidDumper(object):
     def __init__(self, scs):
         self.scs = scs

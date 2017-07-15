@@ -304,9 +304,19 @@ class Handle(model.Component):
         self.__target_power = bool(enabled)
         checked(api.set_target_power(self.handle, bool(enabled)))
 
-    # swo_start
-    # swo_stop
-    # swo_read
+    def swo_start(self, baudrate, size = 2048):
+        checked(api.swo_start(self.handle, api.SWO_MODE["UART"], int(baudrate), size))
+
+    def swo_stop(self):
+        checked(api.swo_stop(self.handle))
+
+    def swo_read(self, size):
+        buffer = (ctypes.c_ubyte * size)()
+        size_ = ctypes.c_uint32(size)
+        
+        checked(api.swo_read(self.handle, buffer, ctypes.byref(size_)))
+        return bytes(buffer[:size_.value])
+
     # swo_get_speeds
 
 class Device(object):
@@ -360,7 +370,7 @@ class Context(object):
         self.logger = logging.getLogger("jaylink")
         self.log_level_match = {}
         for name, level in [("DEBUG", logging.DEBUG),
-                            ("INFO", logging.INFO),
+                            ("INFO", logging.DEBUG),
                             ("WARNING", logging.WARNING),
                             ("ERROR", logging.ERROR)]:
             self.log_level_match[api.LOG_LEVEL[name]] = level
@@ -392,7 +402,7 @@ class Context(object):
             d = Device(devices[i], self)
             try:
                 d.serial_number
-            except:
+            except Exception:
                 break
             ret.append(d)
             i += 1
@@ -466,7 +476,7 @@ if __name__ == "__main__":
                 try:
                     v = h.hardware_info_get(name)
                     print(name, v)
-                except:
+                except Exception:
                     pass
 
         if "GET_COUNTERS" in h.caps:
@@ -474,7 +484,7 @@ if __name__ == "__main__":
                 try:
                     v = h.counter_get(name)
                     print(name, v)
-                except:
+                except Exception:
                     pass
 
         if "READ_CONFIG" in h.caps:
@@ -486,7 +496,7 @@ if __name__ == "__main__":
                 h.interface = i
                 low, high = h.speed_range
                 print(sci(low, 'Hz'), sci(high, 'Hz'))
-            except:
+            except Exception:
                 print()
 
         h.power = False

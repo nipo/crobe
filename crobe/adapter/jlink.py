@@ -100,7 +100,16 @@ class JLinkInterface(object):
 
     def emucom_write(self, channel, data):
         return self.handle.emucom_write(channel, data)
-    
+
+    def swo_start(self, baudrate, size = 2048):
+        self.handle.swo_start(baudrate, size)
+
+    def swo_stop(self):
+        self.handle.swo_stop()
+
+    def swo_read(self, size):
+        return self.handle.swo_read(size)
+
 class JtagInterface(JLinkInterface, jtag.Interface):
     def __init__(self, port):
         JLinkInterface.__init__(self, port, "JTAG")
