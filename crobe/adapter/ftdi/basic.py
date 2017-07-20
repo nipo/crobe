@@ -26,10 +26,7 @@ class Adapter(model.Adapter):
         d.update(self.enumerator.defaults)
         d.update(defaults)
 
-        b = self.device.open(interface = "B", mode = "reset")
-        a = self.device.open(interface = "A", mode = "reset")
-        b.close()
-        a.close()
+        self.device.reset()
         
         if interface_name.lower() == "jtag":
             return JtagInterface(self, **d)

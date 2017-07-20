@@ -1,0 +1,14 @@
+top = tb.tb
+libraries += top
+target = swd_etm
+top-srcdir = $(SRC_DIR)/../src
+hwdep=xilinx
+
+tool = isim
+
+include ../../../../nsl/build/build.mk
+
+$(target).vcd: rsp.txt cmd.txt
+
+rsp.txt cmd.txt: txn_gen
+	./$< $@

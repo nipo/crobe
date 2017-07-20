@@ -8,6 +8,7 @@ import struct
 import logging
 import binascii
 import threading
+import queue
 
 class FtdiError(base.CommunicationError):
     pass
@@ -77,6 +78,16 @@ class Device(object):
         connection_id = b"d:%03u/%03u" % (api.libusb_get_bus_number(dev), api.libusb_get_device_address(dev))
 
         return cls(vid, pid, vendor, model, serial, connection_id)
+
+    def reset(self):
+        try:
+            Handle(self.connection_id, "A", "RESET").close()
+        except:
+            pass
+        try:
+            Handle(self.connection_id, "B", "RESET").close()
+        except:
+            pass
     
     def __init__(self, vid, pid, vendor, model, serial, connection_id):
         self.vid = vid
@@ -93,28 +104,30 @@ class Device(object):
         if mode == "mpsse":
             return Mpsse(self, interface, **defaults)
         elif mode == "ft245_sync_fifo":
+            return Handle(self.connection_id, interface, "SYNCFF")
             return Ft245SyncFifo(self, interface, **defaults)
         elif mode == "reset":
             return Handle(self.connection_id, interface, "RESET")
         
+@api.stream_callback_fn
+def _callback(buf, size, progress_info, owner):
+    if buf and size:
+        owner.handle.stream_data(bytes(buf[:size]))
+
+    if progress_info:
+        owner.handle.stream_progress(progress_info)
+    return int(not owner.running)
+
 class StreamerThread(threading.Thread):
     def __init__(self, handle):
         threading.Thread.__init__(self)
         self.handle = handle
         self.running = False
 
-    @staticmethod
-    @api.stream_callback_fn
-    def _callback(buf, size, progress_info, self):
-        if buf and size:
-            self.handle.stream_data(bytes(buf[:size]))
-        if progress_info:
-            self.handle.stream_progress(progress_info)
-        return int(not self.running)
-
     def run(self):
         self.running = True
-        api.readstream(self.handle.context, self._callback, ctypes.py_object(self), 1, 4)
+        api.readstream(self.handle.context, _callback, ctypes.py_object(self), 1, 4)
+        assert not self.running
 
     def stop(self):
         self.running = False
@@ -122,6 +135,7 @@ class StreamerThread(threading.Thread):
         
 class Handle(Context):
     def __init__(self, connection_id, interface, mode):
+        self.opened = False
         Context.__init__(self)
         self.logger = logging.getLogger(str(connection_id, 'ascii'))
 
@@ -254,7 +268,7 @@ class Handle(Context):
         self.check(api.set_eeprom_value(self.context, id, value))
 
     def write(self, blob):
-        self.logger.info("< %s", binascii.b2a_hex(blob))
+        self.logger.debug("<< %s", binascii.b2a_hex(blob))
         raw = (ctypes.c_ubyte * len(blob)).from_buffer_copy(blob)
         self.check(api.write_data(self.context, raw, len(blob)))
 
@@ -263,6 +277,9 @@ class Handle(Context):
         self.check(api.poll_modem_status(self.context, ctypes.byref(status)))
         return status.value
 
+    def rx_flush(self):
+        self.check(api.usb_purge_rx_buffer(self.context))
+    
     def _read(self, size = 4096):
         blob = (ctypes.c_ubyte * size)()
         size = self.check(api.read_data(self.context, blob, size))
@@ -279,6 +296,7 @@ class Handle(Context):
             retries -= 1
             if not retries:
                 raise base.CommunicationError("Failed to read all data")
+        self.logger.debug(">> %s", binascii.b2a_hex(ret))
         return ret
     
     def execute(self, blob, rsize = 0):
@@ -292,39 +310,22 @@ class Handle(Context):
 class Ft245SyncFifo(Handle):
     def __init__(self, device, interface, **defaults):
         Handle.__init__(self, device.connection_id, interface, "RESET", **defaults)
-
-        self.stream_rx_queue_cond = threading.Condition()
-        self.stream_rx_queue = b""
+        self.stream_rx_queue = queue.Queue()
 
         self.streamer = StreamerThread(self)
         self.streamer.start()
 
     def read(self, size):
         ret = bytearray()
-        needed = size
 
-        with self.stream_rx_queue_cond:
-            while True:
-                while self.stream_rx_queue and needed:
-                    if len(self.stream_rx_queue) <= needed:
-                        ret += self.stream_rx_queue
-                        self.stream_rx_queue = b''
-                        needed = size - len(ret)
-                    else:
-                        ret += self.stream_rx_queue[:needed]
-                        self.stream_rx_queue = self.stream_rx_queue[needed:]
-                        needed = 0
+        while len(ret) < size:
+            ret += self.stream_rx_queue.get()
 
-                if not needed:
-                    return ret
+        return ret
 
-                self.stream_rx_queue_cond.wait()
-        
     def stream_data(self, buf):
-        with self.stream_rx_queue_cond:
-            self.logger.info("> %s", binascii.b2a_hex(buf))
-            self.stream_rx_queue += buf
-            self.stream_rx_queue_cond.notify_all()
+        self.logger.debug(">> %s", binascii.b2a_hex(buf))
+        self.stream_rx_queue.put(buf)
 
     def stream_progress(self, progress):
         pass
