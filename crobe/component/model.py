@@ -1,6 +1,8 @@
 from ..model import *
 import struct
 from enum import Enum
+from collections import deque
+from ..util.info import TimedLogger
 
 class Bus(object):
     def __init__(self, name):
@@ -33,7 +35,7 @@ class Bus(object):
         if not data:
             return
 
-        commands = []
+        commands = deque()
 
         if address & 0x1:
             commands.append(self.cmd_u8_write(address, data[0], interval))
@@ -61,7 +63,7 @@ class Bus(object):
             commands.append(self.cmd_u8_write(address, data[0], interval))
 
         self.execute(commands)
-            
+
     def u32_write(self, address, data):
         self.execute([self.cmd_u32_write(address, data)])
 

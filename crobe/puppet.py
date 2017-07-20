@@ -83,11 +83,10 @@ class Puppet(Component):
     def step(self):
         self.cpu.step()
         
-    def wait(self, interval = .01):
-        tries = 20
-        while self.cpu.state == self.cpu.State.RUN and tries:
-            time.sleep(interval)
-            tries -= 1
+    def wait(self, max_time = .05):
+        deadline = time.time() + max_time
+        while self.cpu.state == self.cpu.State.RUN and time.time() < deadline:
+            pass
 
         self.logger.debug("state %s reason %s", self.cpu.state, self.cpu.halt_cause)
 

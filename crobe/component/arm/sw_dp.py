@@ -1,6 +1,7 @@
 from ...adapter.protocol import swd
 from ...part_id import PartId
 from . import dp
+from collections import deque
 import math
 
 parts = []
@@ -112,7 +113,7 @@ class SwDp(dp.Dp):
                 raise dp.DpAccessFailure(o)
 
     def lower(self, operations, insert_run = 0):
-        ops = []
+        ops = deque()
 
         ap_read_pending = None
         select = 0
