@@ -138,7 +138,7 @@ if __name__ == "__main__":
     t.reset(0xdeadbeef)
     t.flush(1)
 
-    c.write(1, 4)
+    c.write(1, 1)
     c.flush(1)
 
     t.read(False, 0, 0xdeadbeef)
@@ -151,7 +151,7 @@ if __name__ == "__main__":
     t.read(False, 3, 0xdecafbad)
     t.flush(1)
 
-    c.write(0, 2)
+    c.write(0, 20)
     c.flush(1)
     
     t.write(True, 0, 0xdecafbad)
