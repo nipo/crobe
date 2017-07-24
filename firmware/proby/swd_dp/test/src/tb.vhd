@@ -6,10 +6,10 @@ entity tb is
 end tb;
 
 library nsl;
-use nsl.flit.all;
+use nsl.sized.all;
 
 library testing;
-use testing.flit.all;
+use testing.sized.all;
 use testing.ftdi.all;
 
 library top;
@@ -33,8 +33,8 @@ architecture arch of tb is
   signal s_fifo_oen: std_ulogic;
   signal s_fifo_clk: std_ulogic := '0';
 
-  signal s_gen_ack, s_chk_ack : nsl.flit.flit_ack;
-  signal s_gen_val, s_chk_val : nsl.flit.flit_cmd;
+  signal s_gen_ack, s_chk_ack : nsl.sized.sized_ack;
+  signal s_gen_val, s_chk_val : nsl.sized.sized_req;
 
   signal s_done : std_ulogic_vector(1 downto 0) := "00";
   
@@ -132,7 +132,7 @@ begin
       p_in_data => s_gen_val.data
       );
 
-  chk: testing.flit.flit_file_checker
+  chk: testing.sized.sized_file_checker
     generic map(
       filename => "rsp.txt"
       )
@@ -146,7 +146,7 @@ begin
       p_done => s_done(0)
       );
 
-  gen: testing.flit.flit_file_reader
+  gen: testing.sized.sized_file_reader
     generic map(
       filename => "cmd.txt"
       )
