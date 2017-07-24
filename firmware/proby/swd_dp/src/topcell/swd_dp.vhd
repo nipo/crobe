@@ -10,7 +10,9 @@ use nsl.ftdi.all;
 use nsl.routed.all;
 use nsl.framed.all;
 use nsl.sized.all;
-use nsl.swd.all;
+
+library coresight;
+use coresight.dp.all;
 
 entity swd_dp is
   port (
@@ -175,7 +177,7 @@ begin
       p_out_ack => s_to_host_ack(0)
       );
 
-  dp: nsl.swd.swd_framed_dp
+  dp: coresight.dp.dp_framed_swdp
     port map(
       p_clk  => fifo_clk,
       p_resetn => s_soft_resetn,

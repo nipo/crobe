@@ -5,4 +5,4 @@ deps += nsl.cs
 deps += nsl.framed
 deps += nsl.sized
 deps += nsl.routed
-deps += nsl.swd
+deps += coresight.dp
