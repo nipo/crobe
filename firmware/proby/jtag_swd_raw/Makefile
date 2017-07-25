@@ -1,7 +1,5 @@
-libraries = work
-work-srcdir = src
 target = jtag_swd_raw
-top = top
+top = work.top
 
 all: ../../../crobe/adapter/proby/fw/jtag_swd_raw.bit.gz
 

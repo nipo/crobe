@@ -1,5 +1,4 @@
 top = tb.tb
-libraries += top
 target = swd_etm
 top-srcdir = $(SRC_DIR)/../src
 hwdep=xilinx

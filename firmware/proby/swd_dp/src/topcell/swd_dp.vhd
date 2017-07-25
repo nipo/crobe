@@ -11,6 +11,9 @@ use nsl.routed.all;
 use nsl.framed.all;
 use nsl.sized.all;
 
+library util;
+use util.sync.sync_resetn;
+
 library coresight;
 use coresight.dp.all;
 
@@ -85,7 +88,7 @@ begin
   s_resetn <= user_btn;
   s_soft_resetn <= not s_soft_reset;
 
-  reset_fifo_clk_sync: nsl.util.reset_synchronizer
+  reset_fifo_clk_sync: util.sync.sync_resetn
     port map(
       p_resetn => s_resetn,
       p_resetn_sync => s_resetn_fifo_clk,
