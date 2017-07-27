@@ -153,6 +153,8 @@ class BaseInterface(object):
 
     @freq.setter
     def freq(self, freq):
+        if not freq:
+            freq = 60e6
         self.handle.freq = freq
         self.logger.info("requested freq %s, had %s", sci(freq, "Hz"), sci(self.handle.freq, "Hz"))
 

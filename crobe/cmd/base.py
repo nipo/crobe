@@ -71,7 +71,7 @@ class Interface(Adapter):
 
 class Freq(Interface):
     def c30_freq_declare(self):
-        self.parser.add_argument('--freq', '-f', type = str, default = "10e6",
+        self.parser.add_argument('--freq', '-f', type = str, default = "0",
                                      help = "Target insterface freq (Hz)")
 
     def c30_freq_parse(self, args):

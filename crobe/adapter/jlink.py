@@ -75,7 +75,7 @@ class JLinkInterface(object):
     @freq.setter
     def freq(self, freq):
         self.handle.speed = float(freq) / 1000.
-        self.logger.info("Frequency requested %s, had %s", sci(freq, 'Hz'), sci(self.freq, 'Hz'))
+        self.logger.debug("Frequency requested %s, had %s", sci(freq, 'Hz'), sci(self.freq, 'Hz'))
 
     @property
     def reset(self):

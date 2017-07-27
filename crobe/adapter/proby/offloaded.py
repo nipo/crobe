@@ -141,8 +141,9 @@ class Interface(swd.Interface):
         return self.BASE_FREQ / self.__divisor / 2
 
     @freq.setter
-    def freq(self, value):
-        self.__divisor = min((1<<16, max((1, int(self.BASE_FREQ / float(value) / 2)))))
+    def freq(self, freq):
+        self.__divisor = min(1<<16, max(2, int(self.BASE_FREQ / float(freq or 1e9) / 2)))
+        self.logger.info("requested freq %s, had %s", sci(freq, "Hz"), sci(self.freq, "Hz"))
         self.__divisor_dirty = True
         
     @property
