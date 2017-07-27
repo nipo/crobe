@@ -38,13 +38,15 @@ architecture arch of tb is
 
   signal s_done : std_ulogic_vector(1 downto 0) := "00";
   
-  signal s_dap_a : unsigned(1 downto 0);
-  signal s_dap_ad : std_ulogic;
-  signal s_dap_rdata : unsigned(31 downto 0);
-  signal s_dap_ready : std_ulogic;
-  signal s_dap_ren : std_ulogic;
-  signal s_dap_wdata : unsigned(31 downto 0);
-  signal s_dap_wen : std_ulogic;
+  signal s_ap_resetn : std_ulogic;
+  signal s_ap_sel : unsigned(7 downto 0);
+  signal s_ap_a : unsigned(5 downto 0);
+  signal s_ap_rdata : unsigned(31 downto 0);
+  signal s_ap_ready : std_ulogic;
+  signal s_ap_rok : std_ulogic;
+  signal s_ap_ren : std_ulogic;
+  signal s_ap_wdata : unsigned(31 downto 0);
+  signal s_ap_wen : std_ulogic;
 
 begin
 
@@ -164,25 +166,29 @@ begin
     port map(
       p_swclk => s_io0(4),
       p_swdio => s_io0(5),
-      p_dap_a => s_dap_a,
-      p_dap_ad => s_dap_ad,
-      p_dap_rdata => s_dap_rdata,
-      p_dap_ready => s_dap_ready,
-      p_dap_ren => s_dap_ren,
-      p_dap_wdata => s_dap_wdata,
-      p_dap_wen => s_dap_wen
+      p_swd_resetn => s_ap_resetn,
+      p_ap_sel => s_ap_sel,
+      p_ap_a => s_ap_a,
+      p_ap_rdata => s_ap_rdata,
+      p_ap_ready => s_ap_ready,
+      p_ap_ren => s_ap_ren,
+      p_ap_rok => s_ap_rok,
+      p_ap_wdata => s_ap_wdata,
+      p_ap_wen => s_ap_wen
       );
 
-  dap: testing.swd.dap_sim
+  ap: testing.swd.ap_sim
     port map(
       p_clk => s_io0(4),
-      p_dap_a => s_dap_a,
-      p_dap_ad => s_dap_ad,
-      p_dap_rdata => s_dap_rdata,
-      p_dap_ready => s_dap_ready,
-      p_dap_ren => s_dap_ren,
-      p_dap_wdata => s_dap_wdata,
-      p_dap_wen => s_dap_wen
+      p_resetn => s_ap_resetn,
+      p_ap => s_ap_sel,
+      p_a => s_ap_a,
+      p_rdata => s_ap_rdata,
+      p_ready => s_ap_ready,
+      p_ren => s_ap_ren,
+      p_rok => s_ap_rok,
+      p_wdata => s_ap_wdata,
+      p_wen => s_ap_wen
       );
 
   s_user_btn <= s_resetn;

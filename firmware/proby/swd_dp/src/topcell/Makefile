@@ -6,4 +6,5 @@ deps += nsl.framed
 deps += nsl.sized
 deps += nsl.routed
 deps += util.sync
+deps += util.activity
 deps += coresight.dp

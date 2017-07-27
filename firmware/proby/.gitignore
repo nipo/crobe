@@ -13,3 +13,14 @@ usage_statistics_webtalk.html
 *.xwbt
 par_usage_statistics.html
 _xmsgs/
+*.xmsgs
+isim/
+isim*.wdb
+isim.log
+*.nlf
+*.sdf
+*.vcd
+*.vcd.tmp
+*.wcfg
+fuse.log
+fuseRelaunch.cmd

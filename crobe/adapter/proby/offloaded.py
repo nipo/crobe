@@ -113,15 +113,15 @@ class Interface(swd.Interface):
     CONFIG_REG_FREQ = 0
     CONFIG_REG_SRST = 1
     CONFIG_REG_TRST = 2
-    CONFIG_REG_USER_LED = 3
     
     def __init__(self, adapter, mux):
         self.__turnaround_cycles = 1
-        self.__turnaround_dirty = False
+        self.__turnaround_dirty = True
         swd.Interface.__init__(self, adapter)
         self.mux = RoutedPath(mux, 0xf)
         self.__reset = False
         self.__divisor = int(self.BASE_FREQ / 1e6 - 1)
+        self.__divisor_dirty = True
 
     @property
     def reset(self):
@@ -136,9 +136,6 @@ class Interface(swd.Interface):
         self.__reset = bool(value)
         self.mux.execute(self.CONFIG_CID, struct.pack("<BL", self.CONFIG_REG_SRST, int(self.__reset)), 1)
         
-    def led_set(self, value):
-        self.mux.execute(self.CONFIG_CID, struct.pack("<BL", self.CONFIG_REG_USER_LED, int(bool(value))), 1)
-        
     @property
     def freq(self):
         return self.BASE_FREQ / self.__divisor / 2
@@ -146,7 +143,7 @@ class Interface(swd.Interface):
     @freq.setter
     def freq(self, value):
         self.__divisor = min((1<<16, max((1, int(self.BASE_FREQ / float(value) / 2)))))
-        self.mux.execute(self.CONFIG_CID, struct.pack("<BL", self.CONFIG_REG_FREQ, self.__divisor - 1), 1)
+        self.__divisor_dirty = True
         
     @property
     def turnaround_cycles(self):
@@ -154,6 +151,7 @@ class Interface(swd.Interface):
 
     @turnaround_cycles.setter
     def turnaround_cycles(self, cycles):
+        self.logger.debug("Changing turnaround_cycles from %d to %d", self.__turnaround_cycles, cycles)
         if cycles != self.__turnaround_cycles:
             self.__turnaround_dirty = True
             self.__turnaround_cycles = cycles
@@ -161,25 +159,29 @@ class Interface(swd.Interface):
     def _execute(self, operation_list):
         ops = deque(operation_list)
         max_size = 512
-
-        self.led_set(1)
         
         while ops:
             cmd = bytearray([0] * max_size)
             cmd_size = 0
             rsp_size = 0
 
-            if self.__turnaround_dirty:
-                cmd[cmd_size] = self.CMD_TURNAROUND | (self.__turnaround_cycles - 1)
-                cmd_size += 1
-                rsp_size += 1
-                self.__turnaround_dirty = False
-
             pending = deque()
 
             while ops and cmd_size < max_size - 16 and rsp_size < max_size - 16:
                 op = ops.popleft()
                 pending.append(op)
+
+                if self.__turnaround_dirty:
+                    self.logger.debug("Turnaround dirty, now %d", self.__turnaround_cycles)
+                    cmd[cmd_size] = self.CMD_TURNAROUND | (self.__turnaround_cycles - 1)
+                    cmd_size += 1
+                    rsp_size += 1
+                    self.__turnaround_dirty = False
+
+                if self.__divisor_dirty:
+                    d = self.__divisor
+                    self.mux.execute(self.CONFIG_CID, struct.pack("<BL", self.CONFIG_REG_FREQ, d - 1), 1)
+                    self.__divisor_dirty = False
 
                 if isinstance(op, swd.Read):
                     addr = op.addr & 0x3
@@ -210,6 +212,7 @@ class Interface(swd.Interface):
                         rsp_size += 1
                     
                 elif isinstance(op, swd.Wakeup):
+                    self.turnaround_cycles = 1
                     cmd[cmd_size] = self.CMD_RUN | 0x40 | 49
                     cmd_size += 1
                     rsp_size += 1
@@ -249,8 +252,6 @@ class Interface(swd.Interface):
 
                     if isinstance(op, swd.Read):
                         op.data, = struct.unpack("<L", in_blob[op.__offset + 1 : op.__offset + 5])
-
-            self.led_set(0)
 
 class Adapter(basic.Adapter, base.Reflasher):
     supported_interfaces = ["swd"]

@@ -160,7 +160,7 @@ class Handle(Context):
         self.check(api.set_bitmode(self.context, 0, api.BITMODE["RESET"]))
         self.check(api.usb_purge_buffers(self.context))
         self.check(api.set_latency_timer(self.context, 1))
-        self.check(api.set_bitmode(self.context, 0xfb, api.BITMODE[mode]))
+        self.check(api.set_bitmode(self.context, 0, api.BITMODE[mode]))
 
     def close(self):
         if self.opened:
@@ -347,7 +347,7 @@ class Mpsse(Handle):
 
     def close(self):
         if self.opened:
-            self.gpio_mask_set(0xffff, 0, 0)
+            self.gpio_mask_set(0xffff, 0, 0xffff)
         Handle.close(self)
         
     @property

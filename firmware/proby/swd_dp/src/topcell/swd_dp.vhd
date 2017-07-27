@@ -12,7 +12,8 @@ use nsl.framed.all;
 use nsl.sized.all;
 
 library util;
-use util.sync.sync_resetn;
+use util.sync.sync_rising_edge;
+use util.activity.activity_monitor;
 
 library coresight;
 use coresight.dp.all;
@@ -77,10 +78,10 @@ architecture arch of swd_dp is
   signal s_srst, s_trst, s_swclk, s_swdio_i, s_swdio_o, s_swdio_oe : std_ulogic;
   signal s_soft_resetn, s_soft_reset: std_ulogic;
 
-  signal s_io_config: std_ulogic_vector(2 downto 0);
+  signal s_io_config: std_ulogic_vector(1 downto 0);
   signal s_div: std_ulogic_vector(15 downto 0);
   signal s_config_data: nsl.cs.cs_reg;
-  signal s_config_write: std_ulogic_vector(4 downto 0);
+  signal s_config_write: std_ulogic_vector(2 downto 0);
   signal s_status: nsl.cs.cs_reg_array(1 downto 0);
   
 begin
@@ -88,10 +89,10 @@ begin
   s_resetn <= user_btn;
   s_soft_resetn <= not s_soft_reset;
 
-  reset_fifo_clk_sync: util.sync.sync_resetn
+  reset_fifo_clk_sync: util.sync.sync_rising_edge
     port map(
-      p_resetn => s_resetn,
-      p_resetn_sync => s_resetn_fifo_clk,
+      p_in => s_resetn,
+      p_out => s_resetn_fifo_clk,
       p_clk => fifo_clk
       );
   
@@ -308,10 +309,6 @@ begin
       if s_config_write(2) = '1' then
         s_io_config(1) <= s_config_data(0);
       end if;
-
-      if s_config_write(3) = '1' then
-        s_io_config(2) <= s_config_data(0);
-      end if;
     end if;
   end process;
   
@@ -320,7 +317,17 @@ begin
   s_status(1)(1) <= io0(7); -- trst
   s_srst <= s_io_config(0);
   s_trst <= s_io_config(1);
-  user_led <= s_io_config(2);
+
+  monitor: util.activity.activity_monitor
+    generic map(
+      blink_time => 7500000
+      )
+    port map(
+      p_resetn => s_soft_resetn,
+      p_clk => fifo_clk,
+      p_togglable => io0(5),
+      p_activity => user_led
+      );
   
   s_swdio_i <= io0(5);
   io0(7) <= '0' when s_trst = '1' else 'Z'; -- TRST

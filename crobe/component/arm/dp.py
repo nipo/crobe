@@ -112,6 +112,10 @@ class Dp(PortComponent):
     def cmd_run(self, cycles = 1):
         return Run(cycles)
 
+    def run(self, cycles = 1):
+        op = self.port.cmd_run(cycles)
+        self.port.execute([op])
+
     def banked_reg_read(self, regno):
         raise NotImplementedError()
 
