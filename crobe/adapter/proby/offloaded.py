@@ -106,11 +106,11 @@ class Interface(swd.Interface):
     RSP_ACK_MASK         = 0x07
     RSP_PAR_ERROR        = 0x08
 
-    BASE_FREQ = 60e6
-
     SWD_PORT_CID = 0
     CONFIG_CID = 1
-    CONFIG_REG_FREQ = 0
+
+    STATUS_REG_BASE_FREQ = 2
+    CONFIG_REG_RATE = 0
     CONFIG_REG_SRST = 1
     CONFIG_REG_TRST = 2
     
@@ -119,9 +119,15 @@ class Interface(swd.Interface):
         self.__turnaround_dirty = True
         swd.Interface.__init__(self, adapter)
         self.mux = RoutedPath(mux, 0xf)
+        self.base_freq = int.from_bytes(
+            self.mux.execute(self.CONFIG_CID, struct.pack("<B", 0x80 | self.STATUS_REG_BASE_FREQ), 5)[1:],
+            byteorder = 'little')
+
+        self.logger.info("Found proby with internal clock of %s", sci(self.base_freq, "Hz"))
+        
         self.__reset = False
-        self.__divisor = int(self.BASE_FREQ / 1e6 - 1)
-        self.__divisor_dirty = True
+        self.__rate = 1000
+        self.__rate_dirty = True
 
     @property
     def reset(self):
@@ -138,13 +144,15 @@ class Interface(swd.Interface):
         
     @property
     def freq(self):
-        return self.BASE_FREQ / self.__divisor / 2
+        return self.__rate / 2
 
     @freq.setter
     def freq(self, freq):
-        self.__divisor = min(1<<16, max(2, int(self.BASE_FREQ / float(freq or 1e9) / 2)))
+        if not freq:
+            freq = 15e6
+        self.__rate = min((1 << 26) - 1, max(1, int(float(freq) * 2)))
         self.logger.info("requested freq %s, had %s", sci(freq, "Hz"), sci(self.freq, "Hz"))
-        self.__divisor_dirty = True
+        self.__rate_dirty = True
         
     @property
     def turnaround_cycles(self):
@@ -179,10 +187,9 @@ class Interface(swd.Interface):
                     rsp_size += 1
                     self.__turnaround_dirty = False
 
-                if self.__divisor_dirty:
-                    d = self.__divisor
-                    self.mux.execute(self.CONFIG_CID, struct.pack("<BL", self.CONFIG_REG_FREQ, d - 1), 1)
-                    self.__divisor_dirty = False
+                if self.__rate_dirty:
+                    self.mux.execute(self.CONFIG_CID, struct.pack("<BL", self.CONFIG_REG_RATE, self.__rate), 1)
+                    self.__rate_dirty = False
 
                 if isinstance(op, swd.Read):
                     addr = op.addr & 0x3

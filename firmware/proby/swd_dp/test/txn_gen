@@ -6,7 +6,7 @@ class NocTxnFile:
     def __init__(self, filename):
         self.output = open(filename, "w")
 
-    def put(self, data, mask, length, wait = 1000):
+    def put(self, data, mask, length, wait = 0):
         for i in range(length - 1, -1, -1):
             v = (data >> i) & 1
             m = (mask >> i) & 1
@@ -141,7 +141,7 @@ if __name__ == "__main__":
     t.reset(0x2ba01477)
     t.flush(1)
 
-    c.write(0, 1)
+    c.write(0, 2 * 1024 * 1024)
     c.write(1, 1)
     c.flush(1)
 
@@ -161,7 +161,7 @@ if __name__ == "__main__":
     t.read(False, 3, 0xdecafbad)
     t.flush(1)
 
-    c.write(0, 0)
+    c.write(0, int(25e6 * 2))
     c.flush(1)
     
     t.write(True, 0, 0xdecafbad)

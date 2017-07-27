@@ -4,6 +4,7 @@ deps += nsl.ftdi
 deps += nsl.cs
 deps += nsl.framed
 deps += nsl.sized
+deps += nsl.util
 deps += nsl.routed
 deps += util.sync
 deps += util.activity
