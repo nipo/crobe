@@ -24,10 +24,7 @@ class EfmFlash(StubFlash):
                  PartId(6, 0x73, 0x101),
                  PartId(6, 0x73, 0x901))
 class Gecko(SoC):
-    DI_UNIQUE = 0x0fe081f0
-    DI_PACKAGE_INFO = 0x0fe081e4
-    DI_MEM_INFO = 0x0fe081f8
-    DI_PART_INFO = 0x0fe081fc
+    DI_BASE = 0x0fe081b0
     
     def __init__(self, dp):
         SoC.__init__(self, "Gecko", dp)
@@ -37,28 +34,40 @@ class Gecko(SoC):
         self.logger.info("MCU UID: %016x", self.uid)
 
     def device_identify(self):
-        self.uid, = struct.unpack("<Q", self.buses[0].mem_read(self.DI_UNIQUE, 8))
-        part_info = self.buses[0].u32_read(self.DI_PART_INFO)
-        mem_info = self.buses[0].u32_read(self.DI_MEM_INFO)
-        pack_info = self.buses[0].u32_read(self.DI_PACKAGE_INFO)
-
-        prod_ref = (part_info >> 24) & 0xff
-        family = (part_info >> 16) & 0xff
-        dev_number = part_info & 0xffff
-        flash_size = mem_info & 0xffff
-        ram_size = mem_info >> 16
-
-        name = self.PART_NAMES.get(family, "EFM32[%d]" % family) + str(dev_number) + "F" + str(flash_size)
-
-        self.logger.info("DI_PART_INFO: %08x", part_info)
+        self.di_data = self.buses[0].mem_read(self.DI_BASE, self.DI_EMUTEMP)
         
-        flash_page_size = 2 ** (((pack_info >> 24) + 10) & 0xff)
+        self.uid, = struct.unpack("<Q", self.di_data[self.DI_UNIQUE:self.DI_UNIQUE+8])
+        dev_number, family, prod_ref = struct.unpack("<HBB", self.di_data[self.DI_PART:self.DI_PART+4])
+        flash_size, ram_size = struct.unpack("<HH", self.di_data[self.DI_MSIZE:self.DI_MSIZE+4])
+        tempgrade, pkgtype, pincount, flash_page_size = \
+            struct.unpack("<BBBB", self.di_data[self.DI_MEMINFO:self.DI_MEMINFO+4])
+        pkgtype = chr(pkgtype)
+        flash_page_size = 2 ** ((flash_page_size + 10) & 0xff)
 
+        name = self.PART_NAMES.get(family, "EFM32[%d]" % family) \
+               + str(dev_number) + "F" + str(flash_size)
+        if pincount:
+            name += pkgtype + str(pincount)
+
+        self.name = name
+
+        if name.startswith("EFR"):
+            self.mac = self.di_data[self.DI_EUI48+5:self.DI_EUI48-1:-1]
+            self.logger.info("EUI48 HWADDR: %s", ':'.join(["%02x"%x for x in self.mac]))
+
+        if pincount:
+            self.logger.info("Package: %s%d", self.PACKAGE_NAMES.get(pkgtype, pkgtype), pincount)
+            
         self.child_add(EfmFlash(self, "code", 0, flash_size * 1024, flash_page_size))
         self.child_add(Ram(self.buses[0], "ram", 0x20000000, ram_size * 1024))
 
-        self.name = name
-        
+    PACKAGE_NAMES = {
+        'J': "WLCSP",
+        'L': "BGA",
+        'M': "QFN",
+        'Q': "QFP",
+        }
+    
     PART_NAMES = {
         16: "EFR32MG1P",
         17: "EFR32MG1B",
@@ -82,3 +91,12 @@ class Gecko(SoC):
         121: "EZR32LG",
         122: "EZR32HG",
         }
+
+    DI_EUI48            = 0x028
+    DI_CUSTOMINFO       = 0x030
+    DI_MEMINFO          = 0x034
+    DI_UNIQUE           = 0x040
+    DI_MSIZE            = 0x048
+    DI_PART             = 0x04C
+    DI_DEVINFOREV       = 0x050
+    DI_EMUTEMP          = 0x054
