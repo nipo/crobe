@@ -27,14 +27,15 @@ entity swd_dp is
     user_btn: in std_ulogic;
 
     io_en: out std_ulogic;
-    io0: inout std_logic_vector(7 downto 0);
-    io1: in std_ulogic_vector(23 downto 0);
 
-    jtag_en: out std_ulogic;
-    jtag_tdi: in std_ulogic;
-    jtag_tms: in std_ulogic;
-    jtag_tdo: out std_ulogic;
-    jtag_tck: in std_ulogic;
+    dbg_spare: in std_logic;
+    dbg_srst: inout std_logic;
+    dbg_rtck: in std_logic;
+    dbg_tck: out std_logic;
+    dbg_tms: inout std_logic;
+    dbg_tdi: out std_logic;
+    dbg_tdo: in std_logic;
+    dbg_trst: inout std_logic;
 
     fifo_data: inout std_logic_vector(7 downto 0);
     fifo_rxfn: in std_ulogic;
@@ -42,20 +43,7 @@ entity swd_dp is
     fifo_rdn: out std_ulogic;
     fifo_wrn: out std_ulogic;
     fifo_oen: out std_ulogic;
-    fifo_clk: in std_ulogic;
-
-    ram_addr: out std_ulogic_vector(21 downto 0);
-    ram_da: inout std_ulogic_vector(7 downto 0);
-    ram_db: inout std_ulogic_vector(7 downto 0);
-    ram_dap: inout std_ulogic;
-    ram_dbp: inout std_ulogic;
-    ram_bwan: out std_ulogic;
-    ram_bwbn: out std_ulogic;
-    ram_wen: out std_ulogic;
-    ram_cen: out std_ulogic;
-    ram_cenn: out std_ulogic;
-    ram_oen: out std_ulogic;
-    ram_clk: out std_ulogic
+    fifo_clk: in std_ulogic
   );
 end swd_dp;
 
@@ -384,8 +372,8 @@ begin
   end process;
   
   s_status(0)(s_clk_gen_rate'range) <= std_ulogic_vector(s_clk_gen_rate);
-  s_status(1)(0) <= io0(1); -- srst
-  s_status(1)(1) <= io0(7); -- trst
+  s_status(1)(0) <= dbg_srst;
+  s_status(1)(1) <= dbg_trst;
   s_status(2) <= std_ulogic_vector(to_unsigned(sys_clk_mhz * 1000000, s_status(2)'length)); -- s_sys_clk
   s_srst <= s_io_config(0);
   s_trst <= s_io_config(1);
@@ -397,40 +385,17 @@ begin
     port map(
       p_resetn => s_sys_resetn_soft,
       p_clk => s_sys_clk,
-      p_togglable => io0(5),
+      p_togglable => dbg_tms,
       p_activity => user_led
       );
   
-  s_swdio_i <= io0(5);
-  io0(7) <= '0' when s_trst = '1' else 'Z'; -- TRST
-  io0(6) <= 'L'; -- TDI
-  io0(5) <= s_swdio_o when s_swdio_oe = '1' else 'Z'; -- TMS
-  io0(4) <= s_swclk; -- TCK
-  io0(3) <= 'L'; -- RTCK
-  io0(2) <= 'L'; -- TDO
-  io0(1) <= '0' when s_srst = '1' else 'Z'; -- SRST
-  io0(0) <= 'L';
-  
-  jtag_en <= '0';
-  jtag_tdo <= 'L';
+  s_swdio_i <= dbg_tms;
+  dbg_trst <= '0' when s_trst = '1' else 'Z';
+  dbg_tdi <= 'L';
+  dbg_tms <= s_swdio_o when s_swdio_oe = '1' else 'Z';
+  dbg_tck <= s_swclk;
+  dbg_srst <= '0' when s_srst = '1' else 'Z';
 
   io_en <= '1';
-
---   user_led <= s_sys_resetn_soft;
-  
-  -- RAM IO, unconnected
-  
-  ram_addr <= (others => '0');
-  ram_da <= (others => '0');
-  ram_db <= (others => '0');
-  ram_dap <= '0';
-  ram_dbp <= '0';
-  ram_bwan <= '1';
-  ram_bwbn <= '1';
-  ram_wen <= '1';
-  ram_cen <= '1';
-  ram_cenn <= '1';
-  ram_oen <= '1';
-  ram_clk <= '0';
 
 end arch;

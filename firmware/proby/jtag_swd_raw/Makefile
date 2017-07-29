@@ -1,9 +1,14 @@
 target = jtag_swd_raw
 top = work.top
+target_part = xc6slx9tqg144-2
+constraints += $(SRC_DIR)/../pinout/ftdi_jtag.ucf
+constraints += $(SRC_DIR)/../pinout/io0_dbg.ucf
+constraints += $(SRC_DIR)/../pinout/user.ucf
+tool = ise
 
 all: ../../../crobe/adapter/proby/fw/jtag_swd_raw.bit.gz
 
 ../../../crobe/adapter/proby/fw/jtag_swd_raw.bit.gz: jtag_swd_raw-compressed.bit
 	gzip -c9 < $< > $@
 
-include ../synthesis.mk
+include ../../../nsl/build/build.mk

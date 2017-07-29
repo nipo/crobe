@@ -1,0 +1,11 @@
+# IOs
+NET "io_en"        LOC =  "P32" | IOSTANDARD = LVCMOS25 | SLEW = SLOW;     # Enable buffers, if any, active high
+
+NET "dbg_spare"   LOC =  "P50" | IOSTANDARD = LVCMOS33 | SLEW = FAST;
+NET "dbg_srst"    LOC =  "P48" | IOSTANDARD = LVCMOS33 | SLEW = FAST;
+NET "dbg_tdo"     LOC =  "P47" | IOSTANDARD = LVCMOS33 | SLEW = FAST;
+NET "dbg_rtck"    LOC =  "P46" | IOSTANDARD = LVCMOS33 | SLEW = FAST;
+NET "dbg_tck"     LOC =  "P45" | IOSTANDARD = LVCMOS33 | SLEW = FAST;
+NET "dbg_tms"     LOC =  "P44" | IOSTANDARD = LVCMOS33 | SLEW = FAST;
+NET "dbg_tdi"     LOC =  "P43" | IOSTANDARD = LVCMOS33 | SLEW = FAST;
+NET "dbg_trst"    LOC =  "P41" | IOSTANDARD = LVCMOS33 | SLEW = FAST;

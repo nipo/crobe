@@ -11,14 +11,15 @@ package topcell is
       user_btn: in std_ulogic;
 
       io_en: out std_ulogic;
-      io0: inout std_logic_vector(7 downto 0);
-      io1: in std_ulogic_vector(23 downto 0);
 
-      jtag_en: out std_ulogic;
-      jtag_tdi: in std_ulogic;
-      jtag_tms: in std_ulogic;
-      jtag_tdo: out std_ulogic;
-      jtag_tck: in std_ulogic;
+      dbg_spare: in std_logic;
+      dbg_srst: inout std_logic;
+      dbg_rtck: in std_logic;
+      dbg_tck: out std_logic;
+      dbg_tms: inout std_logic;
+      dbg_tdi: out std_logic;
+      dbg_tdo: in std_logic;
+      dbg_trst: inout std_logic;
 
       fifo_data: inout std_logic_vector(7 downto 0);
       fifo_rxfn: in std_ulogic;
@@ -26,20 +27,7 @@ package topcell is
       fifo_rdn: out std_ulogic;
       fifo_wrn: out std_ulogic;
       fifo_oen: out std_ulogic;
-      fifo_clk: in std_ulogic;
-
-      ram_addr: out std_ulogic_vector(21 downto 0);
-      ram_da: inout std_ulogic_vector(7 downto 0);
-      ram_db: inout std_ulogic_vector(7 downto 0);
-      ram_dap: inout std_ulogic;
-      ram_dbp: inout std_ulogic;
-      ram_bwan: out std_ulogic;
-      ram_bwbn: out std_ulogic;
-      ram_wen: out std_ulogic;
-      ram_cen: out std_ulogic;
-      ram_cenn: out std_ulogic;
-      ram_oen: out std_ulogic;
-      ram_clk: out std_ulogic
+      fifo_clk: in std_ulogic
       );
   end component;
 

@@ -23,7 +23,8 @@ architecture arch of tb is
 
   signal s_user_btn: std_ulogic;
 
-  signal s_io0: std_logic_vector(7 downto 0);
+  signal dbg_swclk: std_logic;
+  signal dbg_swdio: std_logic;
 
   signal s_fifo_data: std_logic_vector(7 downto 0);
   signal s_fifo_rxfn: std_ulogic;
@@ -85,13 +86,15 @@ begin
       user_led => open,
       user_btn => '1',
       io_en => open,
-      io0 => s_io0,
-      io1 => "LLLLLLLLLLLLLLLLLLLLLLLL",
-      jtag_en => open,
-      jtag_tdi => '0',
-      jtag_tms => '0',
-      jtag_tdo => open,
-      jtag_tck => '0',
+
+      dbg_spare => '0',
+      dbg_srst => open,
+      dbg_rtck => '0',
+      dbg_tck => dbg_swclk,
+      dbg_tms => dbg_swdio,
+      dbg_tdi => open,
+      dbg_tdo => '0',
+      dbg_trst => open,
 
       fifo_data => s_fifo_data,
       fifo_rxfn => s_fifo_rxfn,
@@ -99,20 +102,7 @@ begin
       fifo_rdn => s_fifo_rdn,
       fifo_wrn => s_fifo_wrn,
       fifo_oen => s_fifo_oen,
-      fifo_clk => s_fifo_clk,
-
-      ram_addr => open,
-      ram_da => open,
-      ram_db => open,
-      ram_dap => open,
-      ram_dbp => open,
-      ram_bwan => open,
-      ram_bwbn => open,
-      ram_wen => open,
-      ram_cen => open,
-      ram_cenn => open,
-      ram_oen => open,
-      ram_clk => open
+      fifo_clk => s_fifo_clk
       );
 
   split: testing.ftdi.ft245_sync_fifo_merger
@@ -164,8 +154,8 @@ begin
 
   swdap: testing.swd.swdap
     port map(
-      p_swclk => s_io0(4),
-      p_swdio => s_io0(5),
+      p_swclk => dbg_swclk,
+      p_swdio => dbg_swdio,
       p_swd_resetn => s_ap_resetn,
       p_ap_sel => s_ap_sel,
       p_ap_a => s_ap_a,
@@ -179,7 +169,7 @@ begin
 
   ap: testing.swd.ap_sim
     port map(
-      p_clk => s_io0(4),
+      p_clk => dbg_swclk,
       p_resetn => s_ap_resetn,
       p_ap => s_ap_sel,
       p_a => s_ap_a,
