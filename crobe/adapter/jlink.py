@@ -1,8 +1,9 @@
 from . import model
 from collections import deque
-from .protocol import swd, jtag, base
+from .protocol import swd, jtag, base, spi
 from .. import bitstring
 from ..util.pretty import sci
+from ..util.endian import bitswap8
 import struct
 
 __all__ = []
@@ -45,6 +46,8 @@ class Adapter(model.Adapter):
         self.nickname = nickname
         self.serial_number = serial_number
         self.supported_interfaces = [x.lower() for x in available_interfaces]
+        if 'jtag' in self.supported_interfaces:
+            self.supported_interfaces += ["spi"]
         self.__firmware_version = firmware_version
 
     @property
@@ -57,6 +60,9 @@ class Adapter(model.Adapter):
 
         if interface_name.lower() == "jtag":
             return JtagInterface(self)
+
+        if interface_name.lower() == "spi":
+            return SpiInterface(self)
 
         if interface_name.lower() == "swd":
             return SwdInterface(self)
@@ -395,3 +401,42 @@ class SwdInterface(JLinkInterface, swd.Interface):
                     op.ack = ack
                     if isinstance(op, swd.Read):
                         op.data, = struct.unpack("<L", in_blob[byte + 1 : byte + 5])
+
+class SpiInterface(JLinkInterface, spi.Interface):
+    def __init__(self, port):
+        spi.Interface.__init__(self, port)
+        JLinkInterface.__init__(self, port, "JTAG")
+        self.__cs = False
+
+    def _execute(self, operation_list):
+        ops = deque(operation_list)
+        
+        while ops:
+            cs_pending = bytearray()
+            out_pending = bytearray()
+            used = 0
+            pending = deque()
+
+            while ops and len(cs_pending) < 2048 - 16:
+                op = ops.popleft()
+                pending.append(op)
+
+                if isinstance(op, spi.Shift):
+                    op.__offset = len(out_pending)
+                    cs_pending += (b"\x00" if self.__cs else b"\xff") * len(op.mosi)
+                    out_pending += bitswap8(op.mosi)
+                    
+                elif isinstance(op, spi.Cs):
+                    if self.__cs != op.value:
+                        self.__cs = op.value
+                        cs_pending += b"\xff"
+                        out_pending += b'\x00'
+
+                else:
+                    raise base.ProtocolError("Unknown SPI operation %s" % type(op))
+
+            in_blob = self.handle.jtag_io(cs_pending, out_pending, len(out_pending) * 8)
+
+            for op in pending:
+                if isinstance(op, spi.Shift):
+                    op.miso = bitswap8(in_blob[op.__offset : op.__offset + len(op.mosi)])

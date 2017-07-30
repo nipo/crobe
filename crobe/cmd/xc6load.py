@@ -5,6 +5,7 @@ def main():
     class Tool(base.Freq, base.Programs):
         forced_interface = "jtag"
         program_count_needed = 1
+        max_freq = 50e6
 
     args = Tool("XC6S loader")
 

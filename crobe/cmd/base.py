@@ -55,7 +55,10 @@ class Adapter(Command):
 
         Enumerator.singleton.start()
 
-        self.adapter = Enumerator.singleton.get(args.adapter)
+        filt = None
+        if hasattr(self, "forced_interface") and self.forced_interface:
+            filt = lambda x: self.forced_interface in x.supported_interfaces
+        self.adapter = Enumerator.singleton.get(args.adapter, predicate = filt)
     
 class Interface(Adapter):
     forced_interface = None
@@ -70,13 +73,22 @@ class Interface(Adapter):
         self.interface = self.adapter.open(interface)
 
 class Freq(Interface):
+    max_freq = None
+
     def c30_freq_declare(self):
         self.parser.add_argument('--freq', '-f', type = str, default = "0",
                                      help = "Target insterface freq (Hz)")
 
     def c30_freq_parse(self, args):
         from ..util.pretty import sci_parse
-        self.interface.freq = sci_parse(args.freq)
+        f = sci_parse(args.freq)
+
+        if self.max_freq is not None and f:
+            f = max(self.max_freq, f)
+        elif self.max_freq and not f:
+            f = self.max_freq
+
+        self.interface.freq = f
     
 class Power(Interface):
     def c24_power_declare(self):

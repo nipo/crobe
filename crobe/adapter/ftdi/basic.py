@@ -1,9 +1,11 @@
 from .. import model
 from ...bitstring import BitString
-from ..protocol import jtag, base, swd
-from . import ftdi
+from ..protocol import jtag, base, swd, spi
+from . import ftdi, api
 from ...util.pretty import sci
-        
+from collections import deque
+import struct
+
 class Adapter(model.Adapter):
     supported_interfaces = ["jtag"]
 
@@ -27,13 +29,16 @@ class Adapter(model.Adapter):
         d.update(defaults)
 
         self.device.reset()
-        
+
         if interface_name.lower() == "jtag":
             return JtagInterface(self, **d)
 
+        if interface_name.lower() == "spi":
+            return SpiInterface(self, **d)
+
         if interface_name.lower() == "swd":
             return SwdInterface(self, **d)
-        
+
         raise NotSupportedError("Unsupported interface %s" % interface_name)
 
 class AdapterEnumerator(model.Enumerator):
@@ -47,13 +52,13 @@ class AdapterEnumerator(model.Enumerator):
         self.defaults = defaults
         self.vid_pid = []
 
-        
+
         if vid is not None and pid is not None:
             self.add(vid, pid)
 
     def add(self, vid, pid):
         self.vid_pid.append((vid, pid))
-        
+
     def filter(self, adapter):
         return True
 
@@ -106,7 +111,7 @@ class BaseInterface(object):
             self.__activity_pin = (activityn_pin, False)
             oe |= (1 << activityn_pin)
             val |= (1 << activityn_pin)
-            
+
         self.handle = adapter.device.open(interface = channel, gpio_oe = oe, gpio_val = val)
 
     @property
@@ -146,7 +151,7 @@ class BaseInterface(object):
         pin, polarity = self.__power_pin
         self.handle.gpio_mask_set(1 << pin, 1 << pin,
                                   (1 << pin) if bool(reset) == polarity else 0)
-        
+
     @property
     def freq(self):
         return int(self.handle.freq)
@@ -165,7 +170,7 @@ class BaseInterface(object):
                                                  (1 << pin) if polarity == bool(value) else 0)
         else:
             return b""
-        
+
 class JtagInterface(BaseInterface, jtag.Interface):
     def __init__(self, adapter, oe_pin = None, oen_pin = None, **args):
         jtag.Interface.__init__(self, adapter)
@@ -179,13 +184,13 @@ class JtagInterface(BaseInterface, jtag.Interface):
         self.__cmd_capture_pause = self.handle.cmd_tms_shift(BitString(1, 2))
         self.__cmd_pause_rti = self.handle.cmd_tms_shift(BitString(3, 3))
         self.__cmd_reset_rti = self.handle.cmd_tms_shift(BitString(0, 1))
-        
+
     def _execute(self, operation_list):
         to_join = []
         ops = []
 
         max_shift_bits = 512*8
-        
+
         for o in operation_list:
             if isinstance(o, jtag.Shift):
                 if not len(o.tdi):
@@ -206,7 +211,7 @@ class JtagInterface(BaseInterface, jtag.Interface):
         #self.logger.debug("running %s", operation_list)
 
         assert self.__state in (self.STATE_RESET, self.STATE_PAUSE, self.STATE_RTI, None)
-        
+
         while ops:
             pending = []
             cmd = [self.cmd_activity(True)]
@@ -253,7 +258,7 @@ class JtagInterface(BaseInterface, jtag.Interface):
                     elif self.__state == self.STATE_RESET:
                         cmd.append(self.__cmd_reset_rti)
                         self.__state = self.STATE_RTI
-                        
+
                     if self.__state == self.STATE_RTI:
                         if op.cycles:
                             # TODO anything shorter ?
@@ -280,7 +285,7 @@ class JtagInterface(BaseInterface, jtag.Interface):
 
                 else:
                     raise base.ProtocolError("Unknown JTAG operation %s" % type(op))
-                
+
             cmd.append(self.cmd_activity(False))
 
             tdo_blob = self.handle.execute(b''.join(cmd), tdo_length)
@@ -335,10 +340,10 @@ class SwdInterface(BaseInterface, swd.Interface):
         return self.handle.cmd_gpio_mask_set((1 << pin) | 2,
                                              (1 << pin) | 2,
                                               (int(bool(val) == pol) << pin) | (int(tdi) << 1))
-        
+
     def _execute(self, operation_list):
         ops = list(operation_list)
-        
+
         #self.logger.debug("running %s", ops)
         cmd_turn = self.handle.cmd_idle(self.turnaround_cycles, 1)
 
@@ -421,7 +426,7 @@ class SwdInterface(BaseInterface, swd.Interface):
 
                 else:
                     raise base.ProtocolError("Unknown SWD operation %s" % type(op))
-                
+
             cmd.append(self.cmd_activity(False))
 
             rsp = self.handle.execute(b''.join(cmd), rsp_length)
@@ -467,3 +472,52 @@ class SwdInterface(BaseInterface, swd.Interface):
             tdo |= v << tdo_len
             tdo_len += bits
         return tdo
+
+class SpiInterface(BaseInterface, spi.Interface):
+    def __init__(self, adapter, csn_pin = None, **args):
+        spi.Interface.__init__(self, adapter)
+        BaseInterface.__init__(self, adapter, **args)
+
+        self.__cmd_cs_on = self.handle.cmd_gpio_mask_set(
+            1 << csn_pin, 1 << csn_pin, 0 << csn_pin)
+        self.__cmd_cs_off = self.handle.cmd_gpio_mask_set(
+            1 << csn_pin, 1 << csn_pin, 1 << csn_pin)
+
+    def _execute(self, operation_list):
+        ops = deque(operation_list)
+        io = api.MPSSE_WRITE_NEG | api.MPSSE_WRITE | api.MPSSE_READ
+
+        while ops:
+            pending = []
+            cmd = self.cmd_activity(True)
+            rsp_length = 0
+
+            while ops and len(cmd) < 4000:
+                op = ops.popleft()
+                pending.append(op)
+
+                if isinstance(op, spi.Shift):
+                    bytestring = op.mosi
+                    op.__offset = rsp_length
+                    for i in range(0, len(bytestring), 1024):
+                        chunk = bytestring[i : i+1024]
+                        cmd += struct.pack("<BH", io, len(chunk) - 1)
+                        cmd += chunk
+                        rsp_length += len(chunk)
+
+                elif isinstance(op, spi.Cs):
+                    if op.value:
+                        pending += self.__cmd_cs_on
+                    else:
+                        pending += self.__cmd_cs_off
+
+                else:
+                    raise base.ProtocolError("Unknown SPI operation %s" % type(op))
+
+            cmd += self.cmd_activity(False)
+
+            rsp = self.handle.execute(cmd, rsp_length)
+
+            for op in pending:
+                if isinstance(op, spi.Shift):
+                    op.miso = rsp[op.__offset : op.__offset + len(op.mosi)]

@@ -32,8 +32,11 @@ class Enumerator(model.Component):
         cls.singleton.children.append(enum_class())
         return enum_class
 
-    def find(self, crit):
+    def find(self, crit, predicate = None):
         adapters = self.children_of_class(Adapter)
+
+        if predicate:
+            adapters = list(filter(predicate, adapters))
 
         try:
             index = int(crit)
@@ -48,8 +51,8 @@ class Enumerator(model.Component):
         adapters = [a for a in adapters if a.name.lower() == crit.lower()]
         return adapters
         
-    def get(self, crit):
-        candidates = self.find(crit)
+    def get(self, *args, **kwargs):
+        candidates = self.find(*args, **kwargs)
         if len(candidates) != 1:
             raise KeyError("Criteria not met")
         return candidates[0]
