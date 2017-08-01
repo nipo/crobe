@@ -109,7 +109,7 @@ class JtagDp(dp.Dp):
                     continue
 
                 if ack == self.Ack.WAIT:
-                    operations = operations[i:]
+                    operations = list(operations)[i:]
                     self.ctrlstat = self.ctrlstat | 2
                     must_restart = True
                     insert_run += 1
