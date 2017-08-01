@@ -4,3 +4,9 @@ bitswap8_lut = b'\x00\x80@\xc0 \xa0`\xe0\x10\x90P\xd00\xb0p\xf0\x08\x88H\xc8(\xa
 
 def bitswap8(s):
     return s.translate(bitswap8_lut)
+
+def swib_u8(w):
+    return bitswap8_lut[w]
+
+def swib_u16(w):
+    return bitswap8_lut[w >> 8] | (bitswap8_lut[w & 0xff] << 8)

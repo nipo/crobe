@@ -2,7 +2,9 @@ from ...part_id import PartId
 from ...adapter.protocol import jtag
 import struct
 from ... import bitstring
+from ...util.endian import swib_u16
 import datetime
+import os, os.path
 
 parts = {
     0x04000093: "XC6SLX4",
@@ -22,6 +24,8 @@ parts = {
 
 @jtag.Tap.db.register(*[PartId.from_idcode(c).drop_revision() for c in parts.keys()])
 class Spartan6(jtag.Tap):
+    base_path = os.path.join(os.path.dirname(__file__), "fw")
+
     irlen = 6
 
     IR_BYPASS      = 0x3f
@@ -84,7 +88,7 @@ class Spartan6(jtag.Tap):
         return (idcode[0] << 16) | idcode[1]
 
     def _cfg_shift(self, cmd, prog_data, read_rsp = False):
-        blob = struct.pack("<" + "H" * len(prog_data), *map(self.swib_u16, prog_data))
+        blob = struct.pack("<" + "H" * len(prog_data), *map(swib_u16, prog_data))
 
         prog_dr = bitstring.BitString(blob)
 
@@ -92,7 +96,7 @@ class Spartan6(jtag.Tap):
         self.run(30)
 
         if read_rsp:
-            return [self.swib_u16(x) for x in struct.unpack("<" + "H" * len(prog_data), rsp.data)]
+            return [swib_u16(x) for x in struct.unpack("<" + "H" * len(prog_data), rsp.data)]
 
     def cfg_read(self, reg, count):
         nop = 0x2000
@@ -119,10 +123,17 @@ class Spartan6(jtag.Tap):
 
         return ops[2].tdo
 
-    def load(self, program):
+    def load(self, program, force_reload = False):
         if len(program) != 1:
             raise ValueError("Bitstream programming only supports one config payload")
 
+        expected_userid = program.info.get("userid", None)
+        if expected_userid == 0xffffffff:
+            expected_userid = None
+
+        if expected_userid:
+            self.logger.info("Expected UserID=0x%08x", expected_userid)
+        
         if "device" in program.info:
             target = program.info["device"].lower()
             cur = self.name[2:].lower()
@@ -130,6 +141,13 @@ class Spartan6(jtag.Tap):
             if not target.startswith(cur):
                 raise ValueError("Bitstream is for a %s, device is a %s" % (target, cur))
 
+        if expected_userid:
+            userid = self.dr_shift(self.IR_USERCODE, 0, 32)
+            self.logger.info("Current UserID=0x%08x", userid)
+            if userid == expected_userid and not force_reload:
+                self.logger.info("UserID matches, doing nothing")
+                return
+            
         blob = program[0].data
         if len(blob) % 1:
             raise ValueError("Odd data length in bitstream")
@@ -173,12 +191,14 @@ class Spartan6(jtag.Tap):
             raise RuntimeError("Unable to start FPGA")
         else:
             self.logger.info("Done OK, time taken: %s", end - begin)
-    
-    @staticmethod
-    def swib_u16(w):
-        w = ((w & 0x5555) << 1) | ((w & 0xaaaa) >> 1)
-        w = ((w & 0x3333) << 2) | ((w & 0xcccc) >> 2)
-        w = ((w & 0x0f0f) << 4) | ((w & 0xf0f0) >> 4)
-        w = ((w & 0x00ff) << 8) | ((w & 0xff00) >> 8)
-        return w
         
+
+    def spi_interface(self):
+        from ...loadable.object import Program
+        filename = os.path.join(self.base_path, self.name.lower() + "_jtag_spi.bit.gz")
+        self.load(Program.from_file(filename))
+
+        from ..jtag_spi_bridge import JtagSpiBridge
+
+        return JtagSpiBridge(self, self.IR_USER1, self.IR_USER2)
+

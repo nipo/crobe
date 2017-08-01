@@ -1,0 +1,15 @@
+ise-build/
+*.bgn
+*.bit
+*.mcs
+*.xrpt
+xlnx_auto_0_xdb/
+xilinx_device_details.xml
+webtalk.log
+usage_statistics_webtalk.html
+*.lso
+*.srp
+*.drc
+*.xwbt
+par_usage_statistics.html
+_xmsgs/
