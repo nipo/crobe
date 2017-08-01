@@ -1,13 +1,21 @@
 library ieee;
 use ieee.std_logic_1164.all;
-use work.all;
+
+library hwdep;
+use hwdep.clock.all;
+
+library util;
+use util.activity.all;
 
 entity top is
   port (
     user_led: out std_ulogic;
     user_btn: in std_ulogic;
 
+    clk: in std_ulogic;
+
     io_en: inout std_ulogic;
+    jtag_en: inout std_ulogic;
 
     dbg_spare: out std_ulogic;
     dbg_srst: inout std_ulogic;
@@ -87,8 +95,19 @@ begin
   ftdi_d7 <= dbg_rtck;
   ftdi_d6 <= dbg_srst;
   ftdi_c3 <= 'H';
-
-  user_led <= ftdi_c6;
+  
+  monitor: util.activity.activity_monitor
+    generic map(
+      blink_time => 12000000 / 8
+      )
+    port map(
+      p_resetn => '1',
+      p_clk => clk,
+      p_togglable => ftdi_tck,
+      p_activity => user_led
+      );
+  
   io_en <= ftdi_c1;
+  jtag_en <= '0';
 
 end arch;

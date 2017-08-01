@@ -25,13 +25,6 @@ class Reflasher(object):
 
         filename = os.path.join(self.base_path, mode + ".bit.gz")
         obj = Program.from_file(filename)
-
-        expected_userid = obj.info.get("userid", None)
-        if expected_userid == 0xffffffff:
-            expected_userid = None
-
-        if expected_userid:
-            self.logger.info("Expected UserID=0x%08x", expected_userid)
                  
         self.logger.info("Using internal chain of Proby, starting discovery")
 
@@ -43,26 +36,7 @@ class Reflasher(object):
 
         self.logger.info("Got FPGA in chain: %s", fpga)
 
-        if expected_userid:
-            userid = fpga.dr_shift(fpga.IR_USERCODE, 0, 32)
-            self.logger.info("Current User ID: 0x%08x", userid)
-            if userid == expected_userid:
-                self.logger.info("UserID matches, doing nothing")
-                del jtag_intf
-                return
-
         fpga.load(obj)
-
-        for i in range(10):
-            done = jtag_intf.handle.gpio_get(5)
-            if done:
-                break
-            time.sleep(.01)
-
-        if not done:
-            raise RuntimeError("FPGA not done, timeout")
-
-        del jtag_intf
 
 class Enumerator(basic.AdapterEnumerator):
     def __init__(self, name, nick, **kwargs):

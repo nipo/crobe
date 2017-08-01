@@ -1,6 +1,4 @@
 # JTAG from FTDI (MPSSE Port B)
-# Route JTAG to FPGA IO pins rather than dedicated programming pins
-NET "jtag_en"      LOC =  "P35" | IOSTANDARD = LVCMOS25 | SLEW = SLOW;
 # Always connected to FTDI
 NET "jtag_tdi"     LOC =  "P40" | IOSTANDARD = LVCMOS33 | SLEW = SLOW;
 # Always connected to FTDI
