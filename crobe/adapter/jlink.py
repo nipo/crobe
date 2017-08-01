@@ -423,8 +423,15 @@ class SpiInterface(JLinkInterface, spi.Interface):
 
                 if isinstance(op, spi.Shift):
                     op.__offset = len(out_pending)
-                    cs_pending += (b"\x00" if self.__cs else b"\xff") * len(op.mosi)
-                    out_pending += bitswap8(op.mosi)
+                    mosi = op.mosi
+                    if isinstance(mosi, bytes):
+                        cs_pending += (b"\x00" if self.__cs else b"\xff") * len(mosi)
+                        out_pending += bitswap8(mosi)
+                    elif isinstance(mosi, int):
+                        cs_pending += (b"\x00" if self.__cs else b"\xff") * mosi
+                        out_pending += b"\x00" * mosi
+                    else:
+                        raise ValueError("Unhandled data type for mosi", mosi)
                     
                 elif isinstance(op, spi.Cs):
                     if self.__cs != op.value:
@@ -438,5 +445,5 @@ class SpiInterface(JLinkInterface, spi.Interface):
             in_blob = self.handle.jtag_io(cs_pending, out_pending, len(out_pending) * 8)
 
             for op in pending:
-                if isinstance(op, spi.Shift):
+                if isinstance(op, spi.Shift) and op.read_miso:
                     op.miso = bitswap8(in_blob[op.__offset : op.__offset + len(op.mosi)])
