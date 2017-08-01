@@ -23,6 +23,22 @@ class Interface(base.Interface):
 
     def __init__(self, port):
         base.Interface.__init__(self, "SPI Intf", port)
+
+    @property
+    def reset(self):
+        return False
+
+    @reset.setter
+    def reset(self, reset):
+        raise NotImplementedError("Incapable hardware")
+
+    @property
+    def power(self):
+        return True
+
+    @power.setter
+    def power(self, power):
+        raise NotImplementedError("Incapable hardware")
         
     def _execute(self, operation_list):
         """
@@ -37,22 +53,22 @@ class Interface(base.Interface):
         op = self.cmd_cs(val)
         self.execute([op])
 
-    def shift(self, mosi):
+    def shift(self, mosi, read_miso = True):
         """
         See cmd_read()
         """
-        op = self.cmd_shift(mosi)
+        op = self.cmd_shift(mosi, read_miso)
         self.execute([op])
         return op.miso
 
-    def cmd_shift(self, mosi):
+    def cmd_shift(self, mosi, read_miso = True):
         """
         Returns a shift operation object.  `miso` is set on shift
         object upon successful execution.
 
         :param bytes mosi: Value to shift in
         """
-        return Shift(mosi)
+        return Shift(mosi, read_miso)
 
     def cmd_cs(self, value):
         """
@@ -61,19 +77,20 @@ class Interface(base.Interface):
         return Cs(value)
 
 class Target(PortComponent):
-
-    def transaction(self, mosi):
-        op = self.port.cmd_shift(mosi)
+    def transaction(self, mosi, read_miso = True):
+        op = self.port.cmd_shift(mosi, read_miso)
         self.port.execute([self.port.cmd_cs(True), op, self.port.cmd_cs(False)])
-        return op.miso
+        if read_miso:
+            return op.miso
 
 class Operation(object):
     def __repr__(self):
         return str(self)
 
 class Shift(Operation):
-    def __init__(self, mosi):
+    def __init__(self, mosi, read_miso = True):
         self.mosi = mosi
+        self.read_miso = read_miso
 
     # When executed
     miso = None
