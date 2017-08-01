@@ -497,13 +497,13 @@ class Tap(PortComponent):
             if isinstance(c, TapDrShift) and (c.read_tdo or c.read_ir):
                 c.tdo = c.postprocess(c.__op.tdo)
 
-    def dr_shift(self, ir, dr, length = None, read_tdo = True, read_ir = False):
+    def dr_shift(self, ir, dr, length = None, read_tdo = True, read_ir = False, return_type = None):
         """
         See cmd_dr_shift().
         """
-        op = self.cmd_dr_shift(ir, dr, length, read_tdo, read_ir)
+        op = self.cmd_dr_shift(ir, dr, length, read_tdo, read_ir, return_type)
         self.execute([op])
-        if dr is not None and read_tdo:
+        if read_tdo or dr is not None:
             return op.tdo
         elif read_ir:
             return op.tdo
@@ -514,7 +514,7 @@ class Tap(PortComponent):
         """
         self.execute([TapRun(cycles)])
 
-    def cmd_dr_shift(self, ir, dr, length = None, read_tdo = True, read_ir = False):
+    def cmd_dr_shift(self, ir, dr, length = None, read_tdo = True, read_ir = False, return_type = None):
         """
         Shifts DR having a given IR selected. Will only reload IR if needed.
 
@@ -528,7 +528,7 @@ class Tap(PortComponent):
         or an integer (in which case it will be used as a
         little-endian value of length bits, then length is mandatory).
         """
-        return TapDrShift(ir, dr, length, read_tdo, read_ir)
+        return TapDrShift(ir, dr, length, read_tdo, read_ir, return_type)
 
     def cmd_run(self, cycles):
         """
@@ -546,22 +546,27 @@ class TapOperation(object):
         return str(self)
 
 class TapDrShift(TapOperation):
-    def __init__(self, ir, dr, length = None, read_tdo = True, read_ir = False):
+    def __init__(self, ir, dr, length = None, read_tdo = True, read_ir = False, return_type = None):
         self.ir = ir
-        self.postprocess = lambda x:x
+        self.postprocess = return_type or (lambda x:x)
         self.tdo = 0
         self.read_ir = False
 
-        if dr is None:
+        if dr is None and length is None:
             read_tdo = False
             self.read_ir = read_ir
             self.tdi = None
+        elif dr is None:
+            self.tdi = BitString(0, length)
+            self.postprocess = return_type or int
         elif isinstance(dr, BitString):
             self.tdi = dr
+        elif isinstance(dr, bytes):
+            self.tdi = BitString(dr, length)
         elif isinstance(dr, int):
             assert isinstance(length, int) and length >= 1
             self.tdi = BitString(dr, length)
-            self.postprocess = int
+            self.postprocess = return_type or int
         else:
             raise RuntimeError("Cannot handle dr", dr)
 
