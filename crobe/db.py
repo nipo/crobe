@@ -16,6 +16,7 @@ class Db(object):
 
     def register_default(self, obj):
         self.default = obj
+        return obj
 
     def _register(self, ids, obj):
         for i in set(ids):
