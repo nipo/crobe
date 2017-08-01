@@ -18,6 +18,9 @@ class BitStringSlice:
     def data(self):
         return int(self).to_bytes(length = (self.__length + 7)//8, byteorder = 'little')
 
+    def __bytes__(self):
+        return int(self).to_bytes(length = (self.__length + 7)//8, byteorder = 'little')
+    
     def __len__(self):
         return self.__length
     
@@ -167,6 +170,9 @@ class BitString:
                 self.__data_cache = b''.join(self.__bytes)
 
         return self.__data_cache
+
+    def __bytes__(self):
+        return self.data
 
     def __len__(self):
         """
