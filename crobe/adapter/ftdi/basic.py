@@ -120,7 +120,7 @@ class BaseInterface(object):
             return False
 
         pin, polarity = self.__reset_pin
-        return self.gpio_get(pin) == polarity
+        return self.handle.gpio_get(pin) == polarity
 
     @reset.setter
     def reset(self, reset):
@@ -485,7 +485,6 @@ class SpiInterface(BaseInterface, spi.Interface):
 
     def _execute(self, operation_list):
         ops = deque(operation_list)
-        io = api.MPSSE_WRITE_NEG | api.MPSSE_WRITE | api.MPSSE_READ
 
         while ops:
             pending = []
@@ -497,13 +496,25 @@ class SpiInterface(BaseInterface, spi.Interface):
                 pending.append(op)
 
                 if isinstance(op, spi.Shift):
-                    bytestring = op.mosi
-                    op.__offset = rsp_length
-                    for i in range(0, len(bytestring), 1024):
-                        chunk = bytestring[i : i+1024]
-                        cmd += struct.pack("<BH", io, len(chunk) - 1)
-                        cmd += chunk
-                        rsp_length += len(chunk)
+                    if isinstance(op.mosi, bytes):
+                        io = api.MPSSE_WRITE_NEG | api.MPSSE_WRITE
+                        if op.read_miso:
+                            io |= api.MPSSE_READ
+                        op.__offset = rsp_length
+                        for i in range(0, len(op.mosi), 1024):
+                            chunk = op.mosi[i : i+1024]
+                            cmd += struct.pack("<BH", io, len(chunk) - 1)
+                            cmd += chunk
+                            rsp_length += len(chunk)
+                    elif isinstance(op.mosi, int):
+                        io = api.MPSSE_WRITE_NEG
+                        if op.read_miso:
+                            io |= api.MPSSE_READ
+                        op.__offset = rsp_length
+                        for i in range(0, op.mosi, 1024):
+                            cmd += struct.pack("<BH", io, len(chunk) - 1)
+                    else:
+                        raise ValueError("Unhandled data type for mosi", mosi)
 
                 elif isinstance(op, spi.Cs):
                     if op.value:
@@ -519,5 +530,5 @@ class SpiInterface(BaseInterface, spi.Interface):
             rsp = self.handle.execute(cmd, rsp_length)
 
             for op in pending:
-                if isinstance(op, spi.Shift):
+                if isinstance(op, spi.Shift) and op.read_miso:
                     op.miso = rsp[op.__offset : op.__offset + len(op.mosi)]
