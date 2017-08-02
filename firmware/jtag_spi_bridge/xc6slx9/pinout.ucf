@@ -1,5 +1,4 @@
-NET p_flash_sck       LOC = P70 | IOSTANDARD = LVCMOS33 | SLEW = SLOW;
-NET p_flash_mosi      LOC = P64 | IOSTANDARD = LVCMOS33 | SLEW = SLOW;
+NET p_flash_sck       LOC = P70 | IOSTANDARD = LVCMOS33 | SLEW = FAST;
+NET p_flash_mosi      LOC = P64 | IOSTANDARD = LVCMOS33 | SLEW = FAST;
 NET p_flash_miso      LOC = P65 | IOSTANDARD = LVCMOS33;
-NET p_flash_cs        LOC = P38 | IOSTANDARD = LVCMOS33 | SLEW = SLOW;
-NET p_flash_cs        LOC = P38 | IOSTANDARD = LVCMOS33 | SLEW = SLOW;
+NET p_flash_cs        LOC = P38 | IOSTANDARD = LVCMOS33 | SLEW = FAST;
