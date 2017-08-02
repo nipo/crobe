@@ -46,8 +46,8 @@ class Adapter(model.Adapter):
         self.nickname = nickname
         self.serial_number = serial_number
         self.supported_interfaces = [x.lower() for x in available_interfaces]
-        if 'jtag' in self.supported_interfaces:
-            self.supported_interfaces += ["spi"]
+        if 'jtag' in self.supported_interfaces and "spi" not in self.supported_interfaces:
+            self.supported_interfaces.append("spi")
         self.__firmware_version = firmware_version
 
     @property
