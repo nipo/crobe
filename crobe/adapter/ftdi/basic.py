@@ -14,7 +14,7 @@ class Adapter(model.Adapter):
         self.device = device
         self.enumerator = enumerator
         self.serial_number = enumerator.serial_mangle(self.device.serial)
-        model.Adapter.__init__(self, "%s:%s" % (enumerator.short_name.lower(), self.serial_number or str(self.device.connection_id, 'ascii')[2:]))
+        model.Adapter.__init__(self, "%s-%s" % (enumerator.short_name.lower(), self.serial_number or str(self.device.connection_id, 'ascii')[2:]))
         self.nickname = self.name
 
     @property

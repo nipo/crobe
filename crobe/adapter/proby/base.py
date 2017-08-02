@@ -43,7 +43,7 @@ class Enumerator(basic.AdapterEnumerator):
                                         vid = 0x10eb, pid = 0x0026, **kwargs)
 
     def serial_mangle(self, serial):
-        return serial.split(";")[-1]
+        return str(int(serial.split(";")[-1]))
 
 #@model.Enumerator.register
 class ProbyIntEnumerator(Enumerator):
