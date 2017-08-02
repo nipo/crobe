@@ -246,7 +246,7 @@ class Program:
             return cls.from_bin(filename, offset)
         if filename.endswith(".bit") or filename.endswith(".bit.gz"):
             return cls.from_bit(filename, offset)
-        if filename.endswith(".hex") or filename.endswith(".ihex"):
+        if filename.endswith(".hex") or filename.endswith(".ihex") or filename.endswith(".mcs"):
             return cls.from_ihex(filename, offset)
         try:
             return cls.from_elf(filename, offset)

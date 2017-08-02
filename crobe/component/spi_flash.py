@@ -4,6 +4,7 @@ from ..adapter.protocol import spi
 from ..util.pretty import sci
 import binascii
 import struct
+import time
 
 __all__ = ["SpiFlash"]
 
@@ -18,11 +19,14 @@ class SpiFlash(PortComponent):
     
     CMD_READ = b"\x0b"
     CMD_READ_JEDEC_ID = b"\x9f"
+    CMD_PAGE_PROGRAM = b"\x02"
     CMD_WRITE_STATUS = None
     CMD_CHIP_ERASE = b'\xc7'
     CMD_WRITE_ENABLE = b'\x06'
     CMD_WRITE_DISABLE = b'\x04'
     CMD_READ_STATUS = b'\x05'
+    CMD_RESET_ENABLE = b'\x66'
+    CMD_RESET = b'\x99'
     STATUS_WIP = 1
     STATUS_WEL = 2
     
@@ -31,9 +35,9 @@ class SpiFlash(PortComponent):
         if not idr:
             idr = self.idr_get()
         self.idr = idr
+        self.logger.info("SPI flash, IDR %06x", self.idr)
 
     def info(self):
-        self.logger.info("SPI flash, IDR %06x", self.idr)
         self.logger.info("Total size: %s (%s)", sci(self.total_size, "B"), sci(self.total_size * 8, "b"))
         for i, s in enumerate(self.SECTOR_INFO):
             self.logger.info("- level %d: %d sectors of %d bytes. Erase command: 0x%02x",
@@ -44,6 +48,21 @@ class SpiFlash(PortComponent):
 
     @classmethod
     def detect(cls, port):
+        port.execute([
+            port.cmd_cs(False),
+            port.cmd_shift(b'\x00'),
+            ])
+        time.sleep(.01)
+        port.execute([
+            port.cmd_cs(True),
+            port.cmd_shift(cls.CMD_RESET_ENABLE),
+            port.cmd_cs(False),
+            port.cmd_shift(b'\x00'),
+            port.cmd_cs(True),
+            port.cmd_shift(cls.CMD_RESET),
+            port.cmd_cs(False),
+            ])
+        time.sleep(.3)
         self = cls(port)
         try:
             self = cls.db.call(self.idr, port, self.idr)
@@ -88,7 +107,7 @@ class SpiFlash(PortComponent):
     def status(self):
         return self.command(self.CMD_READ_STATUS, 1)[0]
             
-    def chip_erase(self):
+    def erase_all(self):
         while not (self.status & self.STATUS_WEL):
             self.write_enable(True)
         self.command(self.CMD_CHIP_ERASE, 0)
@@ -96,7 +115,7 @@ class SpiFlash(PortComponent):
             pass
         self.write_enable(False)
     
-    def erase(self, base, size):
+    def erase_range(self, base, size):
         chosen = None
         for s in self.SECTOR_INFO:
             ss = s["size"]
@@ -106,30 +125,42 @@ class SpiFlash(PortComponent):
         if chosen is None:
             raise ValueError("Cannot find a suitable command to erase zone")
 
+        for addr in range(base, base + size, si["size"]):
+            self.erase_sector(addr, chosen)
+
+    def erase_sector(self, addr, si):
+        self.logger.info("Erasing %d bytes at %08x", si["size"], addr)
+        self.command(si["erase_cmd"] + self.addr(addr), 0)
+        while self.status & self.STATUS_WIP:
+            pass
+
+    def write(self, program, erase_first = True):
+        si = self.SECTOR_INFO[0]
+
         while not (self.status & self.STATUS_WEL):
             self.write_enable(True)
 
-        for addr in range(base, base + size, ss["size"]):
-            self.command(ss["erase_cmd"] + self.addr(addr), 0)
+        for page in program.paged(si["size"], fill = b'\x00'):
+            if erase_first:
+                self.erase_sector(page.address, si)
+
+            self.logger.info("Writing %d bytes at %08x", si["size"], page.address)
+            for offset in range(0, len(page), 256):
+                self.command(self.CMD_PAGE_PROGRAM + self.addr(page.address + offset)
+                             + page.data[offset : offset + 256], 0)
             while self.status & self.STATUS_WIP:
                 pass
 
         self.write_enable(False)
 
-    def write(self, base, payload, erase_first = True):
-        if erase_first:
-            self.erase(base, len(payload))
+    def verify(self, program):
+        si = self.SECTOR_INFO[0]
 
-        while not (self.status & self.STATUS_WEL):
-            self.write_enable(True)
+        for page in program.paged(si["size"], fill = b'\x00'):
+            if self.read(page.address, len(page)) != page.data:
+                return False
+        return True
 
-        for offset in range(0, len(payload), 256):
-            self.command(self.CMD_PAGE_PROGRAM + self.addr(base + offset) + payload[offset : offset + 256], 0)
-            while self.status & self.STATUS_WIP:
-                pass
-
-        self.write_enable(False)
-        
 @SpiFlash.db.register_default
 class SfdpFlash(SpiFlash):
     CMD_SFDP_READ = b'\x5a'
