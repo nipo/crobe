@@ -27,7 +27,7 @@ class Enumerator(basic.AdapterEnumerator):
                                        resetn_pin = 11,
                                        activity_pin = 15)
 
-@model.Enumerator.register
+#@model.Enumerator.register
 class Enumerator(basic.AdapterEnumerator):
     def __init__(self):
         basic.AdapterEnumerator.__init__(self, "Busblaster Internal",

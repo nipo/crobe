@@ -28,7 +28,7 @@ class Reflasher(object):
                  
         self.logger.info("Using internal chain of Proby, starting discovery")
 
-        jtag_intf = model.Enumerator.singleton.get("int-proby:" + self.serial_number).open("jtag")
+        jtag_intf = basic.Adapter.open(self, "jtag", channel = "B", resetn_pin = 9, name = "pint-"+self.serial_number)
         jtag_intf.logger.setLevel(logging.WARNING)
         jtag_intf.start()
         fpga, = jtag_intf.children_of_class(Spartan6)
@@ -45,7 +45,7 @@ class Enumerator(basic.AdapterEnumerator):
     def serial_mangle(self, serial):
         return serial.split(";")[-1]
 
-@model.Enumerator.register
+#@model.Enumerator.register
 class ProbyIntEnumerator(Enumerator):
     def __init__(self):
         Enumerator.__init__(self, "Proby-internal", "int-proby",
