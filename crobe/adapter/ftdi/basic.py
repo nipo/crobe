@@ -490,7 +490,7 @@ class SpiInterface(BaseInterface, spi.Interface):
 
         while ops:
             pending = []
-            cmd = self.cmd_activity(True)
+            cmd = b''
             rsp_length = 0
 
             while ops and len(cmd) < 4000:
@@ -503,34 +503,36 @@ class SpiInterface(BaseInterface, spi.Interface):
                         if op.read_miso:
                             io |= api.MPSSE_READ
                         op.__offset = rsp_length
-                        for i in range(0, len(op.mosi), 1024):
-                            chunk = op.mosi[i : i+1024]
-                            cmd += struct.pack("<BH", io, len(chunk) - 1)
-                            cmd += chunk
-                            rsp_length += len(chunk)
-                    elif isinstance(op.mosi, int):
-                        io = api.MPSSE_WRITE_NEG
+                        for i in range(0, len(op.mosi), 1 << 16):
+                            chunk = op.mosi[i : i+(1 << 16)]
+                            cmd += struct.pack("<BH", io, len(chunk) - 1) + chunk
                         if op.read_miso:
-                            io |= api.MPSSE_READ
+                            rsp_length += len(op.mosi)
+                    elif isinstance(op.mosi, int):
+                        io = api.MPSSE_READ
                         op.__offset = rsp_length
-                        for i in range(0, op.mosi, 1024):
-                            cmd += struct.pack("<BH", io, len(chunk) - 1)
+                        for i in range(0, op.mosi, 1<<16):
+                            cl = min(1<<16, op.mosi - i)
+                            cmd += struct.pack("<BH", io, cl - 1)
+                        rsp_length += op.mosi
                     else:
                         raise ValueError("Unhandled data type for mosi", mosi)
 
                 elif isinstance(op, spi.Cs):
                     if op.value:
-                        pending += self.__cmd_cs_on
+                        cmd += self.__cmd_cs_on
                     else:
-                        pending += self.__cmd_cs_off
+                        cmd += self.__cmd_cs_off
 
                 else:
                     raise base.ProtocolError("Unknown SPI operation %s" % type(op))
-
-            cmd += self.cmd_activity(False)
 
             rsp = self.handle.execute(cmd, rsp_length)
 
             for op in pending:
                 if isinstance(op, spi.Shift) and op.read_miso:
-                    op.miso = rsp[op.__offset : op.__offset + len(op.mosi)]
+                    if isinstance(op.mosi, int):
+                        l = op.mosi
+                    else:
+                        l = len(op.mosi)
+                    op.miso = rsp[op.__offset : op.__offset + l]
