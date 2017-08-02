@@ -19,7 +19,7 @@ class Dp(PortComponent):
     RDBUFF    = 3 # R
 
     def __init__(self, name, port):
-        PortComponent.__init__(self, name, port)
+        PortComponent.__init__(self, port, name)
 
     def start(self):
         from ...part_id import PartId

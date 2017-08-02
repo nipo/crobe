@@ -174,8 +174,8 @@ class BaseInterface(object):
             return b""
 
 class JtagInterface(BaseInterface, jtag.Interface):
-    def __init__(self, adapter, oe_pin = None, oen_pin = None, **args):
-        jtag.Interface.__init__(self, adapter)
+    def __init__(self, adapter, oe_pin = None, oen_pin = None, name = None, **args):
+        jtag.Interface.__init__(self, adapter, name)
         BaseInterface.__init__(self, adapter, **args)
 
         self.__state = None
@@ -318,8 +318,8 @@ class JtagInterface(BaseInterface, jtag.Interface):
         return tdo
 
 class SwdInterface(BaseInterface, swd.Interface):
-    def __init__(self, adapter, oen_pin = None, oe_pin = None, **args):
-        swd.Interface.__init__(self, adapter)
+    def __init__(self, adapter, oen_pin = None, oe_pin = None, name = None, **args):
+        swd.Interface.__init__(self, adapter, name)
         BaseInterface.__init__(self, adapter, **args)
         if oen_pin is None and oe_pin is not None:
             self.oe_pin = (oe_pin, True)
@@ -476,8 +476,8 @@ class SwdInterface(BaseInterface, swd.Interface):
         return tdo
 
 class SpiInterface(BaseInterface, spi.Interface):
-    def __init__(self, adapter, csn_pin = None, **args):
-        spi.Interface.__init__(self, adapter)
+    def __init__(self, adapter, csn_pin = None, name = None, **args):
+        spi.Interface.__init__(self, adapter, name)
         BaseInterface.__init__(self, adapter, **args)
 
         self.__cmd_cs_on = self.handle.cmd_gpio_mask_set(

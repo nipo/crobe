@@ -68,8 +68,8 @@ class Interface(base.Interface):
     STATE_SHIFT = "SHIFT"
     STATE_PAUSE = "PAUSE"
 
-    def __init__(self, port):
-        base.Interface.__init__(self, "JTAG Intf", port)
+    def __init__(self, port, name = None):
+        base.Interface.__init__(self, port, (name or port.name) + "/J")
         self.use_icepick = False
 
     def start(self):
@@ -186,8 +186,9 @@ class Chain(PortComponent):
     This can handle SWD to JTAG switching or ICEPick initialization.
     """
     def __init__(self, port):
-        PortComponent.__init__(self, "JTAG Chain", port)
-
+        PortComponent.__init__(self, port, "JTAG Chain")
+        self.name = self.port.port.name + "/C"
+        
     def start(self):
         import time
 
@@ -444,7 +445,7 @@ class Tap(PortComponent):
     max_freq = None
     
     def __init__(self, port, index):
-        PortComponent.__init__(self, "TAP[0x%08x]" % int(port.idcode_at(index)), port)
+        PortComponent.__init__(self, port, "TAP[0x%08x]" % int(port.idcode_at(index)))
         self.index = index
         if self.irlen:
             _, irlen, _ = self.ir_pre_post()

@@ -73,7 +73,7 @@ class BusComponent(Component):
     Component with a bus interface.
     """
 
-    def __init__(self, name, bus):
+    def __init__(self, bus, name):
         Component.__init__(self, name)
         self.bus = bus
 
@@ -82,6 +82,6 @@ class PortComponent(Component):
     Component with a port interface.
     """
 
-    def __init__(self, name, port):
+    def __init__(self, port, name):
         Component.__init__(self, name)
         self.port = port

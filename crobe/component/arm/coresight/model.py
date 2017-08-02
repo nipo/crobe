@@ -15,7 +15,7 @@ class MemoryMappedComponent(model.BusComponent):
     db = Db()
 
     def __init__(self, bus, base, name = None):
-        model.BusComponent.__init__(self, name or "Memory Component", bus)
+        model.BusComponent.__init__(self, bus, name or "Memory Component")
         self.base = base & ~0x3ff
 
         blob = bus.mem_read(self.base | self.DEVID, 16 * 4)

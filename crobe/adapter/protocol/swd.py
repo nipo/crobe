@@ -60,8 +60,8 @@ class Interface(base.Interface):
 
     IDCODE = 0
 
-    def __init__(self, port):
-        base.Interface.__init__(self, "SWD Intf", port)
+    def __init__(self, port, name = None):
+        base.Interface.__init__(self, port, (name or port.name) + "/SWD")
         self.turnaround_cycles = 1
 
     def start(self):

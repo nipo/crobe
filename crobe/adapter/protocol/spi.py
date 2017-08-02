@@ -21,8 +21,8 @@ class Interface(base.Interface):
     they require.  They may toggle clock when CS is high if needed.
     """
 
-    def __init__(self, port):
-        base.Interface.__init__(self, "SPI Intf", port)
+    def __init__(self, port, name = None):
+        base.Interface.__init__(self, port, (name or port.name) + "/SPI")
 
     @property
     def reset(self):

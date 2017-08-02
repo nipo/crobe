@@ -31,7 +31,7 @@ class SpiFlash(PortComponent):
     STATUS_WEL = 2
     
     def __init__(self, port, idr = 0, name = "SPI Flash"):
-        PortComponent.__init__(self, name, port)
+        PortComponent.__init__(self, port, name)
         if not idr:
             idr = self.idr_get()
         self.idr = idr

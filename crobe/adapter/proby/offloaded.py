@@ -13,7 +13,7 @@ import time
 
 class MsgMux(PortComponent):
     def __init__(self, port):
-        PortComponent.__init__(self, "mux", port)
+        PortComponent.__init__(self, port, "mux")
         self.rx_queue_cond = threading.Condition(threading.Lock())
         self.rx_buf = bytearray()
         self.dest = {}
@@ -64,7 +64,7 @@ class MsgMux(PortComponent):
 
 class RoutedPath(PortComponent):
     def __init__(self, port, local_id):
-        PortComponent.__init__(self, "%d<" % local_id, port)
+        PortComponent.__init__(self, port, "%d<" % local_id)
         self.local_id = local_id
         port.register(local_id, self)
         self.last_tag = 0
@@ -117,7 +117,7 @@ class Interface(swd.Interface):
     def __init__(self, adapter, mux):
         self.__turnaround_cycles = 1
         self.__turnaround_dirty = True
-        swd.Interface.__init__(self, adapter)
+        swd.Interface.__init__(self, adapter, self.name)
         self.mux = RoutedPath(mux, 0xf)
         self.base_freq = int.from_bytes(
             self.mux.execute(self.CONFIG_CID, struct.pack("<B", 0x80 | self.STATUS_REG_BASE_FREQ), 5)[1:],

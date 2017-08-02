@@ -21,7 +21,7 @@ class Region(model.BusComponent):
     type = None # Should be a Type
 
     def __init__(self, bus, name, address, size):
-        model.BusComponent.__init__(self, name, bus)
+        model.BusComponent.__init__(self, bus, name)
         self.address = address
         self.size = size
 

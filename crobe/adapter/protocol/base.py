@@ -8,8 +8,8 @@ class Interface(model.PortComponent):
     """
     Base class for protocol interfaces from an Adapter.
     """
-    def __init__(self, name, port):
-        model.PortComponent.__init__(self, name, port)
+    def __init__(self, port, name):
+        model.PortComponent.__init__(self, port, name)
         self._lock = threading.Lock()
         self.__freq_constraints = {}
 
