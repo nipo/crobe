@@ -136,6 +136,9 @@ class Programs:
                 offset = 0
 
             prog = Program.from_file(filename, offset)
+            if len(args.programs) == 1:
+                self.program = prog
+                break
 
             self.program += prog
 
