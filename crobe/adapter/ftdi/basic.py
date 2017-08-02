@@ -8,6 +8,7 @@ import struct
 
 class Adapter(model.Adapter):
     supported_interfaces = ["jtag"]
+    freq_max = None
 
     def __init__(self, enumerator, device):
         self.device = device
@@ -113,6 +114,7 @@ class BaseInterface(object):
             val |= (1 << activityn_pin)
 
         self.handle = adapter.device.open(interface = channel, gpio_oe = oe, gpio_val = val)
+        self.freq_cap("hardware", adapter.freq_max)
 
     @property
     def reset(self):

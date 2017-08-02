@@ -190,6 +190,9 @@ class Chain(PortComponent):
 
     def start(self):
         import time
+
+        self.port.freq_cap("enumeration", 1e6)
+        
         self.reset()
 
         if self.port.use_icepick:
@@ -198,19 +201,22 @@ class Chain(PortComponent):
             self.swd_to_jtag()
             self.discover()
 
+        self.port.freq_cap("enumeration", None)
+
         PortComponent.start(self)
-            
+
+    def child_add(self, child):
+        PortComponent.child_add(self, child)
+        self.port.freq_cap(child, child.max_freq)
+        
     def reset(self):
         import time
-        freq_before = self.port.freq
-        self.port.freq = 1000000
         self.port.tap_reset()
         self.port.trst = True
         self.port.tap_reset()
         self.port.trst = False
         self.port.tap_reset()
         self.port.run(0)
-        self.port.freq = freq_before
 
     def swd_to_jtag(self):
         self.port.swd_to_jtag()
@@ -218,8 +224,7 @@ class Chain(PortComponent):
         self.port.run(50)
         
     def icepick_enable(self):
-        freq_before = self.port.freq
-        self.port.freq = 100000
+        self.port.freq_cap("icepick", 1e5)
         time.sleep(.001)
         ops = [CaptureIr(), Shift(BitString(-1, 6)), Run(1), CaptureDr()]
         for lengths in [(0, 0, 1), (2, 9)]:
@@ -228,7 +233,7 @@ class Chain(PortComponent):
         ops += [CaptureIr(), Shift(BitString(-1, 16)), Run(0)]
         ops += [Run(5), CaptureIr(), Shift(BitString(0x4, 6)), Run(3)]
         self.port.execute(ops)
-        self.port.freq = freq_before
+        self.port.freq_cap("icepick", None)
         self.discover([PartId(0, 0x17, 0x1ce)])
 
     def discover(self, forced_idcodes = []):
@@ -436,6 +441,8 @@ class Tap(PortComponent):
     """
     db = Db()
 
+    max_freq = None
+    
     def __init__(self, port, index):
         PortComponent.__init__(self, "TAP[0x%08x]" % int(port.idcode_at(index)), port)
         self.index = index

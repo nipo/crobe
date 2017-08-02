@@ -16,6 +16,9 @@ class SwDp(dp.Dp):
     ABORT    = 0 # W
     RESEND   = 2 # R
 
+    # TODO build a DB of max freqs
+    max_freq = None
+
     def __init__(self, port):
         dp.Dp.__init__(self, "SW-DP", port)
 

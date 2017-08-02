@@ -4,6 +4,7 @@ from . import base
 
 class Adapter(basic.Adapter, base.Reflasher):
     supported_interfaces = ["jtag", "swd", "spi"]
+    max_freq = 60e6
 
     def open(self, interface_name):
         self.reprogram("jtag_swd_raw")

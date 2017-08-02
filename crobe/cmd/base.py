@@ -81,14 +81,9 @@ class Freq(Interface):
 
     def c30_freq_parse(self, args):
         from ..util.pretty import sci_parse
-        f = sci_parse(args.freq)
-
-        if self.max_freq is not None and f:
-            f = max(self.max_freq, f)
-        elif self.max_freq and not f:
-            f = self.max_freq
-
-        self.interface.freq = f
+        if self.max_freq:
+            self.interface.freq_cap("command defaults", self.max_freq)
+        self.interface.freq_cap("user", sci_parse(args.freq) or None)
     
 class Power(Interface):
     def c24_power_declare(self):

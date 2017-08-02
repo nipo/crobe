@@ -261,6 +261,9 @@ parts = {
 }
 
 class Pic32Tap(EjtagTap):
+    # Param EJ1, TTCKCYC
+    max_freq = 1 / 25e-9
+
     IDCODE = 1
     COMMAND = 7
     SW_MTAP = 4

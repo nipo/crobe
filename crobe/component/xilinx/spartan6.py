@@ -27,6 +27,7 @@ class Spartan6(jtag.Tap):
     base_path = os.path.join(os.path.dirname(__file__), "fw")
 
     irlen = 6
+    max_freq = 40e6
 
     IR_BYPASS      = 0x3f
     IR_ISC_ENABLE  = 0x10

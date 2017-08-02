@@ -258,7 +258,10 @@ class Handle(model.Component):
 
         self.__speed = int(speed.freq / div / 1000. + .5)
 
-        self.logger.info("requested speed %d kHz, had %dHz/%d (%d kHz)", khz, speed.freq, div, self.__speed)
+        if khz:
+            self.logger.info("Requested speed %d kHz, used %dHz/%d (%d kHz)", khz, speed.freq, div, self.__speed)
+        else:
+            self.logger.info("Requested max speed, used %dHz/%d (%d kHz)", speed.freq, div, self.__speed)
         
         checked(api.set_speed(self.handle, self.__speed))
 

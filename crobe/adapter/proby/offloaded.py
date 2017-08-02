@@ -129,6 +129,8 @@ class Interface(swd.Interface):
         self.__rate = 1000
         self.__rate_dirty = True
 
+        self.freq_cap("hardware", 75e6)
+
     @property
     def reset(self):
         return self.__reset

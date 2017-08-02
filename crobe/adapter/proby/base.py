@@ -30,7 +30,6 @@ class Reflasher(object):
 
         jtag_intf = model.Enumerator.singleton.get("int-proby:" + self.serial_number).open("jtag")
         jtag_intf.logger.setLevel(logging.WARNING)
-        jtag_intf.freq = 40e6
         jtag_intf.start()
         fpga, = jtag_intf.children_of_class(Spartan6)
 

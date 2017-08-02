@@ -74,14 +74,21 @@ class JLinkInterface(object):
         self.handle = device.device.open()
         self.handle.interface = interface.upper()
 
+    def max_speed_set(self):
+        self.freq_cap("hardware", self.handle.speed_range[1])
+
     @property
     def freq(self):
         return int(self.handle.speed * 1000.)
 
     @freq.setter
     def freq(self, freq):
-        self.handle.speed = float(freq) / 1000.
-        self.logger.debug("Frequency requested %s, had %s", sci(freq, 'Hz'), sci(self.freq, 'Hz'))
+        if freq is None:
+            self.handle.speed = None
+            self.logger.debug("Max frequency requested, had %s", sci(self.freq, 'Hz'))
+        else:
+            self.handle.speed = float(freq) / 1000.
+            self.logger.debug("Frequency requested: %s, had: %s", sci(freq, 'Hz'), sci(self.freq, 'Hz'))
 
     @property
     def reset(self):
@@ -120,6 +127,7 @@ class JtagInterface(JLinkInterface, jtag.Interface):
     def __init__(self, port):
         JLinkInterface.__init__(self, port, "JTAG")
         jtag.Interface.__init__(self, port)
+        self.max_speed_set()
         self.handle.tresetn = True
         self.__state = None
 
@@ -276,8 +284,9 @@ class SwdInterface(JLinkInterface, swd.Interface):
     def __init__(self, port):
         self.__turnaround_cycles = None
         self.__commands = {}
-        swd.Interface.__init__(self, port)
+        self.max_speed_set()
         JLinkInterface.__init__(self, port, "SWD")
+        swd.Interface.__init__(self, port)
 
     @property
     def turnaround_cycles(self):
@@ -404,8 +413,9 @@ class SwdInterface(JLinkInterface, swd.Interface):
 
 class SpiInterface(JLinkInterface, spi.Interface):
     def __init__(self, port):
-        spi.Interface.__init__(self, port)
         JLinkInterface.__init__(self, port, "JTAG")
+        spi.Interface.__init__(self, port)
+        self.max_speed_set()
         self.__cs = False
 
     def _execute(self, operation_list):
