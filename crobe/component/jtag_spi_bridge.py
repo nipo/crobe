@@ -28,7 +28,7 @@ class JtagSpiBridge(spi.Interface):
         self.logger.debug("CMD %s, rsp %d bytes", binascii.b2a_hex(cmd), rsp_size)
         return [
             self.port.cmd_dr_shift(self.data_in_ir, b"\x5c\xad" + cmd, read_tdo = False),
-            self.port.cmd_run(rsp_size * 2),
+            self.port.cmd_run(rsp_size // 8 + 16),
             self.port.cmd_dr_shift(self.data_out_ir, None, 8 * rsp_size, read_tdo = True, return_type = bytes),
         ]
 

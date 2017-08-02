@@ -50,16 +50,16 @@ class SpiFlash(PortComponent):
     def detect(cls, port):
         port.execute([
             port.cmd_cs(False),
-            port.cmd_shift(b'\x00'),
+            port.cmd_shift(b'\x00', read_miso = False),
             ])
         time.sleep(.01)
         port.execute([
             port.cmd_cs(True),
-            port.cmd_shift(cls.CMD_RESET_ENABLE),
+            port.cmd_shift(cls.CMD_RESET_ENABLE, read_miso = False),
             port.cmd_cs(False),
-            port.cmd_shift(b'\x00'),
+            port.cmd_shift(b'\x00', read_miso = False),
             port.cmd_cs(True),
-            port.cmd_shift(cls.CMD_RESET),
+            port.cmd_shift(cls.CMD_RESET, read_miso = False),
             port.cmd_cs(False),
             ])
         time.sleep(.3)
@@ -79,12 +79,18 @@ class SpiFlash(PortComponent):
             pass
 
     def command(self, cmd, size):
-        rsp = self.port.cmd_shift(size)
-        self.port.execute([self.port.cmd_cs(True),
-                           self.port.cmd_shift(cmd, read_miso = False),
-                           rsp,
-                           self.port.cmd_cs(False)])
-        return rsp.miso
+        cmds = [self.port.cmd_cs(True), self.port.cmd_shift(cmd, read_miso = False)]
+        if size:
+            rsp = self.port.cmd_shift(size)
+            cmds.append(rsp)
+        cmds += [self.port.cmd_cs(False)]
+        self.logger.debug("<< %s %d", binascii.b2a_hex(cmd), size)
+        self.port.execute(cmds)
+        if size:
+            self.logger.debug(">> %s", binascii.b2a_hex(rsp.miso))
+            return rsp.miso
+        self.logger.debug(">> -")
+
         
     def idr_get(self):
         return int.from_bytes(self.command(self.CMD_READ_JEDEC_ID, 3), byteorder = 'big')
@@ -112,6 +118,7 @@ class SpiFlash(PortComponent):
             self.write_enable(True)
         self.command(self.CMD_CHIP_ERASE, 0)
         while self.status & self.STATUS_WIP:
+            time.sleep(.1)
             pass
         self.write_enable(False)
     
@@ -134,22 +141,32 @@ class SpiFlash(PortComponent):
         while self.status & self.STATUS_WIP:
             pass
 
-    def write(self, program, erase_first = True):
+    def write(self, program, erase_first = True, verify = False):
         si = self.SECTOR_INFO[0]
 
         while not (self.status & self.STATUS_WEL):
             self.write_enable(True)
 
-        for page in program.paged(si["size"], fill = b'\x00'):
+        for page in program.paged(si["size"]):
             if erase_first:
                 self.erase_sector(page.address, si)
 
             self.logger.info("Writing %d bytes at %08x", si["size"], page.address)
             for offset in range(0, len(page), 256):
+                self.write_enable(True)
                 self.command(self.CMD_PAGE_PROGRAM + self.addr(page.address + offset)
                              + page.data[offset : offset + 256], 0)
-            while self.status & self.STATUS_WIP:
-                pass
+                while self.status & self.STATUS_WIP:
+                    pass
+
+            if verify:
+                self.logger.info("Checking data at %08x", page.address)
+                readback = self.read(page.address, len(page))
+                if readback != page.data:
+                    for off in range(0, len(page), 16):
+                        print("prog %04x: %s" % (off, binascii.b2a_hex(page.data[off : off + 16])))
+                        print("read     : %s" % (binascii.b2a_hex(readback[off : off + 16])))
+                    raise ValueError("Contents mismatch")
 
         self.write_enable(False)
 

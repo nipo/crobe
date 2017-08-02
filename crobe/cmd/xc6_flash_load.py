@@ -15,6 +15,13 @@ def main():
         def c25_check_parse(self, args):
             self.check = args.check
 
+        def c26_erase_declare(self):
+            self.parser.add_argument('--erase-all', action = "store_true",
+                                     help = "Erase all chip")
+
+        def c26_erase_parse(self, args):
+            self.erase_all = args.erase_all
+            
         forced_interface = "jtag"
         program_count_needed = 1
         max_freq = 40e6
@@ -29,15 +36,11 @@ def main():
 
     flash = SpiFlash.detect(spi)
 
+    if args.erase_all:
+        flash.erase_all()
+    
     with TimedLogger(logging, "writing flash"):
-        flash.write(args.program)
-
-    if args.check:
-        with TimedLogger(logging, "checking flash"):
-            ok = flash.verify(args.program)
-            if not ok:
-                logging.error("Check failed")
-                return 1
+        flash.write(args.program, verify = args.check, erase_first = not args.erase_all)
     
 if __name__ == '__main__':
     main()
