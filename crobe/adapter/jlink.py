@@ -454,4 +454,8 @@ class SpiInterface(JLinkInterface, spi.Interface):
 
             for op in pending:
                 if isinstance(op, spi.Shift) and op.read_miso:
-                    op.miso = bitswap8(in_blob[op.__offset : op.__offset + len(op.mosi)])
+                    if isinstance(op.mosi, int):
+                        cl = op.mosi
+                    else:
+                        cl = len(op.mosi)
+                    op.miso = bitswap8(in_blob[op.__offset : op.__offset + cl])
