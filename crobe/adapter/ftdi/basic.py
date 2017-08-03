@@ -163,7 +163,6 @@ class BaseInterface(object):
         if not freq:
             freq = 60e6
         self.handle.freq = freq
-        self.logger.info("requested freq %s, had %s", sci(freq, "Hz"), sci(self.handle.freq, "Hz"))
 
     def cmd_activity(self, value):
         if self.__activity_pin:

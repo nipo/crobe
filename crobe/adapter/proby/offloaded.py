@@ -153,7 +153,6 @@ class Interface(swd.Interface):
         if not freq:
             freq = 15e6
         self.__rate = min((1 << 26) - 1, max(1, int(float(freq) * 2)))
-        self.logger.info("requested freq %s, had %s", sci(freq, "Hz"), sci(self.freq, "Hz"))
         self.__rate_dirty = True
         
     @property

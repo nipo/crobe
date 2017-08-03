@@ -12,6 +12,7 @@ class Interface(model.PortComponent):
         model.PortComponent.__init__(self, port, name)
         self._lock = threading.Lock()
         self.__freq_constraints = {}
+        self.__freq = None
 
     def close(self):
         pass
@@ -31,11 +32,21 @@ class Interface(model.PortComponent):
         caps = [(f, k) for (k, f) in self.__freq_constraints.items() if f]
         caps.sort(key = lambda x:x[0])
         if not caps:
-            self.logger.info("Frequency now uncapped")
-            self.freq = None
+            self.__freq_set()
         else:
-            self.logger.info("Frequency now capped to %s because of %s", sci(caps[0][0], "Hz"), caps[0][1])
-            self.freq = caps[0][0]
+            self.__freq_set(caps[0][0], caps[0][1])
+
+    def __freq_set(self, freq = None, reason = ""):
+        if freq == self.__freq:
+            return
+        self.__freq = freq
+        self.freq = freq
+
+        if not freq:
+            self.logger.info("Frequency now uncapped, had %s", sci(self.freq, "Hz"))
+        else:
+            self.logger.info("Frequency now capped to %s because of %s, had %s",
+                             sci(freq, "Hz"), reason, sci(self.freq, "Hz"))
 
     # property, writable, Hz
     freq = None
