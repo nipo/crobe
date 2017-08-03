@@ -57,6 +57,24 @@ class Enumerator(model.Component):
             raise KeyError("Criteria not met")
         return candidates[0]
 
+    def child_summon(self, child = None, *parts):
+        interface_filter = None
+        if parts:
+            interface_filter = lambda x: parts[0] in x.supported_interfaces
+
+        if not child:
+            child = "0"
+
+        adapters = self.find(child, interface_filter)
+
+        if len(adapters) > 1:
+            raise ValueError("Too many possibilities")
+
+        if adapters:
+            return adapters[0].child_summon(*parts)
+
+        return model.Component.child_summon(self, *parts)
+    
 class Adapter(model.Component):
     """
     An adapter, this is an actual 'Probe' or 'Emulator' before it is
@@ -94,4 +112,10 @@ class Adapter(model.Component):
         """
         raise NotSupportedError("Unsupported interface %s" % interface_name)
 
+    def child_summon(self, interface = None, *parts):
+        if not interface and len(self.supported_interfaces) == 1:
+            interface = list(self.supported_interfaces)[0]
+
+        return self.open(interface).child_summon(*parts)
+            
 Enumerator.singleton = Enumerator("root")

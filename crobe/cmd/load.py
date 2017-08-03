@@ -4,11 +4,12 @@ from ..target.soc.model import SoC
 from ..component.model import Cpu
 from ..util.pretty import metric
 from ..util.info import TimedLogger
+from ..target.loadable import Loadable
 
 def main():
     from . import base
 
-    class Tool(base.Freq, base.Power, base.IcePick, base.Field, base.Programs):
+    class Tool(base.Target, base.Programs):
         def c25_check_declare(self):
             self.parser.add_argument('--check', action = "store_true",
                                      help = "Read back flash contents and check for equality")
@@ -25,32 +26,22 @@ def main():
 
 
     args = Tool("File loader")
-
-    soc, = args.field.children_of_class(SoC)
-    cpu, = soc.children_of_class(Cpu)
-
-    print("Target:", soc)
-
-    try:
-        args.interface.reset = False
-    except NotImplementedError:
-        pass
+    assert isinstance(args.target, Loadable)
+    
+    print("Target:", args.target)
 
     if args.erase_all:
         with TimedLogger(logging, "erasing all"):
-            soc.erase_all()
+            args.target.erase_all()
     
     with TimedLogger(logging, "writing flash"):
-        soc.load(args.program, erase = not args.erase_all)
+        args.target.load(args.program, erase = not args.erase_all)
 
     if args.check:
         with TimedLogger(logging, "checking flash"):
-            ok = soc.verify(args.program)
+            ok = args.target.verify(args.program)
             if not ok:
                 return 1
-        
-    cpu.reset()
-    cpu.resume()
 
 if __name__ == '__main__':
     import sys

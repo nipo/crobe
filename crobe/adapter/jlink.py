@@ -286,9 +286,9 @@ class SwdInterface(JLinkInterface, swd.Interface):
     def __init__(self, port):
         self.__turnaround_cycles = None
         self.__commands = {}
-        self.max_speed_set()
         JLinkInterface.__init__(self, port, "SWD")
         swd.Interface.__init__(self, port)
+        self.max_speed_set()
 
     @property
     def turnaround_cycles(self):

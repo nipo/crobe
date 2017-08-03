@@ -1,6 +1,6 @@
 import struct
 
-class FtdiEeprom:
+class FtdiEeprom(base.ConnectionId, FtdiEeprom):
     
     def c50_ftdi_declare(self):
         self.parser.add_argument("--vid", type = str, required = True, default = None, help = "Vendor ID")
@@ -24,20 +24,12 @@ class FtdiEeprom:
         self.power = args.power or None
             
 def main():
-    from . import base
-    from ..adapter.ftdi.ftdi import FtdiError, Handle
-    from ..adapter.ftdi import api
+    from .. import base
+    from ...adapter.ftdi.ftdi import FtdiError, Handle
+    from ...adapter.ftdi import api
     import binascii
 
-    class Tool(base.Command, FtdiEeprom):
-        def c10_connid_declare(self):
-            self.parser.add_argument('--connection', '-c', type = str,
-                                     help = "USB Connection ID pair in bus/device format (e.g. 001/035)")
-
-        def c10_connid_parse(self, args):
-            self.connection_id = args.connection.encode("ascii")
-            
-    args = Tool("FTDI EEPROM Writer")
+    args = FtdiEeprom("FTDI EEPROM Writer")
 
     handle = Handle(args.connection_id, "A", "RESET")
 

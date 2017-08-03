@@ -1,10 +1,11 @@
 from .. import model
 from ...part_id import PartId
 from ...memory import region
+from .. import loadable
 
 __all__ = ["SoC"]
 
-class SoC(model.Target):
+class SoC(model.Target, loadable.Loadable):
     """
     A SoC component.
     """

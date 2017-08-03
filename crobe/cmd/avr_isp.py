@@ -5,7 +5,7 @@ def main():
     import binascii
 
     class Tool(base.Freq):
-        forced_interface = "spi"
+        expected_root = "spi"
         max_freq = 8e6
 
     args = Tool("AVR ISP test")

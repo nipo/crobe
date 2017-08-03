@@ -1,6 +1,6 @@
-from . import base
-from ..adapter.jlink import Adapter
-from ..component.energy_micro.stk import *
+from .. import base
+from ...adapter.jlink import Adapter
+from ...component.energy_micro.stk import *
 import colorama
 import time
 
@@ -91,7 +91,7 @@ class EnergyDisplay:
         self.sample_date = now - self.time_origin
         
 def main():
-    class Tool(base.Adapter):
+    class Tool(base.Root):
         def c20_mode_declare(self):
             self.parser.add_argument("mode", metavar = "MODE",
                                      type = str, default = "",
@@ -103,7 +103,7 @@ def main():
 
     args = Tool("EFM32 STK debug mode tool")
 
-    jlink = args.adapter
+    jlink = args.root
     assert isinstance(jlink, Adapter)
 
     for i in jlink.supported_interfaces:

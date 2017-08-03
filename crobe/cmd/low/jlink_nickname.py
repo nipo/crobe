@@ -1,9 +1,9 @@
 def main():
-    from . import base
-    from ..adapter.jlink import Adapter
+    from .. import base
+    from ...adapter.jlink import Adapter
     import binascii
 
-    class Tool(base.Adapter):
+    class Tool(base.Root):
         def c20_name_declare(self):
             self.parser.add_argument("nickname", metavar = "NICKNAME",
                                      type = str, default = "",
@@ -14,7 +14,7 @@ def main():
 
     args = Tool("JLink nickname changer")
 
-    jlink = args.adapter
+    jlink = args.root
     assert isinstance(jlink, Adapter)
 
     for i in jlink.supported_interfaces:

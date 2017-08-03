@@ -76,6 +76,12 @@ class Interface(base.Interface):
         """
         return Cs(value)
 
+    def child_summon(self, sub, *parts):
+        if sub == "flash":
+            from ...component.spi_flash import SpiFlash
+            return SpiFlash.detect(self).child_summon(*parts)
+        return base.Interface.child_summon(self, sub, *parts)
+    
 class Target(PortComponent):
     def transaction(self, mosi, read_miso = True):
         op = self.port.cmd_shift(mosi, read_miso)

@@ -45,64 +45,19 @@ class Command:
 
         root.info("Starting at %s", formatter.start)
 
-class Adapter(Command):
-    def c10_adapter_declare(self):
-        self.parser.add_argument('--adapter', '-a', type = str, default = "0",
-                                 help = "Adapter identifier or index (use crobe.cmd.adapters for a list)")
+class Root(Command):
+    def c10_root_declare(self):
+        self.parser.add_argument('--root', '-r', type = str, default = "0/",
+                                 help = "Root name, index")
 
-    def c10_adapter_parse(self, args):
-        from ..adapter.model import Enumerator, Adapter
+    def c10_root_parse(self, args):
+        from ..adapter.model import Enumerator
 
         Enumerator.singleton.start()
 
-        filt = None
-        if hasattr(self, "forced_interface") and self.forced_interface:
-            filt = lambda x: self.forced_interface in x.supported_interfaces
-        self.adapter = Enumerator.singleton.get(args.adapter, predicate = filt)
-    
-class Interface(Adapter):
-    forced_interface = None
-
-    def c20_interface_declare(self):
-        if not self.forced_interface:
-            self.parser.add_argument('--interface', '-i', type = str, default = "swd",
-                                     help = "Target insterface")
-
-    def c20_interface_parse(self, args):
-        interface = self.forced_interface or args.interface
-        self.interface = self.adapter.open(interface)
-
-class Freq(Interface):
-    max_freq = None
-
-    def c30_freq_declare(self):
-        self.parser.add_argument('--freq', '-f', type = str, default = "0",
-                                     help = "Target insterface freq (Hz)")
-
-    def c30_freq_parse(self, args):
-        from ..util.pretty import metric_parse
-        if self.max_freq:
-            self.interface.freq_cap("command defaults", self.max_freq)
-        self.interface.freq_cap("user", metric_parse(args.freq) or None)
-    
-class Power(Interface):
-    def c24_power_declare(self):
-        self.parser.add_argument('--power', '-p', type = str, default = "",
-                                     help = "Target power (untouched if not specified)")
-
-    def c24_power_parse(self, args):
-        import time
-        if args.power:
-            self.interface.power = args.power.lower() in ["on", "1", "true"]
-            time.sleep(.05)
-    
-class IcePick(Interface):
-    def c25_icepick_declare(self):
-        self.parser.add_argument('--icepick', action = "store_true",
-                                 help = "Use ICEPick initialization sequence (requires JTAG)")
-
-    def c25_icepick_parse(self, args):
-        self.interface.use_icepick = args.icepick
+        parts = args.root.split("/")
+        
+        self.root = Enumerator.singleton.child_summon(*parts)
 
 class Programs:
     program_count_needed = None
@@ -137,6 +92,32 @@ class Programs:
 
             self.program += prog
 
+class Field(Root):
+    def c60_field_parse(self, args):
+        from ..target.model import Field
+
+        self.field = Field()
+        self.field.discover(self.root)
+
+class Target(Field):
+    def c61_target_declare(self):
+        self.parser.add_argument('--target', '-t', metavar = 'NAME',
+                                 type = str, default = "0",
+                                 help = 'Target accessor')
+
+    @staticmethod
+    def _predicate(child, target):
+        return target in child.name.lower()
+        
+    def c61_target_parse(self, args):
+        from ..target.model import Field
+
+        try:
+            idx = int(args.target)
+            self.target = self.field.children[idx]
+        except:
+            self.target = self.field.child_get(lambda x: self._name_predicate(x, args.target.lower()))
+
 class File:
     def c50_file_declare(self):
         self.parser.add_argument('file', metavar = 'FILE',
@@ -144,18 +125,16 @@ class File:
                                  help = 'File to load')
 
     def c50_file_parse(self, args):
-        from ..loadable.object import Program
         self.file = args.file[0]
 
-class Field(Interface):
-    def c60_field_parse(self, args):
-        self.interface.start()
+class ConnectionId(Command):
+    def c10_connid_declare(self):
+        self.parser.add_argument('--connection', '-c', type = str,
+                                 help = "USB Connection ID pair in bus/device format (e.g. 001/035)")
 
-        from ..target.model import Field
-
-        self.field = Field()
-        self.field.discover(self.interface)
-
+    def c10_connid_parse(self, args):
+        self.connection_id = args.connection.encode("ascii")
+        
 if __name__ == "__main__":
     class LolCommand:
         def __init__(self):

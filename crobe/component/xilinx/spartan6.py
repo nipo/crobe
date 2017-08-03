@@ -124,6 +124,14 @@ class Spartan6(jtag.Tap):
 
         return ops[2].tdo
 
+    def stop(self):
+        ops = [self.cmd_dr_shift(self.IR_ISC_ENABLE, None),
+               self.cmd_run(20),
+               self.cmd_dr_shift(self.IR_ISC_DISABLE, None),
+               ]
+
+        self.execute(ops)
+
     def load(self, program, force_reload = False):
         if len(program) != 1:
             raise ValueError("Bitstream programming only supports one config payload")
@@ -203,3 +211,9 @@ class Spartan6(jtag.Tap):
 
         return JtagSpiBridge(self, self.IR_USER1, self.IR_USER2)
 
+    def child_summon(self, mode = None, *parts):
+        if mode == "spi":
+            return self.spi_interface().child_summon(*parts)
+        return jtag.Tap.child_summon(self, mode, *parts)
+
+    

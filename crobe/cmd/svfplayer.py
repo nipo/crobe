@@ -3,15 +3,13 @@ def main():
     from ..svf.player import Player
     from ..svf.svf import SvfParser
 
-    class Tool(base.Freq, base.File):
+    class Tool(base.Root, base.File):
         forced_interface = "jtag"
 
     args = Tool("SVF player")
 
-    args.interface.start()
-
     svf = SvfParser(args.file)
-    player = Player(svf, args.interface)
+    player = Player(svf, args.root)
 
     player.run()
 

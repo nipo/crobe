@@ -67,7 +67,23 @@ class Component(object):
 
     def child_add(self, obj):
         self.children.append(obj)
-    
+
+    def child_summon(self, a = None, *invocation):
+        if not self.__started:
+            self.start()
+
+        if not a and not invocation:
+            return self
+
+        if a == "*" and len(self.children) == 1:
+            return self.children[0].child_summon(*invocation)
+        
+        possible = self.children_find(lambda x:a.lower() in x.name.lower())
+        if len(possible) == 1:
+            return possible[0].child_summon(*invocation)
+
+        raise ValueError("Unknown invocation", a, *invocation)
+        
 class BusComponent(Component):
     """
     Component with a bus interface.

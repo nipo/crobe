@@ -1,15 +1,20 @@
 from .. import model
-from collections import deque, defaultdict
 from ..ftdi import basic
-from . import base
-from ...util.pretty import sci
+from ...loadable.object import Program
+import logging
+import os
+import os.path
+import time
+from collections import deque, defaultdict
+from ...util.pretty import metric
 from ...model import PortComponent
 from ...component.arm import dp
 from ..protocol import base as pbase
 from ..protocol import swd
 import threading
 import struct
-import time
+
+__all__ = ['Proby', 'Enumerator']
 
 class MsgMux(PortComponent):
     def __init__(self, port):
@@ -117,13 +122,13 @@ class Interface(swd.Interface):
     def __init__(self, adapter, mux):
         self.__turnaround_cycles = 1
         self.__turnaround_dirty = True
-        swd.Interface.__init__(self, adapter, self.name)
+        swd.Interface.__init__(self, adapter, adapter.name)
         self.mux = RoutedPath(mux, 0xf)
         self.base_freq = int.from_bytes(
             self.mux.execute(self.CONFIG_CID, struct.pack("<B", 0x80 | self.STATUS_REG_BASE_FREQ), 5)[1:],
             byteorder = 'little')
 
-        self.logger.info("Found proby with internal clock of %s", sci(self.base_freq, "Hz"))
+        self.logger.info("Found proby with internal clock of %s", metric(self.base_freq, "Hz"))
         
         self.__reset = False
         self.__rate = 1000
@@ -262,25 +267,79 @@ class Interface(swd.Interface):
                     if isinstance(op, swd.Read):
                         op.data, = struct.unpack("<L", in_blob[op.__offset + 1 : op.__offset + 5])
 
-class Adapter(basic.Adapter, base.Reflasher):
-    supported_interfaces = ["swd"]
-    firmware_info = "SWD offload mux"
+class ProbyAdapter(basic.Adapter):
+    base_path = os.path.join(os.path.dirname(__file__), "fw")
+    supported_interfaces = ["swd", "swd-pt", "jtag", "jtag-int", "spi"]
+    
+    def reprogram(self, mode):
+        """
+        Loads a design into proby. Try to optimize not reloading by
+        first doing an internal cache of last loaded design, and also
+        try to check UserID register with a magic value.
+        
+        :param str mode: Base name of design bitstream
+        """
+        from ...component.xilinx.spartan6 import Spartan6
+
+        self.logger.info("Reprogramming FPGA to use mode %s", mode)
+
+        filename = os.path.join(self.base_path, mode + ".bit.gz")
+        obj = Program.from_file(filename)
+                 
+        self.logger.info("Using internal chain of Proby, starting discovery")
+
+        jtag_intf = basic.Adapter.open(self, "jtag", channel = "B", resetn_pin = 9, name = "pint-"+self.serial_number)
+        jtag_intf.logger.setLevel(logging.WARNING)
+        jtag_intf.start()
+        fpga, = jtag_intf.children_of_class(Spartan6)
+
+        self.logger.info("Got FPGA in chain: %s", fpga)
+
+        fpga.load(obj)
 
     def open(self, interface_name):
-        assert interface_name == "swd"
+        if interface_name == "spi":
+            self.reprogram("jtag_swd_raw")
+            return basic.Adapter.open(self, interface_name, channel = "A",
+                                resetn_pin = 8,
+                                csn_pin = 3,
+                                gpio_output = 0x061b, gpio_value = 0x0210)
+        elif interface_name == "jtag":
+            self.reprogram("jtag_swd_raw")
+            return basic.Adapter.open(self, interface_name, channel = "A",
+                                resetn_pin = 8,
+                                gpio_output = 0x061b, gpio_value = 0x0210)
+        elif interface_name == "jtag-int":
+            return basic.Adapter.open(self, "jtag", channel = "B", resetn_pin = 9)
+        elif interface_name == "swd-pt":
+            return basic.Adapter.open(self, interface_name, channel = "A",
+                                resetn_pin = 8,
+                                oe_pin = 5,
+                                gpio_output = 0x063b, gpio_value = 0x0610)
+        elif interface_name == "swd-pt":
+            return basic.Adapter.open(self, interface_name, channel = "A",
+                                resetn_pin = 8,
+                                oe_pin = 5,
+                                gpio_output = 0x063b, gpio_value = 0x0610)
+        elif interface_name == "swd":
+            self.reprogram("swd_dp")
 
-        self.reprogram("swd_dp")
+            fifo = self.device.open(interface = "A", mode = "ft245_sync_fifo")
 
-        fifo = self.device.open(interface = "A", mode = "ft245_sync_fifo")
+            mux = MsgMux(fifo)
+            mux.reset()
 
-        mux = MsgMux(fifo)
-        mux.reset()
-        
-        return Interface(self, mux)
+            return Interface(self, mux)
+        else:
+            raise ValueError("Unknown interface name: %s" % interface_name)
 
 @model.Enumerator.register
-class Enumerator(base.Enumerator):
-    adapter_class = Adapter
+class Enumerator(basic.AdapterEnumerator):
+    adapter_class = ProbyAdapter
 
-    def __init__(self):
-        base.Enumerator.__init__(self, "Proby, offloaded", "oproby")
+    def __init__(self, **kwargs):
+        basic.AdapterEnumerator.__init__(self, "Proby", "proby",
+                                        vid = 0x10eb, pid = 0x0026, **kwargs)
+
+    def serial_mangle(self, serial):
+        return str(int(serial.split(";")[-1]))

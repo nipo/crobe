@@ -17,7 +17,7 @@ class GdbServer(SocketServer):
 def main():
     from . import base
 
-    class Tool(base.Freq, base.Power, base.IcePick, base.Field):
+    class Tool(base.Root):
         def c32_port_declare(self):
             self.parser.add_argument('--port', '-P', type = int, default = 2331,
                                          help = "TCP port to listen on")

@@ -3,7 +3,7 @@ from ..util.pretty import metric
 def main():
     from . import base
     
-    class Tool(base.Freq, base.Power, base.IcePick, base.Field):
+    class Tool(base.Field):
         def c25_cpuid_declare(self):
             self.parser.add_argument('--cpuid', action = "store_true",
                                      help = "Dump CPUID capabilities")
@@ -13,8 +13,7 @@ def main():
 
     args = Tool("Target enumerator")
 
-    
-    component_dump(args.interface)
+    component_dump(args.root)
     component_dump(args.field)
 
     if args.cpuid:

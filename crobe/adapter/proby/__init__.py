@@ -1,2 +1,1 @@
-from . import passthrough
-from . import offloaded
+from . import adapter

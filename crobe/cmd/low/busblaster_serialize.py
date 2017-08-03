@@ -1,8 +1,7 @@
-            
 def main():
-    from . import base
-    from ..adapter.ftdi.ftdi import FtdiError, Handle
-    from ..adapter.ftdi import api
+    from .. import base
+    from ...adapter.ftdi.ftdi import FtdiError, Handle
+    from ...adapter.ftdi import api
     import binascii
 
     class Tool(base.Command):
@@ -13,10 +12,11 @@ def main():
         def c10_connid_parse(self, args):
             self.connection_id = args.connection.encode("ascii")
             
-    args = Tool("FTDI EEPROM dumper")
+    args = Tool("Busblaster serializer")
 
     handle = Handle(args.connection_id, "A", "RESET")
 
+    
     try:
         raw = handle.eeprom_get()
         for i in range(0, len(raw), 16):
