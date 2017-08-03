@@ -9,7 +9,7 @@ class Ap(PortComponent):
     db = Db(eq_func = lambda a, b: not ((a ^ b) & 0x0fffe00f))
 
     def __init__(self, dp, index = 0):
-        PortComponent.__init__(self, "AP", dp)
+        PortComponent.__init__(self, dp, "AP")
         self.index = index
         self.components = []
         self.name = "AP (idr: 0x%08x)" % self.idr
