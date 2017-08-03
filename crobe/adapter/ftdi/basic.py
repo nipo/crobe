@@ -2,7 +2,7 @@ from .. import model
 from ...bitstring import BitString
 from ..protocol import jtag, base, swd, spi
 from . import ftdi, api
-from ...util.pretty import sci
+from ...util.pretty import metric
 from collections import deque
 import struct
 

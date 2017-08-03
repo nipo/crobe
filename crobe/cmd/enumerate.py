@@ -1,4 +1,4 @@
-from ..util.pretty import sci
+from ..util.pretty import metric
 
 def main():
     from . import base
@@ -13,10 +13,6 @@ def main():
 
     args = Tool("Target enumerator")
 
-    print("Adapter:", args.interface.port.firmware_info)
-    print("Serial:", args.interface.port.serial_number)
-    print("Nickname:", args.interface.port.nickname)
-    print("Freq:", sci(args.interface.freq, "Hz"))
     
     component_dump(args.interface)
     component_dump(args.field)

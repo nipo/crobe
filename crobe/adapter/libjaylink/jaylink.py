@@ -453,7 +453,7 @@ class Context(object):
         return str(s)
 
 if __name__ == "__main__":
-    from ...util.pretty import sci
+    from ...util.pretty import metric
     
     ctx = Context()
 
@@ -494,7 +494,7 @@ if __name__ == "__main__":
             try:
                 h.interface = i
                 low, high = h.speed_range
-                print(sci(low, 'Hz'), sci(high, 'Hz'))
+                print(metric(low, 'Hz'), sci(high, 'Hz'))
             except Exception:
                 print()
 

@@ -3,7 +3,7 @@ import logging
 import struct
 from ..bitstring import BitString
 from ..util.socket_server import *
-from ..util.pretty import sci
+from ..util.pretty import metric
 
 class JtagHandler(object):
     STATE_RESET = 0
@@ -143,7 +143,7 @@ class XvcdSession(SocketSession):
         period = 1e-9 * ns
         self.buffer = b""
         self.jtag.interface.freq = 1 / period
-        logging.info("Setting freq to %s, had %s", sci(1/period, "Hz"), sci(self.jtag.interface.freq, "Hz"))
+        logging.info("Setting freq to %s, had %s", metric(1/period, "Hz"), metric(self.jtag.interface.freq, "Hz"))
         self.write(struct.pack("<L", int(1e9 / self.jtag.interface.freq)))
 
 class XvcdServer(SocketServer):
@@ -170,7 +170,7 @@ def main():
 
     print("Adapter:", args.interface.port.firmware_info)
     print("Serial:", args.interface.port.serial_number)
-    print("Freq:", sci(args.interface.freq, "Hz"))
+    print("Freq:", metric(args.interface.freq, "Hz"))
 
     try:
         args.interface.reset = False

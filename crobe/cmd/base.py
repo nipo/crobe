@@ -80,10 +80,10 @@ class Freq(Interface):
                                      help = "Target insterface freq (Hz)")
 
     def c30_freq_parse(self, args):
-        from ..util.pretty import sci_parse
+        from ..util.pretty import metric_parse
         if self.max_freq:
             self.interface.freq_cap("command defaults", self.max_freq)
-        self.interface.freq_cap("user", sci_parse(args.freq) or None)
+        self.interface.freq_cap("user", metric_parse(args.freq) or None)
     
 class Power(Interface):
     def c24_power_declare(self):

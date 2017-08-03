@@ -1,7 +1,7 @@
 from ..model import PortComponent
 from ..db import Db, NoMatch
 from ..adapter.protocol import spi
-from ..util.pretty import sci
+from ..util.pretty import base2, metric
 import binascii
 import struct
 import time
@@ -38,7 +38,7 @@ class SpiFlash(PortComponent):
         self.logger.info("SPI flash, IDR %06x", self.idr)
 
     def info(self):
-        self.logger.info("Total size: %s (%s)", sci(self.total_size, "B"), sci(self.total_size * 8, "b"))
+        self.logger.info("Total size: %s (%s)", base2(self.total_size, "B"), base2(self.total_size * 8, "b"))
         for i, s in enumerate(self.SECTOR_INFO):
             self.logger.info("- level %d: %d sectors of %d bytes. Erase command: 0x%02x",
                              i, self.total_size / s["size"], s["size"], s["erase_cmd"][0])

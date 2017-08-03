@@ -1,5 +1,5 @@
 from ... import model
-from ...util.pretty import sci
+from ...util.pretty import metric
 import threading
 
 __all__ = ["Interface", "ProtocolError", "CommunicationError"]
@@ -43,10 +43,10 @@ class Interface(model.PortComponent):
         self.freq = freq
 
         if not freq:
-            self.logger.info("Frequency now uncapped, had %s", sci(self.freq, "Hz"))
+            self.logger.info("Frequency now uncapped, had %s", metric(self.freq, "Hz"))
         else:
             self.logger.info("Frequency now capped to %s because of %s, had %s",
-                             sci(freq, "Hz"), reason, sci(self.freq, "Hz"))
+                             metric(freq, "Hz"), reason, metric(self.freq, "Hz"))
 
     # property, writable, Hz
     freq = None

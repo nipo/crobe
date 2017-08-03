@@ -2,7 +2,7 @@ import logging
 import struct
 from ..target.soc.model import SoC
 from ..component.model import Cpu
-from ..util.pretty import sci
+from ..util.pretty import metric
 from ..util.info import TimedLogger
 
 def main():
@@ -25,11 +25,6 @@ def main():
 
 
     args = Tool("File loader")
-
-    print("Adapter:", args.interface.port.firmware_info)
-    print("Serial:", args.interface.port.serial_number)
-    print("Nickname:", args.interface.port.nickname)
-    print("Freq:", sci(args.interface.freq, "Hz"))
 
     soc, = args.field.children_of_class(SoC)
     cpu, = soc.children_of_class(Cpu)

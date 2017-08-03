@@ -2,7 +2,7 @@ import logging
 import struct
 from ..bitstring import BitString
 from ..util.socket_server import *
-from ..util.pretty import sci
+from ..util.pretty import metric
 from ..target.soc.model import SoC
 from ..target.soc.gdb import Responder
 
@@ -26,11 +26,6 @@ def main():
             self.port = args.port
 
     args = Tool("GDB Server")
-
-    print("Adapter:", args.interface.port.firmware_info)
-    print("Serial:", args.interface.port.serial_number)
-    print("Nickname:", args.interface.port.nickname)
-    print("Freq:", sci(args.interface.freq, "Hz"))
 
     soc, = args.field.children_of_class(SoC)
 

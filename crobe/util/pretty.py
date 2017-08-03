@@ -1,6 +1,6 @@
 from decimal import Decimal
 
-def sci(value, unit = "", ascii = False):
+def metric(value, unit = "", ascii = False):
     if isinstance(value, (int, float)):
         value = Decimal(value)
     if not isinstance(value, Decimal):
@@ -26,6 +26,25 @@ def sci(value, unit = "", ascii = False):
     if suffix == ' ':
         suffix = ''
     return s + ('%f' % (int(float(m * 1000) + .5) // 1000.)).rstrip('0').rstrip('.') + suffix + unit
+
+def base2(value, unit = ""):
+    if value <= 1:
+        return str(value) + unit
+
+    if isinstance(value, (int, float, Decimal)):
+        value = int(value)
+        
+    exp = 0
+    while (value >> exp) >= 1024:
+        exp += 10
+    m = value * (2. ** -exp)
+    scale = " kMGT"
+    suffix = scale[exp // 10]
+
+    if suffix == ' ':
+        suffix = ''
+
+    return ('%f' % (int(float(m * 1024) + .5) // 1024.)).rstrip('0').rstrip('.') + suffix + "i" + unit
 
 def sci_parse(string):
     suffix = {

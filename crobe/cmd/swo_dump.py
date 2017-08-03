@@ -1,7 +1,7 @@
 import logging
 import struct
 from ..bitstring import BitString
-from ..util.pretty import sci
+from ..util.pretty import metric
 from ..target.soc.model import SoC
 from ..component.arm.cortex import Cortex
 from ..component.arm.coresight.tpiu import Tpiu
@@ -18,7 +18,7 @@ def main():
     print("Adapter:", args.interface.port.firmware_info)
     print("Serial:", args.interface.port.serial_number)
     print("Nickname:", args.interface.port.nickname)
-    print("Freq:", sci(args.interface.freq, "Hz"))
+    print("Freq:", metric(args.interface.freq, "Hz"))
 
     soc, = args.field.children_of_class(SoC)
 
