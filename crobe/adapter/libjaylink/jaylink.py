@@ -13,6 +13,7 @@ __all__ = ["JaylinkError", "Handle", "Device", "Context"]
 class JaylinkError(Exception):
     def __init__(self, message, code):
         Exception.__init__(self, message)
+        self.message = message
         self.code = code
 
 def checked(err):

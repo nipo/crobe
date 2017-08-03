@@ -16,8 +16,12 @@ class Enumerator(model.Enumerator):
         self.ctx = libjaylink.Context()
 
     def start(self):
+        from .libjaylink.jaylink import JaylinkError
         for index, d in enumerate(self.ctx.devices()):
-            self.child_add(Adapter.from_device(d))
+            try:
+                self.child_add(Adapter.from_device(d))
+            except JaylinkError:
+                self.logger.error("USB Error while enumerating JLink with serial %d", d.serial_number)
 
         model.Enumerator.start(self)
             
