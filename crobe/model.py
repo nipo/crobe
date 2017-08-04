@@ -1,4 +1,5 @@
 import logging
+import weakref
 
 class Component(object):
     """
@@ -53,6 +54,8 @@ class Component(object):
         for c in self.children:
             try:
                 if predicate(c):
+                    if isinstance(c, weakref.ProxyTypes):
+                        c = c.ref()
                     ret.append(c)
             except Exception as e:
                 self.logger.warning("children find predicate exception: %s", e)
@@ -65,25 +68,58 @@ class Component(object):
         """
         return self.children_find(lambda x: isinstance(x, klass), include_self)
 
-    def child_add(self, obj):
+    def child_add(self, obj, weak = False):
+        if weak:
+            obj = weakref.proxy(obj, self.weak_child_cleanup)
         self.children.append(obj)
 
-    def child_summon(self, a = None, *invocation):
+    def child_remove(self, obj):
+        self.children.remove(obj)
+
+    def weak_child_cleanup(self, proxy):
+        for i in range(len(self.children)-1, -1, -1):
+            try:
+                self.children[i]
+            except ReferenceError:
+                del self.children[i]
+        
+    def child_summon(self, crit = None, *invocation):
         if not self.__started:
             self.start()
 
-        if not a and not invocation:
+        params = []
+            
+        if crit and crit.endswith(')'):
+            try:
+                index = crit.index('(')
+            except ValueError:
+                raise ValueError("Unmatched parenthesis", crit)
+            params = crit[index + 1 : -1].split(",")
+            crit = crit[: index - 1]
+            
+        if not crit and not invocation:
             return self
 
-        if a == "*" and len(self.children) == 1:
+        if crit == "*" and len(self.children) == 1:
             return self.children[0].child_summon(*invocation)
-        
-        possible = self.children_find(lambda x:a.lower() in x.name.lower())
+
+        try:
+            index = int(crit)
+            return self.children[index].child_summon(*invocation)
+        except ValueError:
+            pass
+
+        possible = self.children_find(lambda x:crit.lower() in x.name.lower())
         if len(possible) == 1:
             return possible[0].child_summon(*invocation)
 
-        raise ValueError("Unknown invocation", a, *invocation)
-        
+        child = self.child_spawn(crit, *params)
+
+        if child:
+            return child.child_summon(*invocation)
+
+        raise ValueError("Unknown invocation", crit, *invocation)
+
 class BusComponent(Component):
     """
     Component with a bus interface.

@@ -1,8 +1,7 @@
 from ....part_id import PartId
-from .soc import SoC, StubFlash
+from .soc import SoC, StubFlash, BusRam
 from ....component.nordic.ctrl_ap import CtrlAp
 from ....component.model import Cpu
-from ....memory.region import *
 import binascii
 import math
 import struct
@@ -17,10 +16,7 @@ class UicrFlash(StubFlash):
     PAGE_WRITE = nrf51_flash_write
     UICR_ADDRESS = 0x10001000
 
-    def erase(self, address, size):
-        if not (address <= self.UICR_ADDRESS < address + size):
-            return
-
+    def erase(self, offset, size):
         self.soc.logger.info("Erasing UICR")
         
         self.bus.u32_write(nRF5.NVMC_CONFIG, nRF5.NVMC_CONFIG_EEN)
@@ -58,8 +54,8 @@ class nRF5(SoC):
         page_size = self.buses[0].u32_read(self.FICR_CODEPAGESIZE)
         code_size = self.buses[0].u32_read(self.FICR_CODESIZE)
 
-        self.child_add(CodeFlash(self, "code", 0, page_size * code_size, page_size))
-        self.child_add(UicrFlash(self, "uicr", self.UICR_BASE, page_size, page_size))
+        self.child_add(CodeFlash("code", 0, page_size * code_size, page_size, self))
+        self.child_add(UicrFlash("uicr", self.UICR_BASE, page_size, page_size, self))
 
     def erase_all(self):
         bus = self.buses[0]
@@ -70,6 +66,8 @@ class nRF5(SoC):
         while not (bus.u32_read(self.NVMC_READY) & self.NVMC_READY_READY):
             pass
         bus.u32_write(self.NVMC_CONFIG, self.NVMC_CONFIG_REN)
+
+        self.force_blank()
 
     NVMC_BASE = 0x4001e000
     NVMC_READY = NVMC_BASE + 0x400
@@ -111,7 +109,7 @@ class nRF51(nRF5):
 
         ram_size = sum(ram[1 : 1 + ram[0]])
 
-        self.child_add(Ram(self.buses[0], "ram", 0x20000000, ram_size))
+        self.child_add(BusRam("ram", 0x20000000, ram_size, self.buses[0]))
 
 @SoC.db.register(PartId(2, 0x44, 1))
 def nrf51x22(dp):
@@ -126,11 +124,12 @@ class nRF52(nRF5):
     def ram_probe(self):
         ram_kb = self.buses[0].u32_read(self.FICR_PARTINFO + 0xc)
 
-        self.child_add(Ram(self.buses[0], "ram", 0x20000000, ram_kb * 1024))
+        self.child_add(BusRam("ram", 0x20000000, ram_kb * 1024, self.buses[0]))
 
     def erase_all(self):
         cpu, = self.children_of_class(Cpu)
         self.ctrl_ap.erase_all()
+        self.force_blank()
         cpu.reset()
 
     def trace_enable(self, width, traceclk_rate, formatted):

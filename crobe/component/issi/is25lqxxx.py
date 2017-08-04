@@ -3,6 +3,7 @@ import binascii
 
 @SfdpFlash.db.register(0x9d4014, 0x9d4015, 0x9d4016)
 class Is25Lq(SfdpFlash):
+    max_freq = 106e6
     CMD_READ_UID = b"\x4b"
 
     def __init__(self, port, idr):

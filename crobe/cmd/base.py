@@ -47,17 +47,20 @@ class Command:
 
 class Root(Command):
     def c10_root_declare(self):
-        self.parser.add_argument('--root', '-r', type = str, default = "0/",
-                                 help = "Root name, index")
+        self.parser.add_argument('--explore', '-e', type = str,
+                                 action = "append",
+                                 help = "Root paths to explore")
 
     def c10_root_parse(self, args):
         from ..adapter.model import Enumerator
 
         Enumerator.singleton.start()
 
-        parts = args.root.split("/")
-        
-        self.root = Enumerator.singleton.child_summon(*parts)
+        r = []
+        for root in args.explore:
+            parts = root.split("/")
+            r.append(Enumerator.singleton.child_summon(*parts))
+        self.roots = r
 
 class Programs:
     program_count_needed = None
@@ -95,28 +98,46 @@ class Programs:
 class Field(Root):
     def c60_field_parse(self, args):
         from ..target.model import Field
+        from ..adapter.model import Enumerator
 
         self.field = Field()
-        self.field.discover(self.root)
+        self.field.discover(Enumerator.singleton)
 
 class Target(Field):
+    expected_target = None
+
     def c61_target_declare(self):
         self.parser.add_argument('--target', '-t', metavar = 'NAME',
                                  type = str, default = "0",
                                  help = 'Target accessor')
 
     @staticmethod
-    def _predicate(child, target):
+    def _name_predicate(child, target):
         return target in child.name.lower()
         
     def c61_target_parse(self, args):
         from ..target.model import Field
 
+        t = self.target_get(args.target)
+
+        if self.expected_target is not None:
+            assert isinstance(t, self.expected_target)
+
+        self.target = t
+
+    def target_get(self, path):
         try:
-            idx = int(args.target)
-            self.target = self.field.children[idx]
+            idx = int(path)
+            return self.field.children[idx]
         except:
-            self.target = self.field.child_get(lambda x: self._name_predicate(x, args.target.lower()))
+            pass
+
+        try:
+            t, = self.field.children_find(lambda x: self._name_predicate(x, path.lower()))
+        except ValueError:
+            pass
+
+        raise ValueError("Cannot field target matching", path)
 
 class File:
     def c50_file_declare(self):

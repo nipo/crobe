@@ -23,7 +23,7 @@ class Adapter(model.Adapter):
 
     def open(self, interface_name, **defaults):
         if not interface_name.lower() in self.supported_interfaces:
-            raise NotSupportedError("Unsupported interface %s" % interface_name)
+            raise NotImplementedError("Unsupported interface %s" % interface_name)
 
         d = {}
         d.update(self.enumerator.defaults)
@@ -40,7 +40,7 @@ class Adapter(model.Adapter):
         if interface_name.lower() == "swd":
             return SwdInterface(self, **d)
 
-        raise NotSupportedError("Unsupported interface %s" % interface_name)
+        raise NotImplementedError("Unsupported interface %s" % interface_name)
 
 class AdapterEnumerator(model.Enumerator):
     adapter_class = Adapter
@@ -162,7 +162,7 @@ class BaseInterface(object):
     def freq(self, freq):
         if not freq:
             freq = 60e6
-        self.handle.freq = freq
+        self.handle.freq = min(freq, 60e6)
 
     def cmd_activity(self, value):
         if self.__activity_pin:
@@ -497,7 +497,7 @@ class SpiInterface(BaseInterface, spi.Interface):
                 pending.append(op)
 
                 if isinstance(op, spi.Shift):
-                    if isinstance(op.mosi, bytes):
+                    if isinstance(op.mosi, (bytes, bytearray)):
                         io = api.MPSSE_WRITE_NEG | api.MPSSE_WRITE
                         if op.read_miso:
                             io |= api.MPSSE_READ
@@ -515,7 +515,7 @@ class SpiInterface(BaseInterface, spi.Interface):
                             cmd += struct.pack("<BH", io, cl - 1)
                         rsp_length += op.mosi
                     else:
-                        raise ValueError("Unhandled data type for mosi", mosi)
+                        raise ValueError("Unhandled data type for mosi", op.mosi)
 
                 elif isinstance(op, spi.Cs):
                     if op.value:

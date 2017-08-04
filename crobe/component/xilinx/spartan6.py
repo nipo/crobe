@@ -27,7 +27,7 @@ class Spartan6(jtag.Tap):
     base_path = os.path.join(os.path.dirname(__file__), "fw")
 
     irlen = 6
-    max_freq = 40e6
+    max_freq = 50e6
 
     IR_BYPASS      = 0x3f
     IR_ISC_ENABLE  = 0x10
@@ -163,6 +163,18 @@ class Spartan6(jtag.Tap):
 
         begin = datetime.datetime.now()
 
+        ok = self.config_write(blob)
+
+        self.logger.info("Status: %04x", self.cfg_status)
+
+        end = datetime.datetime.now()
+
+        if not ok:
+            raise RuntimeError("Unable to start FPGA")
+        else:
+            self.logger.info("Done OK, time taken: %s", end - begin)
+
+    def config_write(self, blob):
         prog_data = struct.unpack(">" + "H" * (len(blob) // 2), blob)
 
         self.logger.info("Ready to load program, %d config words", len(prog_data))
@@ -190,17 +202,7 @@ class Spartan6(jtag.Tap):
         self.dr_shift(self.IR_ISC_DISABLE, None)
         self.run(20)
 
-        self.logger.info("Status: %04x", self.cfg_status)
-
-        ok = self.send_op_wait(self.IR_BYPASS, self.IR_STATUS_DONE)
-
-        end = datetime.datetime.now()
-
-        if not ok:
-            raise RuntimeError("Unable to start FPGA")
-        else:
-            self.logger.info("Done OK, time taken: %s", end - begin)
-        
+        return self.send_op_wait(self.IR_BYPASS, self.IR_STATUS_DONE)
 
     def spi_interface(self):
         from ...loadable.object import Program
@@ -209,11 +211,8 @@ class Spartan6(jtag.Tap):
 
         from ..jtag_spi_bridge import JtagSpiBridge
 
-        return JtagSpiBridge(self, self.IR_USER1, self.IR_USER2)
+        return JtagSpiBridge(self, self.IR_USER1, self.IR_USER2, 50e6)
 
-    def child_summon(self, mode = None, *parts):
+    def child_spawn(self, mode = None, *args):
         if mode == "spi":
-            return self.spi_interface().child_summon(*parts)
-        return jtag.Tap.child_summon(self, mode, *parts)
-
-    
+            return self.spi_interface()

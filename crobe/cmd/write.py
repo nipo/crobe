@@ -4,7 +4,7 @@ from ..target.soc.model import SoC
 from ..component.model import Cpu
 from ..util.pretty import metric
 from ..util.info import TimedLogger
-from ..target.loadable import Loadable
+from ..target.memory import Loadable
 
 def main():
     from . import base
@@ -31,14 +31,14 @@ def main():
     print("Target:", args.target)
 
     if args.erase_all:
-        with TimedLogger(logging, "erasing all"):
+        with TimedLogger(logging, "erase all"):
             args.target.erase_all()
     
-    with TimedLogger(logging, "writing flash"):
-        args.target.load(args.program, erase = not args.erase_all)
+    with TimedLogger(logging, "write"):
+        args.target.write(args.program)
 
     if args.check:
-        with TimedLogger(logging, "checking flash"):
+        with TimedLogger(logging, "check"):
             ok = args.target.verify(args.program)
             if not ok:
                 return 1

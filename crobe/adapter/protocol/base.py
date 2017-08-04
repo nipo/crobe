@@ -10,12 +10,13 @@ class Interface(model.PortComponent):
     """
     def __init__(self, port, name):
         model.PortComponent.__init__(self, port, name)
+        port.child_add(self, weak = True)
         self._lock = threading.Lock()
         self.__freq_constraints = {}
         self.__freq = None
 
     def close(self):
-        pass
+        self.port.child_remove(self)
 
     def _execute(self, commands):
         pass

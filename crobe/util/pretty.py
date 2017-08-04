@@ -38,13 +38,11 @@ def base2(value, unit = ""):
     while (value >> exp) >= 1024:
         exp += 10
     m = value * (2. ** -exp)
-    scale = " kMGT"
+    scale = ["", "ki", "Mi", "Gi"]
+    exp = min((len(scale) - 1) * 10, exp)
     suffix = scale[exp // 10]
 
-    if suffix == ' ':
-        suffix = ''
-
-    return ('%f' % (int(float(m * 1024) + .5) // 1024.)).rstrip('0').rstrip('.') + suffix + "i" + unit
+    return ('%f' % (int(float(m * 1024) + .5) // 1024.)).rstrip('0').rstrip('.') + suffix + unit
 
 def sci_parse(string):
     suffix = {

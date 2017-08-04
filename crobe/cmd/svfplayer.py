@@ -2,9 +2,10 @@ def main():
     from . import base
     from ..svf.player import Player
     from ..svf.svf import SvfParser
+    from ..adapter.protocol.jtag import Interface
 
     class Tool(base.Root, base.File):
-        forced_interface = "jtag"
+        expected_root = Interface
 
     args = Tool("SVF player")
 

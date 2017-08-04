@@ -17,7 +17,9 @@ class GdbServer(SocketServer):
 def main():
     from . import base
 
-    class Tool(base.Root):
+    class Tool(base.Field):
+        expected_target = SoC
+
         def c32_port_declare(self):
             self.parser.add_argument('--port', '-P', type = int, default = 2331,
                                          help = "TCP port to listen on")
@@ -27,16 +29,14 @@ def main():
 
     args = Tool("GDB Server")
 
-    soc, = args.field.children_of_class(SoC)
-
     try:
         args.interface.reset = False
     except NotImplementedError:
         pass
 
-    print("SoC under control:", soc)
+    print("SoC under control:", args.target)
     
-    GdbServer(args.port, soc).serve()
+    GdbServer(args.port, args.target).serve()
 
 if __name__ == '__main__':
     main()

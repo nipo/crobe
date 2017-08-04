@@ -11,6 +11,8 @@ __all__ = ["SpiFlash"]
 class SpiFlash(PortComponent):
     db = Db()
 
+    max_freq = 33e6
+    
     total_size = 0
     sector_size = 1
     page_size = 1
@@ -40,8 +42,8 @@ class SpiFlash(PortComponent):
     def info(self):
         self.logger.info("Total size: %s (%s)", base2(self.total_size, "B"), base2(self.total_size * 8, "b"))
         for i, s in enumerate(self.SECTOR_INFO):
-            self.logger.info("- level %d: %d sectors of %d bytes. Erase command: 0x%02x",
-                             i, self.total_size / s["size"], s["size"], s["erase_cmd"][0])
+            self.logger.info("- level %d: %d x %s sectors, erase command: 0x%02x",
+                             i, self.total_size / s["size"], base2(s["size"], 'B'), s["erase_cmd"][0])
         if self.CMD_WRITE_STATUS:
             self.logger.info("Volatile status write op: 0x%02x", self.CMD_WRITE_STATUS)
            
@@ -69,6 +71,9 @@ class SpiFlash(PortComponent):
         except NoMatch:
             pass
         self.info()
+
+        self.port.freq_cap(self, self.max_freq)
+        self.port.child_add(self)
         return self
         
     def start(self):
@@ -104,69 +109,76 @@ class SpiFlash(PortComponent):
         return self.command(op + self.addr(address) + b'\x00', size)
 
     def write_enable(self, enable):
-        if enable:
-            self.command(self.CMD_WRITE_ENABLE, 0)
-        else:
-            self.command(self.CMD_WRITE_DISABLE, 0)
+        retries = 0
+        while bool(self.status & self.STATUS_WEL) != enable:
+            if enable:
+                self.command(self.CMD_WRITE_ENABLE, 0)
+            else:
+                self.command(self.CMD_WRITE_DISABLE, 0)
+            retries += 1
+
+            if retries & 0xff == 0:
+                self.logger.warning("Still waiting for WEL to get %s, status = 0x%02x", enable, self.status)
 
     @property
     def status(self):
         return self.command(self.CMD_READ_STATUS, 1)[0]
             
     def erase_all(self):
-        while not (self.status & self.STATUS_WEL):
-            self.write_enable(True)
+        self.write_enable(True)
         self.command(self.CMD_CHIP_ERASE, 0)
         while self.status & self.STATUS_WIP:
             time.sleep(.1)
             pass
         self.write_enable(False)
     
-    def erase_range(self, base, size):
+    def erase(self, base, size):
         chosen = None
-        for s in self.SECTOR_INFO:
-            ss = s["size"]
-            if base % ss == 0 and size % ss == 0:
-                chosen = ss
+        while size > 0:
+            try_again = False
+            for i, s in enumerate(self.SECTOR_INFO):
+                ss = s["size"]
+                if base % ss == 0 and size <= ss == 0:
+                    chosen = s
 
-        if chosen is None:
-            raise ValueError("Cannot find a suitable command to erase zone")
+            if not chosen:
+                try_again = True
+                chosen = self.SECTOR_INFO[0]
+                assert base % chosen["size"] == 0
 
-        for addr in range(base, base + size, si["size"]):
-            self.erase_sector(addr, chosen)
+            for addr in range(base, base + size, chosen["size"]):
+                self.erase_sector(addr, chosen)
+                base += chosen["size"]
+                size -= chosen["size"]
+                if try_again:
+                    break
+
+            chosen = None
 
     def erase_sector(self, addr, si):
+        self.write_enable(True)
         self.logger.info("Erasing %d bytes at %08x", si["size"], addr)
         self.command(si["erase_cmd"] + self.addr(addr), 0)
         while self.status & self.STATUS_WIP:
             pass
 
-    def write(self, program, erase_first = True, verify = False):
+    def write(self, base, data):
         si = self.SECTOR_INFO[0]
 
-        while not (self.status & self.STATUS_WEL):
-            self.write_enable(True)
+        page_size = si["size"]
 
-        for page in program.paged(si["size"]):
-            if erase_first:
-                self.erase_sector(page.address, si)
+        for offset in range(0, len(data), page_size):
 
-            self.logger.info("Writing %d bytes at %08x", si["size"], page.address)
-            for offset in range(0, len(page), 256):
+            chunk = data[offset : offset + page_size]
+            chunk += b"\xff" * ((-len(chunk)) % page_size)
+
+            self.logger.info("Writing page at 0x%08x...", offset)
+            for offset2 in range(0, page_size, 256):
                 self.write_enable(True)
-                self.command(self.CMD_PAGE_PROGRAM + self.addr(page.address + offset)
-                             + page.data[offset : offset + 256], 0)
+                self.command(self.CMD_PAGE_PROGRAM + self.addr(base + offset + offset2)
+                             + chunk[offset2 : offset2 + 256], 0)
                 while self.status & self.STATUS_WIP:
                     pass
-
-            if verify:
-                self.logger.info("Checking data at %08x", page.address)
-                readback = self.read(page.address, len(page))
-                if readback != page.data:
-                    for off in range(0, len(page), 16):
-                        print("prog %04x: %s" % (off, binascii.b2a_hex(page.data[off : off + 16])))
-                        print("read     : %s" % (binascii.b2a_hex(readback[off : off + 16])))
-                    raise ValueError("Contents mismatch")
 
         self.write_enable(False)
 
@@ -178,6 +190,13 @@ class SpiFlash(PortComponent):
                 return False
         return True
 
+@spi.Interface.db.register("flash")
+def spi_flash_probe(bus, *args):
+    try:
+        return SpiFlash.detect(bus)
+    except ValueError:
+        raise NoMatch("Not a spi flash")
+    
 @SpiFlash.db.register_default
 class SfdpFlash(SpiFlash):
     CMD_SFDP_READ = b'\x5a'
@@ -204,28 +223,47 @@ class SfdpFlash(SpiFlash):
             self.logger.info("  data: %s", binascii.b2a_hex(data))
             
             if jid == 0:
-                if data[0] & 3 == 1:
-                    self.block_size = 4096
-                if data[0] & 0x8:
-                    self.CMD_WRITE_STATUS = "\x06" if data[0] & 0x10 else "\x50"
-                if data[1] != 0xff:
-                    self.CMD_4KB_ERASE = bytes([data[1]])
-                if data[2] & 0x6 == 0:
-                    self.ADDRESS_SIZE = 3
-                elif data[2] & 0x6 == 2:
-                    self.ADDRESS_SIZE = 4
-                density, = struct.unpack("<L", data[4:8])
-                if density & 0x80000000:
-                    self.total_size = 1 << ((density & 0x7fffffff) - 3)
+                if major == 1 and minor == 5:
+                    self._parse_sfdp_1_5(data)
+                elif major == 1 and minor == 6:
+                    self._parse_sfdp_1_6(data)
                 else:
-                    self.total_size = (density + 1) / 8
-                self.SECTOR_INFO = []
-                for i in range(4):
-                    s = data[28 + 2 * i]
-                    op = data[29 + 2 * i:30 + 2 * i]
-                    if not s:
-                        continue
-                    self.SECTOR_INFO.append({"size": 1 << s, "erase_cmd": op})
+                    raise ValueError("Unsupported SFDP version: %d.%d" % (major, minor))
 
+    def _parse_sfdp_1_5(self, data):
+        if data[0] & 3 == 1:
+            self.block_size = 4096
+        if data[0] & 0x8:
+            self.CMD_WRITE_STATUS = "\x06" if data[0] & 0x10 else "\x50"
+        if data[1] != 0xff:
+            self.CMD_4KB_ERASE = bytes([data[1]])
+        if data[2] & 0x6 == 0:
+            self.ADDRESS_SIZE = 3
+        elif data[2] & 0x6 == 2:
+            self.ADDRESS_SIZE = 4
+
+        density, = struct.unpack("<L", data[4:8])
+
+        if density & 0x80000000:
+            self.total_size = 1 << ((density & 0x7fffffff) - 3)
+        else:
+            self.total_size = (density + 1) / 8
+
+        self.SECTOR_INFO = []
+
+        for i in range(4):
+            s = data[28 + 2 * i]
+            op = data[29 + 2 * i:30 + 2 * i]
+            if not s:
+                continue
+            self.SECTOR_INFO.append({"size": 1 << s, "erase_cmd": op})
+
+        self.page_size = self.SECTOR_INFO[0]["size"]
+
+    def _parse_sfdp_1_6(self, data):
+        self.logger.warning("Should add support for SFDP 1.6 !")
+        return self._parse_sfdp_1_5(data)
+#        raise ValueError("Unsupported SFDP version: 1.6")
+        
     def sfdp_read(self, offset, size):
         return self.command(self.CMD_SFDP_READ + offset.to_bytes(3, byteorder = 'big') + b'\x00', size)

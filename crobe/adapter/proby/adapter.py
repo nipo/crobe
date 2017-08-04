@@ -297,6 +297,8 @@ class ProbyAdapter(basic.Adapter):
 
         fpga.load(obj)
 
+        jtag_intf.close()
+
     def open(self, interface_name):
         if interface_name == "spi":
             self.reprogram("jtag_swd_raw")
@@ -304,23 +306,22 @@ class ProbyAdapter(basic.Adapter):
                                 resetn_pin = 8,
                                 csn_pin = 3,
                                 gpio_output = 0x061b, gpio_value = 0x0210)
+
         elif interface_name == "jtag":
             self.reprogram("jtag_swd_raw")
             return basic.Adapter.open(self, interface_name, channel = "A",
                                 resetn_pin = 8,
                                 gpio_output = 0x061b, gpio_value = 0x0210)
+
         elif interface_name == "jtag-int":
             return basic.Adapter.open(self, "jtag", channel = "B", resetn_pin = 9)
+
         elif interface_name == "swd-pt":
-            return basic.Adapter.open(self, interface_name, channel = "A",
+            return basic.Adapter.open(self, "swd", channel = "A",
                                 resetn_pin = 8,
                                 oe_pin = 5,
                                 gpio_output = 0x063b, gpio_value = 0x0610)
-        elif interface_name == "swd-pt":
-            return basic.Adapter.open(self, interface_name, channel = "A",
-                                resetn_pin = 8,
-                                oe_pin = 5,
-                                gpio_output = 0x063b, gpio_value = 0x0610)
+
         elif interface_name == "swd":
             self.reprogram("swd_dp")
 
@@ -332,7 +333,7 @@ class ProbyAdapter(basic.Adapter):
             return Interface(self, mux)
         else:
             raise ValueError("Unknown interface name: %s" % interface_name)
-
+        
 @model.Enumerator.register
 class Enumerator(basic.AdapterEnumerator):
     adapter_class = ProbyAdapter

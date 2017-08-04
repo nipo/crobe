@@ -8,7 +8,7 @@ from ....component.arm.sw_dp import SwDp
 from ....component.arm.jtag_dp import JtagDp
 from ....component.arm.mem_ap import MemAp
 from ....component.nordic.ctrl_ap import CtrlAp
-from ....memory.region import Ram, NandFlash, Flash
+from ... import memory
 from ....puppet import Puppet
 from ....db import Db
 from ....util.info import TimedLogger
@@ -43,7 +43,7 @@ class PuppetStub:
 class ArmMPuppet(Puppet):
     def __init__(self, soc):
         cpu = soc.children_of_class(Cortex)[0]
-        ram = soc.children_of_class(Ram)[0]
+        ram = soc.children_of_class(memory.Ram)[0]
 
         Puppet.__init__(self, cpu, ram,
                         pc_reg = cpu.registers[15],
@@ -55,9 +55,28 @@ class ArmMPuppet(Puppet):
     def stub(self, code):
         return PuppetStub(self, code)
 
-class StubFlash(NandFlash):
-    def __init__(self, soc, name, base, size, page_size):
-        NandFlash.__init__(self, soc.buses[0], name, base, size, page_size)
+class BusRam(memory.Ram):
+    def __init__(self, name, address, size, bus):
+        memory.Ram.__init__(self, name, address, size)
+        self.bus = bus
+
+    def read(self, offset, size):
+        return self.bus.mem_read(self.address + offset, size)
+
+    def write(self, offset, data):
+        self.bus.mem_write(self.address + offset, size)
+
+class BusFlash(memory.Flash):
+    def __init__(self, name, address, size, page_size, bus):
+        memory.Flash.__init__(self, name, address, size, page_size)
+        self.bus = bus
+
+    def read(self, offset, size):
+        return self.bus.mem_read(self.address + offset, size)
+
+class StubFlash(BusFlash):
+    def __init__(self, name, base, size, page_size, soc):
+        BusFlash.__init__(self, name, base, size, page_size, soc.buses[0])
         self.soc = soc
         self.__prepared = False
 
@@ -80,9 +99,9 @@ class StubFlash(NandFlash):
             code = puppet.stub(self.RANGE_ERASE)
             code.call(self.address + offset, size, self.page_size)
 
-    def read(self, offset, size):
-        return self.bus.mem_read(self.address + offset, size)
-
+        if size == self.size:
+            self.is_blank = True
+            
     def write(self, offset, data):
         assert offset % self.page_size == 0
 
@@ -98,6 +117,8 @@ class StubFlash(NandFlash):
                 page_zone.write(chunk)
                 code.call(self.address + off, page_zone.address, len(chunk))
             puppet.unallocate(page_zone)
+
+        self.set_blank(False)
 
     def load(self, program):
         self.prepare()
@@ -155,11 +176,6 @@ class SoC(model.SoC):
                 rt, = port.children_find(lambda x: isinstance(x, RomTable) and s in x.children)
                 self.child_add(Cortex.from_romtable(rt, idx))
                 idx += 1
-
-    def erase_all(self):
-        flashes = self.children_of_class(Flash)
-        for f in flashes:
-            f.erase(0, f.size)
 
     def puppet(self):
         return ArmMPuppet(self)

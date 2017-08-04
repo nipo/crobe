@@ -4,18 +4,22 @@ import binascii
 __all__ = ["JtagSpiBridge"]
 
 class JtagSpiBridge(spi.Interface):
-    def __init__(self, tap, data_in, data_out):
+    def __init__(self, tap, data_in, data_out, base_freq):
         spi.Interface.__init__(self, tap)
         self.data_in_ir = data_in
         self.data_out_ir = data_out
+        self.base_freq = base_freq
+        self.__div = 0
 
     @property
     def freq(self):
-        return self.port.port.freq / 2
+        return self.base_freq / (self.__div + 1)
 
     @freq.setter
     def freq(self, freq):
-        self.port.port.freq = freq * 2
+        if not freq:
+            self.__div = 0
+        self.__div = max(0, min(0x1f, int(self.base_freq / freq + .5)))
 
     CMD_SELECT = 0x00
     CMD_SHIFT_OUT = 0x80
@@ -25,10 +29,14 @@ class JtagSpiBridge(spi.Interface):
     CMD_DIV = 0x20
 
     def cmd_io(self, cmd, rsp_size):
-        self.logger.debug("CMD %s, rsp %d bytes", binascii.b2a_hex(cmd), rsp_size)
+        padding_time = max(0, rsp_size - len(cmd)) * 8 / self.freq
+        padding_bits = int(padding_time * self.port.port.port.freq)
+
+        self.logger.debug("CMD %s, rsp %d bytes, padding %d bits", binascii.b2a_hex(cmd), rsp_size, padding_bits)
+
         return [
             self.port.cmd_dr_shift(self.data_in_ir, b"\x5c\xad" + cmd, read_tdo = False),
-            self.port.cmd_run(rsp_size // 8 + 16),
+            self.port.cmd_run(padding_bits + 16),
             self.port.cmd_dr_shift(self.data_out_ir, None, 8 * rsp_size, read_tdo = True, return_type = bytes),
         ]
 
@@ -36,7 +44,7 @@ class JtagSpiBridge(spi.Interface):
         pending = []
 
         for op in operation_list:
-            pending += self.cmd_io(bytes([self.CMD_DIV]), 1)
+            pending += self.cmd_io(bytes([self.CMD_DIV | self.__div]), 1)
 
             if isinstance(op, spi.Shift):
                 op.__rsp = []

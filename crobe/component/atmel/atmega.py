@@ -9,6 +9,7 @@ class Atmega(Isp):
         self.enable()
         self.device_signature = self.device_signature_read()
         self.name = self.DEVICE_LIST.get(self.device_signature, "AVR (%06x)" % self.device_signature)
+        self.port.child_add(self)
 
     DEVICE_LIST = {
         0x1e9205: "ATmega48",
@@ -103,3 +104,7 @@ class Atmega(Isp):
         0x1e9802: "ATmega2561",
         0x1ea701: "ATmega128RFA1",
     }
+
+@spi.Interface.db.register("atmega")
+def atmega_probe(bus, *args):
+    return Atmega(bus)

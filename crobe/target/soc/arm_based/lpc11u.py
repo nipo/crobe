@@ -1,6 +1,5 @@
 from .soc import SoC, ArmMPuppet
 from ....part_id import PartId
-from ....memory.region import *
 import struct
 
 class ChipInfo:
@@ -72,8 +71,8 @@ class Lpc11u(SoC):
         SoC.__init__(self, info.name, dp)
         self.info = info
         
-        self.child_add(NandFlash(self.buses[0], "code", 0, info.flash_kb * 1024, 4096))
-        self.child_add(Ram(self.buses[0], "ram", 0x10000000, info.sram_kb * 1024))
+        self.child_add(BusFlash("code", 0, info.flash_kb * 1024, 4096, self.buses[0]))
+        self.child_add(BusRam("ram", 0x10000000, info.sram_kb * 1024, self.buses[0]))
 
         uid = self.puppet().iap_call(58)
         self.uid = sum([uid[i] << (i * 32) for i in range(4)])

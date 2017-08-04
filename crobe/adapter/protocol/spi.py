@@ -1,7 +1,7 @@
 from . import base
 from ...model import PortComponent
 from ... import bitstring
-from ...db import Db
+from ...db import Db, NoMatch
 from ...part_id import PartId
 import time
 from enum import IntEnum
@@ -20,6 +20,8 @@ class Interface(base.Interface):
     Adapter implementations are responsible for handling the IO as
     they require.  They may toggle clock when CS is high if needed.
     """
+
+    db = Db()
 
     def __init__(self, port, name = None):
         base.Interface.__init__(self, port, (name or port.name) + "/SPI")
@@ -76,12 +78,12 @@ class Interface(base.Interface):
         """
         return Cs(value)
 
-    def child_summon(self, sub, *parts):
-        if sub == "flash":
-            from ...component.spi_flash import SpiFlash
-            return SpiFlash.detect(self).child_summon(*parts)
-        return base.Interface.child_summon(self, sub, *parts)
-    
+    def child_spawn(self, sub, *args):
+        try:
+            return self.db.call(sub, self, *args)
+        except NoMatch:
+            pass
+        
 class Target(PortComponent):
     def transaction(self, mosi, read_miso = True):
         op = self.port.cmd_shift(mosi, read_miso)

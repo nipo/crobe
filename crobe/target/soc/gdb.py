@@ -1,6 +1,6 @@
 from ...gdb import protocol, message
 import binascii
-from ...memory import region
+from .. import memory
 from ...component.model import Cpu, Register, Bus
 from xml.etree import ElementTree as et
 
@@ -15,15 +15,15 @@ class Responder(protocol.Responder):
         
     def memory_map_xml(self):
         mm = et.Element("memory-map")
-        regions = self.soc.children_of_class(region.Region)
+        regions = self.soc.children_of_class(memory.Region)
         for r in regions:
-            if r.type not in (region.Type.RAM, region.Type.FLASH):
+            if r.type not in (memory.Type.RAM, memory.Type.FLASH):
                 continue
             el = et.SubElement(mm, "memory",
                                type = r.type.name.lower(),
                                start = hex(r.address),
                                length = hex(r.size))
-            if r.type == region.Type.FLASH:
+            if r.type == memory.Type.FLASH:
                 et.SubElement(el, "property",
                               name = "blocksize").text = hex(r.page_size)
 
@@ -44,18 +44,18 @@ class Responder(protocol.Responder):
         self.respond(message.Ok())
     
     def flash_erase(self, addr, size):
-        regions = self.soc.children_of_class(region.Region)
+        regions = self.soc.children_of_class(memory.Region)
         for r in regions:
-            if not isinstance(r, region.Flash):
+            if not isinstance(r, memory.Flash):
                 continue
 
             if r.address <= addr and addr + size <= r.address + r.size:
                 r.erase(addr, size)
             
     def flash(self, program):
-        regions = self.soc.children_of_class(region.Region)
+        regions = self.soc.children_of_class(memory.Region)
         for r in regions:
-            if not isinstance(r, region.Flash):
+            if not isinstance(r, memory.Flash):
                 continue
 
             pages = program.within(r.address, r.address + r.size)

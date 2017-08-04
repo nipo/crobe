@@ -46,7 +46,7 @@ class Info:
 
         return cls.parts.get(part, 0)
 
-    def flash_add(self, soc, flash_class):
+    def flash_add(self, flash_cb):
         if not self.flash_page_size:
             return
 
@@ -71,7 +71,7 @@ class Info:
                 pages = limit
 
             size = pages * page_size
-            soc.child_add(flash_class(soc, "code", base + offset, size, page_size))
+            flash_cb("code", base + offset, size, page_size)
 
             offset += size
             remaining -= size

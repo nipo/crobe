@@ -16,15 +16,18 @@ class SwDp(dp.Dp):
     ABORT    = 0 # W
     RESEND   = 2 # R
 
-    # TODO build a DB of max freqs
-    max_freq = None
+    max_freq = 15e6
 
     def __init__(self, port):
         dp.Dp.__init__(self, "SW-DP", port)
 
+    def start(self):
+        self.port.freq_cap(self, self.max_freq)
+        dp.Dp.start(self)
+        
     def debug_enable(self, enable):
         dp.Dp.debug_enable(self, enable)
-
+        
         if self.version >= 1 and not self.minimal and enable:
             self.dlcr = (self.dlcr & ~0x300) | 0x300
             self.port.turnaround_cycles = 4

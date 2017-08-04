@@ -1,8 +1,7 @@
 from ....part_id import PartId
-from .soc import SoC, StubFlash
+from .soc import SoC, StubFlash, BusRam
 import binascii
 import struct
-from ....memory.region import *
 from .puppet_code import efm32_flash_erase, efm32_flash_write
 
 class EfmFlash(StubFlash):
@@ -58,8 +57,8 @@ class Gecko(SoC):
         if pincount:
             self.logger.info("Package: %s%d", self.PACKAGE_NAMES.get(pkgtype, pkgtype), pincount)
             
-        self.child_add(EfmFlash(self, "code", 0, flash_size * 1024, flash_page_size))
-        self.child_add(Ram(self.buses[0], "ram", 0x20000000, ram_size * 1024))
+        self.child_add(EfmFlash("code", 0, flash_size * 1024, flash_page_size, self))
+        self.child_add(BusRam("ram", 0x20000000, ram_size * 1024, self.buses[0]))
 
     PACKAGE_NAMES = {
         'J': "WLCSP",

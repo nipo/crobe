@@ -15,20 +15,17 @@ class Enumerator(model.Enumerator):
     def __init__(self):
         model.Enumerator.__init__(self, "XVCD")
 
-    def start(self):
-        servers = (os.getenv("CROBE_XVCD_SEVERS") or "").split()
-
-        for i, s in enumerate(servers):
-            self.child_add(Adapter.from_target(str(i), s))
-
-        model.Enumerator.start(self)
+    def child_spawn(self, name, *args):
+        r = Adapter.from_target(name, name)
+        self.child_add(r)
+        return r
             
 class Adapter(model.Adapter):
     @classmethod
     def from_target(cls, name, target):
         port = target.split(":")[-1]
         hostname = target[:-len(port)-1]
-
+        
         return cls(name, hostname, int(port))
 
     supported_interfaces = ["jtag"]

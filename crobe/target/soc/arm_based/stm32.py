@@ -1,8 +1,7 @@
 from ....part_id import PartId
-from ....memory.region import *
 from ....component.arm.coresight.scs import Scs
 from ....component.st.stm32 import Info
-from .soc import SoC, StubFlash
+from .soc import SoC, StubFlash, BusRam
 import struct
 from .puppet_code import stm32f1_flash_erase, stm32f1_flash_write
 
@@ -23,9 +22,9 @@ class Stm(SoC):
         self.logger.info("MCU UID: %024x", self.uid)
 
         ram_size = self.ram_size_probe(0x20000000, 512 * 1024)
-        self.info.flash_add(self, Stm32f1Flash)
+        self.info.flash_add(lambda name, base, size, page: self.child_add(Stm32f1Flash(name, base, size, page, self)))
 
-        self.child_add(Ram(self.buses[0], "ram", 0x20000000, ram_size))
+        self.child_add(BusRam("ram", 0x20000000, ram_size, self.buses[0]))
 
         if self.info.uid_blob_is_coords:
             x, y, no, self.lot_number = struct.unpack("<HHB7s", uid_blob)

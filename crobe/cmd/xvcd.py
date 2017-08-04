@@ -156,9 +156,9 @@ class XvcdServer(SocketServer):
 
 def main():
     from . import base
+    from ..adapter.protocol.jtag import Interface
 
-    class Tool(base.Freq):
-        forced_interface = "jtag"
+    class Tool(base.Root):
         def c32_port_declare(self):
             self.parser.add_argument('--port', '-p', type = int, default = 2542,
                                          help = "TCP port to listen on")
@@ -168,15 +168,20 @@ def main():
 
     args = Tool("XVCD Server")
 
-    print("Adapter:", args.interface.port.firmware_info)
-    print("Serial:", args.interface.port.serial_number)
-    print("Freq:", metric(args.interface.freq, "Hz"))
+    intf = args.roots[0]
+
+    if not isinstance(intf, Interface):
+        raise ValueError("Expected a JTAG interface. Try -e [adapter]/jtag.")
+    
+    print("Adapter:", intf.port.firmware_info)
+    print("Serial:", intf.port.serial_number)
+    print("Freq:", metric(intf.freq, "Hz"))
 
     try:
-        args.interface.reset = False
+        intf.reset = False
     except NotImplementedError:
         pass
-    XvcdServer(args.port, args.interface).serve()
+    XvcdServer(args.port, intf).serve()
 
     
 if __name__ == '__main__':

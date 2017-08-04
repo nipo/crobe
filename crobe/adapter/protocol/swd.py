@@ -71,8 +71,7 @@ class Interface(base.Interface):
         time.sleep(.050)
 
         # Limit frequency to 1M for line reset and jtag-to-swd.
-        f = self.freq
-        self.freq = min((1e6, f))
+        self.freq_cap("enumeration", 1e6)
 
         ops = [self.cmd_wakeup(), self.cmd_jtag_to_swd(),
                self.cmd_wakeup(), self.cmd_run(10),
@@ -81,9 +80,9 @@ class Interface(base.Interface):
 
         partid = PartId.from_idcode(ops[-1].data)
 
-        self.freq = f
-
         self.child_add(self.db.call(partid, self))
+
+        self.freq_cap("enumeration")
 
         base.Interface.start(self)
         

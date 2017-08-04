@@ -1,4 +1,5 @@
 from ..util.pretty import metric
+from ..adapter.model import Enumerator
 
 def main():
     from . import base
@@ -13,7 +14,7 @@ def main():
 
     args = Tool("Target enumerator")
 
-    component_dump(args.root)
+    component_dump(Enumerator.singleton)
     component_dump(args.field)
 
     if args.cpuid:
