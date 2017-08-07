@@ -46,11 +46,11 @@ class Info:
 
         return cls.parts.get(part, 0)
 
-    def flash_add(self, flash_cb):
+    def flash_add(self, flash_cb, kb):
         if not self.flash_page_size:
             return
 
-        flash_size = self.flash_kb_get(soc) * 1024
+        flash_size = kb * 1024
 
         if isinstance(self.flash_page_size, int):
             page_sizes = [(self.flash_page_size, None)]

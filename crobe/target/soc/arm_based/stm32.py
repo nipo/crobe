@@ -22,7 +22,8 @@ class Stm(SoC):
         self.logger.info("MCU UID: %024x", self.uid)
 
         ram_size = self.ram_size_probe(0x20000000, 512 * 1024)
-        self.info.flash_add(lambda name, base, size, page: self.child_add(Stm32f1Flash(name, base, size, page, self)))
+        self.info.flash_add(lambda name, base, size, page: self.child_add(Stm32f1Flash(name, base, size, page, self)),
+                            self.info.flash_kb_get(self))
 
         self.child_add(BusRam("ram", 0x20000000, ram_size, self.buses[0]))
 
