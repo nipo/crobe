@@ -9,6 +9,7 @@ import logging
 import binascii
 import threading
 import queue
+import math
 
 class FtdiError(base.CommunicationError):
     pass
@@ -363,13 +364,13 @@ class Mpsse(Handle):
         divisor = 120000000 / freq
         if divisor >= 65535:
             divisor /= 5
-            d = min((max((int(divisor) - 1, 0)), 65535))
+            d = min((max((int(math.ceil(divisor)) - 1, 0)), 65535))
             self.execute(struct.pack("<BBH",
                                      api.MPSSE_CLK_DIV5_ENABLE,
                                      api.MPSSE_CLK_DIV, d))
             self.__freq = 24000000 // (d + 1)
         else:
-            d = min((max((int(divisor) - 1, 0)), 65535))
+            d = min((max((int(math.ceil(divisor)) - 1, 0)), 65535))
             self.execute(struct.pack("<BBH",
                                      api.MPSSE_CLK_DIV5_DISABLE,
                                      api.MPSSE_CLK_DIV, int(divisor - 1)))
