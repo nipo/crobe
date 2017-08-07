@@ -124,14 +124,14 @@ class Handle(model.Component):
         checked(api.get_free_memory(self.handle, ctypes.byref(value)))
         return value.value
 
-    CONFIG_USB_ADDRESS        = (0x00, 0x01)
-    CONFIG_ENUMERATION_METHOD = (0x01, 0x02) # 00/FF: USB, 01: Real SN, 02: Fake SN
-    CONFIG_POWER              = (0x04, 0x08)
-    CONFIG_FAKE_SN            = (0x08, 0x0c)
-    CONFIG_IP_ADDR            = (0x20, 0x24)
-    CONFIG_IP_NET             = (0x24, 0x28)
-    CONFIG_HWADDR             = (0x30, 0x36)
-    CONFIG_NICKNAME           = (0x50, 0x70)
+    CONFIG_USB_ADDRESS        = 0x00
+    CONFIG_ENUMERATION_METHOD = 0x01 # 00/FF: USB, 01: Real SN, 02: Fake SN
+    CONFIG_POWER              = slice(0x04, 0x08)
+    CONFIG_FAKE_SN            = slice(0x08, 0x0c)
+    CONFIG_IP_ADDR            = slice(0x20, 0x24)
+    CONFIG_IP_NET             = slice(0x24, 0x28)
+    CONFIG_HWADDR             = slice(0x30, 0x36)
+    CONFIG_NICKNAME           = slice(0x50, 0x70)
 
     @property
     def config(self):
@@ -150,19 +150,30 @@ class Handle(model.Component):
         self.logger.info("Writing configuration blob: %r", binascii.b2a_hex(value))
         blob = (ctypes.c_ubyte * api.DEV_CONFIG_SIZE).from_buffer_copy(value)
         checked(api.write_raw_config(self.handle, blob))
+        if self.config != value:
+            print("Config write failed. You may have more chance using JLinkExe.")
+            print("Try the following commands:")
+            for i, (before, after) in enumerate(zip(self.config, value)):
+                if before != after:
+                    print("wconf %02x, %02x" % (i, after))
+            
+            raise RuntimeError("Config write failed")
 
     @property
     def nickname(self):
-        return self.config[80:80+32].split(b"\x00")[0]
+        return self.config[self.CONFIG_NICKNAME].split(b"\x00")[0]
 
     @nickname.setter
     def nickname(self, nickname):
         self.logger.info("Setting probe nickname: %s", nickname)
-        c = self.config
-        tmp = (nickname.encode("utf-8")[:31] + b'\x00').ljust(32, b"\xff")
-        c2 = c[:80] + tmp + c[80+32:]
-        assert len(c) == len(c2)
-        self.config = c2
+        if nickname:
+            tmp = nickname.encode("utf-8")[:31] + b'\x00'
+        else:
+            tmp = b''
+        c = bytearray(self.config)
+        c[self.CONFIG_NICKNAME] = b'\xff' * 32
+        c[self.CONFIG_NICKNAME.start : self.CONFIG_NICKNAME.start + len(tmp)] = tmp
+        self.config = c
 
     @property
     def available_interfaces(self):

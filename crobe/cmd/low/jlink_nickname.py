@@ -14,21 +14,16 @@ def main():
 
     args = Tool("JLink nickname changer")
 
-    jlink = args.root
+    jlink = args.roots[0]
     assert isinstance(jlink, Adapter)
 
-    for i in jlink.supported_interfaces:
+    for i in ["swd", "jtag"]:
         try:
             interface = jlink.open(i)
         except NotImplementedError:
             continue
 
         interface.handle.nickname = args.nickname
-        print("New config:", binascii.b2a_hex(interface.handle.config))
-        interface.handle.nickname = args.nickname
-        print("New config:", binascii.b2a_hex(interface.handle.config))
-        interface.handle.nickname = args.nickname
-        print("New config:", binascii.b2a_hex(interface.handle.config))
 
         return
 
