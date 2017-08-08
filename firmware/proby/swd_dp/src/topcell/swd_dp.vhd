@@ -2,22 +2,7 @@ library ieee;
 use ieee.std_logic_1164.all;
 use ieee.numeric_std.all;
 
-library unisim;
-use unisim.vcomponents.all;
-
-library nsl;
-use nsl.ftdi.all;
-use nsl.routed.all;
-use nsl.framed.all;
-use nsl.util.all;
-use nsl.sized.all;
-
-library util;
-use util.sync.sync_rising_edge;
-use util.activity.activity_monitor;
-
-library coresight;
-use coresight.dp.all;
+library util, nsl, coresight;
 
 entity swd_dp is
   port (
@@ -27,6 +12,7 @@ entity swd_dp is
     user_btn: in std_ulogic;
 
     io_en: out std_ulogic;
+    jtag_en: out std_ulogic;
 
     dbg_spare: in std_logic;
     dbg_srst: inout std_logic;
@@ -49,9 +35,8 @@ end swd_dp;
 
 architecture arch of swd_dp is
 
-  signal s_resetn_fifo, s_reset_dcm, s_reset_pll : std_ulogic;
-  signal s_sys_clk, s_pll_locked, s_clkfb : std_ulogic;
-  signal s_clk_60, s_dcm_locked : std_ulogic;
+  signal s_resetn_fifo, s_clk_resetn : std_ulogic;
+  signal s_sys_clk : std_ulogic;
   signal s_sys_resetn_soft, s_resetn_soft_async, s_invalid_input: std_ulogic;
   
   signal s_from_host_val, s_to_host_val : nsl.framed.framed_req_array(1 downto 0);
@@ -77,54 +62,38 @@ architecture arch of swd_dp is
   signal s_status: nsl.cs.cs_reg_array(2 downto 0);
 
   constant sys_clk_mhz : natural := 150;
+
+  component clk_gen
+    generic(
+      sys_clk_mhz : natural
+      );
+    port(
+      p_clk_12        : in  std_ulogic;
+      p_resetn        : in  std_ulogic;
+      p_sys_clk       : out std_ulogic;
+      p_sys_clk_ready : out std_ulogic
+      );
+  end component;
   
 begin
 
-  s_reset_dcm <= not user_btn;
-  s_reset_pll <= not s_dcm_locked;
-  s_resetn_soft_async <= s_pll_locked and s_dcm_locked and not s_invalid_input and user_btn;
+  s_resetn_soft_async <= s_clk_resetn and not s_invalid_input and user_btn;
 
-  core_clk60_gen: dcm_sp
+  sys_clk_gen: clk_gen
     generic map(
-      clkin_period => 83.333, -- 12MHz
-      clkfx_multiply => 5,
-      clkfx_divide => 1,
-      clkin_divide_by_2 => false
+      sys_clk_mhz => 150
       )
     port map(
-      clkin => clk,
-      rst => s_reset_dcm,
-      clkfx => s_clk_60,
-      locked => s_dcm_locked
+      p_clk_12 => clk,
+      p_resetn => user_btn,
+      p_sys_clk => s_sys_clk,
+      p_sys_clk_ready => s_clk_resetn
       );
-
-  core_clock_gen: pll_base
-    generic map (
-        clk_feedback         => "CLKFBOUT",
-        divclk_divide        => 1,
-        clkfbout_mult        => 10, -- 600 MHz
-        clkout0_divide       => 600 / sys_clk_mhz,
-        clkin_period         => 16.667,
-        ref_jitter           => 0.25
-    )
-    port map (
-        clkfbout            => s_clkfb,
-        clkout0             => s_sys_clk,
-        clkout1             => open,
-        clkout2             => open,
-        clkout3             => open,
-        clkout4             => open,
-        clkout5             => open,
-        locked              => s_pll_locked,
-        rst                 => s_reset_pll,
-        clkfbin             => s_clkfb,
-        clkin               => s_clk_60
-        );
 
   reset_sync_fifo: util.sync.sync_rising_edge
     port map(
       p_clk => fifo_clk,
-      p_in => s_pll_locked,
+      p_in => s_clk_resetn,
       p_out => s_resetn_fifo
       );
 
@@ -333,7 +302,7 @@ begin
       p_rsp_in_ack => s_swd_rsp_ack
       );
 
-  clk_gen: nsl.util.baudrate_generator
+  baud_gen: nsl.tick.baudrate_generator
     generic map(
       p_clk_rate => sys_clk_mhz * 1000000,
       rate_lsb => s_clk_gen_rate'low,
@@ -397,5 +366,6 @@ begin
   dbg_srst <= '0' when s_srst = '1' else 'Z';
 
   io_en <= '1';
+  jtag_en <= '0';
 
 end arch;

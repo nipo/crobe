@@ -6,7 +6,9 @@ constraints += $(SRC_DIR)/../../pinout/io0_dbg.ucf
 constraints += $(SRC_DIR)/../../pinout/user.ucf
 constraints += $(SRC_DIR)/../../pinout/clk.ucf
 hwdep=xilinx
-target_part = xc6slx9tqg144-2
+target_part = xc6slx9
+target_package = tqg144
+target_speed = -2
 tool = ise
 
 all: ../../../../crobe/adapter/proby/fw/$(target).bit.gz

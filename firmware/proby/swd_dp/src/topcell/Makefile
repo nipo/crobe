@@ -1,10 +1,11 @@
 vhdl-sources += swd_dp.vhd
 vhdl-sources += topcell.vhd
+vhdl-sources += clk_gen_spartan6.vhd
 deps += nsl.ftdi
 deps += nsl.cs
 deps += nsl.framed
 deps += nsl.sized
-deps += nsl.util
+deps += nsl.tick
 deps += nsl.routed
 deps += util.sync
 deps += util.activity
