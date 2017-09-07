@@ -40,4 +40,4 @@ class SpiFlash(model.Target, memory.Loadable):
 
     def erase_all(self):
         self.component.erase_all()
-        self.set_blank()
+        self.force_blank()

@@ -223,7 +223,7 @@ class SfdpFlash(SpiFlash):
             self.logger.info("  data: %s", binascii.b2a_hex(data))
             
             if jid == 0:
-                if major == 1 and minor == 5:
+                if major == 1 and minor <= 5:
                     self._parse_sfdp_1_5(data)
                 elif major == 1 and minor == 6:
                     self._parse_sfdp_1_6(data)
