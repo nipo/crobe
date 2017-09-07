@@ -12,7 +12,7 @@ class Ap(PortComponent):
         PortComponent.__init__(self, dp, "AP")
         self.index = index
         self.components = []
-        self.name = "AP (idr: 0x%08x)" % self.idr
+        self.name = "AP%d (idr: 0x%08x)" % (self.index, self.idr)
 
     def reg_read(self, addr):
         ops = [self.cmd_read(addr)]
