@@ -49,10 +49,25 @@ class MemAp(ap.Ap, model.Bus):
         self.width = 0
         self.increment = 0
         self.csw_base = self.reg_read(self.CSW) & ~0x00000f37
+        base = self.reg_read(self.BASE)
+        if base & 1:
+            self.base = base & ~0xfff
+        else:
+            self.base = 0xe00ff000
         self.wrap_mask = 0x3ff
 
+    def option_set(self, opt):
+        if opt.startswith("base="):
+            addr = int(opt[5:], 16)
+            self.base = base
+            return
+
+        ap.Ap.option_set(self, opt)
+        
+    def start(self):
         from .coresight.model import MemoryMappedComponent
         self.child_add(MemoryMappedComponent(self, self.base).cast())
+        ap.Ap.start(self)
 
     def execute(self, transfers):
         all_transfers = list(transfers)
@@ -174,10 +189,6 @@ class MemAp(ap.Ap, model.Bus):
     @tar.setter
     def tar(self, data):
         self.reg_write(self.TAR, data)
-
-    @property
-    def base(self):
-        return self.reg_read(self.BASE) & ~0xfff
 
     @property
     def cfg(self):
