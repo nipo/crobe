@@ -82,43 +82,57 @@ class Component(object):
                 self.children[i]
             except ReferenceError:
                 del self.children[i]
-        
+
+    def option_set(self, opt):
+        self.logger.warning("Option %r ignored", opt)
+
     def child_summon(self, crit = None, *invocation):
         if not self.__started:
             self.start()
 
-        params = []
-            
+        options = []
+
+        self.logger.info("Summon %s", crit)
+
         if crit and crit.endswith(')'):
             try:
                 index = crit.index('(')
             except ValueError:
                 raise ValueError("Unmatched parenthesis", crit)
-            params = crit[index + 1 : -1].split(",")
-            crit = crit[: index - 1]
+            options = crit[index + 1 : -1].split(",")
+            crit = crit[: index]
             
         if not crit and not invocation:
             return self
 
+        child = self.child_lookup(crit) or self.child_spawn(crit)
+
+        if not child:
+            raise ValueError("Unknown invocation", crit, *invocation)
+
+        for opt in options:
+            child.option_set(opt)
+
+        self.logger.info("Had %s", child)
+            
+        return child.child_summon(*invocation)
+
+    def child_lookup(self, crit):
         if crit == "*" and len(self.children) == 1:
-            return self.children[0].child_summon(*invocation)
+            return self.children[0]
 
         try:
             index = int(crit)
-            return self.children[index].child_summon(*invocation)
+            return self.children[index]
         except ValueError:
             pass
 
         possible = self.children_find(lambda x:crit.lower() in x.name.lower())
         if len(possible) == 1:
-            return possible[0].child_summon(*invocation)
-
-        child = self.child_spawn(crit, *params)
-
-        if child:
-            return child.child_summon(*invocation)
-
-        raise ValueError("Unknown invocation", crit, *invocation)
+            return possible[0]
+    
+    def child_spawn(self, crit):
+        return None
 
 class BusComponent(Component):
     """

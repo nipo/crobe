@@ -65,6 +65,14 @@ class Dp(PortComponent):
 
         PortComponent.start(self)
 
+    def child_lookup(self, crit):
+        if crit.lower().startswith("ap#"):
+            no = int(crit[3:])
+            ap = [a for a in self.children if a.index == no]
+            if ap:
+                return ap[0]
+        return PortComponent.child_lookup(self, crit)
+        
     def __str__(self):
         ret = "%s v.%dr%d" % (self.name, self.version, self.idr_or_idcode.revision)
         if self.minimal:

@@ -213,6 +213,6 @@ class Spartan6(jtag.Tap):
 
         return JtagSpiBridge(self, self.IR_USER1, self.IR_USER2, 50e6)
 
-    def child_spawn(self, mode = None, *args):
+    def child_spawn(self, mode = None):
         if mode == "spi":
             return self.spi_interface()

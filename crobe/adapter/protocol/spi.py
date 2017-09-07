@@ -78,9 +78,9 @@ class Interface(base.Interface):
         """
         return Cs(value)
 
-    def child_spawn(self, sub, *args):
+    def child_spawn(self, sub):
         try:
-            return self.db.call(sub, self, *args)
+            return self.db.call(sub, self)
         except NoMatch:
             pass
         

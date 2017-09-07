@@ -57,7 +57,7 @@ class Enumerator(model.Component):
             raise KeyError("Criteria not met")
         return candidates[0]
 
-    def child_spawn(self, name, *args):
+    def child_spawn(self, name):
         adapters = self.find(name)
 
         if len(adapters) > 1:
@@ -102,7 +102,7 @@ class Adapter(model.Component):
         """
         raise NotSupportedError("Unsupported interface %s" % interface_name)
 
-    def child_spawn(self, name, *args):
+    def child_spawn(self, name):
         return self.open(name)
             
 Enumerator.singleton = Enumerator("Adapters")

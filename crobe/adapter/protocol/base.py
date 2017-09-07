@@ -1,6 +1,7 @@
 from ... import model
-from ...util.pretty import metric
+from ...util.pretty import metric, sci_parse
 import threading
+import time
 
 __all__ = ["Interface", "ProtocolError", "CommunicationError"]
 
@@ -18,6 +19,19 @@ class Interface(model.PortComponent):
     def close(self):
         self.port.child_remove(self)
 
+    def option_set(self, opt):
+        if opt == "reset":
+            self.reset = True
+            time.sleep(.1)
+            self.reset = False
+            return
+
+        if opt.startswith("fmax="):
+            self.freq_cap("user", sci_parse(opt[5:]))
+            return
+
+        model.PortComponent.option_set(self, opt)
+            
     def _execute(self, commands):
         pass
 

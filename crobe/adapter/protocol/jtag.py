@@ -80,6 +80,12 @@ class Interface(base.Interface):
     def _execute(self, operation_list):
         raise NotImplementedError()
 
+    def option_set(self, opt):
+        if opt == "icepick":
+            self.use_icepick = True
+
+        base.Interface.option_set(self, opt)
+    
     def cmd_shift(self, tdi, read_tdo = True):
         return Shift(tdi, read_tdo)
 

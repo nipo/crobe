@@ -15,7 +15,7 @@ class Enumerator(model.Enumerator):
     def __init__(self):
         model.Enumerator.__init__(self, "XVCD")
 
-    def child_spawn(self, name, *args):
+    def child_spawn(self, name):
         r = Adapter.from_target(name, name)
         self.child_add(r)
         return r
