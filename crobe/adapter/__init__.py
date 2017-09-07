@@ -3,3 +3,4 @@ from . import proby
 from . import busblaster
 from . import jlink
 from . import xvcd
+from . import icestick
