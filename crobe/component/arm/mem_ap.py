@@ -30,15 +30,24 @@ class Csw(bitfield.Register):
                    0x04770004,# AXI-AP
 )
 class MemAp(ap.Ap, model.Bus):
-    CSW = 0x00
-    TAR = 0x04
-    DRW = 0x0c
-    BD0 = 0x10
-    BD1 = 0x14
-    BD2 = 0x18
-    BD3 = 0x1c
-    CFG = 0xf4
-    BASE = 0xf8
+    CSW               = 0x00
+    CSW_DBGSWEN       = (1 << 31)
+    CSW_SPIDEN        = (1 << 23)
+    CSW_DEVICEEN      = (1 << 6)
+    TAR               = 0x04
+    TAR_MSB           = 0x08
+    DRW               = 0x0c
+    BD0               = 0x10
+    BD1               = 0x14
+    BD2               = 0x18
+    BD3               = 0x1c
+    ACE_BARR          = 0x20
+    BASE_MSB          = 0xf0
+    CFG               = 0xf4
+    CFG_BIG_ENDIAN    = 0x00000001
+    CFG_LARGE_ADDRESS = 0x00000002
+    CFG_LARGE_DATA    = 0x00000004
+    BASE              = 0xf8
 
     def __init__(self, dp, index = 0):
         ap.Ap.__init__(self, dp, index)
@@ -48,25 +57,56 @@ class MemAp(ap.Ap, model.Bus):
         model.Bus.__init__(self, name)
         self.width = 0
         self.increment = 0
-        self.csw_base = self.reg_read(self.CSW) & ~0x00000f37
+        cfg = self.reg_read(self.CFG)
+        self.large_data = bool(cfg & self.CFG_LARGE_DATA)
+        self.large_address = bool(cfg & self.CFG_LARGE_ADDRESS)
+
+        while not self.csw & self.CSW_DEVICEEN:
+            self.csw = self.csw | self.CSW_SPIDEN
+        self.csw_base = self.csw & ~0x00000f37
+
+        self.logger.info("CSW base: %8x", self.csw_base)
+
+        if self.large_address and self.large_data:
+            self.name = self.name + " LP64"
+        elif self.large_address:
+            self.name = self.name + " P64"
+        elif self.large_data:
+            self.name = self.name + " L64"
+        
         base = self.reg_read(self.BASE)
-        if base & 1:
-            self.base = base & ~0xfff
+        if self.large_address and base & 2:
+            base |= self.reg_read(self.BASE_MSB) << 32
+
+        if base == 0xffffffff:
+            base = None
+        if base & 2:
+            if base & 1:
+                base = base & ~0xfff
+            else:
+                base = None
         else:
-            self.base = 0xe00ff000
+            base = base & ~0xfff
+        self.base = base
+
+        if self.base is not None:
+            self.logger.info("Base: %16x", self.base)
+
         self.wrap_mask = 0x3ff
 
     def option_set(self, opt):
         if opt.startswith("base="):
             addr = int(opt[5:], 16)
-            self.base = base
+            self.base = addr
             return
 
         ap.Ap.option_set(self, opt)
         
     def start(self):
-        from .coresight.model import MemoryMappedComponent
-        self.child_add(MemoryMappedComponent(self, self.base).cast())
+        self.logger.info("starting")
+        if self.base is not None:
+            from .coresight.model import MemoryMappedComponent
+            self.child_add(MemoryMappedComponent(self, self.base).cast())
         ap.Ap.start(self)
 
     def execute(self, transfers):
@@ -148,7 +188,9 @@ class MemAp(ap.Ap, model.Bus):
 
                 if address_dirty:
                     address_dirty = False
-                    operations.append(self.cmd_write(MemAp.TAR, address))
+                    operations.append(self.cmd_write(MemAp.TAR, address & 0xffffffff))
+                    if self.large_address:
+                        operations.append(self.cmd_write(MemAp.TAR_MSB, address >> 32))
 
                 if csw_dirty:
                     csw_dirty = False
@@ -184,11 +226,15 @@ class MemAp(ap.Ap, model.Bus):
 
     @property
     def tar(self):
+        if self.large_address:
+            return self.reg_read(self.TAR) | (self.reg_read(self.TAR_MSB) << 32)
         return self.reg_read(self.TAR)
 
     @tar.setter
     def tar(self, data):
-        self.reg_write(self.TAR, data)
+        if self.large_address:
+            self.reg_write(self.TAR_MSB, data >> 32)
+        self.reg_write(self.TAR, data & 0xffffffff)
 
     @property
     def cfg(self):
