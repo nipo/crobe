@@ -416,7 +416,7 @@ class Chain(PortComponent):
         for t in self.children:
             self.logger.info("- %s", t)
 
-        tap.start()
+        #tap.start()
             
 class Tap(PortComponent):
     """

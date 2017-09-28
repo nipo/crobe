@@ -16,13 +16,15 @@ class Component(object):
         self.name = name
         self.children = []
         self.__started = False
+        self.__in_enum = False
 
     def start(self):
         assert not self.__started
         self.__started = True
         
-        for c in self.children[:]:
-            c.start()
+        if not self.__in_enum:
+            for c in self.children[:]:
+                c.start()
         
     def __str__(self):
         return self.__name
@@ -87,9 +89,6 @@ class Component(object):
         self.logger.warning("Option %r ignored", opt)
 
     def child_summon(self, crit = None, *invocation):
-        if not self.__started:
-            self.start()
-
         options = []
 
         self.logger.info("Summon %s", crit)
@@ -103,17 +102,23 @@ class Component(object):
             crit = crit[: index]
             
         if not crit and not invocation:
+            self.start()
             return self
+
+        if not self.__started:
+            self.__in_enum = True
+            self.start()
+            self.__in_enum = False
 
         child = self.child_lookup(crit) or self.child_spawn(crit)
 
         if not child:
             raise ValueError("Unknown invocation", crit, *invocation)
 
+        self.logger.info("Had %s", child)
+
         for opt in options:
             child.option_set(opt)
-
-        self.logger.info("Had %s", child)
             
         return child.child_summon(*invocation)
 
