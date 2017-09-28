@@ -112,13 +112,13 @@ class StubFlash(BusFlash):
             code = puppet.stub(self.PAGE_WRITE)
 
             page_zone = puppet.allocate(self.page_size, self.page_size)
-            for off in len(0, data, self.page_size):
-                chunk = page.data[off : off + self.page_size]
+            for off in range(0, len(data), self.page_size):
+                chunk = data[off : off + self.page_size]
                 page_zone.write(chunk)
                 code.call(self.address + off, page_zone.address, len(chunk))
             puppet.unallocate(page_zone)
 
-        self.set_blank(False)
+        self.force_blank(False)
 
     def load(self, program):
         self.prepare()
