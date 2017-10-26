@@ -21,6 +21,7 @@ class EfmFlash(StubFlash):
                  PartId(6, 0x73, 0xc1),
                  PartId(6, 0x73, 0xc9),
                  PartId(6, 0x73, 0x101),
+                 PartId(6, 0x73, 0x2c1),
                  PartId(6, 0x73, 0x901))
 class Gecko(SoC):
     DI_BASE = 0x0fe081b0
