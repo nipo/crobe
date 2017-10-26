@@ -16,5 +16,5 @@ setup(
     },
     use_2to3 = False,
     packages = find_packages(),
-    install_requires = ["pyelftools >= 0.23"],
+    install_requires = ["pyelftools >= 0.23", "vhsic"],
 )
