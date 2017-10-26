@@ -54,7 +54,10 @@ class MemoryMappedComponent(model.BusComponent):
             pass
 
         if self.component_class == 0x09:
-            return CoresightComponent.db.call(self.dev_type, self.bus, self.base)
+            try:
+                return CoresightComponent.db.call(self.dev_type, self.bus, self.base)
+            except NoMatch:
+                pass
 
         if self.component_class == 0x0e:
             return self.db.call(self.partid, self.bus, self.base)
