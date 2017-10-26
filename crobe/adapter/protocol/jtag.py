@@ -2,6 +2,7 @@ from . import base
 from ...model import PortComponent
 from ...bitstring import BitString
 from ...db import Db, NoMatch
+from ...util import pretty
 from ...part_id import PartId
 import math
 import time
@@ -83,6 +84,11 @@ class Interface(base.Interface):
     def option_set(self, opt):
         if opt == "icepick":
             self.use_icepick = True
+            return
+
+        if opt.startswith("freq="):
+            self.freq_cap("command line", pretty.sci_parse(opt[5:]))
+            return
 
         base.Interface.option_set(self, opt)
     
