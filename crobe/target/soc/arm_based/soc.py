@@ -64,7 +64,7 @@ class BusRam(memory.Ram):
         return self.bus.mem_read(self.address + offset, size)
 
     def write(self, offset, data):
-        self.bus.mem_write(self.address + offset, size)
+        self.bus.mem_write(self.address + offset, data)
 
 class BusFlash(memory.Flash):
     def __init__(self, name, address, size, page_size, bus):
@@ -103,7 +103,7 @@ class StubFlash(BusFlash):
             self.is_blank = True
             
     def write(self, offset, data):
-        assert offset % self.page_size == 0
+#        assert offset % self.page_size == 0, hex(offset)
 
         with TimedLogger(self.logger,
                          "write 0x%08x-0x%08x" % (
@@ -118,7 +118,7 @@ class StubFlash(BusFlash):
                 code.call(self.address + off, page_zone.address, len(chunk))
             puppet.unallocate(page_zone)
 
-        self.force_blank(False)
+        self.is_blank = False
 
     def load(self, program):
         self.prepare()
