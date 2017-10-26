@@ -2,6 +2,7 @@ from . import nrf5
 from . import lpc11u
 from . import efm32
 from . import stm32
-from . import psoc5
 from . import psoc4
+from . import psoc5
+from . import psoc6
 from . import cc26xx
