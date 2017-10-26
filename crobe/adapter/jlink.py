@@ -43,7 +43,7 @@ class Adapter(model.Adapter):
         return cls(d, address, d.serial_number, interfaces, firmware_version, nickname)
 
     def __init__(self, device, address, serial_number, available_interfaces, firmware_version, nickname):
-        model.Adapter.__init__(self, nickname or ("jlink:%s" % serial_number))
+        model.Adapter.__init__(self, nickname or ("jlink-%s" % serial_number))
 
         self.device = device
         self.address = address
