@@ -122,7 +122,7 @@ class IHex(object):
 
     try:
       line = binascii.a2b_hex(rawline[1:])
-    except:
+    except Exception:
       raise ValueError("Invalid hex data")
 
     length, addr, type = struct.unpack(">BHB", line[:4])

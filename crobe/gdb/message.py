@@ -8,7 +8,7 @@ class Message(object):
         while point < len(data):
             try:
                 escpos = data.index(0x7d)
-            except:
+            except Exception:
                 return ret + data[point:]
             ret += data[point : escpos]
             ret += bytes([data[escpos + 1] ^ 0x20])

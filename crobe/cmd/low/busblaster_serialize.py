@@ -21,7 +21,7 @@ def main():
         raw = handle.eeprom_get()
         for i in range(0, len(raw), 16):
             print("%02x:  %s" % (i, " ".join(map("%02x".__mod__, raw[i:i+16]))))
-    except:
+    except Exception:
         print("No valid data found in EEPROM")
         return
     

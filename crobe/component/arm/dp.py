@@ -46,7 +46,7 @@ class Dp(PortComponent):
         if self.version >= 2:
             try:
                 self.target_id = PartId.from_idcode(self.banked_reg_read(self.TARGETID))
-            except:
+            except Exception:
                 pass
 
             self.logger.info("DP Target ID %s", self.target_id)

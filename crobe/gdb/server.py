@@ -17,7 +17,7 @@ class Session(SocketSession):
             elif self.buffer.startswith(b'+') and self.packet_ack:
                 try:
                     self.rsp_queue.popLeft()
-                except:
+                except Exception:
                     pass
             
             elif self.buffer.startswith(b'-') and self.packet_ack:

@@ -9,7 +9,7 @@ class SvfLexer:
         try:
             fd.read
             self.fd = filename
-        except:
+        except Exception:
             self.fd = open(filename, "rb")
 
     def __iter__(self):

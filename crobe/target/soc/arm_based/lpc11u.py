@@ -89,7 +89,7 @@ def lcp_ducktyping(dp):
     try:
         ap, = dp.children_find(lambda x: isinstance(x, MemAp))
         partid = ap.u32_read(0x400483f4)
-    except:
+    except Exception:
         partid = 0
 
     if partid in chip_info:

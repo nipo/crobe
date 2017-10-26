@@ -59,21 +59,21 @@ class Device(object):
             blob = (ctypes.c_char * 32)()
             ctx.check(api.usb_get_strings(ctx.context, dev, blob, 32, None, 0, None, 0))
             vendor = str(blob.value, "utf-8")
-        except:
+        except Exception:
             pass
         
         try:
             blob = (ctypes.c_char * 32)()
             ctx.check(api.usb_get_strings(ctx.context, dev, None, 0, blob, 32, None, 0))
             model = str(blob.value, "utf-8")
-        except:
+        except Exception:
             pass
         
         try:
             blob = (ctypes.c_char * 32)()
             ctx.check(api.usb_get_strings(ctx.context, dev, None, 0, None, 0, blob, 32))
             serial = str(blob.value, "utf-8")
-        except:
+        except Exception:
             pass
 
         connection_id = b"d:%03u/%03u" % (api.libusb_get_bus_number(dev), api.libusb_get_device_address(dev))
@@ -83,11 +83,11 @@ class Device(object):
     def reset(self):
         try:
             Handle(self.connection_id, "A", "RESET").close()
-        except:
+        except Exception:
             pass
         try:
             Handle(self.connection_id, "B", "RESET").close()
-        except:
+        except Exception:
             pass
     
     def __init__(self, vid, pid, vendor, model, serial, connection_id):
@@ -151,7 +151,7 @@ class Handle(Context):
             self.__eeprom_data_valid = False
             self.check(api.eeprom_decode(self.context, 0))
             self.__eeprom_data_valid = True
-        except:
+        except Exception:
             pass
 
         if mode == 'SYNCFF':

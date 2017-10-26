@@ -62,7 +62,7 @@ class MsgMux(PortComponent):
                     self.logger.warning("Dropping message for %d", dst)
                 else:
                     self.dest[dst].handle(src, tag, data)
-            except:
+            except Exception:
                 raise
             finally:
                 self.reader = None

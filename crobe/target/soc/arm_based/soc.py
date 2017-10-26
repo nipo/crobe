@@ -232,7 +232,7 @@ def arm_soc_probe(dp):
     if dp.target_id:
         try:
             return SoC.db.call(dp.target_id, dp, allow_default = False)
-        except:
+        except Exception:
             pass
 
     rom_tables = dp.children_of_class(RomTable)

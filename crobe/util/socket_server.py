@@ -28,7 +28,7 @@ class SocketSession(object):
         while data:
             try:
                 written = self.sock.send(data)
-            except:
+            except Exception:
                 raise SocketClosed()
             data = data[written:]
         self.sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)

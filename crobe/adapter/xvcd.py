@@ -62,7 +62,7 @@ class JtagInterface(jtag.Interface):
             self.socket = socket.socket(family, socktype, proto)
             try:
                 self.socket.connect(sockaddr)
-            except:
+            except Exception:
                 if i == len(ais) - 1:
                     raise
                 continue

@@ -84,7 +84,7 @@ class Programs:
                 filename, offset = fn.split("+", 1)
                 offset = int(offset, 16)
                 assert os.path.exists(filename)
-            except:
+            except Exception:
                 filename = fn
                 offset = 0
 
@@ -129,7 +129,7 @@ class Target(Field):
         try:
             idx = int(path)
             return self.field.children[idx]
-        except:
+        except Exception:
             pass
 
         try:
