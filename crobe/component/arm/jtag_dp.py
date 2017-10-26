@@ -184,6 +184,7 @@ class JtagDp(dp.Dp):
         return ops
 
 @jtag.Tap.db.register(PartId(4, 0x3b, 0xba00))
+@jtag.Tap.db.register(PartId(4, 0x3b, 0xba01))
 class JtagDpTap(jtag.Tap):
     irlen = 4
 
