@@ -71,14 +71,17 @@ class Cache:
         for code in entity.id_codes:
             self.by_idcode_package[(code, entity.package_variant)] = cache_filename
 
-    def filter(self, idcode = None, package = None):
+    def filter(self, name = None, idcode = None, package = None):
         r = []
-        for (code, pv), name in self.by_idcode_package.items():
+        for (code, pv), filename in self.by_idcode_package.items():
             if idcode and code.mask & idcode != code.value:
                 continue
             if package and pv != package:
                 continue
-            r.append(bsdl.Entity.load(os.path.join(self.path, name)))
+            e = bsdl.Entity.load(os.path.join(self.path, filename))
+            if name and not e.name.startswith(name):
+                continue
+            r.append(e)
         return r
 
     def load(self):
@@ -102,3 +105,16 @@ class Cache:
         fd = open(cache, "w")
         json.dump(obj, fd)
         fd.close()
+
+    @classmethod
+    def open(cls):
+        from .. import config
+        return cls(config.path_get("cache", "bsdl"))
+
+    def rebuild(self):
+        from .. import config
+        for k in config.section_keys("bsdl"):
+            val = config.path_get("bsdl", k)
+            for f in glob.glob(val):
+                self.file_add(f)
+        self.save()

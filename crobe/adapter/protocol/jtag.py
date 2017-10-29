@@ -464,6 +464,10 @@ class Tap(PortComponent):
             assert irlen == self.irlen
         self.ir = None
 
+    @property
+    def idcode(self):
+        return self.port.idcode_at(self.index)
+
     def __str__(self):
         _, irlen, _ = self.ir_pre_post()
         return "%s (TAP#%d, irlen:%d)" % (
