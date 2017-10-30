@@ -86,10 +86,6 @@ class Interface(base.Interface):
             self.use_icepick = True
             return
 
-        if opt.startswith("freq="):
-            self.freq_cap("command line", pretty.sci_parse(opt[5:]))
-            return
-
         base.Interface.option_set(self, opt)
     
     def cmd_shift(self, tdi, read_tdo = True):

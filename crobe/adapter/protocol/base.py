@@ -30,6 +30,11 @@ class Interface(model.PortComponent):
             self.freq_cap("user", sci_parse(opt[5:]))
             return
 
+        if opt.startswith("power="):
+            opt = opt[6:].lower()
+            self.power = opt in ["1", "on", "true"]
+            return
+
         model.PortComponent.option_set(self, opt)
             
     def _execute(self, commands):
