@@ -3,11 +3,13 @@ from ..part_id import PartId
 from ..bitstring import BitString
 from ..adapter.protocol import jtag
 import time
+import logging
 
 class BsDumper:
     def __init__(self, interface, packages):
         self.interface = interface
         self.packages = packages
+        self.logger = logging.getLogger("bsdl")
 
         assert isinstance(interface, jtag.Interface)
         chain = interface.children[0]
@@ -26,19 +28,28 @@ class BsDumper:
             d = cache.filter(idcode = int(tap.idcode), package = pkg)
 
             if not d:
-                raise KeyError("No BSDL entry for %s" % tap.idcode)
+                self.logger.warn("No BSDL entry for %s", tap.idcode)
+
+            if not d or pkg == "ign":
+                self.definitions.append((None, tap))
+                continue
+
             if len(d) > 1:
                 raise KeyError("Ambiguity for part at index %d (%s), choose among packages: %s"
                                % (index, tap.idcode, ",".join(x.package_variant for x in d)))
-
-            self.definitions.append(d[0])
+            
+            self.definitions.append((d[0], tap))
 
         self.sample = BitString()
         self.bs_len = 0
-        for d in self.definitions:
-            self.sample += BitString(d.instructions['sample'].opcodes[0].value,
-                                     d.ir_length)
-            self.bs_len += d.registers["boundary"].length
+        for d, tap in self.definitions:
+            if d:
+                self.sample += BitString(d.instructions['sample'].opcodes[0].value,
+                                         d.ir_length)
+                self.bs_len += d.registers["boundary"].length
+            else:
+                self.sample += BitString(-1, tap.irlen)
+                self.bs_len += 1
 
     def run(self, ignores = set()):
         last_values = self.pin_values()
@@ -100,16 +111,19 @@ class BsDumper:
 
         offset = 0
         ret = {}
-        for d in self.definitions:
-            chip = {}
-            for (name, index), pin in sorted(d.pins.items()):
-                try:
-                    ic = d.pin_input_cell[pin]
-                except:
-                    continue
-                chip[pin] = bs[offset + ic.number]
-            ret[d.name] = chip
-            offset += d.registers["boundary"].length
+        for d, tap in self.definitions:
+            if d:
+                chip = {}
+                for (name, index), pin in sorted(d.pins.items()):
+                    try:
+                        ic = d.pin_input_cell[pin]
+                    except:
+                        continue
+                    chip[pin] = bs[offset + ic.number]
+                ret[d.name] = chip
+                offset += d.registers["boundary"].length
+            else:
+                offset += 1
         return ret
 
 def main():
@@ -126,7 +140,7 @@ def main():
         def c25_package_parse(self, args):
             self.packages = args.pkg.split(",")
             self.ignore = set()
-            for tp in args.ignore.split(','):
+            for tp in filter(None, args.ignore.split(',')):
                 t, p = tp.split("/", 1)
                 self.ignore.add((t, p))
 

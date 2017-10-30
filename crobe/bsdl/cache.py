@@ -5,6 +5,7 @@ import os
 import sys
 import os.path
 import logging
+import glob
 from hashlib import blake2b
 
 class Cache:
@@ -56,7 +57,7 @@ class Cache:
             try:
                 entity = bsdl.Entity.load(filename)
             except Exception:
-                self.logger.debug("Parsing failure in %s", filename, exc_info = sys.exc_info())
+                self.logger.error("Parsing failure in %s", filename, exc_info = sys.exc_info())
                 return
 
             entity.dump(cache_filename)
