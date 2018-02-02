@@ -80,12 +80,14 @@ class BaseInterface(object):
                  channel = "A",
                  gpio_output = 0, gpio_value = 0,
                  resetn_pin = None, reset_pin = None,
+                 reset_oe_pin = None, reset_oen_pin = None,
                  powern_pin = None, power_pin = None,
                  activityn_pin = None, activity_pin = None):
         oe = (gpio_output & 0xfff0) | 0xb
         val = gpio_value
 
         self.__reset_pin = None
+        self.__reset_oe_pin = None
         self.__power_pin = None
         self.__activity_pin = None
 
@@ -96,6 +98,14 @@ class BaseInterface(object):
             self.__reset_pin = (resetn_pin, False)
             oe |= (1 << resetn_pin)
             val |= (1 << resetn_pin)
+
+        if reset_oe_pin is not None:
+            self.__reset_oe_pin = (reset_oe_pin, True)
+            oe |= (1 << reset_oe_pin)
+        elif reset_oen_pin is not None:
+            self.__reset_oe_pin = (reset_oen_pin, False)
+            oe |= (1 << reset_oen_pin)
+            val |= (1 << reset_oen_pin)
 
         if power_pin is not None:
             self.__power_pin = (power_pin, True)
@@ -126,14 +136,40 @@ class BaseInterface(object):
 
     @reset.setter
     def reset(self, reset):
-        if self.__reset_pin is None:
+        mod = 0
+        oe = 0
+        value = 0
+
+        if self.__reset_pin and self.__reset_oe_pin:
+            pin, polarity = self.__reset_pin
+            mod |= 1 << pin
+            oe |= int(reset) << pin
+            value |= int(polarity and reset) << pin
+
+            pin, polarity = self.__reset_oe_pin
+            mod |= 1 << pin
+            oe |= 1 << pin
+            value |= int(bool(reset) == polarity) << pin
+
+        elif self.__reset_pin:
+            pin, polarity = self.__reset_pin
+            mod |= 1 << pin
+            oe |= 1 << pin
+            value |= int(bool(reset) == polarity) << pin
+
+        elif self.__reset_oe_pin:
+            pin, polarity = self.__reset_oe_pin
+            mod |= 1 << pin
+            oe |= 1 << pin
+            value |= int(bool(reset) == polarity) << pin
+
+        else:
             self.logger.warning("Reset %s ignored", "holding" if reset else "releasing")
             return
 
         self.logger.info("%s reset pin", "holding" if reset else "releasing")
-        pin, polarity = self.__reset_pin
-        self.handle.gpio_mask_set(1 << pin, 1 << pin,
-                                  (1 << pin) if bool(reset) == polarity else 0)
+
+        self.handle.gpio_mask_set(mod, oe, value)
 
     @property
     def power(self):
