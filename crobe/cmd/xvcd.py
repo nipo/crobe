@@ -115,7 +115,7 @@ class XvcdSession(SocketSession):
             self.read(6)
             self.handle_shift()
         elif self.buffer.startswith(b"getinfo:"):
-            self.Read(8)
+            self.read(8)
             self.handle_getinfo()
         elif self.buffer.startswith(b"settck:"):
             self.read(7)
