@@ -95,6 +95,42 @@ class Programs:
 
             self.program += prog
 
+class Bus(Root):
+    def c61_bus_declare(self):
+        self.parser.add_argument('--bus', '-b', metavar = 'NAME',
+                                 type = str,
+                                 help = 'Bus id')
+
+    @staticmethod
+    def _bus_predicate(child, bus):
+        return bus and bus in child.name.lower()
+
+    def c61_bus_parse(self, args):
+        self.bus = self.bus_get(args.bus)
+
+    def bus_get(self, path):
+        from ..component.model import Bus
+        self.buses = self.roots[0].children_of_class(Bus)
+
+        try:
+            idx = int(path)
+            return self.buses[idx]
+        except Exception:
+            pass
+
+        try:
+            t = list(filter(lambda x: self._bus_predicate(x, path.lower()), self.buses))
+            return t[0]
+        except AttributeError:
+            pass
+        except ValueError:
+            pass
+
+        for i, b in enumerate(self.buses):
+            print(i, b)
+
+        raise ValueError("Cannot find bus matching", path)
+
 class Field(Root):
     def c60_field_parse(self, args):
         from ..target.model import Field
@@ -134,10 +170,11 @@ class Target(Field):
 
         try:
             t, = self.field.children_find(lambda x: self._name_predicate(x, path.lower()))
+            return t
         except ValueError:
             pass
 
-        raise ValueError("Cannot field target matching", path)
+        raise ValueError("Cannot find target matching", path)
 
 class File:
     def c50_file_declare(self):
