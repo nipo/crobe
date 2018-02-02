@@ -278,9 +278,9 @@ get_hardware_info = _lib.jaylink_get_hardware_info
 get_hardware_info.argtypes = [_c.POINTER(device_handle), _c.c_uint32, _c.POINTER(_c.c_int32)]
 get_hardware_info.restype = _c.c_int
 
-get_counters = _lib.jaylink_get_counters
-get_counters.argtypes = [_c.POINTER(device_handle), _c.c_uint32, _c.POINTER(_c.c_uint32)]
-get_counters.restype = _c.c_int
+#get_counters = _lib.jaylink_get_counters
+#get_counters.argtypes = [_c.POINTER(device_handle), _c.c_uint32, _c.POINTER(_c.c_uint32)]
+#get_counters.restype = _c.c_int
 
 get_hardware_version = _lib.jaylink_get_hardware_version
 get_hardware_version.argtypes = [_c.POINTER(device_handle), _c.POINTER(hardware_version)]
