@@ -5,12 +5,12 @@ def main():
     from ..adapter.protocol.jtag import Interface
 
     class Tool(base.Root, base.File):
-        expected_root = Interface
+        pass
 
     args = Tool("SVF player")
 
     svf = SvfParser(args.file)
-    player = Player(svf, args.root)
+    player = Player(svf, args.roots[0])
 
     player.run()
 

@@ -191,7 +191,7 @@ class SvfParser:
         spec = next(self.lex).lower()
 
         if spec == "sec":
-            args["min_time"] = int(n)
+            args["min_time"] = float(n)
             n = next(self.lex).lower()
         else:
             args["run_count"] = int(n)
