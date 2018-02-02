@@ -70,7 +70,7 @@ class Interface(base.Interface):
     STATE_PAUSE = "PAUSE"
 
     def __init__(self, port, name = None):
-        base.Interface.__init__(self, port, (name or port.name) + "/J")
+        base.Interface.__init__(self, port, (name or port.name) + "-ATE")
         self.use_icepick = False
 
     def start(self):
@@ -126,9 +126,6 @@ class Interface(base.Interface):
 
     def run(self, count):
         self.execute([self.cmd_run(count)])
-
-    def __str__(self):
-        return "JTAG Interface"
         
 class Operation(object):
     def __init__(self):
@@ -198,7 +195,7 @@ class Chain(PortComponent):
     """
     def __init__(self, port):
         PortComponent.__init__(self, port, "JTAG Chain")
-        self.name = self.port.port.name + "/C"
+        self.name = self.port.port.name + "-Chain"
         
     def start(self):
         import time
