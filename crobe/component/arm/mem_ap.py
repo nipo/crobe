@@ -80,7 +80,7 @@ class MemAp(ap.Ap, model.Bus):
 
         if base == 0xffffffff:
             base = None
-        if base & 2:
+        elif base & 2:
             if base & 1:
                 base = base & ~0xfff
             else:
@@ -103,10 +103,18 @@ class MemAp(ap.Ap, model.Bus):
         ap.Ap.option_set(self, opt)
         
     def start(self):
+        from .coresight.model import MemoryMappedComponent
+
         self.logger.info("starting")
-        if self.base is not None:
-            from .coresight.model import MemoryMappedComponent
-            self.child_add(MemoryMappedComponent(self, self.base).cast())
+        while self.base is not None:
+            try:
+                comp = MemoryMappedComponent(self, self.base)
+                comp = comp.cast()
+            except Exception:
+                break
+            self.child_add(comp)
+            break
+
         ap.Ap.start(self)
 
     def execute(self, transfers):
