@@ -7,19 +7,19 @@ import datetime
 import os, os.path
 
 parts = {
-    0x04000093: "XC6SLX4",
-    0x04001093: "XC6SLX9",
-    0x04002093: "XC6SLX16",
-    0x04004093: "XC6SLX25",
-    0x04024093: "XC6SLX25T",
-    0x04008093: "XC6SLX45",
-    0x04028093: "XC6SLX45T",
-    0x0400E093: "XC6SLX75",
-    0x0402E093: "XC6SLX75T",
-    0x04011093: "XC6SLX100",
-    0x04031093: "XC6SLX100T",
-    0x0401D093: "XC6SLX150",
-    0x0403D093: "XC6SLX150T",
+    0x04000093: "LX4",
+    0x04001093: "LX9",
+    0x04002093: "LX16",
+    0x04004093: "LX25",
+    0x04024093: "LX25T",
+    0x04008093: "LX45",
+    0x04028093: "LX45T",
+    0x0400E093: "LX75",
+    0x0402E093: "LX75T",
+    0x04011093: "LX100",
+    0x04031093: "LX100T",
+    0x0401D093: "LX150",
+    0x0403D093: "LX150T",
 }
 
 @jtag.Tap.db.register(*[PartId.from_idcode(c).drop_revision() for c in parts.keys()])
@@ -28,6 +28,8 @@ class Spartan6(jtag.Tap):
 
     irlen = 6
     max_freq = 50e6
+
+    config_memory_size = 500*1024
 
     IR_BYPASS      = 0x3f
     IR_ISC_ENABLE  = 0x10
@@ -57,7 +59,7 @@ class Spartan6(jtag.Tap):
 
     def __init__(self, port, index):
         jtag.Tap.__init__(self, port, index)
-        self.name = parts[int(port.idcode_at(index).drop_revision())]
+        self.name = "Spartan6-" + parts[int(port.idcode_at(index).drop_revision())]
 
     def start(self):
         if not (self.ir_status & self.IR_STATUS_DONE):

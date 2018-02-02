@@ -9,4 +9,7 @@ def swib_u8(w):
     return bitswap8_lut[w]
 
 def swib_u16(w):
-    return bitswap8_lut[w >> 8] | (bitswap8_lut[w & 0xff] << 8)
+    return bitswap8_lut[(w >> 8) & 0xff] | (bitswap8_lut[w & 0xff] << 8)
+
+def swib_u32(w):
+    return swib_u16(w >> 16) | (swib_u16(w) << 16)
