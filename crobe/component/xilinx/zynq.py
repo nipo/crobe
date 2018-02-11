@@ -175,3 +175,63 @@ class Zynq(jtag.Tap):
         self.run(100)
 
         return self.send_op_wait(self.IR_BYPASS, self.IR_STATUS_DONE)
+
+    def bbram_key_read(self):
+        self.dr_shift(self.IR_ISC_ENABLE, self.ISC_DR_EN, 5)
+        self.run(12)
+
+        self.dr_shift(self.IR_ISC_READ, -1, 37)
+
+        for i in range(12):
+            r = self.dr_shift(self.IR_ISC_READ, -1, 37)
+            status = r & 0x1f
+            data = r >> 5
+
+            self.logger.debug("rpoll: %08x %02x", data, status)
+
+            if status & 0x12 != 0x12:
+                return
+
+            if data == 0xffffffff:
+                readback = 0
+                for shift in range(256-32, -32, -32):
+                    r = self.dr_shift(self.IR_ISC_READ, -1, 37)
+                    status = r & 0x1f
+                    data = r >> 5
+                    readback |= data << shift
+                    self.logger.debug("rdata: %08x %02x", data, status)
+                    
+                self.logger.debug("Readback: %x", readback)
+        
+                self.dr_shift(self.IR_ISC_ENABLE, 0, 5)
+                self.run(12)
+        
+        #        self.dr_shift(self.IR_ISC_DISABLE, None)
+        #        self.run(12)
+        
+                return readback
+
+    def bbram_key_write(self, key):
+        self.dr_shift(self.IR_ISC_ENABLE, self.ISC_DR_EN, 5)
+        self.run(12)
+
+        self.dr_shift(self.IR_PROGRAM_KEY, 0xffffffff, 32)
+        self.run(9)
+        self.dr_shift(self.IR_ISC_PROGRAM, 0xffffffff, 32)
+
+        for shift in range(256-32, -32, -32):
+            part = (key >> shift) & 0xffffffff
+            self.dr_shift(self.IR_ISC_PROGRAM, part, 32)
+            self.run(1)
+
+    def bbram_open(self):
+        self.dr_shift(self.IR_JPROGRAM, None)
+        self.dr_shift(self.IR_ISC_NOP, None)
+        self.run(10000)
+        self.dr_shift(self.IR_ISC_NOP, None)
+        self.run(20)
+
+
+    def bbram_close(self):
+        self.dr_shift(self.IR_ISC_DISABLE, None)
+        self.run(12)
