@@ -6,3 +6,6 @@ from . import itm
 from . import rom_table
 from . import scs
 from . import tpiu
+from . import dbg
+from . import pmu
+from . import cti

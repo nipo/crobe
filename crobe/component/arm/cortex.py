@@ -1,6 +1,8 @@
 from ..model import Cpu, Register
 from .coresight.dwt import Dwt
 from .coresight.fpb import Fpb
+from .coresight.dbg import Dbg
+from .coresight.cti import Cti
 from .coresight.scs import Scs
 from .coresight.tpiu import Tpiu
 from .coresight.etm import Etm
@@ -20,7 +22,8 @@ class Cortex(Cpu):
                  dwt = None,
                  tpiu = None,
                  etm = None,
-                 itm = None):
+                 itm = None,
+                 cti = None):
         Cpu.__init__(self, scs.cpu_name, index)
         self.scs = scs
         self.dwt = dwt
@@ -28,6 +31,7 @@ class Cortex(Cpu):
         self.tpiu = tpiu
         self.etm = etm
         self.itm = itm
+        self.cti = cti
         self.bus = scs.bus
 
         self.registers = [
@@ -56,7 +60,8 @@ class Cortex(Cpu):
         self.register_by_name = dict([(r.name, r) for r in self.registers])
         self.register_by_number = dict([(r.number, r) for r in self.registers])
 
-        self.fpb.enable()
+        if self.fpb:
+            self.fpb.enable()
         
     def register_get(self, thing):
         if isinstance(thing, Register):
@@ -66,12 +71,13 @@ class Cortex(Cpu):
         return self.register_by_name[str(thing)]
 
     @classmethod
-    def from_romtable(cls, rt, index):
-        scs, = rt.children_of_class(Scs)
+    def from_romtable(cls, rt, index, rtindex):
+        scs = rt.children_of_class((Scs, Dbg))[rtindex]
 
         others = {}
         for name, type in [("fpb", Fpb),
                            ("dwt", Dwt),
+                           ("cti", Cti),
                            ("tpiu", Tpiu),
                            ("etm", Etm),
                            ("itm", Itm)]:

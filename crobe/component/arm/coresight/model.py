@@ -27,6 +27,9 @@ class MemoryMappedComponent(model.BusComponent):
                              part_no = self.pid & 0xfff,
                              revision = (self.pid >> 20) & 0xf)
 
+        self.logger.info("ID: %08x %16x %08x (%s)",
+                          self.devid, self.pid, self.cid, self.partid)
+
         self.component_class = (self.cid >> 12) & 0xf
         self.dev_type = self.devid >> 24
 

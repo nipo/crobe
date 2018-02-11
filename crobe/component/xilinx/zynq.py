@@ -29,6 +29,7 @@ class Zynq(jtag.Tap):
     IR_BYPASS      = 0x3f
     IR_ISC_ENABLE  = 0x10
     IR_ISC_PROGRAM = 0x11
+    IR_ISC_READ    = 0x15
     IR_ISC_NOP     = 0x14
     IR_ISC_DISABLE = 0x16
     IR_JPROGRAM    = 0x0b
@@ -49,6 +50,8 @@ class Zynq(jtag.Tap):
 
     CFG_STATUS = 0x8
     CFG_IDCODE = 0xe
+
+    ISC_DR_EN = 0x15
 
     IR_STATUS_ISC_DONE    = 0x04
     IR_STATUS_ISC_ENABLED = 0x08
@@ -155,7 +158,7 @@ class Zynq(jtag.Tap):
 
         self.logger.info("Resetting...")
 
-        if not self.send_op_wait(self.IR_JPROGRAM, self.IR_STATUS_INIT):
+        if not self.send_op_wait(self.IR_ISC_ENABLE, self.IR_STATUS_INIT):
             raise RuntimeError("Unable to reset FPGA")
 
         self.dr_shift(self.IR_ISC_NOP, None)

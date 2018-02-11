@@ -3,6 +3,7 @@ from .. import model
 from ....part_id import PartId
 from ....component.arm.coresight.rom_table import RomTable
 from ....component.arm.coresight.scs import Scs
+from ....component.arm.coresight.dbg import Dbg
 from ....component.arm.cortex import Cortex
 from ....component.arm.sw_dp import SwDp
 from ....component.arm.jtag_dp import JtagDp
@@ -171,10 +172,14 @@ class SoC(model.SoC):
         self.buses = port.children_of_class(MemAp)
         
         idx = 0
+        last_rt = None
         for mem_ap in self.buses:
-            for s in mem_ap.children_of_class(Scs):
+            for s in mem_ap.children_of_class((Scs, Dbg)):
                 rt, = port.children_find(lambda x: isinstance(x, RomTable) and s in x.children)
-                self.child_add(Cortex.from_romtable(rt, idx))
+                if rt is not last_rt:
+                    rtidx = 0
+                self.child_add(Cortex.from_romtable(rt, idx, rtidx))
+                rtidx += 1
                 idx += 1
 
     def puppet(self):

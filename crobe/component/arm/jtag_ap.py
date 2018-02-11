@@ -30,6 +30,7 @@ class JtagAp(ap.Ap):
 
     def start(self):
         ap.Ap.start(self)
+        return
 
         for i in range(8):
             interface = JtagApInterface(self, i)

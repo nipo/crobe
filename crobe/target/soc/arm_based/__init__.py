@@ -6,3 +6,4 @@ from . import psoc4
 from . import psoc5
 from . import psoc6
 from . import cc26xx
+from . import zynq_ps
