@@ -75,9 +75,6 @@ class Interface(model.PortComponent):
     # Active high
     reset = False
 
-    def __str__(self):
-        return "%s on %s" % (self.__class__.__name__, self.port)
-
 class ProtocolError(Exception):
     """
     Protocol violation from API usage, like when someone asks for JTAG
