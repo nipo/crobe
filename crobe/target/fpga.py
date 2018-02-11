@@ -20,7 +20,7 @@ class Config(memory.Region):
         self.fpga.config_write(data)
 
 @model.Target.register(Spartan6, Zynq)
-class SpiFlash(model.Target, memory.Loadable):
+class Fpga(model.Target, memory.Loadable):
     """
     A FPGA
     """
