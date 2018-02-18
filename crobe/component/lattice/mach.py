@@ -11,6 +11,7 @@ parts = {
 @jtag.Tap.db.register(*[PartId.from_idcode(c).drop_revision() for c in parts.keys()])
 class MachXO2(jtag.Tap):
     irlen = 8
+    max_freq = 25e6
 
     IR_IDCODE               = 0b11100000
     IR_ISC_ENABLE           = 0b11000110
