@@ -1,10 +1,11 @@
 from .. import model
 from ...bitstring import BitString
-from ..protocol import jtag, base, swd, spi
+from ..protocol import jtag, base, swd, spi, chipcon
 from . import ftdi, api
 from ...util.pretty import metric
 from collections import deque
 import struct
+import time
 
 class Adapter(model.Adapter):
     supported_interfaces = ["jtag"]
@@ -33,6 +34,9 @@ class Adapter(model.Adapter):
 
         if interface_name.lower() == "jtag":
             return JtagInterface(self, **d)
+
+        if interface_name.lower() == "cc":
+            return ChipconInterface(self, **d)
 
         if interface_name.lower() == "spi":
             return SpiInterface(self, **d)
@@ -136,15 +140,20 @@ class BaseInterface(object):
 
     @reset.setter
     def reset(self, reset):
-        mod = 0
-        oe = 0
-        value = 0
+        cmd = self.cmd_reset(reset)
+        if not cmd:
+            self.logger.warning("Reset %s ignored", "holding" if reset else "releasing")
+            return
 
+        self.logger.info("%s reset pin", "holding" if reset else "releasing")
+        self.handle.execute(cmd)
+
+    def cmd_reset(self, reset):
         if self.__reset_pin and self.__reset_oe_pin:
             pin, polarity = self.__reset_pin
-            mod |= 1 << pin
-            oe |= int(reset) << pin
-            value |= int(polarity and reset) << pin
+            mod = 1 << pin
+            oe = int(reset) << pin
+            value = int(polarity and reset) << pin
 
             pin, polarity = self.__reset_oe_pin
             mod |= 1 << pin
@@ -153,23 +162,20 @@ class BaseInterface(object):
 
         elif self.__reset_pin:
             pin, polarity = self.__reset_pin
-            mod |= 1 << pin
-            oe |= 1 << pin
-            value |= int(bool(reset) == polarity) << pin
+            mod = 1 << pin
+            oe = 1 << pin
+            value = int(bool(reset) == polarity) << pin
 
         elif self.__reset_oe_pin:
             pin, polarity = self.__reset_oe_pin
-            mod |= 1 << pin
-            oe |= 1 << pin
-            value |= int(bool(reset) == polarity) << pin
+            mod = 1 << pin
+            oe = 1 << pin
+            value = int(bool(reset) == polarity) << pin
 
         else:
-            self.logger.warning("Reset %s ignored", "holding" if reset else "releasing")
-            return
+            return b''
 
-        self.logger.info("%s reset pin", "holding" if reset else "releasing")
-
-        self.handle.gpio_mask_set(mod, oe, value)
+        return self.handle.cmd_gpio_mask_set(mod, oe, value)
 
     @property
     def power(self):
@@ -509,6 +515,60 @@ class SwdInterface(BaseInterface, swd.Interface):
             tdo |= v << tdo_len
             tdo_len += bits
         return tdo
+
+class ChipconInterface(BaseInterface, chipcon.Interface):
+    def __init__(self, adapter, oen_pin = None, oe_pin = None, name = None, **args):
+        chipcon.Interface.__init__(self, adapter, name)
+        BaseInterface.__init__(self, adapter, **args)
+        if oen_pin is None and oe_pin is not None:
+            self.oe_pin = (oe_pin, True)
+        elif oe_pin is None and oen_pin is not None:
+            self.oe_pin = (oen_pin, False)
+        else:
+            raise ValueError("Need oen_pin or oe_pin")
+
+    def cmd_oe(self, val, tdi):
+        pin, pol = self.oe_pin
+        return self.handle.cmd_gpio_mask_set((1 << pin) | 2,
+                                             (1 << pin) | 2,
+                                              (int(bool(val) == pol) << pin) | (int(tdi) << 1))
+
+    def _execute(self, operation_list):
+        cmd_oe_on = self.cmd_oe(True, 0)
+        cmd_oe_off = self.cmd_oe(False, 1)
+        cmd_read_low = bytes([api.MPSSE_GET_BITS_LOW])
+        cmd_stuff = bytes([api.MPSSE_WRITE | api.MPSSE_WRITE_NEG, 0, 0, 0])
+
+        self.handle.execute(self.cmd_activity(True))
+
+        for op in operation_list:
+            if isinstance(op, chipcon.DebugInit):
+                self.handle.execute(cmd_oe_off)
+                self.reset = True
+                self.handle.execute(bytes([api.MPSSE_WRITE | api.MPSSE_BITS | api.MPSSE_WRITE_NEG, 1, 0]))
+                self.reset = False
+
+            elif isinstance(op, chipcon.Wait):
+                time.sleep(op.cycles / self.freq)
+
+            elif isinstance(op, chipcon.Command):
+                r = self.handle.execute(
+                    cmd_oe_on
+                    + bytes([api.MPSSE_WRITE | api.MPSSE_WRITE_NEG, len(op.command) - 1, 0])
+                    + op.command
+                    + cmd_oe_off
+                    + cmd_read_low, 1)
+                if op.rlen:
+                    while r[0] & 4:
+                        r = self.handle.execute(cmd_stuff + cmd_read_low, 1)
+                    op.data = self.handle.execute(
+                        bytes([api.MPSSE_READ | api.MPSSE_WRITE_NEG | api.MPSSE_READ_NEG, op.rlen - 1, 0]),
+                        op.rlen)
+
+            else:
+                raise ValueError(op)
+
+        self.handle.execute(self.cmd_activity(False))
 
 class SpiInterface(BaseInterface, spi.Interface):
     def __init__(self, adapter, csn_pin = None, name = None, **args):

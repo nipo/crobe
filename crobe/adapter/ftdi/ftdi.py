@@ -403,6 +403,9 @@ class Mpsse(Handle):
             cmd += bytes([api.MPSSE_SET_BITS_HIGH, (self.__gpio_val >> 8), (self.__gpio_oe >> 8)])
 
         return cmd
+        
+    def cmd_gpio_nop(self):
+        return bytes([api.MPSSE_SET_BITS_HIGH, (self.__gpio_val >> 8), (self.__gpio_oe >> 8)])
 
     @classmethod
     def cmd_tms_shift(cls, tms, next = 0):
@@ -546,6 +549,53 @@ class Mpsse(Handle):
         counts = []
 
         cmd = api.MPSSE_LSB | api.MPSSE_READ
+
+        ret = bytearray()
+        
+        if bits >= 8:
+            ret += struct.pack("<BH", cmd, (bits // 8) - 1)
+            counts.append((bits // 8, None))
+
+        if bits % 8:
+            ret += bytes([cmd | api.MPSSE_BITS, (bits % 8) - 1])
+            counts.append((1, bits % 8))
+        
+        return ret, counts
+
+    @classmethod
+    def cmd_out_be(cls, tdi):
+        if not len(tdi):
+            return b''
+        
+        cmd = api.MPSSE_WRITE_NEG | api.MPSSE_WRITE
+
+        ret = bytearray()
+        bits = len(tdi)
+        data = tdi.data
+        
+        if bits >= 8:
+            bytestring = data
+            if bits % 8:
+                bytestring = bytestring[:-1]
+
+            for i in range(0, len(bytestring), 1024):
+                chunk = bytestring[i : i+1024]
+                ret += struct.pack("<BH", cmd, len(chunk) - 1)
+                ret += chunk
+
+        if bits % 8:
+            ret += bytes([cmd | api.MPSSE_BITS, (bits % 8) - 1, data[-1]])
+            
+        return ret
+
+    @classmethod
+    def cmd_in_be(cls, bits):
+        if not bits:
+            return b''
+
+        counts = []
+
+        cmd = api.MPSSE_READ
 
         ret = bytearray()
         

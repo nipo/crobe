@@ -269,7 +269,7 @@ class Interface(swd.Interface):
 
 class ProbyAdapter(basic.Adapter):
     base_path = os.path.join(os.path.dirname(__file__), "fw")
-    supported_interfaces = ["swd", "swd-pt", "jtag", "jtag-int", "spi"]
+    supported_interfaces = ["swd", "swd-pt", "jtag", "jtag-int", "spi", "cc"]
     
     def reprogram(self, mode):
         """
@@ -317,7 +317,15 @@ class ProbyAdapter(basic.Adapter):
             return basic.Adapter.open(self, "jtag", channel = "B", resetn_pin = 9)
 
         elif interface_name == "swd-pt":
+            self.reprogram("jtag_swd_raw")
             return basic.Adapter.open(self, "swd", channel = "A",
+                                resetn_pin = 8,
+                                oe_pin = 5,
+                                gpio_output = 0x063b, gpio_value = 0x0610)
+
+        elif interface_name == "cc":
+            self.reprogram("jtag_swd_raw")
+            return basic.Adapter.open(self, "cc", channel = "A",
                                 resetn_pin = 8,
                                 oe_pin = 5,
                                 gpio_output = 0x063b, gpio_value = 0x0610)

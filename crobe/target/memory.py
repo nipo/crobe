@@ -133,7 +133,7 @@ class Loadable:
             p.append(Segment(r.address, ))
 
     def erase_all(self):
-        flashes = self.children_of_class(memory.Flash)
+        flashes = self.children_of_class(Flash)
         for f in flashes:
             f.erase(0, f.size)
 
