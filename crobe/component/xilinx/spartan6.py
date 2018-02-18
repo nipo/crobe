@@ -57,6 +57,22 @@ class Spartan6(jtag.Tap):
     IR_STATUS_INIT        = 0x10
     IR_STATUS_DONE        = 0x20
 
+    PART_NAMES = {
+        "Spartan6-LX4": "6slx4",
+        "Spartan6-LX9": "6slx9",
+        "Spartan6-LX16": "6slx16",
+        "Spartan6-LX25": "6slx25",
+        "Spartan6-LX25T": "6slx25t",
+        "Spartan6-LX45": "6slx45",
+        "Spartan6-LX45T": "6slx45t",
+        "Spartan6-LX75": "6slx75",
+        "Spartan6-LX75T": "6slx75t",
+        "Spartan6-LX100": "6slx100",
+        "Spartan6-LX100T": "6slx100t",
+        "Spartan6-LX150": "6slx150",
+        "Spartan6-LX150T": "6slx150t",
+    }
+
     def __init__(self, port, index):
         jtag.Tap.__init__(self, port, index)
         self.name = "Spartan6-" + parts[int(port.idcode_at(index).drop_revision())]
@@ -147,10 +163,10 @@ class Spartan6(jtag.Tap):
         
         if "device" in program.info:
             target = program.info["device"].lower()
-            cur = self.name[2:].lower()
+            part_name = self.PART_NAMES.get(self.name, self.name)
 
-            if not target.startswith(cur):
-                raise ValueError("Bitstream is for a %s, device is a %s" % (target, cur))
+            if not target.startswith(part_name):
+                raise ValueError("Bitstream is for a %s, device is a %s (%s)" % (target, part_name, self.name))
 
         if expected_userid:
             userid = self.dr_shift(self.IR_USERCODE, 0, 32)
