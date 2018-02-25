@@ -26,6 +26,7 @@ class SwDp(dp.Dp):
         dp.Dp.start(self)
         
     def debug_enable(self, enable):
+        self.abort(0x1f)
         dp.Dp.debug_enable(self, enable)
         
         if self.version >= 1 and not self.minimal and enable:
