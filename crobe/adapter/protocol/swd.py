@@ -64,6 +64,13 @@ class Interface(base.Interface):
         base.Interface.__init__(self, port, (name or port.name) + "/SWD")
         self.turnaround_cycles = 1
 
+    def line_reset(self):
+        ops = [self.cmd_wakeup(), self.cmd_jtag_to_swd(),
+               self.cmd_wakeup(), self.cmd_run(10),
+               self.cmd_read(False, self.IDCODE)]
+        self.execute(ops)
+        return ops[-1].data
+
     def start(self):
         self.port.reset = True
         time.sleep(.005)
@@ -73,15 +80,9 @@ class Interface(base.Interface):
         # Limit frequency to 1M for line reset and jtag-to-swd.
         self.freq_cap("enumeration", 1e6)
 
-        ops = [self.cmd_wakeup(), self.cmd_jtag_to_swd(),
-               self.cmd_wakeup(), self.cmd_run(10),
-               self.cmd_read(False, self.IDCODE)]
-        self.execute(ops)
-
-        partid = PartId.from_idcode(ops[-1].data)
-
+        idcode = self.line_reset()
+        partid = PartId.from_idcode(idcode)
         self.child_add(self.db.call(partid, self))
-
         self.freq_cap("enumeration")
 
         base.Interface.start(self)
