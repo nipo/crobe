@@ -7,12 +7,12 @@ from ....util.pretty import base2
 import binascii
 import math
 import struct
-from .puppet_code import mkl_flash_erase, mkl_flash_write
+from .puppet_code import mkl
 import time
 
 class CodeFlash(StubFlash):
-    RANGE_ERASE = mkl_flash_erase
-    PAGE_WRITE = mkl_flash_write
+    RANGE_ERASE = mkl["flash_erase"]
+    PAGE_WRITE = mkl["flash_write"]
 
 class MKL0x(SoC):
     SIM_SDID  = 0x40048024

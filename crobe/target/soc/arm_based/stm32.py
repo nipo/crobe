@@ -3,11 +3,11 @@ from ....component.arm.coresight.scs import Scs
 from ....component.st.stm32 import Info
 from .soc import SoC, StubFlash, BusRam
 import struct
-from .puppet_code import stm32f1_flash_erase, stm32f1_flash_write
+from .puppet_code import stm32f1
 
 class Stm32f1Flash(StubFlash):
-    RANGE_ERASE = stm32f1_flash_erase
-    PAGE_WRITE = stm32f1_flash_write
+    RANGE_ERASE = stm32f1["flash_erase"]
+    PAGE_WRITE = stm32f1["flash_write"]
 
 @SoC.db.register(*[PartId(0, 0x20, did) for did in Info.parts.keys() if did])
 class Stm(SoC):

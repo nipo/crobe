@@ -2,11 +2,11 @@ from ....part_id import PartId
 from .soc import SoC, StubFlash, BusRam
 import binascii
 import struct
-from .puppet_code import efm32_flash_erase, efm32_flash_write
+from .puppet_code import efm32
 
 class EfmFlash(StubFlash):
-    RANGE_ERASE = efm32_flash_erase
-    PAGE_WRITE = efm32_flash_write
+    RANGE_ERASE = efm32["flash_erase"]
+    PAGE_WRITE = efm32["flash_write"]
 
     def prepare(self):
         self.soc.buses[0].u32_write(0x400c8084, 0x580e)

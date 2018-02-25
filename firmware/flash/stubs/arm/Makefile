@@ -52,13 +52,12 @@ $1-$2.bin: $1.o
 	$($($1-arch)-prefix)objcopy $$< -j .text.$2 -O binary $$@
 
 $1-$2.py: $1-$2.bin dump_code.py
-	python3 dump_code.py $1_$2 $$< > $$@
+	python3 dump_code.py $1 $2 $$< > $$@
 
-all: $1-$2.py
-
+$1-code-files += $1-$2.py
 clean-files += $1-$2.bin
 clean-files += $1-$2.py
-code-files += $1-$2.py
+code-files += $1.py
 
 endef
 
@@ -68,8 +67,13 @@ $1.o: $($1-src) $(MAKEFILE_LIST)
 	$($($1-arch)-prefix)gcc -c -o $$@ $$< $($(1)-cflags) -std=c99 -ffunction-sections -g
 
 clean-files += $1.o
+clean-files += $1.py
 
 $(eval $(foreach s,$($1-sections),$(call section_expand,$1,$s)))
+
+$1.py: $($1-code-files)
+	echo "$1 = {}" > $$@
+	cat $$^ | sort >> $$@
 
 endef
 

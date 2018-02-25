@@ -5,15 +5,15 @@ from ....component.model import Cpu
 import binascii
 import math
 import struct
-from .puppet_code import nrf51_flash_erase, nrf51_flash_write
+from .puppet_code import nrf51
 import time
 
 class CodeFlash(StubFlash):
-    RANGE_ERASE = nrf51_flash_erase
-    PAGE_WRITE = nrf51_flash_write
+    RANGE_ERASE = nrf51["flash_erase"]
+    PAGE_WRITE = nrf51["flash_write"]
 
 class UicrFlash(StubFlash):
-    PAGE_WRITE = nrf51_flash_write
+    PAGE_WRITE = nrf51["flash_write"]
     UICR_ADDRESS = 0x10001000
 
     def erase(self, offset, size):
