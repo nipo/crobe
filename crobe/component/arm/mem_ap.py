@@ -61,8 +61,7 @@ class MemAp(ap.Ap, model.Bus):
         self.large_data = bool(cfg & self.CFG_LARGE_DATA)
         self.large_address = bool(cfg & self.CFG_LARGE_ADDRESS)
 
-        while not self.csw & self.CSW_DEVICEEN:
-            self.csw = self.csw | self.CSW_SPIDEN
+        self.enable()
         self.csw_base = self.csw & ~0x00000f37
 
         self.logger.info("CSW base: %8x", self.csw_base)
@@ -93,6 +92,13 @@ class MemAp(ap.Ap, model.Bus):
             self.logger.info("Base: %16x", self.base)
 
         self.wrap_mask = 0x3ff
+
+    def enable(self, enable = True):
+        if enable:
+            while not self.csw & self.CSW_DEVICEEN:
+                self.csw = self.csw | self.CSW_SPIDEN
+        else:
+            self.csw = self.csw & ~self.CSW_SPIDEN
 
     def option_set(self, opt):
         if opt.startswith("base="):
