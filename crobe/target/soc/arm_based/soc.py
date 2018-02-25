@@ -220,6 +220,12 @@ class SoC(model.SoC):
         cpu.itm.trace_enable(1)
         cpu.etm.trace_enable(2)
 
+    def reset(self):
+        import time
+        self.port.port.reset = True
+        time.sleep(100e-3)
+        self.port.port.reset = False
+
 @SoC.db.register_default
 def default_soc(ap):
     rom_tables = ap.children_of_class(RomTable)
