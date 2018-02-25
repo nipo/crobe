@@ -28,6 +28,29 @@ class Range:
         if size == self.size:
             return self, None
         return Range(self.address, size), Range(self.address + size, self.size - size)
+
+    def split_alloc(self, size, align):
+        if self.size < size:
+            return
+
+        # try at left side
+        if self.address % align:
+            address = (self.address | (align - 1)) + 1
+        else:
+            address = self.address
+        if address + size <= self.end:
+            left = address - self.address, size, self.end - size - address
+        else:
+            left = None
+
+        # try at right side
+        address = (self.end - size) & ~(align - 1)
+        if address + size <= self.end:
+            right = address - self.address, size, self.end - size - address
+        else:
+            right = None
+
+        return right or left
         
     def __hash__(self):
         return hash(self.address) ^ hash(self.size)
@@ -58,26 +81,36 @@ class Allocator:
         target = None
 
         for i, r in enumerate(self.__free):
-            if r.address % align:
-                pre = -r.address % align
-            else:
-                pre = 0
-            if r.size >= size + pre and (not target or target.size > r.size):
-                target = r
+            can_split = r.split_alloc(size, align)
+
+            if not can_split:
+                continue
+
+            left, allocated, right = can_split
+
+            if not left and not right:
+                break
+
+            if not target:
+                target = r, can_split
+                continue
+
+            t, (left_t, allocated_t, right_t) = target
+            if left + right < left_t + right_t:
+                target = r, can_split
 
         if not target:
-            raise ValueError("No space left")
+            for r in sorted(self.__used):
+                print(r)
 
-        if target.address % align:
-            pre = -target.address % align
-        else:
-            pre = 0
+            raise ValueError("No space left", size)
 
-        self.__free.remove(target)
-        if pre:
-            crumb, target = target.split(pre)
+        t, (left, allocated, right) = target
+        self.__free.remove(t)
+        if left:
+            crumb, t = t.split(left)
             self.__free.add(crumb)
-        ret, crumb = target.split(size)
+        ret, crumb = t.split(allocated)
         if crumb:
             self.__free.add(crumb)
         self.__used.add(ret)
