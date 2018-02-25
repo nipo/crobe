@@ -12,7 +12,7 @@ class Scs(MemoryMappedComponent):
     def __init__(self, ap, base):
         MemoryMappedComponent.__init__(self, ap, base, "SCS")
         self.reg_write(self.DHCSR, self.DHCSR_KEY | self.DHCSR_C_MASKINTS | self.DHCSR_C_DEBUGEN | self.DHCSR_C_HALT)
-        self.demcr = self.DEMCR_TRCENA
+        self.enable()
 
         self.cpu_name = cpuid.decode(self.cpuid)
 
@@ -55,6 +55,9 @@ class Scs(MemoryMappedComponent):
 
     def __str__(self):
         return "System Control Space for %s" % self.cpu_name
+
+    def enable(self):
+        self.demcr = self.DEMCR_TRCENA
             
     @property
     def has_fpu(self):
