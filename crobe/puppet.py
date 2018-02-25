@@ -37,7 +37,7 @@ class Puppet(Component):
     def __init__(self, cpu, ram,
                  pc_reg, sp_reg,
                  arg_regs, trampoline_code,
-                 stack_size = 1024, stack_direction = -1):
+                 stack_size = 128, stack_direction = -1):
         Component.__init__(self, "puppet")
         self.cpu = cpu
         self.ram = ram
