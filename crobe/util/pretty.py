@@ -42,7 +42,7 @@ def base2(value, unit = ""):
     exp = min((len(scale) - 1) * 10, exp)
     suffix = scale[exp // 10]
 
-    return ('%f' % (int(float(m * 1024) + .5) // 1024.)).rstrip('0').rstrip('.') + suffix + unit
+    return ('%f' % (int(float(m * 1024) + .5) / 1024)).rstrip('0').rstrip('.') + suffix + unit
 
 def sci_parse(string):
     suffix = {
