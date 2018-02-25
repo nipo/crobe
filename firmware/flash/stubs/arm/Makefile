@@ -1,4 +1,4 @@
-targets = efm32 efm32g nrf51 lpc11 stm32f1
+targets = efm32 efm32g nrf51 lpc11 stm32f1 mkl
 arm-prefix = arm-mutekh-eabi-
 
 efm32-src = efm32.c
@@ -15,6 +15,11 @@ stm32f1-src = stm32f1.c
 stm32f1-sections = flash_erase flash_write
 stm32f1-cflags = -mcpu=cortex-m3 -mthumb -Os -fPIC
 stm32f1-arch = arm
+
+mkl-src = mkl.c
+mkl-sections = flash_erase flash_write
+mkl-cflags = -mcpu=cortex-m0 -mthumb -Os -fPIC
+mkl-arch = arm
 
 nrf51-src = nrf51.c
 nrf51-sections = flash_erase flash_write

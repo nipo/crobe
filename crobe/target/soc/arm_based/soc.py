@@ -252,4 +252,6 @@ def arm_soc_probe(dp):
 
         return SoC.db.call(partid, dp)
 
+    return SoC.db.call(dp.idcode, dp, allow_default = True)
+
     raise NotImplementedError()

@@ -1,4 +1,5 @@
 from . import xilinx
+from . import nxp
 from . import lattice
 from . import atmel
 from . import energy_micro
