@@ -94,12 +94,13 @@ class Puppet(Component):
             self.cpu.halt()
             self.logger.warning("Forced stop of target")
 
-        #regs = self.cpu.reg_read(self.cpu.registers)
-        #for r, v in sorted(regs.items()):
-        #    self.logger.info("After stop %s: 0x%08x", r.name, v)
+            regs = self.cpu.reg_read(self.cpu.registers)
+            for r, v in sorted(regs.items()):
+                self.logger.info("After stop %s: 0x%08x", r.name, v)
             
     def call(self, pc, *args):
         self.prepare(pc, *args)
+        self.logger.info("Running 0x%08x(%s)", pc, ', '.join(hex(a) for a in args))
         self.run()
         self.wait()
         r0 = self.arg_regs[0]
