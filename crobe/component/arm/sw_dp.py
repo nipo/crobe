@@ -31,6 +31,8 @@ class SwDp(dp.Dp):
         if self.version >= 1 and not self.minimal and enable:
             self.dlcr = (self.dlcr & ~0x300) | 0x300
             self.port.turnaround_cycles = 4
+        if self.minimal:
+            self.port.freq_cap(self, 8e6)
         if enable:
             self.abort(0x1f)
 
@@ -107,7 +109,7 @@ class SwDp(dp.Dp):
                     continue
 
                 if oo.ack == swd.Ack.WAIT:
-                    operations = operations[i:]
+                    operations = list(operations)[i:]
                     self.abort(0x10)
                     must_restart = True
                     insert_run += 1

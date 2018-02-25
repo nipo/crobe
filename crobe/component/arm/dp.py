@@ -74,12 +74,15 @@ class Dp(PortComponent):
         return PortComponent.child_lookup(self, crit)
         
     def __str__(self):
-        ret = "%s v.%dr%d" % (self.name, self.version, self.idr_or_idcode.revision)
-        if self.minimal:
-            ret += ", minimal"
-        if self.target_id:
-            ret += ", Target ID: %s" % self.target_id.pretty()
-        return ret
+        try:
+            ret = "%s v.%dr%d" % (self.name, self.version, self.idr_or_idcode.revision)
+            if self.minimal:
+                ret += ", minimal"
+            if self.target_id:
+                ret += ", Target ID: %s" % self.target_id.pretty()
+            return ret
+        except AttributeError:
+            return self.name
 
     def debug_enable(self, enabled):
         if not enabled:
