@@ -4,6 +4,15 @@ from enum import IntEnum
 
 __all__ = ["Interface"]
 
+class ProtocolError(base.ProtocolError):
+    pass
+
+class AddressNack(ProtocolError):
+    pass
+
+class DataNack(ProtocolError):
+    pass
+
 class Interface(base.Interface):
     """
     I2C protocol interface.
@@ -56,7 +65,7 @@ class Interface(base.Interface):
         Property `data` of object will hold a byte array value on
         successful execution of operation.
         """
-        return Read(ap, addr)
+        return Read(addr, size)
 
     def cmd_write(self, addr, data):
         """
@@ -65,7 +74,7 @@ class Interface(base.Interface):
         :param int addr: Slave address
         :param int data: Value to write
         """
-        return Write(ap, addr, data)
+        return Write(addr, data)
     
 class Operation(object):
     def __repr__(self):

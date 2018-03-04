@@ -10,7 +10,7 @@ from ...util.pretty import metric
 from ...model import PortComponent
 from ...component.arm import dp
 from ..protocol import base as pbase
-from ..protocol import swd
+from ..protocol import swd, i2c
 import threading
 import struct
 
@@ -98,8 +98,8 @@ class RoutedPath(PortComponent):
             self.last_tag = tag
         self.put(peer, tag, blob)
         return self.get(peer, tag)
-        
-class Interface(swd.Interface):
+
+class SwdInterface(swd.Interface):
     CMD_TURNAROUND   = 0xd0
     CMD_RUN          = 0x00
     CMD_ABORT        = 0xc0
@@ -267,6 +267,120 @@ class Interface(swd.Interface):
                     if isinstance(op, swd.Read):
                         op.data, = struct.unpack("<L", in_blob[op.__offset + 1 : op.__offset + 5])
 
+class I2cInterface(i2c.Interface):
+    CMD_READ_ACK     = 0xc0
+    CMD_READ_NACK    = 0x80
+    CMD_WRITE        = 0x40
+    CMD_START        = 0x20
+    CMD_STOP         = 0x21
+    CMD_DIV          = 0x00
+
+    I2C_PORT_CID = 0
+    CONFIG_CID = 1
+    
+    REG_SRST = 0
+    REG_BASE_FREQ = 1
+
+    def __init__(self, adapter, mux):
+        swd.Interface.__init__(self, adapter, adapter.name)
+        self.mux = RoutedPath(mux, 0xf)
+#        self.base_freq = int.from_bytes(
+#            self.mux.execute(self.CONFIG_CID, struct.pack("<B", 0x80 | self.REG_BASE_FREQ), 5)[1:],
+#            byteorder = 'little')
+
+        self.base_freq = 1e6
+
+#        self.logger.info("Found I2C proby with internal clock of %s", metric(self.base_freq, "Hz"))
+        self.freq_cap("hardware", 1e6)
+        self.__reset = False
+        self.__div = 4
+
+    @property
+    def reset(self):
+        return self.__reset
+
+    @reset.setter
+    def reset(self, value):
+        if self.__reset == bool(value):
+            return
+
+        self.logger.info("%s reset pin", "holding" if value else "releasing")
+        self.__reset = bool(value)
+        self.mux.execute(self.CONFIG_CID, struct.pack("<BL", self.REG_SRST, int(self.__reset)), 1)
+        
+    @property
+    def freq(self):
+        return self.base_freq / self.__div / 2
+
+    @freq.setter
+    def freq(self, freq):
+        if not freq:
+            freq = 1e6
+        self.__div = min(0x1f, max(4, int(self.base_freq / float(freq) / 2)))
+
+    def _execute(self, operation_list):
+        ops = list(operation_list)
+        cmd = [self.CMD_DIV | self.__div]
+        rsp_size = 1
+        starts = []
+
+        prev = None
+        for i, cur in enumerate(ops):
+            next = ops[i+1] if i < len(ops) - 1 else None
+
+            if not prev or (isinstance(prev, i2c.Read) != isinstance(cur, i2c.Read)):
+                cmd.append(self.CMD_START)
+                rsp_size += 1
+                cmd += [self.CMD_WRITE | 0, (cur.addr << 1) | int(isinstance(cur, i2c.Read))]
+                starts.append(rsp_size)
+                rsp_size += 1
+
+            last = not next or (isinstance(cur, i2c.Read) != isinstance(next, i2c.Read))
+
+            if isinstance(cur, i2c.Read):
+                cur.__rsp = []
+                for offset in range(0, cur.size, 0x40):
+                    last_offset = cur.size - 0x40 <= offset
+                    size = min(cur.size - offset, 0x40)
+                    cur.__rsp.append((rsp_size, rsp_size + size))
+                    rsp_size += size
+
+                    if last and last_offset:
+                        cmd.append(self.CMD_READ_NACK | (size - 1))
+                    else:
+                        cmd.append(self.CMD_READ_ACK | (size - 1))
+        
+            elif isinstance(cur, i2c.Write):
+                cur.__rsp = []
+                for offset in range(0, len(cur.data), 0x40):
+                    size = min(len(cur.data) - offset, 0x40)
+                    cur.__rsp.append((rsp_size, rsp_size + size))
+                    rsp_size += size
+
+                    cmd.append(self.CMD_WRITE | (size - 1))
+                    cmd += cur.data[offset : offset + size]
+
+            else:
+                raise base.ProtocolError("Unknown SWD operation %s" % type(op))
+
+            prev = cur
+
+        cmd.append(self.CMD_STOP)
+        rsp_size += 1
+
+        rsp = self.mux.execute(self.I2C_PORT_CID, bytes(cmd), rsp_size)
+
+        for op in ops:
+            data = b''.join(rsp[start:end] for (start, end) in op.__rsp)
+            if isinstance(op, i2c.Read):
+                op.data = data
+            elif not all(op.data[:-1]):
+                raise i2c.DataNack()
+
+        for s in starts:
+            if not rsp[s]:
+                raise i2c.AddressNack()
+
 class ProbyAdapter(basic.Adapter):
     base_path = os.path.join(os.path.dirname(__file__), "fw")
     supported_interfaces = ["swd", "swd-pt", "jtag", "jtag-int", "spi", "cc"]
@@ -338,7 +452,18 @@ class ProbyAdapter(basic.Adapter):
             mux = MsgMux(fifo)
             mux.reset()
 
-            return Interface(self, mux)
+            return SwdInterface(self, mux)
+
+        elif interface_name == "i2c":
+            self.reprogram("i2c_master")
+
+            fifo = self.device.open(interface = "A", mode = "ft245_sync_fifo")
+
+            mux = MsgMux(fifo)
+            mux.reset()
+
+            return I2cInterface(self, mux)
+
         else:
             raise ValueError("Unknown interface name: %s" % interface_name)
         
