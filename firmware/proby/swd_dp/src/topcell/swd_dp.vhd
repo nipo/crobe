@@ -35,22 +35,17 @@ end swd_dp;
 
 architecture arch of swd_dp is
 
-  signal s_resetn_fifo, s_clk_resetn : std_ulogic;
+  signal s_fifo_resetn, s_sys_resetn : std_ulogic;
+  signal s_fifo_clk : std_ulogic;
   signal s_sys_clk : std_ulogic;
   signal s_sys_resetn_soft, s_resetn_soft_async, s_invalid_input: std_ulogic;
   
-  signal s_from_host_val, s_to_host_val : nsl.framed.framed_req_array(1 downto 0);
-  signal s_from_host_ack, s_to_host_ack : nsl.framed.framed_ack_array(1 downto 0);
-  signal s_from_host_sized_val, s_to_host_sized_val : nsl.sized.sized_req;
-  signal s_from_host_sized_ack, s_to_host_sized_ack : nsl.sized.sized_ack;
-  signal s_swd_cmd_val, s_swd_rsp_val : nsl.framed.framed_req;
-  signal s_swd_cmd_ack, s_swd_rsp_ack : nsl.framed.framed_ack;
-  signal s_routed_swd_cmd_val, s_routed_swd_rsp_val : nsl.routed.routed_req;
-  signal s_routed_swd_cmd_ack, s_routed_swd_rsp_ack : nsl.routed.routed_ack;
-  signal s_routed_cs_cmd_val, s_routed_cs_rsp_val : nsl.routed.routed_req;
-  signal s_routed_cs_cmd_ack, s_routed_cs_rsp_ack : nsl.routed.routed_ack;
-  signal s_cs_cmd_val, s_cs_rsp_val : nsl.framed.framed_req;
-  signal s_cs_cmd_ack, s_cs_rsp_ack : nsl.framed.framed_ack;
+  signal s_from_host, s_to_host : nsl.framed.framed_bus_array(1 downto 0);
+  signal s_from_host_sized, s_to_host_sized : nsl.sized.sized_bus;
+  signal s_swd_cmd, s_swd_rsp : nsl.framed.framed_bus;
+  signal s_routed_swd_cmd, s_routed_swd_rsp : nsl.routed.routed_bus;
+  signal s_routed_cs_cmd, s_routed_cs_rsp : nsl.routed.routed_bus;
+  signal s_cs_cmd, s_cs_rsp : nsl.framed.framed_bus;
 
   signal s_srst, s_trst, s_swclk, s_swdio_i, s_swdio_o, s_swdio_oe : std_ulogic;
   signal s_clk_gen, s_clk_gen_toggle: std_ulogic;
@@ -77,7 +72,7 @@ architecture arch of swd_dp is
   
 begin
 
-  s_resetn_soft_async <= s_clk_resetn and not s_invalid_input and user_btn;
+  s_resetn_soft_async <= s_sys_resetn and not s_invalid_input and user_btn;
 
   sys_clk_gen: clk_gen
     generic map(
@@ -87,14 +82,14 @@ begin
       p_clk_12 => clk,
       p_resetn => user_btn,
       p_sys_clk => s_sys_clk,
-      p_sys_clk_ready => s_clk_resetn
+      p_sys_clk_ready => s_sys_resetn
       );
 
   reset_sync_fifo: util.sync.sync_rising_edge
     port map(
-      p_clk => fifo_clk,
-      p_in => s_clk_resetn,
-      p_out => s_resetn_fifo
+      p_clk => s_fifo_clk,
+      p_in => s_sys_resetn,
+      p_out => s_fifo_resetn
       );
 
   reset_sync: util.sync.sync_rising_edge
@@ -104,14 +99,15 @@ begin
       p_out => s_sys_resetn_soft
       );
   
-  ftdi_split: nsl.ftdi.ft245_sync_fifo_splitter
+  ftdi_split: nsl.ftdi.ft245_sync_fifo_master
     generic map(
       burst_length => 64
       )
     port map(
-      p_clk => fifo_clk,
-      p_resetn => s_resetn_fifo,
+      p_clk => s_fifo_clk,
+      p_resetn => s_fifo_resetn,
 
+      p_ftdi_clk => fifo_clk,
       p_ftdi_data => fifo_data,
       p_ftdi_rxfn => fifo_rxfn,
       p_ftdi_txen => fifo_txen,
@@ -119,27 +115,27 @@ begin
       p_ftdi_wrn => fifo_wrn,
       p_ftdi_oen => fifo_oen,
 
-      p_in_read => s_from_host_sized_ack.ack,
-      p_in_empty_n => s_from_host_sized_val.val,
-      p_in_data => s_from_host_sized_val.data,
+      p_in_ready => s_from_host_sized.ack.ready,
+      p_in_valid => s_from_host_sized.req.valid,
+      p_in_data => s_from_host_sized.req.data,
 
-      p_out_full_n => s_to_host_sized_ack.ack,
-      p_out_write => s_to_host_sized_val.val,
-      p_out_data => s_to_host_sized_val.data
+      p_out_ready => s_to_host_sized.ack.ready,
+      p_out_valid => s_to_host_sized.req.valid,
+      p_out_data => s_to_host_sized.req.data
       );
 
   to_framed: nsl.sized.sized_to_framed
     port map(
-      p_resetn => s_resetn_fifo,
-      p_clk => fifo_clk,
+      p_resetn => s_fifo_resetn,
+      p_clk => s_fifo_clk,
 
       p_inval => s_invalid_input,
       
-      p_in_val => s_from_host_sized_val,
-      p_in_ack => s_from_host_sized_ack,
+      p_in_val => s_from_host_sized.req,
+      p_in_ack => s_from_host_sized.ack,
 
-      p_out_val => s_from_host_val(0),
-      p_out_ack => s_from_host_ack(0)
+      p_out_val => s_from_host(0).req,
+      p_out_ack => s_from_host(0).ack
       );
 
   from_framed: nsl.sized.sized_from_framed
@@ -148,13 +144,13 @@ begin
       )
     port map(
       p_resetn => s_sys_resetn_soft,
-      p_clk => fifo_clk,
+      p_clk => s_fifo_clk,
 
-      p_in_val => s_to_host_val(0),
-      p_in_ack => s_to_host_ack(0),
+      p_in_val => s_to_host(0).req,
+      p_in_ack => s_to_host(0).ack,
 
-      p_out_val => s_to_host_sized_val,
-      p_out_ack => s_to_host_sized_ack
+      p_out_val => s_to_host_sized.req,
+      p_out_ack => s_to_host_sized.ack
       );
   
   cmd_fifo: nsl.framed.framed_fifo
@@ -164,14 +160,14 @@ begin
       )
     port map(
       p_resetn => s_sys_resetn_soft,
-      p_clk(0) => fifo_clk,
+      p_clk(0) => s_fifo_clk,
       p_clk(1) => s_sys_clk,
 
-      p_in_val => s_from_host_val(0),
-      p_in_ack => s_from_host_ack(0),
+      p_in_val => s_from_host(0).req,
+      p_in_ack => s_from_host(0).ack,
 
-      p_out_val => s_from_host_val(1),
-      p_out_ack => s_from_host_ack(1)
+      p_out_val => s_from_host(1).req,
+      p_out_ack => s_from_host(1).ack
       );
   
   rsp_fifo: nsl.framed.framed_fifo
@@ -182,13 +178,13 @@ begin
     port map(
       p_resetn => s_sys_resetn_soft,
       p_clk(0) => s_sys_clk, -- input is port 0
-      p_clk(1) => fifo_clk,
+      p_clk(1) => s_fifo_clk,
 
-      p_in_val => s_to_host_val(1),
-      p_in_ack => s_to_host_ack(1),
+      p_in_val => s_to_host(1).req,
+      p_in_ack => s_to_host(1).ack,
 
-      p_out_val => s_to_host_val(0),
-      p_out_ack => s_to_host_ack(0)
+      p_out_val => s_to_host(0).req,
+      p_out_ack => s_to_host(0).ack
       );
 
   dp: coresight.dp.dp_framed_swdp
@@ -198,11 +194,11 @@ begin
 
       p_clk_ref => s_clk_gen,
       
-      p_cmd_val => s_swd_cmd_val,
-      p_cmd_ack => s_swd_cmd_ack,
+      p_cmd_val => s_swd_cmd.req,
+      p_cmd_ack => s_swd_cmd.ack,
 
-      p_rsp_val => s_swd_rsp_val,
-      p_rsp_ack => s_swd_rsp_ack,
+      p_rsp_val => s_swd_rsp.req,
+      p_rsp_ack => s_swd_rsp.ack,
       
       p_swclk => s_swclk,
       p_swdio_i => s_swdio_i,
@@ -219,11 +215,11 @@ begin
       p_clk  => s_sys_clk,
       p_resetn => s_sys_resetn_soft,
       
-      p_cmd_val => s_cs_cmd_val,
-      p_cmd_ack => s_cs_cmd_ack,
+      p_cmd_val => s_cs_cmd.req,
+      p_cmd_ack => s_cs_cmd.ack,
 
-      p_rsp_val => s_cs_rsp_val,
-      p_rsp_ack => s_cs_rsp_ack,
+      p_rsp_val => s_cs_rsp.req,
+      p_rsp_ack => s_cs_rsp.ack,
 
       p_config_write => s_config_write,
       p_config_data => s_config_data,
@@ -240,14 +236,14 @@ begin
       p_resetn => s_sys_resetn_soft,
       p_clk => s_sys_clk,
 
-      p_in_val(0) => s_from_host_val(1),
-      p_in_ack(0) => s_from_host_ack(1),
+      p_in_val(0) => s_from_host(1).req,
+      p_in_ack(0) => s_from_host(1).ack,
 
-      p_out_val(0) => s_routed_swd_cmd_val,
-      p_out_val(1) => s_routed_cs_cmd_val,
+      p_out_val(0) => s_routed_swd_cmd.req,
+      p_out_val(1) => s_routed_cs_cmd.req,
 
-      p_out_ack(0) => s_routed_swd_cmd_ack,
-      p_out_ack(1) => s_routed_cs_cmd_ack
+      p_out_ack(0) => s_routed_swd_cmd.ack,
+      p_out_ack(1) => s_routed_cs_cmd.ack
       );
 
   rsp_router: nsl.routed.routed_router
@@ -260,14 +256,14 @@ begin
       p_resetn => s_sys_resetn_soft,
       p_clk => s_sys_clk,
 
-      p_in_val(0) => s_routed_swd_rsp_val,
-      p_in_val(1) => s_routed_cs_rsp_val,
+      p_in_val(0) => s_routed_swd_rsp.req,
+      p_in_val(1) => s_routed_cs_rsp.req,
 
-      p_in_ack(0) => s_routed_swd_rsp_ack,
-      p_in_ack(1) => s_routed_cs_rsp_ack,
+      p_in_ack(0) => s_routed_swd_rsp.ack,
+      p_in_ack(1) => s_routed_cs_rsp.ack,
       
-      p_out_val(0) => s_to_host_val(1),
-      p_out_ack(0) => s_to_host_ack(1)
+      p_out_val(0) => s_to_host(1).req,
+      p_out_ack(0) => s_to_host(1).ack
       );
 
   cs_endpoint: nsl.routed.routed_endpoint
@@ -275,15 +271,15 @@ begin
       p_resetn => s_sys_resetn_soft,
       p_clk => s_sys_clk,
 
-      p_cmd_in_val => s_routed_cs_cmd_val,
-      p_cmd_in_ack => s_routed_cs_cmd_ack,
-      p_rsp_out_val => s_routed_cs_rsp_val,
-      p_rsp_out_ack => s_routed_cs_rsp_ack,
+      p_cmd_in_val => s_routed_cs_cmd.req,
+      p_cmd_in_ack => s_routed_cs_cmd.ack,
+      p_rsp_out_val => s_routed_cs_rsp.req,
+      p_rsp_out_ack => s_routed_cs_rsp.ack,
 
-      p_cmd_out_val => s_cs_cmd_val,
-      p_cmd_out_ack => s_cs_cmd_ack,
-      p_rsp_in_val => s_cs_rsp_val,
-      p_rsp_in_ack => s_cs_rsp_ack
+      p_cmd_out_val => s_cs_cmd.req,
+      p_cmd_out_ack => s_cs_cmd.ack,
+      p_rsp_in_val => s_cs_rsp.req,
+      p_rsp_in_ack => s_cs_rsp.ack
       );
 
   swd_endpoint: nsl.routed.routed_endpoint
@@ -291,15 +287,15 @@ begin
       p_resetn => s_sys_resetn_soft,
       p_clk => s_sys_clk,
 
-      p_cmd_in_val => s_routed_swd_cmd_val,
-      p_cmd_in_ack => s_routed_swd_cmd_ack,
-      p_rsp_out_val => s_routed_swd_rsp_val,
-      p_rsp_out_ack => s_routed_swd_rsp_ack,
+      p_cmd_in_val => s_routed_swd_cmd.req,
+      p_cmd_in_ack => s_routed_swd_cmd.ack,
+      p_rsp_out_val => s_routed_swd_rsp.req,
+      p_rsp_out_ack => s_routed_swd_rsp.ack,
 
-      p_cmd_out_val => s_swd_cmd_val,
-      p_cmd_out_ack => s_swd_cmd_ack,
-      p_rsp_in_val => s_swd_rsp_val,
-      p_rsp_in_ack => s_swd_rsp_ack
+      p_cmd_out_val => s_swd_cmd.req,
+      p_cmd_out_ack => s_swd_cmd.ack,
+      p_rsp_in_val => s_swd_rsp.req,
+      p_rsp_in_ack => s_swd_rsp.ack
       );
 
   baud_gen: nsl.tick.baudrate_generator
