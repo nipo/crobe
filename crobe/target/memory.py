@@ -71,7 +71,7 @@ class Flash(Region):
 
     def verify(self, program):
         for s in program.paged(self.page_size):
-            self.logger.info("Checking range 0x%08x-0x%08x", s.address, s.address + len(s))
+            self.logger.debug("Checking range 0x%08x-0x%08x", s.address, s.address + len(s))
             flash_data = self.read(s.address - self.address, len(s))
             diffs = 0
             for orig, found in zip(s.data, flash_data):

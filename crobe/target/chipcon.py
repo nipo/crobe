@@ -10,19 +10,25 @@ class CCFlash(memory.Flash):
         self.cc = cc
 
     def erase(self, offset, size):
-        pass
+        for addr in range(offset & ~(self.cc.info.page_size - 1),
+                          offset + size,
+                          self.cc.info.page_size):
+            self.logger.debug("Erasing page at 0x%05x", offset)
+            self.cc.flash_page_erase(addr)
 
     def write(self, offset, data):
+        self.logger.debug("Writing page at 0x%05x", offset)
         self.cc.flash_write(offset, data)
 
     def read(self, offset, size):
+        self.logger.debug("Reading %d bytes at 0x%05x", size, offset)
         start = offset & ~(self.cc.info.page_size - 1)
         data = b""
         for addr in range(start, offset + size, self.cc.info.page_size):
             c = self.cc.cmd_flash_read(addr, self.cc.info.page_size)
             self.cc.port.execute([c])
             data += c.data
-        return data[offset - start :][:size]
+        return data[offset - start : offset - start + size]
 
 class CCRam(memory.Ram):
     def __init__(self, cc):
@@ -53,5 +59,5 @@ class CCFlashTarget(model.Target, memory.Loadable):
             pages = program.within(self.flash.address, self.flash.address + self.flash.size)
 
             for page in pages.paged(self.flash.page_size, fill = b'\xff'):
-                print(page, len(page.data))
+                self.flash.erase(page.address - self.flash.address, self.flash.page_size)
                 self.flash.write(page.address - self.flash.address, page.data)

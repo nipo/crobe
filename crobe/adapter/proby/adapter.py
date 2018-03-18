@@ -10,7 +10,7 @@ from ...util.pretty import metric
 from ...model import PortComponent
 from ...component.arm import dp
 from ..protocol import base as pbase
-from ..protocol import swd, i2c
+from ..protocol import swd, i2c, chipcon
 import threading
 import struct
 
@@ -282,7 +282,7 @@ class I2cInterface(i2c.Interface):
     REG_BASE_FREQ = 1
 
     def __init__(self, adapter, mux):
-        swd.Interface.__init__(self, adapter, adapter.name)
+        i2c.Interface.__init__(self, adapter, adapter.name)
         self.mux = RoutedPath(mux, 0xf)
 #        self.base_freq = int.from_bytes(
 #            self.mux.execute(self.CONFIG_CID, struct.pack("<B", 0x80 | self.REG_BASE_FREQ), 5)[1:],
@@ -361,7 +361,7 @@ class I2cInterface(i2c.Interface):
                     cmd += cur.data[offset : offset + size]
 
             else:
-                raise base.ProtocolError("Unknown SWD operation %s" % type(op))
+                raise base.ProtocolError("Unknown I2C operation %s" % type(op))
 
             prev = cur
 
@@ -380,6 +380,116 @@ class I2cInterface(i2c.Interface):
         for s in starts:
             if not rsp[s]:
                 raise i2c.AddressNack()
+
+class CcInterface(chipcon.Interface):
+    CMD_CMD          = staticmethod(lambda out_count, in_count, wait: (in_count | ((out_count - 1) << 2)) | (int(bool(wait)) << 4))
+    CMD_ACQUIRE      = 0x20
+    CMD_RESET        = 0x21
+    CMD_WAIT         = staticmethod(lambda d: (0x40 | d))
+    CMD_DIV          = staticmethod(lambda d: (0xc0 | (0x3f & (d-1))))
+
+    CC_PORT_CID = 0
+    CONFIG_CID = 1
+    
+    REG_SRST = 0
+    REG_BASE_FREQ = 1
+
+    def __init__(self, adapter, mux):
+        chipcon.Interface.__init__(self, adapter, adapter.name)
+        self.mux = RoutedPath(mux, 0xf)
+        self.base_freq = int.from_bytes(
+            self.mux.execute(self.CONFIG_CID, struct.pack("<B", 0x80 | self.REG_BASE_FREQ), 5)[1:],
+            byteorder = 'little')
+
+        self.logger.info("Found CC proby with internal clock of %s", metric(self.base_freq, "Hz"))
+        self.__reset = False
+        self.__div = 4
+
+    @property
+    def reset(self):
+        return self.__reset
+
+    @reset.setter
+    def reset(self, value):
+        if self.__reset == bool(value):
+            return
+
+        if self.__reset and not value:
+            self.logger.info("toggling reset pin")
+            cmds = bytes([self.CMD_DIV(0x40), self.CMD_RESET])
+            self.mux.execute(self.CC_PORT_CID, cmds, 2)
+
+        self.__reset = bool(value)
+        
+    @property
+    def freq(self):
+        return self.base_freq / self.__div / 2
+
+    @freq.setter
+    def freq(self, freq):
+        if not freq:
+            freq = self.base_freq
+        self.__div = min(0x40, max(1, int(self.base_freq / float(freq) / 2)))
+        self.logger.info("Divisor now %d", self.__div)
+
+    def _execute(self, operation_list):
+        ops = list(operation_list)
+
+        commands = []
+        response_lengths = []
+        for op in ops:
+            if isinstance(op, chipcon.DebugInit):
+                commands.append(bytes([self.CMD_DIV(0x40), self.CMD_ACQUIRE,
+                                       self.CMD_WAIT(0x3f), self.CMD_DIV(self.__div)]))
+                response_lengths.append(4)
+
+            elif isinstance(op, chipcon.Command):
+                commands.append(bytes([self.CMD_CMD(len(op.command), op.rlen, op.should_wait)])
+                                + op.command)
+                op.__offset = sum(response_lengths) + 1
+                response_lengths.append(op.rlen + 1)
+
+            elif isinstance(op, chipcon.BurstWrite):
+                assert 1 <= len(op.data) <= 2048
+                c = (len(op.data) & 0x2ff) | 0x8000
+                blob = c.to_bytes(2, "big") + bytes(op.data)
+                for off in range(0, len(blob), 4):
+                    last = off + 4 >= len(blob)
+                    chunk = blob[off : off + 4]
+                    commands.append(bytes([self.CMD_CMD(len(chunk), int(last), last)]
+                                          + list(chunk)))
+                    response_lengths.append(1 + int(last))
+
+            elif isinstance(op, chipcon.Wait):
+                cycles = op.cycles * 2 // 64
+                commands.append(bytes([self.CMD_DIV(64)]))
+                response_lengths.append(1)
+                while cycles:
+                    taken = min(0x40, cycles)
+                    commands.append(bytes([self.CMD_WAIT(taken - 1)]))
+                    response_lengths.append(1)
+                    cycles -= taken
+                commands.append(bytes([self.CMD_DIV(self.__div)]))
+                response_lengths.append(1)
+
+            else:
+                raise base.ProtocolError("Unknown CC operation %s" % type(op))
+
+        rsp = b''
+        cmd = b''
+        rsp_len = 0
+        for i, (c, r) in enumerate(zip(commands, response_lengths)):
+            cmd += c
+            rsp_len += r
+
+            if len(cmd) > 2000 or rsp_len > 2000 or i == len(commands) - 1:
+                rsp += self.mux.execute(self.CC_PORT_CID, cmd, rsp_len)
+                cmd = b''
+                rsp_len = 0
+
+        for op in ops:
+            if isinstance(op, chipcon.Command):
+                op.data = rsp[op.__offset:op.__offset + op.rlen]
 
 class ProbyAdapter(basic.Adapter):
     base_path = os.path.join(os.path.dirname(__file__), "fw")
@@ -437,13 +547,6 @@ class ProbyAdapter(basic.Adapter):
                                 oe_pin = 5,
                                 gpio_output = 0x063b, gpio_value = 0x0610)
 
-        elif interface_name == "cc":
-            self.reprogram("jtag_swd_raw")
-            return basic.Adapter.open(self, "cc", channel = "A",
-                                resetn_pin = 8,
-                                oe_pin = 5,
-                                gpio_output = 0x063b, gpio_value = 0x0610)
-
         elif interface_name == "swd":
             self.reprogram("swd_dp")
 
@@ -463,6 +566,16 @@ class ProbyAdapter(basic.Adapter):
             mux.reset()
 
             return I2cInterface(self, mux)
+
+        elif interface_name == "cc":
+            self.reprogram("cc_master")
+
+            fifo = self.device.open(interface = "A", mode = "ft245_sync_fifo")
+
+            mux = MsgMux(fifo)
+            mux.reset()
+
+            return CcInterface(self, mux)
 
         else:
             raise ValueError("Unknown interface name: %s" % interface_name)

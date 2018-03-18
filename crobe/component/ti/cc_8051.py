@@ -1,6 +1,7 @@
 from ...adapter.protocol import chipcon
 from ...model import PortComponent
 import binascii
+import struct
 
 class ChipconInfo:
     def __init__(self, name, id, page_size, word_size):
@@ -18,9 +19,9 @@ chips = [
     ChipconInfo("CC2530", 0xa5, 2048, 4),
     ChipconInfo("CC2531", 0xb5, 2048, 4),
     ChipconInfo("CC2533", 0x95, 1024, 4),
-    ChipconInfo("CC2543", 0x43, 1024, 0),
-    ChipconInfo("CC2544", 0x44, 1024, 0),
-    ChipconInfo("CC2545", 0x45, 1024, 0),
+    ChipconInfo("CC2543", 0x43, 1024, 4),
+    ChipconInfo("CC2544", 0x44, 1024, 4),
+    ChipconInfo("CC2545", 0x45, 1024, 4),
     ChipconInfo("CC2540", 0x8d, 2048, 4),
     ]
 
@@ -80,15 +81,76 @@ class CC_8051(PortComponent):
     def cmd_mass_erase(self):
         return MassErase()
 
+    def flash_page_erase(self, page_address):
+        assert (page_address % self.info.page_size) == 0
+        self.port.execute([
+            self.port.cmd_clk_init(),
+            self.port.cmd_halt(),
+            self.port.cmd_xdata_write(self.FADDR_ADDR, struct.pack("<H", page_address // self.info.word_size)),
+            self.port.cmd_xdata_write(self.FCTL_ADDR, b"\x01"),
+            ])
+        while self.xdata_read(self.FCTL_ADDR) & 0x80:
+            pass
+
     def flash_write(self, page_address, data):
         assert len(data) == self.info.page_size, (len(data), self.info.page_size)
         assert (page_address % self.info.page_size) == 0
-        self.port.halt()
-        self.logger.info("Uploading data")
-        c = FlashWrite(page_address, data, self.info)
-        self.port.execute([c])
-        self.logger.info("Waiting for CPU")
-        self.port.wait_halted()
+        self.port.execute([
+            self.port.cmd_clk_init(),
+            self.port.cmd_halt(),
+            ])
+
+        self.port.execute([
+            self.port.cmd_write_config(0x22),
+            self.port.cmd_xdata_write(self.DMA_DESC_ADDR,
+                                      self._dma_desc(self.DBGDATA_ADDR,
+                                                     self.BUFFER_ADDR,
+                                                     self.info.page_size,
+                                                     self.TRIGGER_DBG_BW,
+                                                     self.INC_DST)),
+            self.port.cmd_data_write(self.DMA_DESC0_PTR_SFR, struct.pack("<L", self.DMA_DESC_ADDR)),
+            self.port.cmd_data_write(self.DMA_ARM_SFR, bytes([1 << 0])),
+            self.port.cmd_burst_write(data),
+            ])
+
+        self.port.execute([
+            self.port.cmd_xdata_write(self.DMA_DESC_ADDR + 8,
+                                      self._dma_desc(self.BUFFER_ADDR,
+                                                     self.FWDATA_ADDR,
+                                                     self.info.page_size,
+                                                     self.TRIGGER_FLASH,
+                                                     self.INC_SRC)),
+            self.port.cmd_data_write(self.DMA_DESC1_PTR_SFR, struct.pack("<L", self.DMA_DESC_ADDR + 8)),
+            self.port.cmd_xdata_write(self.FADDR_ADDR, struct.pack("<H", page_address // self.info.word_size)),
+            self.port.cmd_data_write(self.DMA_ARM_SFR, bytes([1 << 1])),
+            self.port.cmd_xdata_write(self.FCTL_ADDR, b"\x06"),
+            ])
+
+        while self.xdata_read(self.FCTL_ADDR) & 0x80:
+            pass
+
+    BUFFER_ADDR = 0x0300
+    DMA_DESC_ADDR = 0x0200
+
+    DBGDATA_ADDR = 0x6260
+
+    FCTL_ADDR = 0x6270
+    FADDR_ADDR = 0x6271 # LE
+    FWDATA_ADDR = 0x6273
+
+    DMA_DESC0_PTR_SFR = 0xd4 # LE
+    DMA_DESC1_PTR_SFR = 0xd2 # LE
+    DMA_IRQ_SFR = 0xd1
+    DMA_ARM_SFR = 0xd6
+
+    TRIGGER_DBG_BW = 31
+    TRIGGER_FLASH = 18
+    INC_SRC = 0x42
+    INC_DST = 0x11
+
+    @staticmethod
+    def _dma_desc(src, dst, size, trigger, inc):
+        return struct.pack(">HHHBB", src, dst, size, trigger, inc)
 
     def cmd_flash_read(self, address, size):
         return self.port.cmd_code_read(address, size)
@@ -98,74 +160,22 @@ class CC_8051(PortComponent):
         self.port.execute([c])
         return c.data[0]
 
-class FlashWrite(chipcon.ComposedOperation):
-    def __init__(self, address, data, info):
-        self.address = address
-        self.data = data
-        self.info = info
-
-    def decompose(self, port):
-        routine = self.loader_code(self.address)
-        ret = [port.cmd_sfr_write(0xc7, 0x04)]
-        ret += port.cmd_xdata_write(0x1000, routine).decompose(port)
-        ret += port.cmd_xdata_write(0x1000 + self.info.page_size, self.data).decompose(port)
-        ret += [port.cmd_debug_instr(bytes([0x75, 0xc7, 0x51]), False),
-                port.cmd_set_pc(0x9000 + self.info.page_size),
-                port.cmd_resume(),
-                ]
-        return ret
-
-    def done(self, ops):
-        pass
-
-    def __str__(self):
-        return "<FlashWrite 0x%x %s>" % (self.address, binascii.b2a_hex(self.data))
-
-    def loader_code(self, address):
-        page = ((address >> 8) // self.info.word_size) & 0x7E
-        wcount = self.info.page_size // self.info.word_size
-
-        return bytes([
-            0x75, 0xAD, page,       #     MOV FADDRH, #imm;
-            0x75, 0xAC, 0x00,       #     MOV FADDRL, #00;
-            0x75, 0xAE, 0x01,       #     MOV FLC, #01H; // ERASE
-                                    #     ; Wait for flash erase to complete
-                                    # eraseWaitLoop:
-            0xE5, 0xAE,             #     MOV A, FLC;
-            0x20, 0xE7, 0xFB,       #     JB ACC_BUSY, eraseWaitLoop;
-                                    #     ; Initialize the data pointer
-            0x90, 0xF0, 0x00,       #     MOV DPTR, #0F000H;
-                                    #     ; Outer loops
-            0x7F, wcount >> 8,      #     MOV R7, #imm;
-            0x7E, wcount & 0xff,    #     MOV R6, #imm;
-            0x75, 0xAE, 0x02,       #     MOV FLC, #02H; // WRITE
-                                    #         ; Inner loops
-                                    # writeLoop:
-            0x7D, self.info.word_size, #  MOV R5, #imm;
-                                    # writeWordLoop:
-            0xE0,                   #             MOVX A, @DPTR;
-            0xA3,                   #             INC DPTR;
-            0xF5, 0xAF,             #             MOV FWDATA, A;
-            0xDD, 0xFA,             #         DJNZ R5, writeWordLoop;
-                                    #         ; Wait for completion
-                                    # writeWaitLoop:
-            0xE5, 0xAE,             #         MOV A, FLC;
-            0x20, 0xE6, 0xFB,       #         JB ACC_SWBSY, writeWaitLoop;
-            0xDE, 0xF1,             #     DJNZ R6, writeLoop;
-            0xDF, 0xEF,             #     DJNZ R7, writeLoop;
-                                    #     ; Done, fake a breakpoint
-            0xA5                    #     DB 0xA5;
-        ])                                           
-
 class MassErase(chipcon.ComposedOperation):
     def __init__(self):
         pass
 
     def decompose(self, port):
         return [
+            port.cmd_halt(),
             port.cmd_debug_instr(bytes([0x00]), False),
             port.command(bytes([chipcon.Command.CHIP_ERASE])),
             port.cmd_delay(20e-3),
+            port.cmd_debug_init(),
+            port.cmd_get_chip_id(),
+            port.cmd_debug_init(),
+            port.cmd_write_config(0x22),
+            ]+port.cmd_clk_init().decompose(port)+[
+            port.cmd_halt(),
             ]
 
     def done(self, ops):
