@@ -1,6 +1,7 @@
 from . import base
 from ... import bitstring
 from enum import IntEnum
+from ...db import Db, NoMatch
 
 __all__ = ["Interface"]
 
@@ -17,6 +18,8 @@ class Interface(base.Interface):
     """
     I2C protocol interface.
     """
+
+    db = Db()
 
     def __init__(self, port, name = None):
         base.Interface.__init__(self, port, (name or port.name) + "/I2C")
@@ -75,6 +78,14 @@ class Interface(base.Interface):
         :param int data: Value to write
         """
         return Write(addr, data)
+
+    def child_spawn(self, sub):
+        try:
+            r = self.db.call(sub, self)
+            self.child_add(r)
+            return r
+        except NoMatch:
+            return
     
 class Operation(object):
     def __repr__(self):

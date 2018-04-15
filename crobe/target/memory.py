@@ -3,7 +3,7 @@ from .. import model
 from enum import Enum
 from ..util.pretty import base2
 
-__all__ = ["Region", "Flash", "NandFlash", "NorFlash", "Ram", "Peripheral", "Loadable", "Flag", "Type"]
+__all__ = ["Region", "Flash", "NandFlash", "NorFlash", "Eeprom", "Ram", "Peripheral", "Loadable", "Flag", "Type"]
 
 class Flag(Enum):
     WRITABLE      = 1
@@ -18,7 +18,8 @@ class Flag(Enum):
 class Type(Enum):
     RAM = 0
     FLASH = 1
-    REGS = 2
+    EEPROM = 2
+    REGS = 3
 
 class Region(model.Component):
     flags = set()
@@ -84,6 +85,45 @@ class Flash(Region):
     
     def __str__(self):
         return "%s, %s pages" % (Region.__str__(self), base2(self.page_size, "B"))
+
+class Eeprom(Region):
+    type = Type.EEPROM
+    flags = set([Flag.PARTIAL_READ,
+                 Flag.PARTIAL_WRITE,
+                 Flag.WRITABLE])
+
+    def __init__(self, name, address, size):
+        Region.__init__(self, name, address, size)
+
+    @property
+    def is_blank(self):
+        return False
+
+    @is_blank.setter
+    def is_blank(self, blank = True):
+        pass
+
+    def erase(self, offset, size):
+        pass
+
+    def write(self, offset, data):
+        raise NotImplementedError()
+
+    def read(self, offset, size):
+        raise NotImplementedError()
+
+    def verify(self, program):
+        for s in program:
+            self.logger.debug("Checking range 0x%08x-0x%08x", s.address, s.address + len(s))
+            flash_data = self.read(s.address - self.address, len(s))
+            diffs = 0
+            for orig, found in zip(s.data, flash_data):
+                diffs += int(orig != found)
+
+            if diffs:
+                self.logger.error("Comparison for %s failed: %d/%d bytes differ", s, diffs, len(s))
+                return False
+        return True
 
 class NandFlash(Flash):
     flags = Flash.flags | set([Flag.ERASE_ONE])
