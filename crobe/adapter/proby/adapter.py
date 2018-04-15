@@ -322,6 +322,8 @@ class I2cInterface(i2c.Interface):
         ops = list(operation_list)
         cmd = [self.CMD_DIV | self.__div]
         rsp_size = 1
+        rsp_total_size = 0
+        rsp = b''
         starts = []
 
         prev = None
@@ -332,7 +334,7 @@ class I2cInterface(i2c.Interface):
                 cmd.append(self.CMD_START)
                 rsp_size += 1
                 cmd += [self.CMD_WRITE | 0, (cur.addr << 1) | int(isinstance(cur, i2c.Read))]
-                starts.append(rsp_size)
+                starts.append(rsp_total_size + rsp_size)
                 rsp_size += 1
 
             last = not next or (isinstance(cur, i2c.Read) != isinstance(next, i2c.Read))
@@ -342,39 +344,60 @@ class I2cInterface(i2c.Interface):
                 for offset in range(0, cur.size, 0x40):
                     last_offset = cur.size - 0x40 <= offset
                     size = min(cur.size - offset, 0x40)
-                    cur.__rsp.append((rsp_size, rsp_size + size))
+                    cur.__rsp.append((rsp_total_size + rsp_size,
+                                      rsp_total_size + rsp_size + size))
                     rsp_size += size
 
                     if last and last_offset:
                         cmd.append(self.CMD_READ_NACK | (size - 1))
                     else:
                         cmd.append(self.CMD_READ_ACK | (size - 1))
+
+                    if len(cmd) > 1000 or rsp_size > 1000:
+                        rsp += self.mux.execute(self.I2C_PORT_CID, bytes(cmd), rsp_size)
+                        cmd = []
+                        rsp_total_size += rsp_size
+                        rsp_size = 0
+
         
             elif isinstance(cur, i2c.Write):
                 cur.__rsp = []
                 for offset in range(0, len(cur.data), 0x40):
                     size = min(len(cur.data) - offset, 0x40)
-                    cur.__rsp.append((rsp_size, rsp_size + size))
+                    cur.__rsp.append((rsp_total_size + rsp_size,
+                                      rsp_total_size + rsp_size + size))
                     rsp_size += size
 
                     cmd.append(self.CMD_WRITE | (size - 1))
                     cmd += cur.data[offset : offset + size]
+
+                    if len(cmd) > 1000 or rsp_size > 1000:
+                        rsp += self.mux.execute(self.I2C_PORT_CID, bytes(cmd), rsp_size)
+                        cmd = []
+                        rsp_total_size += rsp_size
+                        rsp_size = 0
 
             else:
                 raise base.ProtocolError("Unknown I2C operation %s" % type(op))
 
             prev = cur
 
+            if len(cmd) > 1000 or rsp_size > 1000:
+                rsp += self.mux.execute(self.I2C_PORT_CID, bytes(cmd), rsp_size)
+                cmd = []
+                rsp_total_size += rsp_size
+                rsp_size = 0
+
         cmd.append(self.CMD_STOP)
         rsp_size += 1
 
-        rsp = self.mux.execute(self.I2C_PORT_CID, bytes(cmd), rsp_size)
+        rsp += self.mux.execute(self.I2C_PORT_CID, bytes(cmd), rsp_size)
 
         for op in ops:
             data = b''.join(rsp[start:end] for (start, end) in op.__rsp)
             if isinstance(op, i2c.Read):
                 op.data = data
-            elif not all(op.data[:-1]):
+            elif not all(data[:-1]):
                 raise i2c.DataNack()
 
         for s in starts:
