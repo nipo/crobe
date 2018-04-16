@@ -102,7 +102,8 @@ class Component(object):
             crit = crit[: index]
             
         if not crit and not invocation:
-            self.start()
+            if not self.__started:
+                self.start()
             return self
 
         if not self.__started:
