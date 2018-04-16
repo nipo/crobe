@@ -4,7 +4,7 @@ import re
 __doc__ = """Serial Vector Format parser."""
 
 class SvfLexer:
-    splitter = re.compile(r'([ \(\);!]|//)')
+    splitter = re.compile(r'([\t \(\);!]|//)')
     def __init__(self, filename):
         try:
             fd.read
@@ -18,7 +18,7 @@ class SvfLexer:
             tokens = self.splitter.split(line)
 
             for t in tokens:
-                if not t or t  == " ":
+                if not t or t  == " " or t == "\t":
                     continue
 
                 if t in ("//", "!"):
@@ -73,13 +73,15 @@ class ShiftIr(Shift): pass
 
 class RunTest(SvfStatement):
     def __init__(self, run_state = None, run_count = None, run_clock = None,
-                 min_time = None, max_time = None, end_state = None):
+                 min_time = None, max_time = None, end_state = None,
+                 tck = None):
         self.run_state = run_state
         self.run_count = run_count
         self.run_clock = run_clock
         self.min_time = min_time
         self.max_time = max_time
         self.end_state = end_state
+        self.tck = tck
 
 class SvfParser:
     STABLE_STATES = ("reset", "irpause", "drpause", "idle")
@@ -189,6 +191,13 @@ class SvfParser:
             args["run_state"] = n
             n = next(self.lex).lower()
         spec = next(self.lex).lower()
+
+        if spec == "tck":
+            args["tck"] = int(n)
+            n = next(self.lex).lower()
+            if n == ";":
+                return RunTest(**args)
+            spec = next(self.lex).lower()
 
         if spec == "sec":
             args["min_time"] = float(n)
