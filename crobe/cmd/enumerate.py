@@ -15,6 +15,9 @@ def main():
     args = Tool("Target enumerator")
 
     component_dump(Enumerator.singleton)
+    print(" Roots")
+    for r in args.roots:
+        print("  ", r)
     component_dump(args.field)
 
     if args.cpuid:

@@ -137,7 +137,8 @@ class Field(Root):
         from ..adapter.model import Enumerator
 
         self.field = Field()
-        self.field.discover(Enumerator.singleton)
+        for r in self.roots:
+            self.field.discover(r)
 
 class Target(Field):
     expected_target = None
