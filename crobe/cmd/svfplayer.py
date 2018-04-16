@@ -1,8 +1,8 @@
 def main():
     from . import base
-    from ..svf.player import Player
+    from ..svf.player import ChainPlayer
     from ..svf.svf import SvfParser
-    from ..adapter.protocol.jtag import Interface
+    from ..adapter.protocol.jtag import Interface, Chain
 
     class Tool(base.Root, base.File):
         pass
@@ -10,9 +10,18 @@ def main():
     args = Tool("SVF player")
 
     svf = SvfParser(args.file)
-    player = Player(svf, args.roots[0])
+    root = args.roots[0]
 
-    player.run()
+    if isinstance(root, Interface):
+        root = root.children[0]
+
+    if isinstance(root, Chain):
+        player = ChainPlayer(root)
+    else:
+        print("Root %s is not a JTAG chain" % root)
+        return
+
+    player.run(svf)
 
 if __name__ == '__main__':
     main()

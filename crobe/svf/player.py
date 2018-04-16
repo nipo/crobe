@@ -1,4 +1,6 @@
 from . import svf
+from ..bitstring import BitString
+import warnings
 
 class Context:
     def __init__(self):
@@ -34,19 +36,20 @@ class Context:
             self.smask = None
 
 class Player:
-    def __init__(self, svf, intf):
-        self.svf = svf
-        self.intf = intf
+    def run(self, svf):
+        for op in svf:
+            self.handle(op)
+        self.flush()
+
+class ChainPlayer(Player):
+    def __init__(self, chain):
+        self.intf = chain.port
 
         self.ir = Context()
         self.dr = Context()
-        self.pending = [intf.cmd_tap_reset(), intf.cmd_run(0)]
+        self.pending = [self.intf.cmd_tap_reset(),
+                        self.intf.cmd_run(0)]
         self.state = "idle"
-
-    def run(self):
-        for op in self.svf:
-            self.handle(op)
-        self.flush()
 
     def handle(self, op):
         if isinstance(op, svf.TrailerDr):
@@ -76,10 +79,7 @@ class Player:
         elif isinstance(op, svf.EndIr):
             self.ir.end_state = op.end_state
         elif isinstance(op, svf.RunTest):
-            self.test_run(run_state = op.run_state,
-                          run_count = op.run_count,
-                          run_clock = op.run_clock,
-                          end_state = op.end_state)
+            self.test_run(op)
         elif isinstance(op, svf.Frequency):
             self.freq(op.value)
         else:
@@ -102,9 +102,11 @@ class Player:
             self.flush()
 
             tdo = int(op.tdo)
+            ctdo = int(ctx.tdo)
             if ctx.mask:
                 tdo &= int(ctx.mask)
-            if tdo != int(ctx.tdo) & int(ctx.mask):
+                ctdo &= int(ctx.mask)
+            if tdo != ctdo:
                 raise ValueError("Expected TDO:%r/%r, had %r" % (ctx.tdo, ctx.mask, op.tdo))
 
         self.move_to(ctx.end_state)
@@ -113,11 +115,18 @@ class Player:
         self.intf.execute(self.pending)
         self.pending = []
 
-    def test_run(self, run_state, run_count, run_clock, end_state):
-        self.move_to(run_state)
-        if run_state == "idle" or not run_state:
-            self.pending.append(self.intf.cmd_run(run_count))
-        self.move_to(end_state)
+    def test_run(self, op):
+        self.move_to(op.run_state)
+        if op.run_state == "idle" or not op.run_state:
+            clocks = [0]
+            if op.run_count:
+                clocks.append(op.run_count)
+            if op.tck:
+                clocks.append(op.tck)
+            if op.min_time:
+                clocks.append(self.freq * op.min_time)
+            self.pending.append(self.intf.cmd_run(max(clocks)))
+        self.move_to(op.end_state)
 
     def move_to(self, state):
         if state == self.state:
@@ -157,4 +166,4 @@ class Player:
 
     def freq(self, f):
         self.flush()
-        self.intf.freq = f
+        self.tap.port.freq_cap("svf", f)
