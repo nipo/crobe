@@ -495,7 +495,7 @@ class Tap(PortComponent):
         
         for c in cmds:
             if isinstance(c, TapDrShift):
-                if self.ir != c.ir or c.read_ir:
+                if c.ir and (self.ir != c.ir or c.read_ir):
                     c.__op = Shift(BitString(c.ir, ir_len), read_tdo = c.read_ir)
                     ops += [CaptureIr(),
                             Shift(BitString(-1, ir_pre)),
