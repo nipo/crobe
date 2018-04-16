@@ -17,6 +17,8 @@ class Dbg(CoresightComponent):
         self.logger.info("AFR: 0x%08x", self.afr)
         self.logger.info("MMFR: %s", ', '.join(["0x%08x" % x for x in self.mmfr]))
         self.logger.info("ISAR: %s", ', '.join(["0x%08x" % x for x in self.isar]))
+        self.logger.info("DEVID: 0x%08x", self.devid)
+        self.logger.info("DIDR: 0x%08x", self.didr)
 
     def __cpuid_read(self):
         cmds = []
@@ -25,6 +27,8 @@ class Dbg(CoresightComponent):
         cmds += [self.cmd_reg_read(self.ID_AFR)]
         cmds += [self.cmd_reg_read(self.ID_MMFR(i)) for i in range(4)]
         cmds += [self.cmd_reg_read(self.ID_ISAR(i)) for i in range(5)]
+        cmds += [self.cmd_reg_read(self.DEVID)]
+        cmds += [self.cmd_reg_read(self.DIDR)]
         self.bus.execute(cmds)
 
         self.pfr = [op.data for op in cmds[0:2]]
@@ -35,6 +39,8 @@ class Dbg(CoresightComponent):
         self.mvfr = [0] * 3
         self.clidr = 0
         self.ccsidr = 0
+        self.devid = cmds[13].data
+        self.didr = cmds[14].data
 
     # Processor Feature Registers
     ID_PFR = staticmethod(lambda x: 0xd20 + 4 * x)
@@ -50,3 +56,24 @@ class Dbg(CoresightComponent):
     CCSIDR  = 0xd80
     CSSELR  = 0xd84
 
+    # Debug Identification Registers
+    DEVID = 0xFC8
+    DEVID1 = 0xFC4
+    DEVID2 = 0xFC0
+    DIDR = 0x000
+
+    # Debug Control and Status Registers
+    DRCR = 0x090
+    DSCR = 0x088
+    EACR = 0x094
+    PRCR = 0x310
+    PRSR = 0x314
+    WFAR = 0x018
+
+    # Software Debug Event Registers
+    BCR = staticmethod(lambda x: 0x140 + 4 * x)
+    BVR = staticmethod(lambda x: 0x100 + 4 * x)
+    VCR = 0x01C
+    WCR = staticmethod(lambda x: 0x1c0 + 4 * x)
+    WVR = staticmethod(lambda x: 0x180 + 4 * x)
+    BXVR = staticmethod(lambda x: 0x240 + 4 * x)
