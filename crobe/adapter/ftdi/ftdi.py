@@ -269,7 +269,7 @@ class Handle(Context):
         self.check(api.set_eeprom_value(self.context, id, value))
 
     def write(self, blob):
-        self.logger.debug("<< %s", binascii.b2a_hex(blob))
+        #self.logger.debug("<< %s", binascii.b2a_hex(blob))
         raw = (ctypes.c_ubyte * len(blob)).from_buffer_copy(blob)
         self.check(api.write_data(self.context, raw, len(blob)))
 
@@ -297,7 +297,7 @@ class Handle(Context):
             retries -= 1
             if not retries:
                 raise base.CommunicationError("Failed to read all data")
-        self.logger.debug(">> %s", binascii.b2a_hex(ret))
+        #self.logger.debug(">> %s", binascii.b2a_hex(ret))
         return ret
     
     def execute(self, blob, rsize = 0):

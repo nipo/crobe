@@ -503,9 +503,6 @@ class SwdInterface(BaseInterface, swd.Interface):
         tdo = 0
         tdo_len = 0
 
-        if len(bs) > 1:
-            print(bs)
-
         for bytec, bits in bs:
             if bits is None:
                 v = int.from_bytes(rsp[base : base + bytec], byteorder = 'little')
