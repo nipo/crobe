@@ -14,14 +14,14 @@ entity i2c_master is
     io_en: out std_ulogic;
     jtag_en: out std_ulogic;
 
---    dbg_spare: in std_logic;
---    dbg_srst: inout std_logic;
---    dbg_rtck: in std_logic;
---    dbg_tck: inout std_logic;
---    dbg_tms: inout std_logic;
---    dbg_tdi: out std_logic;
---    dbg_tdo: in std_logic;
---    dbg_trst: inout std_logic;
+    dbg_spare: in std_logic;
+    dbg_srst: inout std_logic;
+    dbg_rtck: in std_logic;
+    dbg_tck: inout std_logic;
+    dbg_tms: inout std_logic;
+    dbg_tdi: out std_logic;
+    dbg_tdo: in std_logic;
+    dbg_trst: inout std_logic;
     io1: inout std_logic_vector(23 downto 0);
 
     fifo_data: inout std_logic_vector(7 downto 0);
@@ -54,9 +54,12 @@ architecture arch of i2c_master is
   signal s_config_write: std_ulogic_vector(1 downto 0);
   signal s_status: nsl.cs.cs_reg_array(1 downto 0);
 
-  constant sys_clk_mhz : natural := 1;
+  constant sys_clk_mhz : natural := 4;
 
   component clk_gen
+    generic(
+      sys_clk_mhz : natural
+      );
     port(
       p_clk_12        : in  std_ulogic;
       p_resetn        : in  std_ulogic;
@@ -70,6 +73,9 @@ begin
   s_resetn_soft_async <= s_sys_resetn and not s_invalid_input and user_btn;
 
   sys_clk_gen: clk_gen
+    generic map(
+      sys_clk_mhz => sys_clk_mhz
+      )
     port map(
       p_clk_12 => clk,
       p_resetn => user_btn,
@@ -300,8 +306,8 @@ begin
     end if;
   end process;
   
-  s_status(0)(0) <= '0';--dbg_srst;
-  s_status(1) <= std_ulogic_vector(to_unsigned(sys_clk_mhz * 1000000, s_status(1)'length)); -- s_sys_clk
+  s_status(0)(0) <= dbg_srst;
+  s_status(1) <= std_ulogic_vector(to_unsigned(sys_clk_mhz * 1000000, s_status(1)'length));
   s_srst <= s_io_config(0);
 
   monitor: util.activity.activity_monitor
@@ -311,20 +317,19 @@ begin
     port map(
       p_resetn => s_sys_resetn_soft,
       p_clk => s_sys_clk,
-      p_togglable => s_scl_drain,--dbg_tms,
+      p_togglable => s_scl_drain,
       p_activity => user_led
       );
   
---  dbg_trst <= 'Z';
---  dbg_tdi <= 'L';
---  dbg_tms <= '0' when s_sda_drain = '1' else 'Z';
---  dbg_tck <= '0' when s_scl_drain = '1' else 'Z';
---  dbg_srst <= '0' when s_srst = '1' else 'Z';
---  sda_pu: unisim.vcomponents.pullup port map (o => dbg_tms);
---  scl_pu: unisim.vcomponents.pullup port map (o => dbg_tck);
+  dbg_trst <= 'H';
+  dbg_tdi <= 'L';
+  dbg_tms <= 'H';
+  dbg_tck <= 'H';
+  dbg_srst <= '0' when s_srst = '1' else 'Z';
 
   io1(0) <= '0' when s_scl_drain = '1' else 'Z';
   io1(1) <= '0' when s_sda_drain = '1' else 'Z';
+  io1(io1'left downto 2) <= (others => 'L');
   scl_pu: unisim.vcomponents.pullup port map (o => io1(0));
   sda_pu: unisim.vcomponents.pullup port map (o => io1(1));
   

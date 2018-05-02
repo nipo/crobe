@@ -284,16 +284,16 @@ class I2cInterface(i2c.Interface):
     def __init__(self, adapter, mux):
         i2c.Interface.__init__(self, adapter, adapter.name)
         self.mux = RoutedPath(mux, 0xf)
-#        self.base_freq = int.from_bytes(
-#            self.mux.execute(self.CONFIG_CID, struct.pack("<B", 0x80 | self.REG_BASE_FREQ), 5)[1:],
-#            byteorder = 'little')
+        self.base_freq = int.from_bytes(
+            self.mux.execute(self.CONFIG_CID, struct.pack("<B", 0x80 | self.REG_BASE_FREQ), 5)[1:],
+            byteorder = 'little')
 
-        self.base_freq = 1e6
+#        self.base_freq = 4e6
 
-#        self.logger.info("Found I2C proby with internal clock of %s", metric(self.base_freq, "Hz"))
-        self.freq_cap("hardware", 1e6)
+        self.logger.info("Found I2C proby with internal clock of %s", metric(self.base_freq, "Hz"))
         self.__reset = False
         self.__div = 4
+        self.freq_cap("hardware", 1e6)
 
     @property
     def reset(self):
@@ -393,16 +393,16 @@ class I2cInterface(i2c.Interface):
 
         rsp += self.mux.execute(self.I2C_PORT_CID, bytes(cmd), rsp_size)
 
+        for s in starts:
+            if not rsp[s]:
+                raise i2c.AddressNack()
+
         for op in ops:
             data = b''.join(rsp[start:end] for (start, end) in op.__rsp)
             if isinstance(op, i2c.Read):
                 op.data = data
             elif not all(data[:-1]):
                 raise i2c.DataNack()
-
-        for s in starts:
-            if not rsp[s]:
-                raise i2c.AddressNack()
 
 class CcInterface(chipcon.Interface):
     CMD_CMD          = staticmethod(lambda out_count, in_count, wait: (in_count | ((out_count - 1) << 2)) | (int(bool(wait)) << 4))

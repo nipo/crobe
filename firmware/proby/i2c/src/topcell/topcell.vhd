@@ -12,14 +12,14 @@ package topcell is
 
       io_en: out std_ulogic;
 
---      dbg_spare: in std_logic;
---      dbg_srst: inout std_logic;
---      dbg_rtck: in std_logic;
---      dbg_tck: inout std_logic;
---      dbg_tms: inout std_logic;
---      dbg_tdi: out std_logic;
---      dbg_tdo: in std_logic;
---      dbg_trst: inout std_logic;
+      dbg_spare: in std_logic;
+      dbg_srst: inout std_logic;
+      dbg_rtck: in std_logic;
+      dbg_tck: inout std_logic;
+      dbg_tms: inout std_logic;
+      dbg_tdi: out std_logic;
+      dbg_tdo: in std_logic;
+      dbg_trst: inout std_logic;
       io1: inout std_logic_vector(23 downto 0);
 
       fifo_data: inout std_logic_vector(7 downto 0);
