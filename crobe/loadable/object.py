@@ -1,3 +1,5 @@
+import warnings
+
 __all__ = ['Segment', 'Program']
 
 __doc__ = """Program memory"""
@@ -97,6 +99,8 @@ class Program:
 
     def pprint(self, out = print):
         out("Program:")
+        for k, v in sorted(self.info.items()):
+            out(" + %s: %s" % (k, v))
         for s in self.segments:
             out(" - %s" % s)
 
@@ -182,6 +186,59 @@ class Program:
 
     @classmethod
     def from_bit(cls, filename, offset = 0):
+        for handler in [
+            cls.from_xilinx_bit,
+            cls.from_lattice_bit,
+            ]:
+            try:
+                return handler(filename, offset)
+            except ValueError:
+                pass
+        raise ValueError("Not a known bitstream format")
+
+    @classmethod
+    def from_lattice_bit(cls, filename, offset = 0):
+        """Load a Program from an Lattice bit file"""
+        HEADER = b"\xff\x00Lattice Semiconductor Corporation Bitstream\x00"
+        HEADER_END = b"\x00\xff"
+        START = bytes([0xff, 0xff, 0xbd, 0xb3, 0xff, 0xff])
+        import struct
+        import datetime
+        
+        self = cls()
+
+        if filename.endswith(".bit.gz"):
+            import gzip
+            fd = gzip.open(filename, 'rb')
+        else:
+            fd = open(filename, 'rb')
+
+        blob = fd.read()
+        fd.close()
+
+        has_header = blob.startswith(HEADER)
+        start = blob.index(START)
+
+        if start > 1024:
+            raise ValueError("Start too far from file begin")
+
+        if has_header:
+            header_end = blob.index(HEADER_END)
+
+            for f in str(blob[len(HEADER) : header_end], "ascii").split("\x00"):
+                k, v = f.split(": ", 1)
+                self.info[k] = v
+            if start != header_end + 2:
+                warnings.warn("Something present between header and start of bitstream ??")
+                
+        else:
+            warnings.warn("Would prefer Lattice bitstream with ASCII header")
+
+        self.append(Segment(offset, blob[start:]))
+        return self
+
+    @classmethod
+    def from_xilinx_bit(cls, filename, offset = 0):
         """Load a Program from an Xilinx bit file"""
         HEADER = bytes([0x00, 0x09, 0x0f, 0xf0, 0x0f, 0xf0, 0x0f, 0xf0, 0x0f, 0xf0, 0x00, 0x00, 0x01])
         import struct
