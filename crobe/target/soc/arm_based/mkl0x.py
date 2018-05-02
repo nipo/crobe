@@ -3,6 +3,9 @@ from .soc import SoC, StubFlash, BusRam
 from ....component.nxp.mdm_ap import MdmAp
 from ....db import NoMatch
 from ....component.model import Cpu
+from ....component.nxp import mkl_bootloader
+from ...memory import Flash, Loadable
+from ... import model
 from ....util.pretty import base2
 import binascii
 import math
@@ -128,3 +131,45 @@ def kinetis_ducktyping(dp):
     except TypeError:
         raise NoMatch("Not a Kinetis")
     return MKL0x(dp)
+
+class BootloaderFlash(Flash):
+    def __init__(self, bl):
+        address, = bl.get_property(bl.PROPERTY_FLASH_START_ADDRESS)
+        size, = bl.get_property(bl.PROPERTY_FLASH_SIZE_IN_BYTES)
+        page_size, = bl.get_property(bl.PROPERTY_FLASH_SECTOR_SIZE)
+        Flash.__init__(self, "flash", address, size, page_size)
+        self.bl = bl
+
+    def erase(self, offset, size):
+        self.bl.command(self.bl.CMD_FLASH_ERASE_REGION, [offset, size])
+
+    def write(self, offset, data):
+        self.bl.mem_write(offset, data)
+
+@model.Target.register(mkl_bootloader.MklBootloader)
+class MklBootloaderTarget(model.Target, Loadable):
+    """
+    Kinetis bootloader target
+    """
+
+    def __init__(self, comp):
+        model.Target.__init__(self, "MKL: " + comp.name)
+        Loadable.__init__(self)
+        self.flash = BootloaderFlash(comp)
+        self.child_add(self.flash)
+        self.bl = comp
+        self.stack_addr = 0
+        self.entry_point = 0
+
+    def erase_all(self):
+        self.bl.command(self.bl.CMD_FLASH_ERASE_ALL_UNSECURE)
+
+    def write(self, program):
+        z = program.segment_at(0)
+        if z:
+            self.stack_addr = int.from_bytes(z[:4], 'little')
+            self.entry_point = int.from_bytes(z[4:8], 'little')
+        Loadable.write(self, program.paged(self.flash.page_size, fill = b'\xff'))
+
+    def reset(self):
+        self.bl.execute(self.entry_point, 0, self.stack_addr)
