@@ -60,8 +60,19 @@ class State(SvfStatement):
 class Shift(SvfStatement):
     def __init__(self, tdi = None, tdo = None, mask = None, smask = None):
         self.tdi = tdi
+
+        if mask and not int(mask):
+            tdo = None
+            mask = None
+
         self.tdo = tdo
-        self.mask = mask
+
+        if mask:
+            self.mask = mask
+        elif tdo:
+            self.mask = BitString(-1, len(tdo))
+        else:
+            self.mask = None
         self.smask = smask
 
 class TrailerDr(Shift): pass
@@ -126,7 +137,7 @@ class SvfParser:
     def handle_state(self):
         states = []
         while True:
-            st = next(self.lex)
+            st = next(self.lex).lower()
             if st == ";":
                 break
             states.append(st)

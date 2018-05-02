@@ -1,4 +1,5 @@
 from . import svf
+import binascii
 from ..bitstring import BitString
 import warnings
 
@@ -103,7 +104,7 @@ class ChainPlayer(Player):
 
             tdo = int(op.tdo)
             ctdo = int(ctx.tdo)
-            if ctx.mask:
+            if ctx.tdo:
                 tdo &= int(ctx.mask)
                 ctdo &= int(ctx.mask)
             if tdo != ctdo:
@@ -167,3 +168,116 @@ class ChainPlayer(Player):
     def freq(self, f):
         self.flush()
         self.tap.port.freq_cap("svf", f)
+
+class TapRegContext:
+    def __init__(self, player):
+        self.tdi = BitString()
+        self.tdo = BitString()
+        self.mask = BitString()
+        self.update = False
+        self.player = player
+
+    def shift(self, tdi, tdo, mask):
+        l = len(tdi or tdo)
+
+        self.tdi += tdi if tdi else BitString(0, l)
+        self.tdo += tdo if tdo else BitString(0, l)
+        self.mask += mask if mask else BitString(-1 if tdo else 0, l)
+        if self.update:
+            self.run()
+
+    def run(self):
+        if not self.tdi and not self.tdo:
+            return
+
+        rb = bool(int(self.mask))
+        cmd = self._cmd(rb)
+        self.player.pending.append(cmd)
+        if rb:
+            self.player.flush()
+
+            print("Expected :", str(binascii.b2a_hex(bytes(self.tdo)), "ascii"))
+            print("Actual   :", str(binascii.b2a_hex(bytes(cmd.tdo)), "ascii"))
+
+            tdo = int(cmd.tdo)
+            ctdo = int(self.tdo)
+            if self.mask:
+                tdo &= int(self.mask)
+                ctdo &= int(self.mask)
+            if tdo != ctdo:
+                raise ValueError(self.__class__.__name__ + " Expected TDO:%r/%r, had %r" % (self.tdo, self.mask, cmd.tdo))
+
+        self.tdi = BitString()
+        self.tdo = BitString()
+        self.mask = BitString()
+
+class TapIrContext(TapRegContext):
+    def _cmd(self, rb):
+        irlen = self.player.tap.irlen
+        tdi = self.tdi[-irlen:]
+        assert len(tdi) == irlen
+        return self.player.tap.cmd_dr_shift(int(tdi), None,
+                                            read_ir = rb,
+                                            return_type = (lambda x:BitString(x, irlen)) if rb else None)
+
+class TapDrContext(TapRegContext):
+    def _cmd(self, rb):
+        return self.player.tap.cmd_dr_shift(None,
+                                            self.tdi or None,
+                                            read_tdo = rb)
+
+class TapPlayer(Player):
+    def __init__(self, tap):
+        self.tap = tap
+
+        self.ir = TapIrContext(self)
+        self.dr = TapDrContext(self)
+        self.pending = [tap.cmd_run(0)]
+
+    def flush(self):
+        self.tap.execute(self.pending)
+        self.pending = []
+
+    def handle(self, op):
+        if isinstance(op, (svf.TrailerDr,
+                           svf.TrailerIr,
+                           svf.HeaderDr,
+                           svf.HeaderIr)):
+            pass
+        elif isinstance(op, svf.ShiftDr):
+            self.ir.run()
+            self.dr.shift(op.tdi, op.tdo, op.mask)
+        elif isinstance(op, svf.ShiftIr):
+            self.ir.run()
+            self.dr.run()
+            self.ir.shift(op.tdi, op.tdo, op.mask)
+        elif isinstance(op, svf.State):
+            if op.states == ["idle"]:
+                self.pending.append(self.tap.cmd_run(0))
+            else:
+                warnings.warn("State change ignored %s" % op.states)
+        elif isinstance(op, svf.Trst):
+            warnings.warn("Tap reset ignored")
+        elif isinstance(op, svf.EndDr):
+            self.dr.update = op.end_state != "drpause"
+        elif isinstance(op, svf.EndIr):
+            self.ir.update = op.end_state != "irpause"
+        elif isinstance(op, svf.RunTest):
+            self.test_run(op)
+        elif isinstance(op, svf.Frequency):
+            self.flush()
+            self.tap.port.port.freq_cap("svf", op.value)
+        else:
+            raise NotImplementedError("Unknown operation", op)
+
+    def test_run(self, op):
+        clocks = [0]
+        self.ir.run()
+        self.dr.run()
+        if op.run_count:
+            clocks.append(op.run_count)
+        if op.tck:
+            clocks.append(op.tck)
+        if op.min_time:
+            clocks.append(int(self.tap.port.port.freq * op.min_time))
+        self.pending.append(self.tap.cmd_run(max(clocks)))
