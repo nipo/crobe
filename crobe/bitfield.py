@@ -22,9 +22,12 @@ class Field:
         return (reg_value >> self.pos) & ((1 << self.width) - 1)
 
     def pretty(self, value):
-        return self.values.get(value, "0x%x (unknown)" % value)
+        try:
+            return self.values[value]
+        except KeyError:
+            return "0x%x (unknown)" % value
 
-    def __cmp__(self, other):
+    def __lt__(self, other):
         return cmp(self.pos, other.pos)
 
 class BinaryField(Field):
@@ -61,10 +64,14 @@ class Register:
         self.value = value
         
     def dump(self, output = print):
-        output(" %s" % self.name)
-        output("   0x%08x" % self.value)
-        for f in sorted(self.fields, key = lambda x:x.pos):
+        fields = list(sorted(self.fields, key = lambda x:x.pos))
+        w = fields[-1].pos + fields[-1].width
+        wx = (w + 3) // 4
+        output(" %s, %d bits" % (self.name, w))
+        output(" 0x%0*x" % (wx, self.value))
+        for f in fields:
             v = f.value(self.value)
-            output("   % 10s % 10s % 8d %s %s" % (
-                "%x" % (v << (f.pos % 4)) + " " * (f.pos // 4),
-                hex(v), v, f.name, f.pretty(v)))
+            output("   % *s % *s % 8d %s %s" % (
+                wx, "%0*x" % ((f.width + 3) // 4, v << (f.pos % 4)) + " " * (f.pos // 4),
+                wx, hex(v),
+                v, f.name, f.pretty(v)))
