@@ -5,6 +5,7 @@ from ..component.model import Cpu
 from ..util.pretty import metric
 from ..util.info import TimedLogger
 from ..target.memory import Loadable
+import binascii
 
 def main():
     from . import base
@@ -15,7 +16,8 @@ def main():
                                      help = "BBRAM key")
 
         def c25_check_parse(self, args):
-            self.key = int(args.key, 16)
+            self.key = binascii.a2b_hex(args.key.encode("ascii"))
+            assert len(self.key) == 32
 
     args = Tool("BBRAM key loader")
     assert isinstance(args.target, Loadable)
@@ -24,7 +26,8 @@ def main():
 
     args.target.component.bbram_open()
     args.target.component.bbram_key_write(args.key)
-    assert args.key == args.target.component.bbram_key_read()
+    rbkey = args.target.component.bbram_key_read()
+    assert args.key == rbkey
     args.target.component.bbram_close()
 
 if __name__ == '__main__':
