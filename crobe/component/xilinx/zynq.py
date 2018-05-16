@@ -2,6 +2,7 @@ from ...part_id import PartId
 from ...protocol import jtag
 import struct
 from ... import bitstring
+from ... import bitfield
 from ...util.endian import swib_u32
 import datetime
 import os, os.path
@@ -40,6 +41,7 @@ class Zynq(jtag.Tap):
     IR_XSC_DNA     = 0x17
     IR_PROGRAM_KEY = 0x12
     IR_FUSE_DNA    = 0x32
+    IR_FUSE_CTS    = 0x30
     IR_USER1       = 0x02
     IR_USER2       = 0x03
     IR_USER3       = 0x22
@@ -57,6 +59,78 @@ class Zynq(jtag.Tap):
     IR_STATUS_ISC_ENABLED = 0x08
     IR_STATUS_INIT        = 0x10
     IR_STATUS_DONE        = 0x20
+
+    CTS_MAGIC_WRITE = 0xfeed28ac
+    CTS_MAGIC_READ  = 0xa08a28ac
+
+    class Efuse0(bitfield.Register):
+        name = "Efuse0"
+        fields = [
+            bitfield.EnableField("Force PowerCycle Reconfig", 1),
+            bitfield.DisableField("Key write", 2),
+            bitfield.DisableField("AES Key read", 3),
+            bitfield.DisableField("User Key read", 4),
+            bitfield.DisableField("FUSE Control write", 5),
+            bitfield.DisableField("Unsup 0", 6),
+            bitfield.DisableField("Unsup 1", 7),
+            bitfield.EnableField("AES Only", 8),
+            bitfield.DisableField("JTAG", 9),
+            bitfield.DisableField("BBRAM Key", 8),
+            bitfield.EnableField("Force PowerCycle Reconfig (r)", 14+1),
+            bitfield.DisableField("Key write (r)", 14+2),
+            bitfield.DisableField("AES Key read (r)", 14+3),
+            bitfield.DisableField("User Key read (r)", 14+4),
+            bitfield.DisableField("FUSE Control write (r)", 14+5),
+            bitfield.DisableField("Unsup 0 (r)", 14+6),
+            bitfield.DisableField("Unsup 1 (r)", 14+7),
+            bitfield.EnableField("AES Only (r)", 14+8),
+            bitfield.DisableField("JTAG (r)", 14+9),
+            bitfield.DisableField("BBRAM Key (r)", 14+8),
+            ]
+
+    class Efuse5(bitfield.Register):
+        name = "Efuse5"
+        fields = [
+            bitfield.ValueField("DNA0", (8, 23)),
+            bitfield.ValueField("DNA0 Ecc", (24, 29)),
+            ]
+
+    class Efuse6(bitfield.Register):
+        name = "Efuse6"
+        fields = [
+            bitfield.ValueField("DNA1", (0, 23)),
+            bitfield.ValueField("DNA1 Ecc", (24, 29)),
+            ]
+        
+    class Efuse7(bitfield.Register):
+        name = "Efuse7"
+        fields = [
+            bitfield.ValueField("DNA2", (0, 23)),
+            bitfield.ValueField("DNA2 Ecc", (24, 29)),
+            ]
+
+    # Efuse 20-29: AES key (24 bit each + ECC)
+    # Efuse 30:    USER[0] || AES key (8 + 16 bit + ECC)
+    # Efuse 31:    USER[321] (24 bit + ECC)
+
+    @staticmethod
+    def efuse_ecc_update(value):
+        value &= 0xc0ffffff
+        for bit, mask in enumerate([0x03ff0f,
+                                    0x1c78ee,
+                                    0x64a6dd,
+                                    0xa915bb,
+                                    0xd20b77,
+                                    0x1fffffff]):
+            t = value & mask
+            mask ^= mask >> 16
+            mask ^= mask >> 8
+            mask ^= mask >> 4
+            mask ^= mask >> 2
+            mask ^= mask >> 1
+            mask &= 1
+            value |= mask << (24 + bit)
+        return value
 
     def __init__(self, port, index):
         jtag.Tap.__init__(self, port, index)
@@ -85,6 +159,36 @@ class Zynq(jtag.Tap):
         self.execute(ops)
 
         return ops[0].tdo
+
+    @classmethod
+    def cts_dr(cls, op = "read", row = 0, margin = 0, dma = 0, program = 1, bit = 0):
+        assert 0 <= margin <= 2
+        assert 0 <= row <= 0x1f
+        assert 0 <= bit <= 0x1f
+        assert op in ["read", "write"]
+
+        cmd = (cls.CTS_MAGIC_READ if op == "read" else cls.CTS_MAGIC_WRITE) << 32
+        cmd |= int(bool(program))
+        cmd |= int(bool(dma)) << 1
+        cmd |= row << 3
+        cmd |= bit << 8
+        cmd |= 1 << (13 + margin)
+        return cmd
+
+    def efuse_row_read(self, row, margin = 0):
+        cts = self.cts_dr(op = "read", row = row, margin = margin)
+
+        ops = [self.cmd_run(1),
+               self.cmd_dr_shift(self.IR_FUSE_CTS, cts, 64, read_tdo = False),
+               self.cmd_dr_shift(self.IR_FUSE_CTS, 0, 64, read_tdo = True),
+               self.cmd_run(1),
+               self.cmd_dr_shift(-1, None),
+               ]
+        self.execute(ops)
+
+        value = ops[2].tdo >> 32
+
+        return value
 
     def load(self, program, force_reload = False):
         if len(program) != 1:

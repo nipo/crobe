@@ -26,6 +26,25 @@ def bbram_key_set(roots, key):
 
     assert key == rbkey
 
+@xilinx.command(help = "EFUSE dumper")
+@base.roots()
+def efuse_dump(roots):
+    root = roots[0]
+    assert isinstance(root, zynq.Zynq)
+
+    root.bbram_open()
+    click.echo("Target: %s" % root)
+    for row in range(0x1f):
+        value = root.efuse_row_read(row)
+        try:
+            pretty = getattr(root, "Efuse%d" % row)
+            pretty(value).dump()
+        except AttributeError:
+            click.echo(" Efuse%d, 0x%08x" % (row, value))
+        
+    root.bbram_close()
+
+
 @xilinx.command(help = "Xilinx Virtual Cable server")
 @click.option("--port", type = int, default = 2542, help = "TCP port to bind")
 @base.roots()
