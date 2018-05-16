@@ -7,9 +7,9 @@ class SvfLexer:
     splitter = re.compile(r'([\t \(\);!]|//)')
     def __init__(self, filename):
         try:
-            fd.read
+            filename.read
             self.fd = filename
-        except Exception:
+        except Exception as e:
             self.fd = open(filename, "rb")
 
     def __iter__(self):

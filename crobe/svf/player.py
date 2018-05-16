@@ -48,7 +48,7 @@ class ChainPlayer(Player):
 
         self.ir = Context()
         self.dr = Context()
-        self.pending = [self.intf.cmd_tap_reset(),
+        self.pending = [self.intf.cmd_reset(1),
                         self.intf.cmd_run(0)]
         self.state = "idle"
 

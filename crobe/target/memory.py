@@ -2,6 +2,7 @@ from ..loadable.object import Program, Segment
 from .. import model
 from enum import Enum
 from ..util.pretty import base2
+import click
 
 __all__ = ["Region", "Flash", "NandFlash", "NorFlash", "Eeprom", "Ram", "Peripheral", "Loadable", "Flag", "Type"]
 
@@ -71,16 +72,17 @@ class Flash(Region):
         raise NotImplementedError()
 
     def verify(self, program):
-        for s in program.paged(self.page_size):
-            self.logger.debug("Checking range 0x%08x-0x%08x", s.address, s.address + len(s))
-            flash_data = self.read(s.address - self.address, len(s))
-            diffs = 0
-            for orig, found in zip(s.data, flash_data):
-                diffs += int(orig != found)
+        pages = program.paged(self.page_size)
+        with click.progressbar(pages, label = "Checking") as bar:
+            for s in bar:
+                flash_data = self.read(s.address - self.address, len(s))
+                diffs = 0
+                for orig, found in zip(s.data, flash_data):
+                    diffs += int(orig != found)
 
-            if diffs:
-                self.logger.error("Comparison for %s failed: %d/%d bytes differ", s, diffs, len(s))
-                return False
+                if diffs:
+                    self.logger.error("Comparison for %s failed: %d/%d bytes differ", s, diffs, len(s))
+                    return False
         return True
     
     def __str__(self):
@@ -186,8 +188,9 @@ class Loadable:
             if not blank:
                 r.erase(pages.address - r.address, pages.end - pages.address)
 
-            for p in pages:
-                r.write(p.address - r.address, p.data)
+            with click.progressbar(pages, label = "Writing %-8s" % r.name) as bar:
+                for p in bar:
+                    r.write(p.address - r.address, p.data)
 
     def verify(self, program):
         regions = self.children_of_class(Region)
