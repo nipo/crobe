@@ -10,12 +10,6 @@ __all__ = []
 class Adapter(basic.Adapter):
     supported_interfaces = ["jtag", "jtag-int"]
 
-    def __init__(self):
-        basic.AdapterEnumerator.__init__(self, "Lattice HW-USBN-2B",
-                                       short_name = "lat",
-                                       vid = 0x0403, pid = 0x6010,
-                                       channel = "A")
-
     def open(self, interface_name):
         if interface_name == "jtag-int":
             return basic.Adapter.open(self, "jtag", channel = "B")
