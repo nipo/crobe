@@ -4,7 +4,7 @@ from ....component.nxp.mdm_ap import MdmAp
 from ....db import NoMatch
 from ....component.model import Cpu
 from ....component.nxp import mkl_bootloader
-from ...memory import Flash, Loadable
+from ...memory import Flash, Loadable, Region
 from ... import model
 from ....util.pretty import base2
 import binascii
@@ -169,7 +169,37 @@ class MklBootloaderTarget(model.Target, Loadable):
         if z:
             self.stack_addr = int.from_bytes(z[:4], 'little')
             self.entry_point = int.from_bytes(z[4:8], 'little')
-        Loadable.write(self, program.paged(self.flash.page_size, fill = b'\xff'))
+        self._write(program)
+
+    def _write(self, program):
+        program = program.paged(self.flash.page_size, fill = b'\xff')
+        regions = self.children_of_class(Region)
+        for r in regions:
+            pages = program.within(r.address, r.address + r.size)
+
+            for p in pages:
+                self.page_write(r, p.address - r.address, p.data)
+
+    def page_write(self, region, offset, data):
+        for retry in range(6):
+            try:
+                region.erase(offset, len(data))
+                for part in range(4):
+                    for retry in range(6):
+                        try:
+                            region.write(offset + len(data)//4 * part, data[len(data)//4*part:len(data)//4*(part+1)])
+                        except Exception:
+                            if retry == 5:
+                                raise
+                            self.bl.abort()
+                            continue
+                        break
+            except Exception:
+                if retry == 5:
+                    raise
+                self.bl.abort()
+                continue
+            break
 
     def reset(self):
         self.bl.execute(self.entry_point, 0, self.stack_addr)
