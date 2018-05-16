@@ -301,7 +301,10 @@ class Handle(Context):
         return ret
     
     def execute(self, blob, rsize = 0):
-        self.write(blob)
+        try:
+            self.write(blob)
+        except FtdiError:
+            raise FtdiError("Write of %d bytes failed" % len(blob))
         if rsize:
             rsp = self.read(rsize)
             return rsp
