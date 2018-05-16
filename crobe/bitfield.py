@@ -66,7 +66,7 @@ class Register:
     def dump(self, output = print):
         fields = list(sorted(self.fields, key = lambda x:x.pos))
         w = fields[-1].pos + fields[-1].width
-        wx = (w + 3) // 4
+        wx = max((w + 3) // 4, len("%x"%self.value))
         output(" %s, %d bits" % (self.name, w))
         output(" 0x%0*x" % (wx, self.value))
         for f in fields:
