@@ -4,7 +4,7 @@ from ..target.soc.model import SoC
 from ..component.model import Cpu
 from ..util.pretty import metric
 from ..util.info import TimedLogger
-from ..target.memory import Loadable, Region, Flash
+from ..target.memory import Loadable, Region, Flash, Eeprom
 from ..loadable.object import Program, Segment
 
 def main():
@@ -22,6 +22,9 @@ def main():
     p = Program()
     for memory in args.target.children_of_class(Region):
         cs = 1024
+
+        if not isinstance(memory, (Flash, Eeprom)):
+            continue
 
         if isinstance(memory, Flash):
             cs = memory.page_size

@@ -2,6 +2,8 @@ import logging
 import struct
 from ..target.soc.model import SoC
 from ..component.model import Cpu
+from ..component.arm import dp, mem_ap
+from ..component.arm.coresight import fpb
 from ..util.pretty import metric
 from ..util.info import TimedLogger
 from ..target.memory import Loadable
@@ -43,7 +45,19 @@ def main():
                 return 1
 
     if args.run:
+        fpbs = args.roots[0].children_of_class(fpb.Fpb)
+        if fpbs:
+            fpbs[0].disable()
+        memap = args.roots[0].children_of_class(mem_ap.MemAp)
+        if memap:
+            memap[0].enable(False)
+        dps = args.roots[0].children_of_class(dp.Dp)
+        if dps:
+            dps[0].debug_enable(0)
+
         try:
+            args.target.reset()
+            args.target.reset()
             args.target.reset()
         except AttributeError:
             print("WARNING: Target does not handle reset")
@@ -51,6 +65,3 @@ def main():
 if __name__ == '__main__':
     import sys
     sys.exit(main())
-
-
-
