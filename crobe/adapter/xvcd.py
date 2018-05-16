@@ -1,5 +1,5 @@
 from . import model
-from .protocol import jtag, base
+from ..protocol import jtag, base
 from .. import bitstring
 import os
 import socket

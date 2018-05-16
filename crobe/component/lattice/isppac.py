@@ -1,5 +1,5 @@
 from ...part_id import PartId
-from ...adapter.protocol import jtag
+from ...protocol import jtag
 import struct
 from ... import bitstring
 

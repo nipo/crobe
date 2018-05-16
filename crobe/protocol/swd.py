@@ -1,7 +1,7 @@
 from . import base
-from ... import bitstring
-from ...db import Db
-from ...part_id import PartId
+from .. import bitstring
+from ..db import Db
+from ..part_id import PartId
 import time
 from enum import IntEnum
 

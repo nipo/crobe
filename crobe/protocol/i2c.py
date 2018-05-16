@@ -1,7 +1,7 @@
 from . import base
-from ... import bitstring
+from .. import bitstring
 from enum import IntEnum
-from ...db import Db, NoMatch
+from ..db import Db, NoMatch
 
 __all__ = ["Interface"]
 

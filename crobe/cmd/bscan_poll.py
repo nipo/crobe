@@ -1,4 +1,4 @@
-from ..adapter.protocol import jtag
+from ..protocol import jtag
 from ..bscan.dumper import Dumper
 
 def main():

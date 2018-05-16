@@ -1,6 +1,6 @@
 from ..model import PortComponent
 from ..db import Db, NoMatch
-from ..adapter.protocol import spi
+from ..protocol import spi
 from ..util.pretty import base2, metric
 import binascii
 import struct

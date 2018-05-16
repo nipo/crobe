@@ -2,7 +2,7 @@ from ..util.pretty import metric
 
 def main():
     from . import base
-    from ..adapter.protocol.jtag import Interface
+    from ..protocol.jtag import Interface
     from ..xvcd.server import XvcdServer
 
     class Tool(base.Root):

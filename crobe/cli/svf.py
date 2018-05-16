@@ -13,7 +13,7 @@ def svf():
 def play(roots, file):
     from ..svf.player import ChainPlayer, TapPlayer
     from ..svf.svf import SvfParser
-    from ..adapter.protocol.jtag import Interface, Chain, Tap
+    from ..protocol.jtag import Interface, Chain, Tap
 
     svf = SvfParser(file)
     root = roots[0]

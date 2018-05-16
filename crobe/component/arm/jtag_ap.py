@@ -2,7 +2,7 @@ from ...part_id import PartId
 from . import ap, dp
 from ... import bitfield
 from ...bitstring import BitString
-from ...adapter.protocol import jtag
+from ...protocol import jtag
 import struct
 
 __all__ = ["JtagAp"]

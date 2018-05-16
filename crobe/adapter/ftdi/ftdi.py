@@ -1,7 +1,7 @@
 from . import api
 from ...bitstring import BitString
 from ... import model
-from ..protocol import base, jtag
+from ...protocol import base, jtag
 from collections import deque
 import ctypes
 import struct

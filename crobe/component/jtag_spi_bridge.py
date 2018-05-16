@@ -1,4 +1,4 @@
-from ..adapter.protocol import spi
+from ..protocol import spi
 import binascii
 
 __all__ = ["JtagSpiBridge"]

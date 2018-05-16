@@ -1,7 +1,7 @@
 from .. import model
 import operator
 import functools
-from ..adapter.protocol import swd, jtag
+from ..protocol import swd, jtag
 
 class Explorer(object):
     def __init__(self, func, component_types, precedence):

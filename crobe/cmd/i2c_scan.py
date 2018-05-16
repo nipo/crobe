@@ -1,6 +1,6 @@
 def main():
     from . import base
-    from ..adapter.protocol.i2c import Interface, AddressNack
+    from ..protocol.i2c import Interface, AddressNack
 
     class Tool(base.Root):
         def c80_range_declare(self):

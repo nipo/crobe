@@ -2,7 +2,7 @@ def main():
     from . import base
     from ..svf.player import ChainPlayer, TapPlayer
     from ..svf.svf import SvfParser
-    from ..adapter.protocol.jtag import Interface, Chain, Tap
+    from ..protocol.jtag import Interface, Chain, Tap
 
     class Tool(base.Root, base.File):
         pass

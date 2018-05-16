@@ -1,6 +1,6 @@
 from . import model
 from collections import deque
-from .protocol import swd, jtag, base, spi
+from ..protocol import swd, jtag, base, spi
 from .. import bitstring
 from ..util.pretty import metric
 from ..util.endian import bitswap8

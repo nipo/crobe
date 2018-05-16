@@ -1,5 +1,5 @@
-from ... import model
-from ...util.pretty import metric, sci_parse
+from .. import model
+from ..util.pretty import metric, sci_parse
 import threading
 import time
 

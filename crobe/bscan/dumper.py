@@ -1,6 +1,6 @@
 from ..bitstring import BitString
 from ..bsdl.cache import Cache
-from ..adapter.protocol import jtag
+from ..protocol import jtag
 import time
 import logging
 

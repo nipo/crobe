@@ -1,4 +1,4 @@
-from ...adapter.protocol import swd
+from ...protocol import swd
 from ...part_id import PartId
 from . import dp
 from collections import deque

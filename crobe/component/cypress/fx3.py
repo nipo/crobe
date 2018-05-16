@@ -1,5 +1,5 @@
 from ...part_id import PartId
-from ...adapter.protocol import jtag
+from ...protocol import jtag
 
 @jtag.Tap.db.register(PartId(0, 0x34, 0x7926))
 class FX3(jtag.Tap):

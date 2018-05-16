@@ -1,5 +1,5 @@
 from ...part_id import PartId
-from ...adapter.protocol import jtag
+from ...protocol import jtag
 from ... import bitfield
 from ...util.endian import bitswap8
 import struct

@@ -1,4 +1,4 @@
-from ...adapter.protocol import chipcon
+from ...protocol import chipcon
 from ...model import PortComponent
 import binascii
 import struct

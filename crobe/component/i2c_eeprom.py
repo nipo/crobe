@@ -1,5 +1,5 @@
 from ..model import PortComponent
-from ..adapter.protocol import i2c
+from ..protocol import i2c
 import binascii
 
 __all__ = ["I2cEeprom"]

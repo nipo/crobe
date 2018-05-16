@@ -1,5 +1,5 @@
 from . import base
-from ...db import Db
+from ..db import Db
 import binascii
 
 __all__ = ["Interface"]

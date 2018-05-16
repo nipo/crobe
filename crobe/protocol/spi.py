@@ -1,8 +1,8 @@
 from . import base
-from ...model import PortComponent
-from ... import bitstring
-from ...db import Db, NoMatch
-from ...part_id import PartId
+from ..model import PortComponent
+from .. import bitstring
+from ..db import Db, NoMatch
+from ..part_id import PartId
 import time
 from enum import IntEnum
 

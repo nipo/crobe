@@ -9,8 +9,8 @@ from collections import deque, defaultdict
 from ...util.pretty import metric
 from ...model import PortComponent
 from ...component.arm import dp
-from ..protocol import base as pbase
-from ..protocol import swd, i2c, chipcon
+from ...protocol import base as pbase
+from ...protocol import swd, i2c, chipcon
 import threading
 import struct
 

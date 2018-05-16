@@ -1,9 +1,9 @@
 from . import base
-from ...model import PortComponent
-from ...bitstring import BitString
-from ...db import Db, NoMatch
-from ...util import pretty
-from ...part_id import PartId
+from ..model import PortComponent
+from ..bitstring import BitString
+from ..db import Db, NoMatch
+from ..util import pretty
+from ..part_id import PartId
 import math
 import time
 

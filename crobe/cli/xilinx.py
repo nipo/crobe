@@ -30,7 +30,7 @@ def bbram_key_set(roots, key):
 @click.option("--port", type = int, default = 2542, help = "TCP port to bind")
 @base.roots()
 def vcd_server(roots, port):
-    from ..adapter.protocol.jtag import Interface
+    from ..protocol.jtag import Interface
     from ..xvcd.server import XvcdServer
     from ..util.pretty import metric
 
