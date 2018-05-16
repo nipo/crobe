@@ -65,8 +65,13 @@ class Interface(base.Interface):
         self.turnaround_cycles = 1
 
     def line_reset(self):
-        ops = [self.cmd_wakeup(), self.cmd_jtag_to_swd(),
-               self.cmd_wakeup(), self.cmd_run(10),
+        ops = [self.cmd_wakeup(), self.cmd_wakeup(),
+               self.cmd_wakeup(), self.cmd_wakeup(),
+               self.cmd_wakeup(), self.cmd_jtag_to_swd(),
+               self.cmd_wakeup(), self.cmd_jtag_to_swd(),
+               self.cmd_wakeup(), self.cmd_wakeup(),
+               self.cmd_wakeup(), self.cmd_wakeup(),
+               self.cmd_run(200),
                self.cmd_read(False, self.IDCODE)]
         self.execute(ops)
         return ops[-1].data
