@@ -26,6 +26,19 @@ class Interface(model.PortComponent):
             self.reset = False
             return
 
+        if opt.startswith("reset="):
+            self.reset = True
+            w = float(sci_parse(opt[6:]))
+            time.sleep(w)
+            self.reset = False
+            return
+
+        if opt.startswith("wait="):
+            w = float(sci_parse(opt[5:]))
+            self.logger.debug("Waiting %fs", w)
+            time.sleep(float(w))
+            return
+
         if opt.startswith("fmax="):
             self.freq_cap("user", sci_parse(opt[5:]))
             return
