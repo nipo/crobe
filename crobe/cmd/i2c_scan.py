@@ -19,8 +19,8 @@ def main():
         def c80_range_parse(self, args):
             first = int(args.first, 16)
             last = int(args.last, 16)
-            addresses = map(lambda x: int(x, 16), args.addr or [])
-            self.addresses = addresses or range(first, last + 1)
+            addresses = list(map(lambda x: int(x, 16), args.addr or []))
+            self.addresses = addresses or list(range(first, last + 1))
 
     args = Tool("I2C Scanner")
 
