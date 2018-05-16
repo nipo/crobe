@@ -310,13 +310,13 @@ class I2cInterface(i2c.Interface):
         
     @property
     def freq(self):
-        return self.base_freq / self.__div / 2
+        return self.base_freq / self.__div / 4
 
     @freq.setter
     def freq(self, freq):
         if not freq:
             freq = 1e6
-        self.__div = min(0x1f, max(4, int(self.base_freq / float(freq) / 2)))
+        self.__div = min(0x1f, max(2, int(self.base_freq / float(freq * 4))))
 
     def _execute(self, operation_list):
         ops = list(operation_list)

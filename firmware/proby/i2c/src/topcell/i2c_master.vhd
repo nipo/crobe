@@ -22,7 +22,8 @@ entity i2c_master is
     dbg_tdi: out std_logic;
     dbg_tdo: in std_logic;
     dbg_trst: inout std_logic;
-    io1: inout std_logic_vector(23 downto 0);
+    scl: inout std_logic;
+    sda: inout std_logic;
 
     fifo_data: inout std_logic_vector(7 downto 0);
     fifo_rxfn: in std_ulogic;
@@ -195,10 +196,8 @@ begin
       p_rsp_val => s_i2c_rsp.req,
       p_rsp_ack => s_i2c_rsp.ack,
       
---      p_scl => dbg_tck,
---      p_sda => dbg_tms,
-      p_scl => io1(0),
-      p_sda => io1(1),
+      p_scl => scl,
+      p_sda => sda,
       p_scl_drain => s_scl_drain,
       p_sda_drain => s_sda_drain
       );
@@ -327,11 +326,8 @@ begin
   dbg_tck <= 'H';
   dbg_srst <= '0' when s_srst = '1' else 'Z';
 
-  io1(0) <= '0' when s_scl_drain = '1' else 'Z';
-  io1(1) <= '0' when s_sda_drain = '1' else 'Z';
-  io1(io1'left downto 2) <= (others => 'L');
-  scl_pu: unisim.vcomponents.pullup port map (o => io1(0));
-  sda_pu: unisim.vcomponents.pullup port map (o => io1(1));
+  scl <= '0' when s_scl_drain = '1' else 'Z';
+  sda <= '0' when s_sda_drain = '1' else 'Z';
   
   io_en <= s_sys_resetn;
   jtag_en <= '0';
