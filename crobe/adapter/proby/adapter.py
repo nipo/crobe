@@ -516,7 +516,7 @@ class CcInterface(chipcon.Interface):
 
 class ProbyAdapter(basic.Adapter):
     base_path = os.path.join(os.path.dirname(__file__), "fw")
-    supported_interfaces = ["swd", "swd-pt", "jtag", "jtag-int", "spi", "cc"]
+    supported_interfaces = ["swd", "swd-pt", "jtag", "jtag-int", "spi", "cc", "i2c"]
     
     def reprogram(self, mode):
         """
