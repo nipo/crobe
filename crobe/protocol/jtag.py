@@ -187,6 +187,9 @@ class Run(Operation):
 class OpenChain(Exception):
     pass
 
+class ClosedChain(Exception):
+    pass
+
 class Chain(PortComponent):
     """
     JTAG Chain abstraction, handles discovery of the chain and instanciation of TAPs.
@@ -262,7 +265,7 @@ class Chain(PortComponent):
         self.port.run(1)
 
         self.port.capture_dr()
-        default_dr = BitString()
+        default_dr = self.port.shift(BitString(3, 32))
         dr = True
         while dr:
             dr = self.port.shift(BitString(0, 32))
@@ -270,7 +273,12 @@ class Chain(PortComponent):
             dr = int(dr)
             if len(default_dr) > 500:
                 raise OpenChain()
+
+        total_dr_length = int(math.log(int(default_dr), 2)) - 1
             
+        if total_dr_length == 0:
+            raise ClosedChain()
+
         # Get default IR
         self.port.capture_ir()
 
