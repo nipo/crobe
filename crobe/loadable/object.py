@@ -1,4 +1,5 @@
 import warnings
+import click
 
 __all__ = ['Segment', 'Program']
 
@@ -320,7 +321,10 @@ class Program:
 
     def save_bin(self, filename):
         fd = open(filename, "wb")
+        self.bin_dump(fd)
+        fd.close()
 
+    def bin_dump(self, fd):
         begin = self.address
         end = self.end
 
@@ -329,7 +333,6 @@ class Program:
             blob = blob[: s.address - begin] + s.data + blob[s.address - begin + len(s):]
 
         fd.write(blob)
-        fd.close()
 
     def save_hex(self, filename):
         from .ihex import IHex
@@ -341,7 +344,20 @@ class Program:
 
         f.write_file(filename)
 
+@click.group()
+def cli():
+    pass
+
+@cli.command(help = "Dump file parsing results")
+@click.argument("program", type = click.Path(exists = True, dir_okay = False))
+def dump(program):
+    Program.from_file(program).pprint()
+
+@cli.command(help = "Convert to binary")
+@click.argument("program", type = click.Path(exists = True, dir_okay = False))
+@click.argument("bin", type = click.File("wb"))
+def to_bin(program, bin):
+    Program.from_file(program).bin_dump(bin)
+
 if __name__ == "__main__":
-    import sys
-    
-    Program.from_file(sys.argv[1]).pprint()
+    cli.main()
