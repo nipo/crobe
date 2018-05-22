@@ -63,6 +63,8 @@ def field(ctx):
     field = Field()
     for r in ctx.params["roots"]:
         field.discover(r)
+    for t in field.children:
+        t.start()
     return field
 
 def _program_parse(ctx, param, value):

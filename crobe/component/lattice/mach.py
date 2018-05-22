@@ -315,11 +315,13 @@ class MachXO2(jtag.Tap):
         self.config_memory_size = self.info.row_count * self.info.col_bit_count // 8
         self.flash_size = (self.info.flash_page_count + self.info.ufm_page_count) * 16
 
+    def start(self):
         self.uid = self.dr_shift(self.IR_LSC_UIDCODE_PUB, 0, 64)
         self.logger.info("UID: 0x%08x", self.uid)
 
         self.Status(self.status).dump(self.logger.info)
         self.Feature(self.feature).dump(self.logger.info)
+        jtag.Tap.start(self)
 
     def stop(self):
 
