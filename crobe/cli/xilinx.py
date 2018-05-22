@@ -2,6 +2,7 @@ from . import base
 import click
 from ..component.xilinx import zynq
 import binascii
+import time
 
 @base.cli.group(help = "Xilinx-specific")
 def xilinx():
@@ -44,6 +45,16 @@ def efuse_dump(roots):
         
     root.bbram_close()
 
+@xilinx.command(help = "XADC Temperature monitor")
+@base.roots()
+def xadc_temp(roots):
+    z = roots[0]
+    assert isinstance(z, zynq.Zynq)
+
+    z.xadc_init_defaults()
+    while True:
+        print("Temperature: %3.2f°C" % z.xadc_temperature_read(), end = "\r")
+        time.sleep(.1)
 
 @xilinx.command(help = "Xilinx Virtual Cable server")
 @click.option("--port", type = int, default = 2542, help = "TCP port to bind")
