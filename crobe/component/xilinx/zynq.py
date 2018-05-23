@@ -42,6 +42,9 @@ class Zynq(jtag.Tap):
     IR_PROGRAM_KEY = 0x12
     IR_FUSE_DNA    = 0x32
     IR_FUSE_CTS    = 0x30
+    IR_FUSE_USER   = 0x33
+    IR_FUSE_KEY    = 0x31
+    IR_FUSE_CNTL   = 0x34
     IR_USER1       = 0x02
     IR_USER2       = 0x03
     IR_USER3       = 0x22
@@ -60,8 +63,11 @@ class Zynq(jtag.Tap):
     IR_STATUS_INIT        = 0x10
     IR_STATUS_DONE        = 0x20
 
-    CTS_MAGIC_WRITE = 0xfeed28ac
-    CTS_MAGIC_READ  = 0xa08a28ac
+    CTS_MAGIC = dict(
+        op1 = 0xa08a28ac,
+        op2 = 0xfeed28ac,
+        nop = 0,
+        )
 
     class Efuse0(bitfield.Register):
         name = "Efuse0"
@@ -87,6 +93,10 @@ class Zynq(jtag.Tap):
             bitfield.DisableField("ARM JTAG (r)", 14+9),
             bitfield.DisableField("BBRAM Key (r)", 14+10),
             ]
+
+    FUSE_CFG_KEY_PROTECT_WRITE = 2
+    FUSE_CFG_KEY_PROTECT_READ = 3
+    FUSE_CFG_USER_PROTECT_READ = 4
 
     class Efuse5(bitfield.Register):
         name = "Efuse5"
@@ -123,13 +133,13 @@ class Zynq(jtag.Tap):
                                     0xd20b77,
                                     0x1fffffff]):
             t = value & mask
-            mask ^= mask >> 16
-            mask ^= mask >> 8
-            mask ^= mask >> 4
-            mask ^= mask >> 2
-            mask ^= mask >> 1
-            mask &= 1
-            value |= mask << (24 + bit)
+            t ^= t >> 16
+            t ^= t >> 8
+            t ^= t >> 4
+            t ^= t >> 2
+            t ^= t >> 1
+            t &= 1
+            value |= t << (24 + bit)
         return value
 
     def __init__(self, port, index):
@@ -161,13 +171,12 @@ class Zynq(jtag.Tap):
         return ops[0].tdo
 
     @classmethod
-    def cts_dr(cls, op = "read", row = 0, margin = 0, dma = 0, program = 1, bit = 0):
+    def cts_dr(cls, op = "op1", row = 0, margin = 0, dma = 0, program = 1, bit = 0):
         assert 0 <= margin <= 2
         assert 0 <= row <= 0x1f
         assert 0 <= bit <= 0x1f
-        assert op in ["read", "write"]
 
-        cmd = (cls.CTS_MAGIC_READ if op == "read" else cls.CTS_MAGIC_WRITE) << 32
+        cmd = cls.CTS_MAGIC[op] << 32
         cmd |= int(bool(program))
         cmd |= int(bool(dma)) << 1
         cmd |= row << 3
@@ -176,19 +185,44 @@ class Zynq(jtag.Tap):
         return cmd
 
     def efuse_row_read(self, row, margin = 0):
-        cts = self.cts_dr(op = "read", row = row, margin = margin)
+        cts = self.cts_dr(op = "op1", row = row, margin = margin)
 
-        ops = [self.cmd_run(1),
+        ops = [self.cmd_run(50),
                self.cmd_dr_shift(self.IR_FUSE_CTS, cts, 64, read_tdo = False),
+               self.cmd_run(12),
                self.cmd_dr_shift(self.IR_FUSE_CTS, 0, 64, read_tdo = True),
                self.cmd_run(1),
                self.cmd_dr_shift(-1, None),
                ]
         self.execute(ops)
 
-        value = ops[2].tdo >> 32
+        value = ops[3].tdo >> 32
 
         return value
+
+    def cmd_efuse_bit_set(self, row, bit):
+        cts = self.cts_dr(op = "op1", row = row, bit = bit, margin = 1, dma = 1)
+
+        return [self.cmd_run(12),
+                self.cmd_dr_shift(self.IR_FUSE_CTS, cts, 64, read_tdo = False),
+                self.cmd_run(12*50),
+                self.cmd_dr_shift(self.IR_FUSE_CTS, 0, 64, read_tdo = False),
+                self.cmd_run(12),
+                ]
+
+    def efuse_cfg_set(self, bit):
+        self.execute(self.cmd_efuse_bit_set(0, bit)
+                     + self.cmd_efuse_bit_set(0, 14 + bit))
+
+    def efuse_bit_set(self, row, bit):
+        self.execute(self.cmd_efuse_bit_set(row, bit))
+
+    def cmd_efuse_row_set(self, row, value):
+        ret = []
+        for i in range(32):
+            if (value >> i) & 1:
+                ret += self.cmd_efuse_bit_set(row, i)
+        return ret
 
     def load(self, program, force_reload = False):
         if len(program) != 1:
@@ -297,6 +331,26 @@ class Zynq(jtag.Tap):
             parts.append(part)
 
         return struct.pack(">8L", *parts)
+
+    def efuse_key_write(self, key):
+        key = int.from_bytes(key, "big")
+        cmds = []
+        for i in range(11):
+            chunk = (key >> (24 * i)) & 0xffffff
+            data = self.efuse_ecc_update(chunk)
+            cmds += self.cmd_efuse_row_set(20 + i, data)
+        self.execute(cmds)
+
+    def efuse_key_read(self):
+        ret = 0
+        for i in range(11):
+            row = self.efuse_row_read(20 + i)
+            if self.efuse_ecc_update(row) != row:
+                row = 0
+            row &= 0xffffff
+            ret |= row << (24 * i)
+        ret &= (1 << 256) - 1
+        return ret.to_bytes(32, "big")
 
     def bbram_key_write(self, key):
         parts = struct.unpack(">8L", key)

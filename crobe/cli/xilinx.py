@@ -27,6 +27,39 @@ def bbram_key_set(roots, key):
 
     assert key == rbkey
 
+@xilinx.command(help = "Efuse key setter")
+@base.roots()
+@click.argument("key", type = str, default = "")
+@click.option("--protect", is_flag = True)
+def efuse_key_set(roots, key, protect):
+    root = roots[0]
+    assert isinstance(root, zynq.Zynq)
+
+    click.echo("Target: %s" % root)
+
+    if key:
+        root.bbram_open()
+        key = binascii.a2b_hex(key.encode("ascii"))
+        assert len(key) == 32
+        root.efuse_key_write(key)
+        root.bbram_close()
+
+        root.bbram_open()
+        rbkey = root.efuse_key_read()
+        root.bbram_close()
+        if key != rbkey:
+            x = bytes([a^b for (a,b) in zip(key, rbkey)])
+            print("Differencies at readback:", binascii.b2a_hex(x))
+            if protect:
+                print("Not protecting key")
+            return 1
+
+    if protect:
+        root.bbram_open()
+        root.efuse_cfg_set(root.FUSE_CFG_KEY_PROTECT_WRITE)
+        root.efuse_cfg_set(root.FUSE_CFG_KEY_PROTECT_READ)
+        root.bbram_close()
+
 @xilinx.command(help = "EFUSE dumper")
 @base.roots()
 def efuse_dump(roots):
@@ -41,7 +74,9 @@ def efuse_dump(roots):
             pretty = getattr(root, "Efuse%d" % row)
             pretty(value).dump()
         except AttributeError:
-            click.echo(" Efuse%d, 0x%08x" % (row, value))
+            click.echo(" Efuse%d, 0x%08x%s" % (row, value, "" if root.efuse_ecc_update(value) == value else " ECC Fail"))
+    rbkey = root.efuse_key_read()
+    print("Key:", binascii.b2a_hex(rbkey))
         
     root.bbram_close()
 
