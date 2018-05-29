@@ -1,6 +1,6 @@
 from . import base
 import click
-from ..component.xilinx import zynq
+from ..component.xilinx import zynq, series67
 import binascii
 import time
 
@@ -26,6 +26,18 @@ def bbram_key_set(roots, key):
     root.bbram_close()
 
     assert key == rbkey
+
+@xilinx.command(help = "Info dumper")
+@base.roots()
+def info(roots):
+    root = roots[0]
+    assert isinstance(root, series67.Series67)
+
+    if root.done:
+        click.echo("Device is running, not accessing config port")
+        return
+
+    root.cfg_status_dump()
 
 @xilinx.command(help = "Efuse key setter")
 @base.roots()

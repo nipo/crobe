@@ -34,6 +34,9 @@ class Fpga(model.Target, memory.Loadable):
         self.child_add(Config(comp))
         self.component = comp
 
+    def write(self, program):
+        self.component.load(program)
+
 class MachFlash(memory.Region):
     type = memory.Type.FLASH
     flags = set([memory.Flag.WRITABLE])
