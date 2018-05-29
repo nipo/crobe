@@ -6,3 +6,4 @@ from . import memory
 from . import chip
 from . import bscan
 from . import svf
+from . import pin

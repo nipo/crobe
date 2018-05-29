@@ -2,6 +2,7 @@ from ....part_id import PartId
 from .soc import SoC, StubFlash, BusRam
 from ....component.nordic.ctrl_ap import CtrlAp
 from ....component.model import Cpu
+from ... import pin_control
 import binascii
 import math
 import struct
@@ -27,12 +28,23 @@ class UicrFlash(StubFlash):
             pass
         self.bus.u32_write(nRF5.NVMC_CONFIG, nRF5.NVMC_CONFIG_REN)
         
-class nRF5(SoC):
+class nRF5(SoC, pin_control.Controller):
     def __init__(self, name, dp):
         SoC.__init__(self, name, dp)
         self.flash_probe()
         self.ram_probe()
         self.id_probe()
+
+        self.gpio_map = {}
+        if self.GPIO_COUNT <= 32:
+            for i in range(self.GPIO_COUNT):
+                self.gpio_map["P%02d" % i] = 0, i
+        else:
+            for i in range(32):
+                self.gpio_map["P0.%02d" % i] = 0, i
+            for i in range(self.GPIO_COUNT - 32):
+                self.gpio_map["P1.%02d" % i] = 1, i
+
 
         self.logger.info("MCU UID: %016x", self.uid)
         self.logger.info("BLE Address: %s %s",
@@ -94,15 +106,77 @@ class nRF5(SoC):
     FICR_RAMINFO = 0x10000034
     FICR_CONFIGID = 0x1000005c
 
-    GPIO_PIN_CNF = staticmethod(lambda x: 0x50000700 + x * 4)
-    GPIO_PIN_CNF_DIR_OUTPUT       = 0x01
-    GPIO_PIN_CNF_INPUT_DISCONNECT = 0x02
-    GPIO_PIN_CNF_PULL_DOWN        = 0x04
-    GPIO_PIN_CNF_PULL_UP          = 0x0c
+    GPIO_PIN_CNF = staticmethod(lambda b, p: 0x50000700 + b * 0x300 + p * 4)
+    GPIO_PIN_CNF_DIR_OUTPUT       = 0x001
+    GPIO_PIN_CNF_INPUT_DISCONNECT = 0x002
+    GPIO_PIN_CNF_PULL_DOWN        = 0x004
+    GPIO_PIN_CNF_PULL_UP          = 0x00c
     GPIO_PIN_CNF_DRIVE_S0S1       = 0x000
     GPIO_PIN_CNF_DRIVE_H0H1       = 0x300
+    GPIO_PIN_CNF_DRIVE_D0S1       = 0x400
+    GPIO_PIN_CNF_DRIVE_S0D1       = 0x600
+    GPIO_OUT    = staticmethod(lambda b: 0x50000504 + b * 0x300)
+    GPIO_OUTSET = staticmethod(lambda b: 0x50000508 + b * 0x300)
+    GPIO_OUTCLR = staticmethod(lambda b: 0x5000050c + b * 0x300)
+    GPIO_IN     = staticmethod(lambda b: 0x50000510 + b * 0x300)
+    GPIO_DIR    = staticmethod(lambda b: 0x50000514 + b * 0x300)
+    GPIO_DIRSET = staticmethod(lambda b: 0x50000518 + b * 0x300)
+    GPIO_DIRCLR = staticmethod(lambda b: 0x5000051c + b * 0x300)
+
+    def pin_get_many(self, pin_names = None):
+        if pin_names is None:
+            pin_names = self.pin_names
+        pins = dict((name, self.gpio_map[name]) for name in pin_names)
+        banks = set(b for (b, p) in pins.values())
+        regs = dict((b, self.buses[0].u32_read(self.GPIO_IN(b))) for b in banks)
+        ret = {}
+        for name, (bank, pin) in pins.items():
+            ret[name] = int((regs[bank] >> pin) & 1)
+        return ret
+
+    @property
+    def pin_names(self):
+        return self.gpio_map.keys()
+
+    def pin_get(self, name):
+        bank, pin = self.gpio_map[name]
+        reg = self.GPIO_IN(bank)
+        v = self.buses[0].u32_read(reg)
+        self.logger.info("Getting %s, reg %08x = %08x", name, reg, v)
+        return (v >> pin) & 1
+
+    def pin_set(self, name, value):
+        bank, pin = self.gpio_map[name]
+        reg = self.GPIO_OUTSET(bank) if value else self.GPIO_OUTCLR(bank)
+        self.logger.info("Setting %s to %d, reg %08x", name, int(value), reg)
+        self.buses[0].u32_write(reg, 1 << pin)
+
+    def pin_config(self, name, mode):
+        bank, pin = self.gpio_map[name]
+        reg = self.GPIO_PIN_CNF(bank, pin)
+        if not mode & pin_control.Mode.Enabled_:
+            value = self.GPIO_PIN_CNF_INPUT_DISCONNECT
+        else:
+            value = self.GPIO_PIN_CNF_DIR_OUTPUT
+            if mode & pin_control.Mode.ResistorUp_:
+                value |= self.GPIO_PIN_CNF_PULL_UP
+            elif mode & pin_control.Mode.ResistorDown_:
+                value |= self.GPIO_PIN_CNF_PULL_DOWN
+            if value & (pin_control.Mode.DriveUp_ | pin_control.Mode.DriveDown_) == (pin_control.Mode.DriveUp_ | pin_control.Mode.DriveDown_):
+                value |= self.GPIO_PIN_CNF_DRIVE_S0S1
+            elif value & pin_control.Mode.DriveUp_:
+                value |= self.GPIO_PIN_CNF_DRIVE_D0S1
+            elif value & pin_control.Mode.DriveDown_:
+                value |= self.GPIO_PIN_CNF_DRIVE_S0D1
+            else:
+                value &= ~self.GPIO_PIN_CNF_DIR_OUTPUT
+            
+        self.logger.info("Setting mode for %s, reg %08x = %08x", name, reg, value)
+        self.buses[0].u32_write(reg, value)
 
 class nRF51(nRF5):
+    GPIO_COUNT = 31
+
     def ram_probe(self):
         ram = [self.buses[0].u32_read(self.FICR_RAMINFO + d) for d in range(0, 4*5, 4)]
 
@@ -163,9 +237,15 @@ class nRF52(nRF5):
     CLOCK_TRACECONFIG = 0x4000055c
         
 @SoC.db.register(PartId(2, 0x44, 6))
-def nrf52832(dp):
-    return nRF52("nRF52832", dp)
+class nRF52832(nRF52):
+    GPIO_COUNT = 31
+
+    def __init__(self, dp):
+        nRF52.__init__(self, "nRF52832", dp)
 
 @SoC.db.register(PartId(2, 0x44, 8))
-def nrf52840(dp):
-    return nRF52("nRF52840", dp)
+class nRF52840(nRF52):
+    GPIO_COUNT = 48
+
+    def __init__(self, dp):
+        nRF52.__init__(self, "nRF52840", dp)
