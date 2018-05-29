@@ -71,7 +71,7 @@ class Register:
         output(" 0x%0*x" % (wx, self.value))
         for f in fields:
             v = f.value(self.value)
-            output("   % *s % *s % 8d %s %s" % (
+            output("   % *s % *s %s %s" % (
                 wx, "%0*x" % ((f.width + 3) // 4, v << (f.pos % 4)) + " " * (f.pos // 4),
                 wx, hex(v),
-                v, f.name, f.pretty(v)))
+                f.name, f.pretty(v)))
