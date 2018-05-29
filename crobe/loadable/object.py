@@ -272,7 +272,10 @@ class Program:
                 self.append(Segment(offset, blob))
 
                 date = info[b'c'].strip() + " " + info[b'd'].strip()
-                self.info["build_date"] = datetime.datetime.strptime(date, "%Y/%m/%d %H:%M:%S")
+                try:
+                    self.info["build_date"] = datetime.datetime.strptime(date, "%Y/%m/%d %H:%M:%S")
+                except ValueError:
+                    self.info["build_date"] = None
                 self.info["device"] = info[b'b']
                 parts = info[b'a'].split(';')
                 self.info["project"] = parts[0]
