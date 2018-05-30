@@ -34,10 +34,16 @@ class nRF5(SoC, pin_control.Controller):
         self.flash_probe()
         self.ram_probe()
         self.id_probe()
+        self.part_probe()
 
         self.gpio_map = {}
         if self.GPIO_COUNT <= 32:
-            for i in range(self.GPIO_COUNT):
+            ios = range(self.GPIO_COUNT)
+            if self.GPIO_COUNT == 15:
+                ios = [0, 1, 3, 4, 5, 8, 11, 12, 14, 15, 16, 17, 18, 20, 21]
+            if self.GPIO_COUNT == 17:
+                ios = [0, 1, 4, 5, 6, 9, 10, 12, 14, 15, 16, 18, 20, 21, 25, 28, 30]
+            for i in ios:
                 self.gpio_map["P%02d" % i] = 0, i
         else:
             for i in range(32):
@@ -50,6 +56,88 @@ class nRF5(SoC, pin_control.Controller):
         self.logger.info("BLE Address: %s %s",
                          self.ble_address[0],
                          ":".join(map("%02x".__mod__, self.ble_address[1])))
+
+    PACKAGES = {
+        0: ("QF", "QFN48", 31),
+        0x1000: ("CD", "QFN48", 31),
+        0x1001: ("CE", "QFN48", 31),
+        0x1002: ("CF", "QFN48", 31),
+        0x1003: ("CF", "QFN48", 31),
+        0x1004: ("QF", "QFN48", 31),
+        0x2000: ("QF", "QFN48", 32),
+        0x2001: ("CI", "WLCSP56", 32),
+        0x2001: ("CA", "WLCSP33", 15),
+        0x2003: ("QC", "QFN32", 17),
+        0x2004: ("QI", "aQFN73", 48),
+        }
+
+    CONFIGID_HW = {
+        0x1D: (0x51822, "QF", "AAC0", 31),
+        0x1E: (0x51422, "QF", "AACA", 31),
+        0x20: (0x51822, "CE", "AABA", 31),
+        0x24: (0x51422, "QF", "AAC0", 31),
+        0x26: (0x51822, "QF", "ABAA", 31),
+        0x27: (0x51822, "QF", "ABA0", 31),
+        0x2A: (0x51822, "QF", "AAFA0", 31),
+        0x2D: (0x51422, "QF", "AADAA", 31),
+        0x2E: (0x51422, "QF", "AAE00", 31),
+        0x2F: (0x51822, "CE", "AAB0", 31),
+        0x31: (0x51422, "CE", "AAA0A", 31),
+        0x3C: (0x51822, "QF", "AAG00", 31),
+        0x40: (0x51822, "CE", "AACA0", 31),
+        0x44: (0x51822, "QF", "AAGC0", 31),
+        0x47: (0x51822, "CE", "AADA0", 31),
+        0x4C: (0x51822, "QF", "ABB00", 31),
+        0x4D: (0x51822, "CE", "AAD00", 31),
+        0x50: (0x51422, "CE", "AAB00", 31),
+        0x61: (0x51422, "QF", "ABA00", 31),
+        0x72: (0x51822, "QF", "AAH00", 31),
+        0x73: (0x51422, "QF", "AAF00", 31),
+        0x79: (0x51822, "CE", "AAE00", 31),
+        0x7A: (0x51422, "CE", "AAC00", 31),
+        0x7B: (0x51822, "QF", "ABC00", 31),
+        0x7C: (0x51422, "QF", "ABB00", 31),
+        0x7D: (0x51822, "CD", "ABA00", 31),
+        0x7E: (0x51422, "CD", "ABA00", 31),
+        0x83: (0x51822, "QF", "ACA00", 31),
+        0x85: (0x51422, "QF", "ACA00", 31),
+        0x86: (0x51422, "QF", "ACA10", 31),
+        0x87: (0x51822, "CF", "ACA00", 31),
+        0x88: (0x51422, "CF", "ACA00", 31),
+        0xeb: (0x52840, "QI", "AAA00", 32),
+    }
+
+    def part_probe(self):
+        partinfo = self.buses[0].mem_read(self.FICR_PARTINFO, 20)
+        configid = self.buses[0].u32_read(self.FICR_CONFIGID)
+
+        configid_hw = configid & 0xffff
+
+        if b'\xff\xff\xff\xff' not in partinfo:
+            part, variant, package, ram, flash = struct.unpack("<L4s3L", partinfo)
+            variant = ''.join(chr(x) for x in variant[::-1] if 0x20 < x < 0x7f)
+            package_code, package_name, gpio_count \
+                          = self.PACKAGES.get(package, ("Unknown (%04x)" % package, 0))
+
+            if not variant and configid_hw in self.CONFIGID_HW:
+                variant = self.CONFIGID_HW[configid_hw][2]
+            else:
+                v, = struct.unpack("<L", partinfo[4:8])
+                self.logger.info("Cannot get package variant, variant: %08x, configid: %08x",
+                                 v, configid)
+
+        elif configid_hw in self.CONFIGID_HW:
+            # Fallback on legacy CONFIGID.HW
+            part, package_code, variant, gpio_count = self.CONFIGID_HW[configid_hw]
+
+        else:
+            a, b, c, d, e = struct.unpack("<5L", partinfo)
+            self.logger.info("Cannot get package info, partinfo: %08x/%08x/%08x/%08x/%08x, configid: %08x",
+                             a, b, c, d, e, configid)
+            return
+
+        self.logger.info("nRF%05x%s%s, %s, %d gpios" % (
+            part, package_code, variant, package_name, gpio_count))
 
     def id_probe(self):
         addr = self.buses[0].mem_read(self.FICR_DEVICEADDRTYPE, 12)
