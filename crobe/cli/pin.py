@@ -56,9 +56,9 @@ def marching_test(ctx, ignore):
 
             for n in pins:
                 if during[n] != before[n] and n != name:
-                    print("While %s = %d, %s changed to %d" % (name, value, during[n]))
+                    print("While %s = %d, %s changed to %d" % (name, value, n, during[n]))
             if during[name] != value:
-                print("%s set to %d, but stuck to %d" % (name, value, during[n]))
+                print("%s set to %d, but stuck to %d" % (name, value, during[name]))
             for n in pins:
                 if before[n] != after[n] and n != name:
                     print("After %s = %d, %s stuck to %d" % (name, value, n, after[n]))
