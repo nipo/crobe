@@ -1,0 +1,24 @@
+from . import base
+import click
+from ..component.nordic import ctrl_ap
+import binascii
+import time
+
+@base.cli.group(help = "Nordic-specific")
+def nordic():
+    pass
+
+@nordic.command(help = "Erase using Ctrl-AP")
+@base.roots()
+def erase(roots):
+    root = roots[0]
+    try:
+        ap, = root.children_of_class(ctrl_ap.CtrlAp)
+    except ValueError:
+        raise ValueError("Root does not have exactly one Ctrl AP in subtree")
+    click.echo("Target: %s" % ap)
+
+    ap.erase_all()
+    ap.reset = True
+    time.sleep(.1)
+    ap.reset = False

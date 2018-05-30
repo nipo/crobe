@@ -7,3 +7,4 @@ from . import chip
 from . import bscan
 from . import svf
 from . import pin
+from . import nordic
