@@ -14,12 +14,10 @@ class SpiFlash(PortComponent):
     max_freq = 33e6
     
     total_size = 0
-    sector_size = 1
-    page_size = 1
 
     ADDRESS_SIZE = 3
     
-    CMD_READ = b"\x0b"
+    CMD_FAST_READ = b"\x0b"
     CMD_READ_JEDEC_ID = b"\x9f"
     CMD_PAGE_PROGRAM = b"\x02"
     CMD_WRITE_STATUS = None
@@ -45,8 +43,7 @@ class SpiFlash(PortComponent):
             self.logger.info("- level %d: %d x %s sectors, erase command: 0x%02x",
                              i, self.total_size / s["size"], base2(s["size"], 'B'), s["erase_cmd"][0])
         if self.CMD_WRITE_STATUS:
-            self.logger.info("Volatile status write op: 0x%02x", self.CMD_WRITE_STATUS)
-           
+            self.logger.info("Volatile status write op: 0x%02x", self.CMD_WRITE_STATUS[0])
 
     @classmethod
     def detect(cls, port):
@@ -83,8 +80,11 @@ class SpiFlash(PortComponent):
         except NotImplementedError:
             pass
 
-    def command(self, cmd, size):
-        cmds = [self.port.cmd_cs(True), self.port.cmd_shift(cmd, read_miso = False)]
+    def command(self, cmd, size, dummy_words = 0):
+        cmds = [self.port.cmd_cs(True),
+                self.port.cmd_shift(cmd, read_miso = False)]
+        if dummy_words:
+            cmds.append(self.port.cmd_shift(b"\xff"*dummy_words, read_miso = False))
         if size:
             rsp = self.port.cmd_shift(size)
             cmds.append(rsp)
@@ -105,8 +105,8 @@ class SpiFlash(PortComponent):
     
     def read(self, address, size, op = None):
         if op is None:
-            op = self.CMD_READ
-        return self.command(op + self.addr(address) + b'\x00', size)
+            op = self.CMD_FAST_READ
+        return self.command(op + self.addr(address), size, dummy_words = 1)
 
     def write_enable(self, enable):
         retries = 0
@@ -190,10 +190,10 @@ class SpiFlash(PortComponent):
                 return False
         return True
 
-@spi.Interface.db.register("flash")
-def spi_flash_probe(bus, *args):
+@spi.Target.db.register("flash")
+def spi_flash_probe(target, *args):
     try:
-        return SpiFlash.detect(bus)
+        return SpiFlash.detect(target)
     except ValueError:
         raise NoMatch("Not a spi flash")
     
