@@ -15,6 +15,17 @@ class RelativeFormatter(logging.Formatter):
         elapsed = datetime.now() - self.start
         return str(elapsed)
 
+def hex_parse(ctx, param, value):
+    if isinstance(value, int):
+        return value
+    try:
+        return int(value, 16)
+    except ValueError:
+        raise click.BadParameter('%s should be an hex value')
+
+def hex_parse_list(ctx, param, value):
+    return [hex_parse(ctx, param, v) for v in value]
+
 @click.group()
 @click.option('-v', '--verbose', count = True)
 @click.option('-q', '--quiet', count = True)

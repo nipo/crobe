@@ -51,9 +51,9 @@ def eeprom_dump(ctx):
             pass
 
 @ftdi.command(help = "EEPROM Writer")
-@click.option("--vid", type = str, required = True, help = "Vendor ID")
-@click.option("--pid", type = str, required = True, help = "Product ID")
-@click.option("--version", type = str, default = "0100", help = "Product version")
+@click.option("--vid", callback = base.hex_parse, required = True, help = "Vendor ID")
+@click.option("--pid", callback = base.hex_parse, required = True, help = "Product ID")
+@click.option("--version", callback = base.hex_parse, default = 0x0100, help = "Product version")
 @click.option("--vendor", type = str, required = True, help = "Vendor name")
 @click.option("--product", type = str, required = True, help = "Product name")
 @click.option("--serial", type = str, required = True, help = "Serial number")

@@ -51,19 +51,18 @@ def enumerate(roots, field, cpuid):
 
 @info.command(help = "I2C bus scan")
 @base.roots()
-@click.option("--first", type = str, default = "1", help = "First address to scan")
-@click.option("--last", type = str, default = "0x7f", help = "Last address to scan")
-@click.option("--addr", type = str, help = "Explicitly add address to scan", multiple = True)
+@click.option("--first", callback = base.hex_parse, default = 0x01, help = "First address to scan")
+@click.option("--last", callback = base.hex_parse, default = 0x7f, help = "Last address to scan")
+@click.option("--addr", callback = base.hex_parse_list, help = "Explicitly add address to scan", multiple = True)
 def i2c_scan(roots, first, last, addr):
-    first = int(first, 16)
-    last = int(last, 16)
-    addresses = list(map(lambda x: int(x, 16), addr) or range(first, last + 1))
+    from ..protocol.i2c import AddressNack
+    addresses = list(addr or range(first, last + 1))
 
     bus = roots[0]
 
     for addr in addresses:
         try:
-            bus.write(addr, b'')
+            bus.read(addr, 1)
         except AddressNack:
             continue
         click.echo("Slave on address %02x" % addr)
