@@ -577,6 +577,8 @@ class SpiInterface(BaseInterface, spi.Interface):
         self.__cmd_cs_off = self.handle.cmd_gpio_mask_set(
             1 << csn_pin, 1 << csn_pin, 1 << csn_pin)
 
+        self.child_add(spi.Target(self, "cs0", 0))
+
     def _execute(self, operation_list):
         ops = deque(operation_list)
 
@@ -611,7 +613,7 @@ class SpiInterface(BaseInterface, spi.Interface):
                         raise ValueError("Unhandled data type for mosi", op.mosi)
 
                 elif isinstance(op, spi.Cs):
-                    if op.value:
+                    if op.value is not None:
                         cmd += self.__cmd_cs_on
                     else:
                         cmd += self.__cmd_cs_off

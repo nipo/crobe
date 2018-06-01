@@ -5,16 +5,47 @@ import time
 
 __all__ = ["Interface", "ProtocolError", "CommunicationError"]
 
-class Interface(model.PortComponent):
+class FreqCapper:
+    def __init__(self):
+        self.__freq_constraints = {}
+        self.__freq = None
+
+    def freq_cap(self, key, freq = None):
+        if freq is None:
+            self.__freq_constraints.pop(key, None)
+        else:
+            self.__freq_constraints[key] = freq
+        caps = [(f, k) for (k, f) in self.__freq_constraints.items() if f]
+        caps.sort(key = lambda x:x[0])
+        if not caps:
+            self.__freq_set()
+        else:
+            self.__freq_set(caps[0][0], caps[0][1])
+
+    def __freq_set(self, freq = None, reason = ""):
+        if freq == self.__freq:
+            return
+        self.__freq = freq
+        self.freq = freq
+
+        if not freq:
+            self.logger.info("Frequency now uncapped, had %s", metric(self.freq, "Hz"))
+        else:
+            self.logger.info("Frequency now capped to %s because of %s, had %s",
+                             metric(freq, "Hz"), reason, metric(self.freq, "Hz"))
+
+    # property, writable, Hz
+    freq = None
+
+class Interface(model.PortComponent, FreqCapper):
     """
     Base class for protocol interfaces from an Adapter.
     """
     def __init__(self, port, name):
         model.PortComponent.__init__(self, port, name)
+        FreqCapper.__init__(self)
         port.child_add(self, weak = True)
         self._lock = threading.Lock()
-        self.__freq_constraints = {}
-        self.__freq = None
 
     def close(self):
         self.port.child_remove(self)
@@ -56,33 +87,6 @@ class Interface(model.PortComponent):
     def execute(self, commands):
         with self._lock:
             self._execute(commands)
-
-    def freq_cap(self, key, freq = None):
-        if freq is None:
-            self.__freq_constraints.pop(key, None)
-        else:
-            self.__freq_constraints[key] = freq
-        caps = [(f, k) for (k, f) in self.__freq_constraints.items() if f]
-        caps.sort(key = lambda x:x[0])
-        if not caps:
-            self.__freq_set()
-        else:
-            self.__freq_set(caps[0][0], caps[0][1])
-
-    def __freq_set(self, freq = None, reason = ""):
-        if freq == self.__freq:
-            return
-        self.__freq = freq
-        self.freq = freq
-
-        if not freq:
-            self.logger.info("Frequency now uncapped, had %s", metric(self.freq, "Hz"))
-        else:
-            self.logger.info("Frequency now capped to %s because of %s, had %s",
-                             metric(freq, "Hz"), reason, metric(self.freq, "Hz"))
-
-    # property, writable, Hz
-    freq = None
 
     # property read-write
     # Active high

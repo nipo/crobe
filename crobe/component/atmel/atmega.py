@@ -105,6 +105,6 @@ class Atmega(Isp):
         0x1ea701: "ATmega128RFA1",
     }
 
-@spi.Interface.db.register("atmega")
+@spi.Target.db.register("atmega")
 def atmega_probe(bus, *args):
     return Atmega(bus)

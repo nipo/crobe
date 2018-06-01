@@ -21,8 +21,6 @@ class Interface(base.Interface):
     they require.  They may toggle clock when CS is high if needed.
     """
 
-    db = Db()
-
     def __init__(self, port, name = None):
         base.Interface.__init__(self, port, (name or port.name) + "/SPI")
 
@@ -77,19 +75,49 @@ class Interface(base.Interface):
         Toggles CS to value
         """
         return Cs(value)
+        
+class Target(PortComponent, base.FreqCapper):
+    db = Db()
+
+    def __init__(self, port, name, cs):
+        PortComponent.__init__(self, port, name)
+        base.FreqCapper.__init__(self)
+        self.cs = cs
+
+    def execute(self, ops):
+        self.port.freq_cap("target", self.freq)
+        r = self.port.execute(ops)
+        self.port.freq_cap("target", None)
+        return r
+
+    def transaction(self, mosi, read_miso = True):
+        op = self.cmd_shift(mosi, read_miso)
+        self.port.execute([self.cmd_cs(True), op, self.cmd_cs(False)])
+        if read_miso:
+            return op.miso
+
+    def cmd_shift(self, mosi, read_miso = True):
+        """
+        Returns a shift operation object.  `miso` is set on shift
+        object upon successful execution.
+
+        :param bytes mosi: Value to shift in
+        """
+        return Shift(mosi, read_miso)
+
+    def cmd_cs(self, value):
+        """
+        Toggles CS to value
+        """
+        if value:
+            return Cs(self.cs)
+        return Cs(None)
 
     def child_spawn(self, sub):
         try:
             return self.db.call(sub, self)
         except NoMatch:
             pass
-        
-class Target(PortComponent):
-    def transaction(self, mosi, read_miso = True):
-        op = self.port.cmd_shift(mosi, read_miso)
-        self.port.execute([self.port.cmd_cs(True), op, self.port.cmd_cs(False)])
-        if read_miso:
-            return op.miso
 
 class Operation(object):
     def __repr__(self):
