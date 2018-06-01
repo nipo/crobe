@@ -6,7 +6,8 @@ from ..component.arm import dp, mem_ap
 from ..component.arm.coresight import fpb
 from ..util.pretty import metric
 from ..util.info import TimedLogger
-from ..target.memory import Loadable
+from ..target.memory import Loadable, Region, Flash, Eeprom
+from ..loadable.object import Program, Segment
 import logging
 
 @base.cli.group(help = "Target chip manipulation")
@@ -28,12 +29,12 @@ def chip(ctx, roots, field, target):
 @click.pass_context
 def program(ctx, program, erase, check, run):
     target = ctx.obj["target"]
-        
+
     click.echo("Target: %s" % target)
 
     if erase:
         target.erase_all()
-    
+
     if program:
         target.write(program)
 
@@ -64,25 +65,36 @@ def program(ctx, program, erase, check, run):
 @click.argument('filename', type = str)
 @click.pass_context
 def readback(ctx, filename):
+    import math
+
     target = ctx.obj["target"]
 
     click.echo("Target: %s" % target)
 
-    p = Program()
+    total_size = 0
     for memory in target.children_of_class(Region):
-        cs = 1024
-
         if not isinstance(memory, (Flash, Eeprom)):
             continue
+        total_size += memory.size
 
-        if isinstance(memory, Flash):
-            cs = memory.page_size
-        
-        blob = bytearray()
-        for offset in range(0, memory.size, cs):
-            with TimedLogger(logging, "read at %08x (%d%%)" % (offset, offset / memory.size * 100)):
-                blob += memory.read(offset, cs)
+    with click.progressbar(length = total_size, label = "Reading...") as pb:
+        p = Program()
+        for memory in target.children_of_class(Region):
+            cs = 1024
 
-        p.append(Segment(memory.address, blob))
+            if not isinstance(memory, (Flash, Eeprom)):
+                continue
+
+            if isinstance(memory, Flash):
+                cs = memory.page_size
+
+            blob = bytearray()
+            for offset in range(0, memory.size, cs):
+                chunk = memory.read(offset, cs)
+                blob += chunk
+                
+                pb.update(len(chunk))
+
+            p.append(Segment(memory.address, blob))
 
     p.save(filename)
