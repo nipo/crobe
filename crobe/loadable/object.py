@@ -1,5 +1,6 @@
 import warnings
 import click
+import struct
 
 __all__ = ['Segment', 'Program']
 
@@ -139,6 +140,53 @@ class Program:
             segment = Segment(addr + offset, data)
             self.append(segment)
         return self
+
+    @classmethod
+    def from_cypress_img(cls, filename, offset = 0):
+        """Load a Program from a Cypress FX image file"""
+        if filename.endswith(".img.gz"):
+            import gzip
+            fd = gzip.open(filename, 'rb')
+        else:
+            fd = open(filename, 'rb')
+
+        header, ctl, typ = struct.unpack("2sBB", fd.read(4))
+        if header != b"CY":
+            raise ValueError("Bad file header")
+
+        self = cls()
+
+        chk = 0
+
+        while True:
+            ch = fd.read(8)
+            size, address = struct.unpack("<LL", ch)
+            if size == 0:
+                break
+            blob = fd.read(size * 4)
+            self.append(Segment(address + offset, blob))
+            chk += sum(struct.unpack("<%dL" % (len(blob) // 4), blob))
+
+        checksum, = struct.unpack("<L", fd.read(4))
+
+        if checksum != chk & 0xffffffff:
+            raise ValueError("Bad file checksum")
+
+        self.info["entry"] = address
+        self.info["checksum"] = checksum
+
+        return self
+
+    @classmethod
+    def from_img(cls, filename, offset = 0):
+        for handler in [
+            cls.from_cypress_img,
+            ]:
+            try:
+                return handler(filename, offset)
+            except ValueError:
+                pass
+        raise ValueError("Not a known bitstream format")
 
     @classmethod
     def from_elf(cls, filename, offset = 0):
@@ -307,6 +355,8 @@ class Program:
             return cls.from_bin(filename, offset)
         if filename.endswith(".bit") or filename.endswith(".bit.gz"):
             return cls.from_bit(filename, offset)
+        if filename.endswith(".img") or filename.endswith(".img.gz"):
+            return cls.from_img(filename, offset)
         if filename.endswith(".hex") or filename.endswith(".ihex") or filename.endswith(".mcs"):
             return cls.from_ihex(filename, offset)
         try:
