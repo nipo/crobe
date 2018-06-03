@@ -48,19 +48,19 @@ architecture arch of swd_dp is
   signal s_cs_cmd, s_cs_rsp : nsl.framed.framed_bus;
 
   signal s_srst, s_trst, s_swclk, s_swdio_i, s_swdio_o, s_swdio_oe : std_ulogic;
-  signal s_clk_gen, s_clk_gen_toggle: std_ulogic;
+  signal s_clk_gen_toggle: std_ulogic;
   
   signal s_io_config: std_ulogic_vector(1 downto 0);
-  signal s_clk_gen_rate: unsigned(25 downto 0);
+  signal s_clk_gen_rate: unsigned(27 downto 0);
   signal s_config_data: nsl.cs.cs_reg;
   signal s_config_write: std_ulogic_vector(2 downto 0);
   signal s_status: nsl.cs.cs_reg_array(2 downto 0);
 
-  constant sys_clk_mhz : natural := 150;
+  constant sys_clk_hz : natural := 900000000 / 6;
 
   component clk_gen
     generic(
-      sys_clk_mhz : natural
+      sys_clk_hz : natural
       );
     port(
       p_clk_12        : in  std_ulogic;
@@ -76,7 +76,7 @@ begin
 
   sys_clk_gen: clk_gen
     generic map(
-      sys_clk_mhz => 150
+      sys_clk_hz => sys_clk_hz
       )
     port map(
       p_clk_12 => clk,
@@ -192,7 +192,7 @@ begin
       p_clk  => s_sys_clk,
       p_resetn => s_sys_resetn_soft,
 
-      p_clk_ref => s_clk_gen,
+      p_clk_tick => s_clk_gen_toggle,
       
       p_cmd_val => s_swd_cmd.req,
       p_cmd_ack => s_swd_cmd.ack,
@@ -300,7 +300,7 @@ begin
 
   baud_gen: nsl.tick.baudrate_generator
     generic map(
-      p_clk_rate => sys_clk_mhz * 1000000,
+      p_clk_rate => sys_clk_hz,
       rate_lsb => s_clk_gen_rate'low,
       rate_msb => s_clk_gen_rate'high
       )
@@ -316,12 +316,7 @@ begin
     if s_sys_resetn_soft = '0' then
       s_clk_gen_rate <= to_unsigned(1024 * 1024, s_clk_gen_rate'high+1)(s_clk_gen_rate'range);
       s_io_config <= (others => '0');
-      s_clk_gen <= '0';
     elsif rising_edge(s_sys_clk) then
-      if s_clk_gen_toggle = '1' then
-        s_clk_gen <= not s_clk_gen;
-      end if;
-
       if s_config_write(0) = '1' then
         s_clk_gen_rate <= unsigned(s_config_data(s_clk_gen_rate'range));
       end if;
@@ -339,13 +334,13 @@ begin
   s_status(0)(s_clk_gen_rate'range) <= std_ulogic_vector(s_clk_gen_rate);
   s_status(1)(0) <= dbg_srst;
   s_status(1)(1) <= dbg_trst;
-  s_status(2) <= std_ulogic_vector(to_unsigned(sys_clk_mhz * 1000000, s_status(2)'length)); -- s_sys_clk
+  s_status(2) <= std_ulogic_vector(to_unsigned(sys_clk_hz, s_status(2)'length)); -- s_sys_clk
   s_srst <= s_io_config(0);
   s_trst <= s_io_config(1);
 
   monitor: util.activity.activity_monitor
     generic map(
-      blink_time => sys_clk_mhz * 1000000 / 8
+      blink_time => sys_clk_hz / 8
       )
     port map(
       p_resetn => s_sys_resetn_soft,

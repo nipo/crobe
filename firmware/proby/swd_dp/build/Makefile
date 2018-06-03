@@ -5,6 +5,7 @@ constraints += $(SRC_DIR)/../../pinout/ftdi_fifo.ucf
 constraints += $(SRC_DIR)/../../pinout/io0_dbg.ucf
 constraints += $(SRC_DIR)/../../pinout/user.ucf
 constraints += $(SRC_DIR)/../../pinout/clk.ucf
+constraints += $(SRC_DIR)/../src/clocks.ucf
 hwdep=xilinx
 target_part = xc6slx9
 target_package = tqg144
