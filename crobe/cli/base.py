@@ -4,10 +4,20 @@ import logging
 import click
 from functools import update_wrapper
 
+class DomainFilter(logging.Filter):
+    silent = set()
+
+    def __init__(self, off):
+        logging.Filter.__init__(self)
+        self.silent = set(off)
+
+    def filter(self, record):
+        return record.name not in self.silent
+
 class RelativeFormatter(logging.Formatter):
     def __init__(self):
         logging.Formatter.__init__(self,
-                                   '%(asctime)-15s %(name)-10s %(message)s',
+                                   '%(asctime)-15s %(name)-15s %(message)s',
                                    None, "%")
         self.start = datetime.now()
 
@@ -29,12 +39,18 @@ def hex_parse_list(ctx, param, value):
 @click.group()
 @click.option('-v', '--verbose', count = True)
 @click.option('-q', '--quiet', count = True)
+@click.option('--silent', multiple = True, type = str)
 @click.pass_context
-def cli(ctx, verbose, quiet):
-    handler = logging.StreamHandler()
+def cli(ctx, verbose, quiet, silent):
     formatter = RelativeFormatter()
+    f = DomainFilter(silent)
+    ctx.obj["log_filter"] = f
+
+    handler = logging.StreamHandler()
     handler.setFormatter(formatter)
-    root = logging.getLogger()
+    handler.addFilter(f)
+
+    root = logging.getLogger('')
     root.addHandler(handler)
     root.setLevel(10 * (5 + quiet - verbose))
     root.info("Starting at %s", formatter.start)
