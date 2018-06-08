@@ -1,6 +1,6 @@
 #include "common.h"
 
-#define FLASH ((struct flash_s *)0x40022000)
+#define FLASH ((struct flash_s *)FLASH_BASE)
 
 struct flash_s {
     volatile uint32_t access_control;
@@ -39,6 +39,30 @@ void unlock(struct flash_s *flash)
     flash->key = KEY_2;
 }
 
+static inline
+void lock(struct flash_s *flash)
+{
+    flash->control |= CONTROL_LOCK;
+}
+
+void mass_erase(void)
+{
+    struct flash_s *flash = FLASH;
+
+    unlock(flash);
+    flash->control = CONTROL_MASS_ERASE;
+    flash->control |= CONTROL_START;
+
+    while (flash->status & STATUS_BUSY)
+        ;
+
+    if (flash->status & STATUS_EOP)
+        flash->status = STATUS_EOP;
+
+    flash->control = 0;
+    lock(flash);
+}
+
 void flash_erase(uintptr_t addr, size_t bytes, size_t page_size)
 {
     uintptr_t end = addr + bytes;
@@ -52,19 +76,23 @@ void flash_erase(uintptr_t addr, size_t bytes, size_t page_size)
         ;
 
     while (addr < end) {
-        flash->control = CONTROL_ERASE;
+        flash->control |= CONTROL_ERASE;
 
         flash->address = addr;
 
-        flash->control = CONTROL_START | CONTROL_ERASE;
+        flash->control |= CONTROL_START;
 
         while (flash->status & STATUS_BUSY)
             ;
+
+        if (flash->status & STATUS_EOP)
+            flash->status = STATUS_EOP;
 
         addr += page_size;
     }
 
     flash->control = 0;
+    lock(flash);
 }
 
 void flash_write(uintptr_t dest_, const void *src_, size_t size)
@@ -85,4 +113,5 @@ void flash_write(uintptr_t dest_, const void *src_, size_t size)
     }
 
     flash->control = 0;
+    lock(flash);
 }

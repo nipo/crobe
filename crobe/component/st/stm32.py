@@ -2,15 +2,17 @@ from ..arm.coresight.rom_table import RomTable
 import binascii
 
 class Info:
-    DBGMCU_IDCODE = 0xe0042000
+    DBGMCU_IDCODE = [0xe0042000, 0x40015800]
+    uid_blob_addr = None
+    flash_size_addr = None
+    uid_blob_is_coords = False
+    dbgmcu_addr = None
+    dbgmcu_init = {}
+    gpio = None
 
-    def __init__(self, name, flash_page_size, flash_size_addr,
-                 uid_blob_addr = None, uid_blob_is_coords = False):
+    def __init__(self, name, flash_page_size):
         self.name = "STM32" + name
         self.flash_page_size = flash_page_size
-        self.flash_size_addr = flash_size_addr
-        self.uid_blob_addr = uid_blob_addr
-        self.uid_blob_is_coords = uid_blob_is_coords
 
     def flash_kb_get(self, soc):
         return soc.buses[0].u32_read(self.flash_size_addr) & 0xffff
@@ -23,8 +25,11 @@ class Info:
 
     @classmethod
     def from_soc(cls, soc):
-        mcu_id = soc.buses[0].u32_read(cls.DBGMCU_IDCODE)
-        soc.logger.info("DBGMCU_IDCODE: 0x%08x", mcu_id)
+        for addr in cls.DBGMCU_IDCODE:
+            mcu_id = soc.buses[0].u32_read(addr)
+            soc.logger.info("DBGMCU_IDCODE at 0x%08x: 0x%08x", addr, mcu_id)
+            if mcu_id:
+                break
 
         if not mcu_id:
             soc.logger.warning("Bad DBGMCU_IDCODE, using RomTable ID instead")
@@ -32,7 +37,7 @@ class Info:
             if rom_tables:
                 mcu_id = rom_tables[0].partid.part_no
 
-        return cls.from_id(mcu_id & 0xffff)
+        return cls.from_id(mcu_id & 0xfff)
 
     @classmethod
     def from_id(cls, part):
@@ -71,47 +76,92 @@ class Info:
                 pages = limit
 
             size = pages * page_size
-            flash_cb("code", base + offset, size, page_size)
+            flash_cb("flash", base + offset, size, page_size)
 
             offset += size
             remaining -= size
 
-class InfoL1C34(Info):
+class Rm0038(Info):
+    flash_size_addr = 0x1ff8004c
+    uid_blob_addr = 0x1ff80050
+
+class Rm0038Cat3(Info):
+    flash_size_addr = 0x1ff8004c
+    uid_blob_addr = 0x1ff800d0
+
+class InfoL1C34(Rm0038Cat3):
     def flash_kb_get(self, soc):
         if Info.flash_kb_get(self, soc):
             return 256
         return 384
 
+class Rm0008(Info):
+    flash_size_addr = 0x1ffff7e0
+    uid_blob_addr = 0x1ffff7e8
+    dbgmcu_addr = 0xe0042000
+    dbgmcu_init = {4: 0x186}
+
+class Rm0360(Info):
+    flash_size_addr = 0x1ffff7cc
+    dbgmcu_addr = 0x40015800
+    dbgmcu_init = {4: 0x6, 8:0x1800}
+    gpio = 0x48000000, (0xffffffff, 0xffffffff, 0xffffffff, 0xffffffff,
+                        0x00000000, 0xffffffff)
+
+class Rm0385(Info):
+    flash_size_addr = 0x1ff0f442
+    uid_blob_addr = 0x1ff0f420
+    uid_blob_is_coords = True
+
+class Rm0368(Info):
+    flash_size_addr = 0x1fff7a22
+    uid_blob_addr = 0x1fff7a10
+    uid_blob_is_coords = True
+
+class Rm0410(Info):
+    flash_size_addr = 0x1ff0f442
+    uid_blob_addr = 0x1ff0f420
+    uid_blob_is_coords = True
+
+class Rm0090(Info):
+    flash_size_addr = 0x1fff7a22
+    uid_blob_addr = 0x1fff7a10
+    uid_blob_is_coords = True
+
+class Rm0033(Info):
+    flash_size_addr = 0x1fff7a22
+    uid_blob_addr = 0x1fff7a10
+
 Info.parts = {
-    0: Info("", 0, 0, 0),
+    0: Info("", 0),
 
     # RM0008
-    0x410: Info("F10x/Medium-Density", 1024, 0x1ffff7e0, 0x1ffff7e8),
-    0x412: Info("F10x/Low-Density",    1024, 0x1ffff7e0, 0x1ffff7e8),
-    0x413: Info("F10x/High-Density",   2048, 0x1ffff7e0, 0x1ffff7e8),
-    0x418: Info("F10x/Connectivity",   2048, 0x1ffff7e0, 0x1ffff7e8),
-    0x430: Info("F10x/XL",             2048, 0x1ffff7e0, 0x1ffff7e8),
+    0x410: Rm0008("F10x/Medium-Density", 1024),
+    0x412: Rm0008("F10x/Low-Density",    1024),
+    0x413: Rm0008("F10x/High-Density",   2048),
+    0x418: Rm0008("F10x/Connectivity",   2048),
+    0x430: Rm0008("F10x/XL",             2048),
     # RM0360
-    0x440: Info("F030x8",              1024, 0x1ffff7cc),
-    0x444: Info("F030x4/6",            1024, 0x1ffff7cc),
-    0x445: Info("F070x6",              1024, 0x1ffff7cc),
-    0x448: Info("F070xB",              2048, 0x1ffff7cc),
-    0x442: Info("F030xC",              2048, 0x1ffff7cc),
+    0x440: Rm0360("F030x8",              1024),
+    0x444: Rm0360("F030x4/6",            1024),
+    0x445: Rm0360("F070x6",              1024),
+    0x448: Rm0360("F070xB",              2048),
+    0x442: Rm0360("F030xC",              2048),
     # RM0038
-    0x416: Info("L10x/Cat1",            256, 0x1ff8004c, 0x1ff80050),
-    0x429: Info("L10x/Cat2",            256, 0x1ff8004c, 0x1ff80050),
-    0x427: Info("L10x/Cat356",          256, 0x1ff800cc, 0x1ff800d0),
-    0x437: Info("L10x/Cat356",          256, 0x1ff800cc, 0x1ff800d0),
-    0x436: InfoL1C34("L10x/Cat34",      256, 0x1ff800cc, 0x1ff800d0),
+    0x416: Rm0038("L10x/Cat1",            256),
+    0x429: Rm0038("L10x/Cat2",            256),
+    0x427: Rm0038Cat3("L10x/Cat356",      256),
+    0x437: Rm0038Cat3("L10x/Cat356",      256),
+    0x436: InfoL1C34("L10x/Cat34",        256),
     # RM0385
-    0x449: Info("F7[45]xxx", [(32, 4), (128, 1), (256, 1)], 0x1ff0f442, 0x1ff0f420, True),
+    0x449: Rm0385("F7[45]xxx", [(32, 4), (128, 1), (256, 1)]),
     # RM0410
-    0x451: Info("F7[67]xx",               0, 0x1ff0f442, 0x1ff0f420, True),
+    0x451: Rm0410("F7[67]xx",               0),
     # RM0090
-    0x413: Info("F4xx",                   0, 0x1fff7a22, 0x1fff7a10, True),
-    0x419: Info("F4xx",                   0, 0x1fff7a22, 0x1fff7a10, True),
+    0x413: Rm0090("F4xx",                   0),
+    0x419: Rm0090("F4xx",                   0),
     # RM0368
-    0x433: Info("F401",                   0, 0x1fff7a22, 0x1fff7a10, True),
+    0x433: Rm0368("F401",                   0),
     # RM0033
-    0x10033: Info("F2xx",                 0, 0x1fff7a22, 0x1fff7a10),
+    0x10033: Rm0033("F2xx",                 0),
 }
