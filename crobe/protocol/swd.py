@@ -124,11 +124,11 @@ class Interface(base.Interface):
         """
         self.execute([self.cmd_jtag_to_swd()])
 
-    def wakeup(self):
+    def wakeup(self, cycles = 50):
         """
         See cmd_wakeup()
         """
-        self.execute([self.cmd_wakeup()])
+        self.execute([self.cmd_wakeup(cycles)])
 
     def cmd_read(self, ap, addr):
         """
@@ -165,12 +165,12 @@ class Interface(base.Interface):
         """
         return JtagToSwd()
 
-    def cmd_wakeup(self):
+    def cmd_wakeup(self, cycles = 50):
         """
         Returns a wakeup object. Will cycle SWCLK with SWDIO high for
         at least 50 cycles.
         """
-        return Wakeup()
+        return Wakeup(cycles)
     
 class Operation(object):
     def __repr__(self):
@@ -213,8 +213,11 @@ class JtagToSwd(Operation):
     out = bitstring.BitString(0b1110011110011110, 16)
 
 class Wakeup(Operation):
+    def __init__(self, cycles):
+        self.cycles = cycles
+
     def __str__(self):
-        return "<SWD Wakeup>"
+        return "<Wakeup %d>" % self.cycles
 
 class Run(Operation):
     def __init__(self, cycles):

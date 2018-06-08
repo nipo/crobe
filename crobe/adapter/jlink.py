@@ -377,9 +377,10 @@ class SwdInterface(JLinkInterface, swd.Interface):
                         used += 2
 
                 elif isinstance(op, swd.Wakeup):
-                    oe_list.append(b"\xff" * 7)
-                    out_list.append(b'\xff' * 7)
-                    used += 7
+                    c = (op.cycles + 7) // 8
+                    oe_list.append(b"\xff" * c)
+                    out_list.append(b'\xff' * c)
+                    used += c
 
                 elif isinstance(op, swd.Run):
                     c = (op.cycles + 7) // 8

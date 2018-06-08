@@ -226,10 +226,13 @@ class SwdInterface(swd.Interface):
                         rsp_size += 1
                     
                 elif isinstance(op, swd.Wakeup):
-                    self.turnaround_cycles = 1
-                    cmd[cmd_size] = self.CMD_RUN | 0x40 | 49
-                    cmd_size += 1
-                    rsp_size += 1
+                    count = op.cycles
+                    while count:
+                        c = min((64, count))
+                        count -= c
+                        cmd[cmd_size] = self.CMD_RUN | 0x40 | (c - 1)
+                        cmd_size += 1
+                        rsp_size += 1
 
                 elif isinstance(op, swd.Run):
                     count = op.cycles

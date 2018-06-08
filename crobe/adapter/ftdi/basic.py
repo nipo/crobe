@@ -459,7 +459,7 @@ class SwdInterface(BaseInterface, swd.Interface):
 
                 elif isinstance(op, swd.Wakeup):
                     cmd.append(self.__cmd_oe_on1)
-                    cmd.append(self.handle.cmd_idle(50, 1))
+                    cmd.append(self.handle.cmd_idle(op.cycles, 1))
 
                 elif isinstance(op, swd.Run):
                     cmd.append(self.handle.cmd_idle(op.cycles, 0))
