@@ -1,5 +1,22 @@
 import logging
 import weakref
+import inspect
+
+class Signal:
+    def __init__(self):
+        self.__slots = weakref.WeakSet([])
+
+    def connect(self, slot):
+        if inspect.ismethod(slot):
+            r = weakref.WeakMethod(slot)
+        else:
+            r = weakref.ref(slot)
+
+        self.__slots.add(r)
+
+    def __call__(self, *args, **kwargs):
+        for s in self.__slots:
+            s()(*args, **kwargs)
 
 class Component(object):
     """
