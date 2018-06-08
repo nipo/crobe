@@ -345,25 +345,41 @@ class Program:
 
         raise ValueError("Not bitstream data in %s" % filename)
 
+    EXT_MAP = {
+        ".bin": "bin",
+        ".bit": "bit",
+        ".bit.gz": "bit",
+        ".img": "img",
+        ".img.gz": "img",
+        ".hex": "ihex",
+        ".ihex": "ihex",
+        ".mcs": "ihex",
+        ".elf": "elf",
+        ".out": "elf",
+        ".axf": "elf",
+        }
+
     @classmethod
     def from_file(cls, filename, offset = 0):
         """Load a Program from a file"""
         from os.path import splitext
         from elftools.common.exceptions import ELFError
 
-        if filename.endswith(".bin"):
-            return cls.from_bin(filename, offset)
-        if filename.endswith(".bit") or filename.endswith(".bit.gz"):
-            return cls.from_bit(filename, offset)
-        if filename.endswith(".img") or filename.endswith(".img.gz"):
-            return cls.from_img(filename, offset)
-        if filename.endswith(".hex") or filename.endswith(".ihex") or filename.endswith(".mcs"):
-            return cls.from_ihex(filename, offset)
-        try:
-            return cls.from_elf(filename, offset)
-        except ELFError:
-            pass
-        raise RuntimeError("Format of %s not .bin, .hex or ELF" % filename)
+        parser = None
+
+        force_type = filename.split(":")[-1]
+        if len(force_type) == 3:
+            parser = force_type.lower()
+            filename = filename[:-len(force_type)-1]
+        else:
+            for ext, p in cls.EXT_MAP.items():
+                if filename.endswith(ext):
+                    parser = p
+                    break
+
+        if parser is not None:
+            return getattr(cls, "from_" + parser)(filename, offset)
+        raise RuntimeError("Format of %s not known" % filename)
 
     def save(self, filename):
         if filename.endswith(".bin"):
@@ -402,12 +418,12 @@ def cli():
     pass
 
 @cli.command(help = "Dump file parsing results")
-@click.argument("program", type = click.Path(exists = True, dir_okay = False))
+@click.argument("program", type = click.Path(dir_okay = False))
 def dump(program):
     Program.from_file(program).pprint()
 
 @cli.command(help = "Convert to binary")
-@click.argument("program", type = click.Path(exists = True, dir_okay = False))
+@click.argument("program", type = click.Path(dir_okay = False))
 @click.argument("bin", type = click.File("wb"))
 def to_bin(program, bin):
     Program.from_file(program).bin_dump(bin)
