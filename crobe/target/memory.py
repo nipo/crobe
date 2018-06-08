@@ -178,6 +178,7 @@ class Loadable:
         flashes = self.children_of_class(Flash)
         for f in flashes:
             f.erase(0, f.size)
+        self.force_blank()
 
     def write(self, program):
         regions = self.children_of_class(Region)

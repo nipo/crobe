@@ -10,8 +10,11 @@ class Bank(memory.NandFlash):
         self.flash = flash
 
     def erase(self, offset, size):
-        assert 0 <= offset < size
-        assert 0 <= offset + size <= size
+        if not size:
+            return
+
+        assert 0 <= offset < size, (offset, size)
+        assert 0 <= offset + size <= size, (offset, size)
 
         if size == self.size:
             self.flash.erase_all()
