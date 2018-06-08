@@ -65,32 +65,41 @@ class Interface(base.Interface):
         self.turnaround_cycles = 1
 
     def line_reset(self):
+        if self.do_reset:
+            self.reset = True
+            time.sleep(.1)
+            self.reset = False
         ops = [self.cmd_wakeup(), self.cmd_wakeup(),
                self.cmd_wakeup(), self.cmd_wakeup(),
                self.cmd_wakeup(), self.cmd_jtag_to_swd(),
                self.cmd_wakeup(), self.cmd_jtag_to_swd(),
                self.cmd_wakeup(), self.cmd_wakeup(),
                self.cmd_wakeup(), self.cmd_wakeup(),
-               self.cmd_run(200),
-               self.cmd_read(False, self.IDCODE)]
+               self.cmd_run(1),
+               self.cmd_read(False, self.IDCODE),
+               ]
         self.execute(ops)
         return ops[-1].data
 
-    def start(self):
-        self.port.reset = True
-        time.sleep(.005)
-        self.port.reset = False
-        time.sleep(.050)
 
+    def start(self):
         # Limit frequency to 1M for line reset and jtag-to-swd.
         self.freq_cap("enumeration", 1e6)
 
-        idcode = self.line_reset()
-        partid = PartId.from_idcode(idcode)
-        self.child_add(self.db.call(partid, self))
+        partid = None
+        for i in range(4):
+            idcode = self.line_reset()
+            try:
+                partid = PartId.from_idcode(idcode)
+            except ValueError:
+                continue
+            break
+
         self.freq_cap("enumeration")
 
-        base.Interface.start(self)
+        if partid is not None:
+            self.child_add(self.db.call(partid, self))
+            base.Interface.start(self)
         
     def _execute(self, operation_list):
         """

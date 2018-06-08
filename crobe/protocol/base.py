@@ -46,15 +46,14 @@ class Interface(model.PortComponent, FreqCapper):
         FreqCapper.__init__(self)
         port.child_add(self, weak = True)
         self._lock = threading.Lock()
+        self.do_reset = False
 
     def close(self):
         self.port.child_remove(self)
 
     def option_set(self, opt):
         if opt == "reset":
-            self.reset = True
-            time.sleep(.1)
-            self.reset = False
+            self.do_reset = True
             return
 
         if opt.startswith("reset="):

@@ -225,6 +225,12 @@ class Chain(PortComponent):
         import time
         self.port.tap_reset()
         self.port.trst = True
+
+        if self.port.do_reset:
+            self.port.reset = True
+            time.sleep(.1)
+            self.port.reset = False
+
         self.port.tap_reset()
         self.port.trst = False
         self.port.tap_reset()
