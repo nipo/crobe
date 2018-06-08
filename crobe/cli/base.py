@@ -98,7 +98,7 @@ def _program_parse(ctx, param, value):
     from ..loadable.object import Program
 
     if not value:
-        ctx.params["program"] = None
+        ctx.params[param.name] = None
         return
 
     program = Program()
@@ -114,13 +114,19 @@ def _program_parse(ctx, param, value):
 
         prog = Program.from_file(filename, offset)
         if len(value) == 1:
-            ctx.params["program"] = prog
+            ctx.params[param.name] = prog
             return
 
         program += prog
 
-    ctx.params["program"] = program
+    ctx.params[param.name] = program
 
-def program():
-    return click.argument('program', nargs = -1, type = str,
+def program(name = "program"):
+    return click.argument(name, nargs = -1, type = str,
                           callback = _program_parse, expose_value = False)
+
+def program_opt(name = "program"):
+    return click.option(name, multiple = True,
+                        type = str,
+                        callback = _program_parse,
+                        expose_value = False)
