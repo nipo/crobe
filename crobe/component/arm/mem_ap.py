@@ -98,7 +98,7 @@ class MemAp(ap.Ap, model.Bus):
             while not self.csw & self.CSW_DEVICEEN:
                 self.csw = self.csw | self.CSW_SPIDEN
         else:
-            self.csw = self.csw & ~self.CSW_SPIDEN
+            self.csw = self.csw & ~self.CSW_SPIDEN & ~self.CSW_DBGSWEN
 
     def option_set(self, opt):
         if opt.startswith("base="):
@@ -137,7 +137,7 @@ class MemAp(ap.Ap, model.Bus):
             csw_dirty = True
             csw = 0x012
 
-            #self.logger.debug("Executing %s", transfers)
+            self.logger.debug("Executing %s", transfers)
 
 
             for i, t in enumerate(transfers):

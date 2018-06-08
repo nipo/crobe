@@ -13,6 +13,7 @@ from ... import memory
 from ....puppet import Puppet
 from ....db import Db
 from ....util.info import TimedLogger
+import click
 
 __all__ = ["SoC", 'ArmMPuppet', 'StubFlash']
 
@@ -22,9 +23,9 @@ class PuppetStub:
         self.code = code
         self.zone = self.puppet.allocate(len(code))
 
-    def call(self, *args):
+    def call(self, *args, timeout = None):
         self.zone.write(self.code)
-        return self.puppet.call(self.zone.address + 1, *args)
+        return self.puppet.call(self.zone.address + 1, *args, timeout = timeout)
 
     def prepare(self, *args):
         self.zone.write(self.code)
@@ -33,8 +34,8 @@ class PuppetStub:
     def run(self):
         return self.puppet.run()
 
-    def wait(self):
-        self.puppet.wait()
+    def wait(self, timeout = None):
+        self.puppet.wait(timeout = timeout)
         r0 = self.puppet.arg_regs[0]
         return self.puppet.cpu.reg_read([r0])[r0]
 
@@ -79,89 +80,32 @@ class StubFlash(BusFlash):
     def __init__(self, name, base, size, page_size, soc):
         BusFlash.__init__(self, name, base, size, page_size, soc.buses[0])
         self.soc = soc
-        self.__prepared = False
-
-    def _prepare(self):
-        if self.__prepared:
-            return
-        self.prepare()
-        self.__prepared = True
-
-    def prepare(self):
-        pass
 
     def erase(self, offset, size):
-        self.prepare()
+        self.soc.attach()
 
-        with TimedLogger(self.logger,
-                         "erase 0x%08x-0x%08x" % (
-            self.address + offset, self.address + offset + size)):
-            puppet = self.soc.puppet()
-            code = puppet.stub(self.RANGE_ERASE)
-            code.call(self.address + offset, size, self.page_size)
+        puppet = self.soc.puppet()
+        code = puppet.stub(self.RANGE_ERASE)
+        code.call(self.address + offset, size, self.page_size)
 
         if size == self.size:
             self.is_blank = True
             
     def write(self, offset, data):
 #        assert offset % self.page_size == 0, hex(offset)
-
-        with TimedLogger(self.logger,
-                         "write 0x%08x-0x%08x" % (
-            self.address + offset, self.address + offset + len(data))):
-            puppet = self.soc.puppet()
-            code = puppet.stub(self.PAGE_WRITE)
-
-            page_zone = puppet.allocate(self.page_size, self.page_size)
-            for off in range(0, len(data), self.page_size):
-                chunk = data[off : off + self.page_size]
-                page_zone.write(chunk)
-                code.call(self.address + off, page_zone.address, len(chunk))
-            puppet.unallocate(page_zone)
-
-        self.is_blank = False
-
-    def load(self, program):
-        self.prepare()
+        self.soc.attach()
 
         puppet = self.soc.puppet()
         code = puppet.stub(self.PAGE_WRITE)
 
-        if True:
-            page_zone = puppet.allocate(self.page_size, self.page_size), \
-                        puppet.allocate(self.page_size, self.page_size)
+        page_zone = puppet.allocate(self.page_size, self.page_size)
+        for off in range(0, len(data), self.page_size):
+            chunk = data[off : off + self.page_size]
+            page_zone.write(chunk)
+            code.call(self.address + off, page_zone.address, len(chunk))
+        puppet.unallocate(page_zone)
 
-            running = None
-            for i, page in enumerate(program.paged(self.page_size, fill = b'\xff')):
-                self.logger.info("Loading page at 0x%08x...", page.address)
-                z = page_zone[i % 2]
-
-                z.write(page.data)
-
-                if running is not None:
-                    self.logger.info("Done writing page at 0x%08x...", running)
-                    code.wait()
-                    running = None
-
-                code.prepare(page.address, z.address, self.page_size)
-                code.run()
-                running = page.address
-
-            if running:
-                code.wait()
-                self.logger.info("Done writing page at 0x%08x...", running)
-            puppet.unallocate(page_zone[0])
-            puppet.unallocate(page_zone[1])
-        else:
-            page_zone = puppet.allocate(self.page_size, self.page_size)
-            for i, page in enumerate(program.paged(self.page_size, fill = b'\xff')):
-                self.logger.info("Loading page at 0x%08x...", page.address)
-                chunk = 256
-                for i in range(0, self.page_size, chunk):
-                    page_zone.write(page.data[i:i+chunk], i)
-                code.call(page.address, page_zone.address, self.page_size)
-                self.logger.info("Done writing page at 0x%08x", page.address)
-            puppet.unallocate(page_zone)
+        #self.is_blank = False
 
 class SoC(model.SoC):
     db = Db()
@@ -182,8 +126,34 @@ class SoC(model.SoC):
                 rtidx += 1
                 idx += 1
 
+        self.bus = self.buses[0]
+
     def puppet(self):
         return ArmMPuppet(self)
+
+    def attach(self):
+        if self.attached:
+            return
+
+        model.SoC.attach(self)
+
+        for s in self.children_of_class(Cortex):
+            s.attach()
+
+    def detach(self):
+        # Actually detach even if not attached, but do not complain if it hangs
+        if not self.attached:
+            for s in self.children_of_class(Cortex):
+                try:
+                    s.detach()
+                except:
+                    pass
+            return
+
+        for s in self.children_of_class(Cortex):
+            s.detach()
+
+        model.SoC.detach(self)
 
     def ram_size_probe(self, address, size):
         import random
@@ -220,11 +190,76 @@ class SoC(model.SoC):
         cpu.itm.trace_enable(1)
         cpu.etm.trace_enable(2)
 
+    def run_attached(self):
+        cpu, = self.children_of_class(Cortex)
+        cpu.halt()
+        cpu.reset(False)
+
     def reset(self):
         import time
         self.port.port.reset = True
+        self.port.port.reset = True
         time.sleep(100e-3)
         self.port.port.reset = False
+        self.port.port.reset = False
+
+    def write(self, program):
+        cpu, = self.children_of_class(Cortex)
+        cpu.halt()
+
+        flashs = list(self.children_of_class(StubFlash))
+        if not flashs:
+            return Loadable.write(self, program)
+
+        others = [r for r in self.children_of_class(memory.Region) if r not in flashs]
+
+        puppet = self.puppet()
+
+        for f in flashs:
+            code = puppet.stub(f.PAGE_WRITE)
+
+            page_zone = puppet.allocate(f.page_size, f.page_size), \
+                        puppet.allocate(f.page_size, f.page_size)
+
+            pages = program\
+                    .within(f.address, f.address + f.size)\
+                    .paged(f.page_size, fill = b'\xff')
+
+            with click.progressbar(pages, label = "Writing %-8s" % f.name) as bar:
+                running = None
+
+                for i, page in enumerate(bar):
+                    self.logger.debug("Loading page at 0x%08x...", page.address)
+                    z = page_zone[i % 2]
+
+                    z.write(page.data)
+
+                    if running is not None:
+                        code.wait(.4)
+                        running = None
+
+                    code.prepare(page.address, z.address, f.page_size)
+                    code.run()
+                    running = page.address
+
+                if running:
+                    code.wait(.4)
+
+                puppet.unallocate(page_zone[0])
+                puppet.unallocate(page_zone[1])
+
+        for r in others:
+            if isinstance(r, memory.Ram):
+                continue
+            blank = r.is_blank
+
+            pages = program.within(r.address, r.address + r.size)
+            if not blank:
+                r.erase(pages.address - r.address, pages.end - pages.address)
+
+            with click.progressbar(pages, label = "Writing %-8s" % r.name) as bar:
+                for p in bar:
+                    r.write(p.address - r.address, p.data)
 
 @SoC.db.register_default
 def default_soc(ap):

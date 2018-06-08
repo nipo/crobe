@@ -44,18 +44,6 @@ def program(ctx, program, erase, check, run):
             return 1
 
     if run:
-        bus = target.bus
-
-        fpbs = bus.children_of_class(fpb.Fpb)
-        if fpbs:
-            fpbs[0].disable()
-        memap = bus.children_of_class(mem_ap.MemAp)
-        if memap:
-            memap[0].enable(False)
-        dps = bus.children_of_class(dp.Dp)
-        if dps:
-            dps[0].debug_enable(0)
-
         try:
             target.reset()
         except AttributeError:

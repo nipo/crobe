@@ -56,8 +56,14 @@ class Scs(MemoryMappedComponent):
     def __str__(self):
         return "System Control Space for %s" % self.cpu_name
 
-    def enable(self):
-        self.demcr = self.DEMCR_TRCENA
+    def enable(self, en = True):
+        if en:
+            self.demcr = self.DEMCR_TRCENA
+        else:
+            self.cpu_resume()
+            self.demcr = 0
+            self.reg_write(self.DHCSR, self.DHCSR_KEY)
+            self.reg_write(self.DHCSR, 0)
             
     @property
     def has_fpu(self):

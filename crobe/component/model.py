@@ -171,6 +171,12 @@ class Cpu(Component):
     def halt(self):
         raise NotImplementedError()
 
+    def attach(self):
+        raise NotImplementedError()
+
+    def detach(self):
+        raise NotImplementedError()
+
     def reset(self, stop = True):
         raise NotImplementedError()
 

@@ -53,7 +53,7 @@ class Puppet(Component):
         self.trampoline = self.allocate(len(trampoline_code) + 4)
         self.trampoline_code = trampoline_code
 
-        self.logger.info("ready, trampoline at 0x%08x", self.trampoline.address)
+        self.logger.debug("ready, trampoline at 0x%08x", self.trampoline.address)
         
     def allocate(self, size, align = 1):
         return Zone(self.cpu.bus, self.ram_allocator.allocate(size, align))
@@ -62,6 +62,8 @@ class Puppet(Component):
         self.ram_allocator.free(zone.range)
 
     def prepare(self, pc, *args):
+        self.logger.debug("Preparing 0x%08x(%s)", pc, ', '.join(hex(a) for a in args))
+
         assert self.cpu.state != self.cpu.State.RUN
         assert len(args) <= len(self.arg_regs)
 
@@ -79,30 +81,39 @@ class Puppet(Component):
 
     def run(self):
         self.cpu.resume(allow_interrupts = False)
+        self.logger.debug("...started !")
 
     def step(self):
         self.cpu.step()
         
-    def wait(self, max_time = .05):
-        deadline = time.time() + max_time
+    def wait(self, timeout = None):
+        deadline = time.time() + (timeout or .2)
         while self.cpu.state == self.cpu.State.RUN and time.time() < deadline:
             pass
 
-        self.logger.debug("state %s reason %s", self.cpu.state, self.cpu.halt_cause)
+        st = self.cpu.state
+        hc = self.cpu.halt_cause
 
-        if self.cpu.state == self.cpu.State.RUN:
+        dump = False
+        if st == self.cpu.State.RUN:
             self.cpu.halt()
             self.logger.warning("Forced stop of target")
+            dump = True
 
+        if st in [self.cpu.State.LOCKUP, self.cpu.State.FAULT]:
+            self.logger.warning("CPU ended up in bad state")
+            dump = True
+
+        if dump:
+            self.logger.info("State %s reason %s", st, hc)
             regs = self.cpu.reg_read(self.cpu.registers)
             for r, v in sorted(regs.items()):
                 self.logger.info("After stop %s: 0x%08x", r.name, v)
             
-    def call(self, pc, *args):
+    def call(self, pc, *args, timeout = None):
         self.prepare(pc, *args)
-        self.logger.info("Running 0x%08x(%s)", pc, ', '.join(hex(a) for a in args))
         self.run()
-        self.wait()
+        self.wait(timeout = timeout)
         r0 = self.arg_regs[0]
         return self.cpu.reg_read([r0])[r0]
 

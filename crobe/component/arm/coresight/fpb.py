@@ -20,11 +20,8 @@ class Fpb(MemoryMappedComponent):
 
         self.logger.info("%d litteral, %d code", self.lit_count, self.code_count)
 
-    def enable(self):
-        self.reg_write(self.CTRL, 0x3)
-
-    def disable(self):
-        self.reg_write(self.CTRL, 0x2)
+    def enable(self, enable = True):
+        self.reg_write(self.CTRL, 0x3 if enable else 0)
         
     def __str__(self):
         return "Flash Patch and Breakpoint unit"

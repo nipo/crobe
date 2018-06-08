@@ -1,4 +1,5 @@
 from ..model import Cpu, Register
+from .coresight.model import MemoryMappedComponent
 from .coresight.dwt import Dwt
 from .coresight.fpb import Fpb
 from .coresight.dbg import Dbg
@@ -59,9 +60,6 @@ class Cortex(Cpu):
 
         self.register_by_name = dict([(r.name, r) for r in self.registers])
         self.register_by_number = dict([(r.number, r) for r in self.registers])
-
-        if self.fpb:
-            self.fpb.enable()
         
     def register_get(self, thing):
         if isinstance(thing, Register):
@@ -112,6 +110,16 @@ class Cortex(Cpu):
     
     def halt(self):
         return self.scs.cpu_halt()
+
+    def attach(self):
+        self.scs.enable()
+
+        if self.fpb:
+            self.fpb.enable()
+
+    def detach(self):
+        for b in self.bus.children_of_class(MemoryMappedComponent):
+            b.enable(False)
 
     def reset(self, block_after_reset = True):
         if block_after_reset:

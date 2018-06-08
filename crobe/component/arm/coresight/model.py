@@ -67,6 +67,9 @@ class MemoryMappedComponent(model.BusComponent):
 
         return self
 
+    def enable(self, enable = True):
+        pass
+
     def reg_read(self, offset):
         op = self.cmd_reg_read(offset)
         self.bus.execute([op])
