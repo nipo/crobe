@@ -403,6 +403,7 @@ class Series7(Series67):
         self.dr_shift(self.IR_JPROGRAM, None)
         self.dr_shift(self.IR_ISC_NOP, None)
         self.run(10000)
+        self.efuse_row_read(0)
 
     def bbram_close(self):
         self.dr_shift(self.IR_ISC_DISABLE, None)
