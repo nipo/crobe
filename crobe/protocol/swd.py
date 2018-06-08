@@ -62,9 +62,32 @@ class Interface(base.Interface):
 
     def __init__(self, port, name = None):
         base.Interface.__init__(self, port, (name or port.name) + "/SWD")
+        self.cypress_acquire = False
         self.turnaround_cycles = 1
 
     def line_reset(self):
+        if self.cypress_acquire:
+            for delay in range(int(self.freq * 1.2e-3),
+                               int(self.freq * 5e-3),
+                               int(self.freq / 20e3)):
+                self.reset = True
+                time.sleep(0.01)
+                self.reset = False
+                op = self.cmd_read(False, self.IDCODE)
+                ops = [self.cmd_wakeup(delay)] + [
+                       op,
+                       self.cmd_write(False, 1, 0x54000000),
+                       self.cmd_write(False, 2, 0),
+                       self.cmd_write(True, 0, 0x00000002), # CSW
+                       self.cmd_write(True, 1, 0x40030014), # TAR
+                       self.cmd_write(True, 3, 0x80000000), # TEST_MODE
+                       ]
+                self.execute(ops)
+                if op.ack != Ack.OK or ops[-1].ack != Ack.OK:
+                    continue
+                return op.data
+            return 0
+
         if self.do_reset:
             self.reset = True
             time.sleep(.1)
@@ -81,6 +104,11 @@ class Interface(base.Interface):
         self.execute(ops)
         return ops[-1].data
 
+    def option_set(self, opt):
+        if opt == "cypress_acquire":
+            self.cypress_acquire = True
+            return
+        base.Interface.option_set(self, opt)
 
     def start(self):
         # Limit frequency to 1M for line reset and jtag-to-swd.
