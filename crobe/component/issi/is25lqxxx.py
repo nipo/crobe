@@ -5,6 +5,7 @@ import binascii
 class Is25Lq(SfdpFlash):
     max_freq = 106e6
     CMD_READ_UID = b"\x4b"
+    write_buffer_size = 256
 
     def __init__(self, port, idr):
         SfdpFlash.__init__(self, port, idr, "IS25LQ")

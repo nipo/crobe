@@ -10,9 +10,9 @@ class W25x(SpiFlash):
     CMD_RESET = None
     CMD_4KB_ERASE = b'\x20'
     SECTOR_INFO = [
-        {"size": 4 * 1024, "erase_cmd": b'\x20'},
-        {"size": 32 * 1024, "erase_cmd": b'\x52'},
-        {"size": 64 * 1024, "erase_cmd": b'\xd8'},
+        {"type": 1, "size": 4 * 1024, "erase_cmd": b'\x20'},
+        {"type": 2, "size": 32 * 1024, "erase_cmd": b'\x52'},
+        {"type": 3, "size": 64 * 1024, "erase_cmd": b'\xd8'},
         ]
     page_size = 256
     total_size = 4 * 1024 * 1024 / 8

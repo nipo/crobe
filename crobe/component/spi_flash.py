@@ -2,11 +2,19 @@ from ..model import PortComponent
 from ..db import Db, NoMatch
 from ..protocol import spi
 from ..util.pretty import base2, metric
+from ..jep106 import name_get
 import binascii
 import struct
 import time
 
 __all__ = ["SpiFlash"]
+
+@spi.Target.db.register("flash")
+def spi_flash_probe(target, *args):
+    try:
+        return SpiFlash.detect(target)
+    except ValueError:
+        raise NoMatch("Not a spi flash")
 
 class SpiFlash(PortComponent):
     db = Db()
@@ -29,6 +37,8 @@ class SpiFlash(PortComponent):
     CMD_RESET = b'\x99'
     STATUS_WIP = 1
     STATUS_WEL = 2
+    write_buffer_size = 1
+    SECTOR_INFO = []
     
     def __init__(self, port, idr = 0, name = "SPI Flash"):
         PortComponent.__init__(self, port, name)
@@ -37,11 +47,18 @@ class SpiFlash(PortComponent):
         self.idr = idr
         self.logger.info("SPI flash, IDR %06x", self.idr)
 
+    @property
+    def page_size(self):
+        return self.write_buffer_size
+
     def info(self):
         self.logger.info("Total size: %s (%s)", base2(self.total_size, "B"), base2(self.total_size * 8, "b"))
-        for i, s in enumerate(self.SECTOR_INFO):
-            self.logger.info("- level %d: %d x %s sectors, erase command: 0x%02x",
-                             i, self.total_size / s["size"], base2(s["size"], 'B'), s["erase_cmd"][0])
+        self.logger.info("%d bytes address, %d-byte write buffer", self.ADDRESS_SIZE, self.write_buffer_size)
+        self.logger.info("Fast read: %02x, Page program: %02x, erase commands:", self.CMD_FAST_READ[0], self.CMD_PAGE_PROGRAM[0])
+        for s in self.SECTOR_INFO:
+            self.logger.info("- type %d: %d x %s sectors, erase command: %s",
+                             s["type"], self.total_size / s["size"], base2(s["size"], 'B'),
+                             ("0x%02x" % s["erase_cmd"][0]) if s["erase_cmd"] else "-")
         if self.CMD_WRITE_STATUS:
             self.logger.info("Volatile status write op: 0x%02x", self.CMD_WRITE_STATUS[0])
 
@@ -62,11 +79,41 @@ class SpiFlash(PortComponent):
             port.cmd_cs(False),
             ])
         time.sleep(.3)
-        self = cls(port)
+
+        sfdp = port.cmd_shift(4)
+        idr = port.cmd_shift(0x13)
+
+        cmds = [port.cmd_cs(True),
+                port.cmd_shift(b"\x9f", read_miso = False),
+                idr,
+                port.cmd_cs(False),
+                port.cmd_shift(b'\x00', read_miso = False),
+                port.cmd_cs(True),
+                port.cmd_shift(b"\x5a\x00\x00\x00\x00", read_miso = False),
+                sfdp,
+                port.cmd_cs(False),
+                ]
+        port.execute(cmds)
+
+        sfdp = sfdp.miso
+        id_cfi = idr.miso[0x10:0x13]
+        idr = int.from_bytes(idr.miso[:3], "big")
+
+        self = None
         try:
-            self = cls.db.call(self.idr, port, self.idr)
+            self = cls.db.call(idr, port, idr)
         except NoMatch:
             pass
+
+        if self is None and sfdp == b'SFDP':
+            self = SfdpFlash(port, idr)
+
+        if self is None and id_cfi == b'QRY':
+            self = IdCfiFlash(port, idr)
+
+        if self is None:
+            self = cls(port)
+        
         self.info()
 
         self.port.freq_cap(self, self.max_freq)
@@ -89,12 +136,12 @@ class SpiFlash(PortComponent):
             rsp = self.port.cmd_shift(size)
             cmds.append(rsp)
         cmds += [self.port.cmd_cs(False)]
-        self.logger.debug("<< %s %d", binascii.b2a_hex(cmd), size)
+        #self.logger.debug("<< %s %d", binascii.b2a_hex(cmd), size)
         self.port.execute(cmds)
         if size:
-            self.logger.debug(">> %s", binascii.b2a_hex(rsp.miso))
+            #self.logger.debug(">> %s", binascii.b2a_hex(rsp.miso))
             return rsp.miso
-        self.logger.debug(">> -")
+        #self.logger.debug(">> -")
 
         
     def idr_get(self):
@@ -112,8 +159,10 @@ class SpiFlash(PortComponent):
         retries = 0
         while bool(self.status & self.STATUS_WEL) != enable:
             if enable:
+                self.logger.debug("Write enable (%02x)", self.CMD_WRITE_ENABLE[0])
                 self.command(self.CMD_WRITE_ENABLE, 0)
             else:
+                self.logger.debug("Write disable (%02x)", self.CMD_WRITE_DISABLE[0])
                 self.command(self.CMD_WRITE_DISABLE, 0)
             retries += 1
 
@@ -122,21 +171,29 @@ class SpiFlash(PortComponent):
 
     @property
     def status(self):
-        return self.command(self.CMD_READ_STATUS, 1)[0]
+        st = self.command(self.CMD_READ_STATUS, 1)[0]
+#        self.logger.debug("Status: %02x", st)
+        return st
             
     def erase_all(self):
         self.write_enable(True)
+        self.logger.debug("Chip erase (%02x)", self.CMD_CHIP_ERASE[0])
         self.command(self.CMD_CHIP_ERASE, 0)
+        self.logger.debug("Waiting for erase to complete")
         while self.status & self.STATUS_WIP:
             time.sleep(.1)
             pass
         self.write_enable(False)
     
     def erase(self, base, size):
+        self.logger.debug("Erasing %08x, %s", base, base2(base+size, 'B'))
+
         chosen = None
         while size > 0:
             try_again = False
             for i, s in enumerate(self.SECTOR_INFO):
+                if not s["erase_cmd"]:
+                    continue
                 ss = s["size"]
                 if base % ss == 0 and size <= ss == 0:
                     chosen = s
@@ -144,7 +201,7 @@ class SpiFlash(PortComponent):
             if not chosen:
                 try_again = True
                 chosen = self.SECTOR_INFO[0]
-                assert base % chosen["size"] == 0
+                assert base % chosen["size"] == 0 and chosen["erase_cmd"]
 
             for addr in range(base, base + size, chosen["size"]):
                 self.erase_sector(addr, chosen)
@@ -157,10 +214,11 @@ class SpiFlash(PortComponent):
 
     def erase_sector(self, addr, si):
         self.write_enable(True)
-        self.logger.info("Erasing %d bytes at %08x", si["size"], addr)
+        self.logger.debug("Erasing %d bytes at %08x (%02x)", si["size"], addr, si["erase_cmd"][0])
         self.command(si["erase_cmd"] + self.addr(addr), 0)
         while self.status & self.STATUS_WIP:
             pass
+        self.write_enable(False)
 
     def write(self, base, data):
         si = self.SECTOR_INFO[0]
@@ -172,11 +230,12 @@ class SpiFlash(PortComponent):
             chunk = data[offset : offset + page_size]
             chunk += b"\xff" * ((-len(chunk)) % page_size)
 
-            self.logger.info("Writing page at 0x%08x...", offset)
-            for offset2 in range(0, page_size, 256):
+            write_chunk_size = self.write_buffer_size
+            for offset2 in range(0, page_size, write_chunk_size):
+                self.logger.debug("Writing chunk at 0x%08x... (%02x)", offset + offset2, self.CMD_PAGE_PROGRAM[0])
                 self.write_enable(True)
                 self.command(self.CMD_PAGE_PROGRAM + self.addr(base + offset + offset2)
-                             + chunk[offset2 : offset2 + 256], 0)
+                             + chunk[offset2 : offset2 + write_chunk_size], 0)
                 while self.status & self.STATUS_WIP:
                     pass
 
@@ -190,19 +249,43 @@ class SpiFlash(PortComponent):
                 return False
         return True
 
-@spi.Target.db.register("flash")
-def spi_flash_probe(target, *args):
-    try:
-        return SpiFlash.detect(target)
-    except ValueError:
-        raise NoMatch("Not a spi flash")
-    
-@SpiFlash.db.register_default
-class SfdpFlash(SpiFlash):
+class SelfDescriptiveFlash(SpiFlash):
+    def __init__(self, port, idr, name):
+        SpiFlash.__init__(self, port, idr, name)
+
+    def _id_cfi_parse(self, data):
+        for off in range(0, len(data), 16):
+            self.logger.info("ID-CFI %04x %s", off, binascii.b2a_hex(data[off:off+16]))
+        assert data[0x10:0x13] == b"QRY"
+
+        si = []
+        self.total_size = 1 << data[0x27]
+        self.write_buffer_size = 1 << int.from_bytes(data[0x2a:0x2c], "little")
+        for i in range(data[0x2c]):
+            y, z = struct.unpack("<HH", data[0x2d + 4 * i: 0x2d + 4 * i + 4])
+            block_size = z * 256
+            region_size = block_size * (y + 1)
+            si.append(dict(size = region_size, type = i+1, erase_cmd = None))
+        if not self.SECTOR_INFO:
+            self.SECTOR_INFO = si
+
+class IdCfiFlash(SelfDescriptiveFlash):
+    def __init__(self, port, idr, name = "ID-CFI Flash"):
+        SelfDescriptiveFlash.__init__(self, port, idr, name)
+
+        hdr = self.command(self.CMD_READ_JEDEC_ID, 4)
+        length = hdr[3]
+
+        id_cfi_blob = self.command(self.CMD_READ_JEDEC_ID, 4 + (length or 0x100))
+
+        self._id_cfi_parse(id_cfi_blob)
+
+class SfdpFlash(SelfDescriptiveFlash):
     CMD_SFDP_READ = b'\x5a'
 
     def __init__(self, port, idr, name = "SFDP Flash"):
-        SpiFlash.__init__(self, port, idr, name)
+        SelfDescriptiveFlash.__init__(self, port, idr, name)
+        self.__address_4byte_support = False
 
         sfdp_header = self.sfdp_read(0, 8)
         if not sfdp_header.startswith(b'SFDP'):
@@ -215,22 +298,100 @@ class SfdpFlash(SpiFlash):
 
         for i in range(header_count):
             jid, minor, major, length, ptp = struct.unpack("<BBBBL", headers[i * 8: (i+1)*8])
+            jid |= (ptp & 0xff000000) >> 16
             ptp = ptp & 0xffffff
-            self.logger.info("- %d ID 0x%02x v%d.%d at %08x, %d bytes",
+            self.logger.info("- %d ID 0x%04x v%d.%d at %08x, %d bytes",
                              i, jid, major, minor, ptp, length * 4)
 
             data = self.sfdp_read(ptp, length * 4)
-            self.logger.info("  data: %s", binascii.b2a_hex(data))
+            #self.logger.info("  data: %s", binascii.b2a_hex(data))
             
-            if jid == 0:
-                if major == 1 and minor <= 5:
-                    self._parse_sfdp_1_5(data)
-                elif major == 1 and minor == 6:
-                    self._parse_sfdp_1_6(data)
-                else:
-                    raise ValueError("Unsupported SFDP version: %d.%d" % (major, minor))
+            if jid & 0xff00 == 0xff00:
+                # JEDEC std
+                if jid == 0xff00:
+                    if major == 1 and minor <= 5:
+                        self._sfdp_1_5_parse(data)
+                        continue
+                    elif major == 1 and minor == 6:
+                        self._sfdp_1_6_parse(data)
+                        continue
+                    else:
+                        self.logger.warning("Unsupported SFDP version: %d.%d" % (major, minor))
+                elif jid == 0xff81:
+                    if major == 1 and minor == 0:
+                        self._sector_map_parse(data)
+                        continue
+                elif jid == 0xff84:
+                    if major == 1 and minor == 0:
+                        self._4byte_addr_insts_parse(data)
+                        continue
 
-    def _parse_sfdp_1_5(self, data):
+                self.logger.info("    Data: %s", binascii.b2a_hex(data))
+                continue
+
+            self.logger.info("    Vendor data: %s", name_get((jid >> 8) - 1, jid & 0x7f))
+
+            if jid == 0x0101:
+                if major == 1 and minor == 1:
+                    self._id_cfi_parse(data)
+            else:
+                self.logger.info("    Data: %s", binascii.b2a_hex(data))
+
+        if self.total_size > (1 << (self.ADDRESS_SIZE * 8)):
+            self.total_size = 1 << (self.ADDRESS_SIZE * 8)
+            self.logger.warning("Only lower %s accessible with %d-byte addresses",
+                                base2(self.total_size, "B"), self.ADDRESS_SIZE)
+
+    def _sector_map_parse(self, data):
+        for offs in range(0, len(data), 8):
+            chunk = data[offs: offs + 8]
+            map_desc = bool(chunk[0] & 2)
+            last = bool(chunk[0] & 1)
+
+            self.logger.debug("  - Command/Map %s", binascii.b2a_hex(chunk))
+
+            if map_desc:
+                _, cmd_instr, len_lat, mask, address = struct.unpack("<BBBBL", chunk)
+                length = len_lat >> 6
+                lat = len_lat & 0xf
+
+                self.logger.debug("  - Command descriptor mask %02x len %x lat %x cmd %02x, addr %08x",
+                                 mask, length, lat, cmd_instr, address)
+            else:
+                _, cid, rcount, _, etype_size = struct.unpack("<BBBBL", chunk)
+                etype = etype_size & 0xf
+                size = etype_size >> 8
+
+                self.logger.debug("  - Map descriptor id %d rcount %d erase %x size %d",
+                                 cid, rcount + 1, etype, size)
+
+            if last:
+                break
+
+    def _4byte_addr_insts_parse(self, data):
+        if not self.__address_4byte_support:
+            return
+
+        support, erase_cmd = struct.unpack("<L4s", data)
+        # Check for 1-1-1 command set
+        # Bit 1: Fast read 1-1-1, cmd 0ch
+        # Bit 6: Page program 1-1-1, cmd 12h
+        # Bit 9-12: Erase for type 1-4
+        mask = 0x42
+        for i in [x["type"] for x in self.SECTOR_INFO]:
+            mask |= 1 << (8 + i) #type is 1-based
+
+        self.logger.debug("  - 4-byte address command info support %06x, expecting %06x", support, mask)
+
+        if (support & mask) == mask:
+            self.ADDRESS_SIZE = 4
+            self.CMD_FAST_READ = b"\x0c"
+            self.CMD_PAGE_PROGRAM = b"\x12"
+            for si in self.SECTOR_INFO:
+                si["erase_cmd"] = erase_cmd[si["type"] - 1:si["type"]]
+            self.logger.info("  - Successful discovery of 4-byte address commands")
+
+    def _sfdp_1_5_parse(self, data):
         if data[0] & 3 == 1:
             self.block_size = 4096
         if data[0] & 0x8:
@@ -240,7 +401,7 @@ class SfdpFlash(SpiFlash):
         if data[2] & 0x6 == 0:
             self.ADDRESS_SIZE = 3
         elif data[2] & 0x6 == 2:
-            self.ADDRESS_SIZE = 4
+            self.__address_4byte_support = True
 
         density, = struct.unpack("<L", data[4:8])
 
@@ -256,13 +417,11 @@ class SfdpFlash(SpiFlash):
             op = data[29 + 2 * i:30 + 2 * i]
             if not s:
                 continue
-            self.SECTOR_INFO.append({"size": 1 << s, "erase_cmd": op})
+            self.SECTOR_INFO.append({"size": 1 << s, "erase_cmd": op, "type": i+1})
 
-        self.page_size = self.SECTOR_INFO[0]["size"]
-
-    def _parse_sfdp_1_6(self, data):
-        self.logger.warning("Should add support for SFDP 1.6 !")
-        return self._parse_sfdp_1_5(data)
+    def _sfdp_1_6_parse(self, data):
+        self.logger.warning("    Parsing SFDP 1.6 as of 1.5")
+        return self._sfdp_1_5_parse(data)
 #        raise ValueError("Unsupported SFDP version: 1.6")
         
     def sfdp_read(self, offset, size):
