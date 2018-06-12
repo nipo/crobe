@@ -279,7 +279,9 @@ class Chain(PortComponent):
             dr = int(dr)
             if len(default_dr) > 500:
                 raise OpenChain()
-
+        if int(default_dr) == 0:
+            raise OpenChain()
+        
         total_dr_length = int(math.log(int(default_dr), 2)) - 1
             
         if total_dr_length == 0:
