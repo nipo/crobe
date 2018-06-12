@@ -3,6 +3,7 @@ from .. import model
 from enum import Enum
 from ..util.pretty import base2
 import click
+import binascii
 
 __all__ = ["Region", "Flash", "NandFlash", "NorFlash", "Eeprom", "Ram", "Peripheral", "Loadable", "Flag", "Type"]
 
@@ -70,7 +71,7 @@ class Flash(Region):
 
     def read(self, offset, size):
         raise NotImplementedError()
-
+    
     def verify(self, program):
         pages = program.paged(self.page_size)
         with click.progressbar(pages, label = "Checking") as bar:
@@ -82,6 +83,14 @@ class Flash(Region):
 
                 if diffs:
                     self.logger.error("Comparison for %s failed: %d/%d bytes differ", s, diffs, len(s))
+                    dumped = 0
+                    for off in range(0, len(s.data), 16):
+                        self.logger.error("Expect 0x%08x %s", s.address + off, binascii.b2a_hex(s.data[off:off+16]))
+                        self.logger.error("Memory 0x%08x %s", s.address + off, binascii.b2a_hex(flash_data[off:off+16]))
+                        
+                        dumped += 1
+                        if dumped >= 10:
+                            break
                     return False
         return True
     
@@ -185,11 +194,23 @@ class Loadable:
         for r in regions:
             blank = r.is_blank
 
-            pages = program.within(r.address, r.address + r.size)
-            if not blank:
-                r.erase(pages.address - r.address, pages.end - pages.address)
+            region_program = program.within(r.address, r.address + r.size)
 
-            with click.progressbar(pages, label = "Writing %-8s" % r.name) as bar:
+            if not blank:
+                r0 = []
+                for p in region_program:
+                    r0.append((p.address - r.address, len(p)))
+                r0.sort()
+                r1 = [r0.pop(0)]
+                for r2 in r0:
+                    if r1[-1][0] + r1[-1][1] >= r2[0]:
+                        r1[-1] = r1[-1][0], r2[0] + r2[1]
+                    else:
+                        r1.append(r2)
+                for r2 in r1:
+                    r.erase(r2[0], r2[1])
+
+            with click.progressbar(region_program, label = "Writing %-8s" % r.name) as bar:
                 for p in bar:
                     r.write(p.address - r.address, p.data)
 
