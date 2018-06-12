@@ -11,6 +11,8 @@ class JtagSpiBridge(spi.Interface):
         self.base_freq = base_freq
         self.__div = 0
 
+        self.child_add(spi.Target(self, "cs0", 0))
+
     @property
     def freq(self):
         return self.base_freq / (self.__div + 1)
@@ -64,7 +66,7 @@ class JtagSpiBridge(spi.Interface):
                         op.__rsp.append(pending[-1])
 
             elif isinstance(op, spi.Cs):
-                pending += self.cmd_io(bytes([self.CMD_SELECT if op.value else self.CMD_UNSELECT]), 1)
+                pending += self.cmd_io(bytes([self.CMD_SELECT if op.value is not None else self.CMD_UNSELECT]), 1)
 
             else:
                 raise base.ProtocolError("Unknown SPI operation %s" % type(op))
