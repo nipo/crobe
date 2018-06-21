@@ -174,14 +174,34 @@ class Loadable:
         for region in self.children_of_class(Region):
             region.is_blank = True
 
-    def read(self, address, size):
-        regions = self.children_of_class(Region)
-        p = Program()
-        for r in regions:
-            if not isinstance(r, Flash):
+    def read(self):
+        total_size = 0
+        to_read = []
+        for region in self.children_of_class(Region):
+            if region.type not in [Type.FLASH, Type.EEPROM]:
                 continue
+            if not (region.flags & set([Flag.PARTIAL_READ, Flag.MM_READ])):
+                continue
+            total_size += region.size
+            to_read.append(region)
 
-            p.append(Segment(r.address, ))
+        with click.progressbar(length = total_size, label = "Reading...") as pb:
+            p = Program()
+            for region in to_read:
+                try:
+                    cs = region.page_size
+                except AttributeError:
+                    cs = 1024
+
+                blob = bytearray()
+                for offset in range(0, region.size, cs):
+                    chunk = region.read(offset, min(cs, region.size - offset))
+                    blob += chunk
+
+                    pb.update(len(chunk))
+
+                p.append(Segment(region.address, blob))
+        return p
 
     def erase_all(self):
         flashes = self.children_of_class(Flash)
@@ -196,7 +216,9 @@ class Loadable:
 
             region_program = program.within(r.address, r.address + r.size)
 
-            if not blank:
+            print(r, list(region_program))
+
+            if not blank and region_program:
                 r0 = []
                 for p in region_program:
                     r0.append((p.address - r.address, len(p)))
@@ -210,17 +232,38 @@ class Loadable:
                 for r2 in r1:
                     r.erase(r2[0], r2[1])
 
-            with click.progressbar(region_program, label = "Writing %-8s" % r.name) as bar:
-                for p in bar:
-                    r.write(p.address - r.address, p.data)
+            for p in region_program:
+                r.write(p.address - r.address, p.data)
 
     def verify(self, program):
         regions = self.children_of_class(Region)
-        for r in regions:
-            if not isinstance(r, Flash):
-                continue
+        to_check = []
 
-            pages = program.within(r.address, r.address + r.size)
-            if not r.verify(pages):
-                return False
+        for region in regions:
+            programmed = program.within(region.address, region.address + region.size)
+            to_check.append((region, programmed))
+
+        total_size = sum(sum(len(s) for s in p) for (r, p) in to_check)
+
+        count = 0
+
+        with click.progressbar(length = total_size, label = "Checking...") as pb:
+            for region, programmed in to_check:
+                for segment in programmed:
+                    actual = region.read(segment.address - region.address, len(segment))
+                    pb.update(len(segment))
+                    if actual != segment.data:
+                        self.logger.error("Mismatch in %s", segment)
+                        for off in range(0, len(segment), 16):
+                            orig = segment.data[off : off + 16]
+                            rb = actual[off : off + 16]
+                            self.logger.error("Expected %08x: %s",
+                                              segment.address + off,
+                                              str(binascii.b2a_hex(orig), "ascii"))
+                            self.logger.error("Readback %08x: %s",
+                                              segment.address + off,
+                                              str(binascii.b2a_hex(rb), "ascii"))
+                            count += 1
+                            if count > 3:
+                                return False
         return True

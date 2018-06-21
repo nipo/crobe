@@ -6,7 +6,7 @@ from ..component.arm import dp, mem_ap
 from ..component.arm.coresight import fpb
 from ..util.pretty import metric
 from ..util.info import TimedLogger
-from ..target.memory import Loadable, Region, Flash, Eeprom
+from ..target import memory
 from ..loadable.object import Program, Segment
 import logging
 
@@ -41,6 +41,7 @@ def program(ctx, program, erase, check, run):
     if check:
         ok = target.verify(program)
         if not ok:
+            print("Comparison failure")
             return 1
 
     if run:
@@ -59,30 +60,5 @@ def readback(ctx, filename):
 
     click.echo("Target: %s" % target)
 
-    total_size = 0
-    for memory in target.children_of_class(Region):
-        if not isinstance(memory, (Flash, Eeprom)):
-            continue
-        total_size += memory.size
-
-    with click.progressbar(length = total_size, label = "Reading...") as pb:
-        p = Program()
-        for memory in target.children_of_class(Region):
-            cs = 1024
-
-            if not isinstance(memory, (Flash, Eeprom)):
-                continue
-
-            if isinstance(memory, Flash):
-                cs = memory.page_size
-
-            blob = bytearray()
-            for offset in range(0, memory.size, cs):
-                chunk = memory.read(offset, cs)
-                blob += chunk
-                
-                pb.update(len(chunk))
-
-            p.append(Segment(memory.address, blob))
-
+    p = target.read()
     p.save(filename)
