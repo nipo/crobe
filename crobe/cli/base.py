@@ -97,29 +97,7 @@ def field(ctx):
 def _program_parse(ctx, param, value):
     from ..loadable.object import Program
 
-    if not value:
-        ctx.params[param.name] = None
-        return
-
-    program = Program()
-
-    for fn in value:
-        try:
-            filename, offset = fn.split("+", 1)
-            offset = int(offset, 16)
-            assert os.path.exists(filename)
-        except Exception:
-            filename = fn
-            offset = 0
-
-        prog = Program.from_file(filename, offset)
-        if len(value) == 1:
-            ctx.params[param.name] = prog
-            return
-
-        program += prog
-
-    ctx.params[param.name] = program
+    ctx.params[param.name] = Program.from_files(value) if value else None
 
 def program(name = "program"):
     return click.argument(name, nargs = -1, type = str,

@@ -1,5 +1,4 @@
 import warnings
-import click
 import struct
 
 __all__ = ['Segment', 'Program']
@@ -367,19 +366,37 @@ class Program:
 
         parser = None
 
-        force_type = filename.split(":")[-1]
-        if len(force_type) == 3:
-            parser = force_type.lower()
-            filename = filename[:-len(force_type)-1]
-        else:
-            for ext, p in cls.EXT_MAP.items():
-                if filename.endswith(ext):
-                    parser = p
-                    break
+        for ext, p in cls.EXT_MAP.items():
+            if filename.endswith(ext):
+                parser = p
+                break
 
-        if parser is not None:
-            return getattr(cls, "from_" + parser)(filename, offset)
-        raise RuntimeError("Format of %s not known" % filename)
+        while True:
+            option = filename.split(":")[-1].lower()
+            if len(option) == 3 and option in cls.EXT_MAP.values():
+                parser = option
+            elif option.startswith("+"):
+                offset += int(option[1:], 16)
+            else:
+                break
+            filename = filename[:-len(option)-1]
+
+        if parser is None:
+            raise RuntimeError("Format of %s not known" % filename)
+
+        return getattr(cls, "from_" + parser)(filename, offset)
+
+    @classmethod
+    def from_files(cls, filenames):
+        if len(filenames) == 1:
+            return cls.from_file(filenames[0])
+
+        program = Program()
+
+        for filename in filenames:
+            program += cls.from_file(filename)
+
+        return program
 
     def save(self, filename):
         if filename.endswith(".bin"):
@@ -407,26 +424,9 @@ class Program:
         from .ihex import IHex
 
         f = IHex()
+        f.set_mode(32)
 
         for s in self.segments:
             f.insert_data(s.address, s.data)
 
         f.write_file(filename)
-
-@click.group()
-def cli():
-    pass
-
-@cli.command(help = "Dump file parsing results")
-@click.argument("program", type = click.Path(dir_okay = False))
-def dump(program):
-    Program.from_file(program).pprint()
-
-@cli.command(help = "Convert to binary")
-@click.argument("program", type = click.Path(dir_okay = False))
-@click.argument("bin", type = click.File("wb"))
-def to_bin(program, bin):
-    Program.from_file(program).bin_dump(bin)
-
-if __name__ == "__main__":
-    cli.main()

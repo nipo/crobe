@@ -141,11 +141,11 @@ class IHex(object):
   def make_line(self, type, addr, data):
     line = struct.pack(">BHB", len(data), addr, type)
     line += data
-    line += chr(self.calc_checksum(line))
+    line += bytes([self.calc_checksum(line)])
     return b":" + binascii.b2a_hex(line).upper() + b"\r\n"
 
   def write(self):
-    output = ""
+    output = b""
     
     for start, data in sorted(self.areas.items()):
       i = 0
@@ -188,7 +188,7 @@ class IHex(object):
       elif self.mode == 32:
         output += self.make_line(0x05, 0, struct.pack(">I", self.start))
 
-    output += self.make_line(0x01, 0, "")
+    output += self.make_line(0x01, 0, b"")
     return output
 
   def write_file(self, fname):
