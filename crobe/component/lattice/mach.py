@@ -6,6 +6,7 @@ import struct
 from ... import bitstring
 import datetime
 import time
+import binascii
 
 class Frame:
     def __init__(self, data, crc = None):
@@ -293,6 +294,7 @@ class MachXO2(jtag.Tap):
     IR_LSC_READ_PASSWORD    = 0xf2
     IR_LSC_READ_CTRL0       = 0x20
     IR_LSC_READ_STATUS      = 0x3c
+    IR_LSC_READ_INCR_NV     = 0x73
     IR_LSC_CHECK_BUSY       = 0xf0
     IR_LSC_REFRESH          = 0x79
     IR_LSC_BITSTREAM_BURST  = 0x7a
@@ -314,65 +316,296 @@ class MachXO2(jtag.Tap):
         self.info = parts[0]
         self.config_memory_size = self.info.row_count * self.info.col_bit_count // 8
         self.flash_size = (self.info.flash_page_count + self.info.ufm_page_count) * 16
+        self.__bg_enable = None
 
     def start(self):
         self.uid = self.dr_shift(self.IR_LSC_UIDCODE_PUB, 0, 64)
         self.logger.info("UID: 0x%08x", self.uid)
 
+        self._isc_enable(True)
         self.Status(self.status).dump(self.logger.info)
         self.Feature(self.feature).dump(self.logger.info)
+        self._isc_disable()
+
         jtag.Tap.start(self)
 
+    ERASE_SRAM = 1
+    ERASE_FEATURE = 2
+    ERASE_FLASH = 4
+    ERASE_UFM = 8
+
+    def _isc_enable(self, background = None):
+        if self.__bg_enable is None and background is None:
+            raise ValueError("Cannot reenable with no previous enable")
+        if background is None:
+            background = self.__bg_enable
+
+        self.dr_shift(self.IR_ISC_DISABLE, None)
+        self.wait_no_fail()
+        self.dr_shift(self.IR_LSC_ENABLE_X if background else self.IR_ISC_ENABLE, 0x08, 8)
+        self.wait_no_fail()
+        self.__bg_enable = background
+
+        self.status_check(0, 0x0200)
+
+    def _isc_disable(self):
+        self.dr_shift(self.IR_ISC_DISABLE, None)
+        self.wait_no_fail()
+        self.dr_shift(self.IR_BYPASS, None)
+        self.__bg_enable = None
+
+    def _erase(self, what):
+        assert self.__bg_enable is not None
+        self.dr_shift(self.IR_ISC_ERASE, what, 8)
+        self.run(1)
+        self.wait_no_fail()
+
+    def _stop(self):
+        self._erase(self.ERASE_SRAM)
+
     def stop(self):
+        self._isc_enable(False)
+        self._stop()
+        self._isc_disable()
 
-        self.dr_shift(self.IR_ISC_ENABLE, 0, 8)
-        self.run()
+    def erase_all(self):
+        self._isc_enable(False)
+        self._erase(self.ERASE_SRAM | self.ERASE_UFM | self.ERASE_FLASH | self.ERASE_FEATURE)
+        self._isc_disable()
 
-        self.dr_shift(self.IR_ISC_ERASE, 0xf, 8)
-        self.run()
-        self.wait_idle()
+    @property
+    def status(self):
+        return self.dr_shift(self.IR_LSC_READ_STATUS, 0, 32, read_tdo = True)
 
-        self.dr_shift(self.IR_ISC_DISABLE, 0, 8)
-        self.run()
+    @property
+    def feature(self):
+        return self.dr_shift(self.IR_LSC_READ_FEATURE, 0, 64, read_tdo = True)
 
     def status_check(self, expect_clear, expect_set):
         mask = expect_set | expect_clear
         assert self.status & mask == expect_set
 
-    def config_write(self, program):
-        bs = MachXOBitstream(program)
-        assert bs.info.idcode == self.info.idcode
-        assert self.info.row_count == len(bs.rti)
+    def wait_idle(self, timeout = 1.):
+        step = .01
 
-        self.status_check(0x00010040, 0)
+        for i in range(max(int(timeout / step), 1)):
+            self.run(1)
+            if self.dr_shift(self.IR_LSC_CHECK_BUSY, 0, 1, read_tdo = True) == 0:
+                return
+            time.sleep(.01)
 
-        self.dr_shift(self.IR_ISC_ENABLE, 0, 8)
-        self.run()
+        raise RuntimeError("Busy flag stuck")
 
-        self.dr_shift(self.IR_ISC_ERASE, 0xf, 8)
-        self.run()
-        self.wait_idle()
+    def wait_no_fail(self, timeout = 1.):
+        self.wait_idle(timeout)
+        self.status_check(3 << 12, 0)
 
-        self.dr_shift(self.IR_LSC_PROG_CTRL0, 0x40000000, 32)
-        self.run()
-        self.dr_shift(self.IR_LSC_INIT_ADDRESS, 0, 8)
-        self.run()
-        time.sleep(.001)
+    def _flash_erase(self):
+        assert self.__bg_enable is not None
+        self._erase(self.ERASE_FLASH)
 
-        for frame in bs.rti:
-            data = bitstring.BitString(bytes(frame.data))
-            self.dr_shift(self.IR_LSC_PROG_INCR_RTI, data)
-            self.run()
-        self.run(1024)
-        self.usercode_program(0)
+    def _ufm_erase(self):
+        assert self.__bg_enable is not None
+        self._erase(self.ERASE_UFM)
 
+    def _feature_erase(self):
+        assert self.__bg_enable is not None
+        self._erase(self.ERASE_FEATURE)
+
+    def _flash_read(self, offset, size):
+        return self._mem_read(offset, size, self.IR_LSC_INIT_ADDRESS, 0)
+
+    def _ufm_read(self, offset, size):
+        return self._mem_read(offset, size, self.IR_LSC_INIT_ADDRESS_UFM, 0x40000000)
+
+    def _mem_read(self, offset, size, addr_init, offset_base):
+        assert self.__bg_enable is not None
+        self.status_check(0, 0xa00)
+
+        self.dr_shift(addr_init, offset_base >> 28, 8)
+        self.run(1)
+        self.wait_no_fail()
+
+        self.dr_shift(self.IR_LSC_WRITE_ADDRESS, offset_base + offset // 16, 32)
+        self.run(1)
+        self.wait_no_fail()
+
+        cmds = [
+            self.cmd_dr_shift(self.IR_LSC_READ_INCR_NV, None),
+            self.run(10),
+            self.cmd_dr_shift(None, None,
+                            16 * 8,
+                            read_tdo = True,
+                            return_type = bytes),
+            ]
+        self.execute(cmds)
+
+        data = b''
+        for addr in range(offset & ~0xf, offset + size, 16):
+            cmds = [
+                self.cmd_dr_shift(self.IR_LSC_READ_INCR_NV, None),
+                self.run(10),
+                self.cmd_dr_shift(None, None,
+                                16 * 8,
+                                read_tdo = True,
+                                return_type = bytes),
+                ]
+            self.execute(cmds)
+
+            row_count = ((offset & 0xf) + size + 0xf) // 16
+            data += cmds[2].tdo
+
+        data = self.row_flip(data)
+
+        return data[offset & 0xf : (offset & 0xf) + size]
+
+    def _mem_write(self, offset, data, addr_init, offset_base):
+        assert self.__bg_enable is not None
+        self.status_check(0, 0x600)
+
+        if offset % 16:
+            prelen = (-offset % 16)
+            self.logger.info("Pre len %d", prelen)
+            data = b'\x00' * prelen + data
+            offset = offset & ~0xf
+
+        if len(data) % 16:
+            postlen = (-len(data) % 16)
+            self.logger.info("Post len %d", postlen)
+            data += b'\x00' * postlen
+
+        self.dr_shift(addr_init, 4, 8)
+        self.run(1)
+        self.wait_no_fail()
+
+        self.dr_shift(self.IR_LSC_WRITE_ADDRESS, offset_base + offset // 16, 32)
+        self.run(1)
+        self.wait_no_fail()
+
+        data = self.row_flip(data)
+
+        for off in range(0, len(data), 16):
+            self.execute([
+                self.cmd_dr_shift(self.IR_LSC_PROG_INCR_NV, None),
+                self.run(1),
+                self.cmd_dr_shift(None, bytes(data[off : off+16]), read_tdo = False),
+                self.run(1),
+                ])
+            assert not self.wait_no_fail()
+
+    def _flash_write(self, offset, data):
+        return self._mem_write(offset, data, self.IR_LSC_INIT_ADDRESS, 0)
+
+    def _ufm_write(self, offset, data):
+        return self._mem_write(offset, data, self.IR_LSC_INIT_ADDRESS_UFM, 0x40000000)
+
+    def lol(self):
+        assert self.__bg_enable is not None
+        self.status_check(0, 0x600)
+
+        #self.logger.info("Flash write 0x%08x %d", offset, len(data))
+        if offset:# % 16:
+            #prelen = (-offset % 16)
+            prelen = offset
+            self.logger.info("Pre len %d", prelen)
+            data = b'\x00' * prelen + data
+            #offset = offset & ~0xf
+            offset = 0
+
+        if len(data) % 16:
+            postlen = (-len(data) % 16)
+            self.logger.info("Post len %d", postlen)
+            data += b'\x00' * postlen
+
+        self.dr_shift(self.IR_LSC_INIT_ADDRESS, 4, 8)
+        self.wait_no_fail()
+
+        #self.dr_shift(self.IR_LSC_WRITE_ADDRESS, offset // 16, 32)
+        #self.wait_no_fail()
+
+        data = self.row_flip(data)
+
+        for off in range(0, len(data), 16):
+            self.dr_shift(self.IR_LSC_PROG_INCR_NV,
+                          bytes(data[off : off+16]),
+                          read_tdo = False)
+            assert not self.wait_no_fail()
+
+    def _flash_done_set(self):
+        assert self.__bg_enable is not None
         self.dr_shift(self.IR_ISC_PROGRAM_DONE, None)
         self.run()
-        self.run(1024)
-        self.dr_shift(self.IR_ISC_DISABLE, None)
+
+    def flash_erase(self):
+        self._isc_enable(True)
+        self._flash_erase()
+        self._isc_disable()
+
+    def ufm_erase(self):
+        self._isc_enable(True)
+        self._ufm_erase()
+        self._isc_disable()
+
+    def flash_read(self, offset, size):
+        self._isc_enable(False)
+        ret = self._flash_read(offset, size)
+        self._isc_disable()
+        return ret
+
+    def ufm_read(self, offset, size):
+        self._isc_enable(False)
+        ret = self._ufm_read(offset, size)
+        self._isc_disable()
+        return ret
+
+    def flash_write(self, offset, data):
+        self._isc_enable(True)
+        self._flash_write(offset, data)
+        self._isc_disable()
+
+    def ufm_write(self, offset, data):
+        self._isc_enable(True)
+        self._ufm_write(offset, data)
+        self._isc_disable()
+
+    def feature_read(self):
+        self._isc_enable(True)
+        ret = self.dr_shift(self.IR_LSC_READ_FEATURE, None, 64, read_tdo = True, return_type = bytes)
+        self._isc_disable()
+        return ret
+
+    def feature_write(self, feature):
+        self._isc_enable(True)
+
+        self.dr_shift(self.IR_LSC_INIT_ADDRESS, 0x02, 8)
         self.run()
-        
-        self.status_check(0x00002000, 0x00000100)
+
+        self.dr_shift(self.IR_LSC_PROG_FEATURE, bytes(feature))
+        self.run()
+
+        self._isc_disable()
+
+    @staticmethod
+    def row_flip(data):
+        assert len(data) % 16 == 0
+        tmp = b""
+        for offset in range(0, len(data), 16):
+            tmp += bitswap8(data[offset : offset + 16])
+        return tmp
+
+    def reset(self):
+        self._isc_enable(True)
+        self.dr_shift(self.IR_ISC_PROGRAM_DONE, None)
+        self.run()
+        self.dr_shift(self.IR_LSC_REFRESH, None)
+        self.run()
+        self._isc_disable()
+
+
+
+    ###
+    ### Experimental
+    ###
 
     def xsram_load(self, blob):
         st = self.status
@@ -424,106 +657,5 @@ class MachXO2(jtag.Tap):
 
         self.dr_shift(self.IR_ISC_DISABLE, None)
         self.run(10000)
-
-        self.dr_shift(self.IR_BYPASS, None)
-
-    def wait_idle(self, timeout = 1.):
-        step = .01
-
-        for i in range(max(int(timeout / step), 1)):
-            if self.dr_shift(self.IR_LSC_CHECK_BUSY, 0, 1, read_tdo = True) == 0:
-                return
-            time.sleep(.01)
-
-        raise RuntimeError("Busy flag stuck")
-
-    def blob_push(self, blob, chunk_size, ir):
-        for off in range(0, len(blob), chunk_size):
-            chunk = blob[off : off + chunk_size].ljust(chunk_size, b'\x00')
-
-            self.dr_shift(ir, bitstring.BitString(chunk))
-            self.run(2)
-            self.wait_idle()
-
-    def cfg_program(self, blob):
-        self.dr_shift(self.IR_LSC_INIT_ADDRESS, 0x4, 8)
-        self.run(2)
-
-        self.blob_push(blob, 16, self.IR_LSC_PROG_INCR_NV)
-
-    def ufm_program(self, blob):
-        self.dr_shift(self.IR_LSC_INIT_ADDRESS_UFM, None)
-        self.run(2)
-
-        self.blob_push(blob, 16, self.IR_LSC_PROG_INCR_NV)
-
-    def usercode_program(self, usercode):
-        self.dr_shift(self.IR_USERCODE, usercode, 32)
-        self.run()
-        self.dr_shift(self.IR_ISC_PROGRAM_USERCODE, None)
-        self.run(2)
-
-    def feature_program(self, feature, feabits):
-        self.dr_shift(self.IR_LSC_INIT_ADDRESS, 0x02, 8)
-        self.run()
-
-        self.feature = feature
-        self.wait_idle()
-        assert self.feature == feature
-        self.feabits = feabits
-        self.wait_idle()
-        assert self.feabits & 0xfff2 == feabits
-
-    @property
-    def status(self):
-        return self.dr_shift(self.IR_LSC_READ_STATUS, 0, 32, read_tdo = True)
-
-    @property
-    def feature(self):
-        return self.dr_shift(self.IR_LSC_READ_FEATURE, 0, 64, read_tdo = True)
-
-    @feature.setter
-    def feature(self, value):
-        self.dr_shift(self.IR_LSC_PROG_FEATURE, value, 64)
-        self.run()
-
-    @property
-    def feabits(self):
-        return self.dr_shift(self.IR_LSC_READ_FEABITS, 0, 16, read_tdo = True)
-
-    @feabits.setter
-    def feabits(self, value):
-        self.dr_shift(self.IR_LSC_PROG_FEABITS, value, 16)
-        self.run()
-
-    def internal_flash_load(self, cfg, ufm, usercode, feature, feabits):
-        st = self.status
-        assert st & 0x02000000 == 0
-        assert st & 0x00008000 == 0
-
-        self.dr_shift(self.IR_ISC_ENABLE, None)
-        self.run(2)
-
-        self.dr_shift(self.IR_ISC_ERASE, 0x70, 8)
-        self.wait_idle()
-
-        st = self.status
-        assert st & 0x0000c000 == 0
-
-        self.cfg_program(cfg)
-        self.ufm_program(ufm)
-        self.usercode_program(usercode)
-        
-        st = self.status
-        assert st & 0x0000c000 == 0
-
-        self.feature_program(feature, feabits)
-
-        self.dr_shift(self.IR_ISC_PROGRAM_DONE, None)
-        self.run(2)
-        self.wait_idle()
-
-        self.dr_shift(self.IR_ISC_DISABLE, None)
-        self.run(2)
 
         self.dr_shift(self.IR_BYPASS, None)
