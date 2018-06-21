@@ -52,7 +52,7 @@ def cli(ctx, verbose, quiet, silent):
 
     root = logging.getLogger('')
     root.addHandler(handler)
-    root.setLevel(10 * (5 + quiet - verbose))
+    root.setLevel(10 * (4 + quiet - verbose))
     root.info("Starting at %s", formatter.start)
 
 def _root_parse(ctx, param, value):
