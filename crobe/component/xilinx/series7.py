@@ -206,12 +206,6 @@ class Series7(Series67):
     ### EFUSE
     ###
 
-    CTS_MAGIC = dict(
-        op1 = 0xa08a28ac,
-        op2 = 0xfeed28ac,
-        nop = 0,
-        )
-
     FUSE_CFG_KEY_PROTECT_WRITE = 2
     FUSE_CFG_KEY_PROTECT_READ = 3
     FUSE_CFG_USER_PROTECT_READ = 4
@@ -286,43 +280,79 @@ class Series7(Series67):
         return value
 
     @classmethod
-    def cts_dr(cls, op = "op1", row = 0, margin = 0, dma = 0, program = 1, bit = 0):
-        assert 0 <= margin <= 2
+    def dr_cts_write(cls, row, bit, margin_opt, program, dma):
+        assert 0 <= margin_opt <= 3
         assert 0 <= row <= 0x1f
         assert 0 <= bit <= 0x1f
 
-        cmd = cls.CTS_MAGIC[op] << 32
-        cmd |= int(bool(program))
-        cmd |= int(bool(dma)) << 1
+        cmd = 0xa08a28ac << 32
+        cmd |= int(bool(dma))
+        cmd |= int(bool(program)) << 1
         cmd |= row << 3
         cmd |= bit << 8
-        cmd |= 1 << (13 + margin)
+        cmd |= margin_opt << 13
         return cmd
 
-    def efuse_row_read(self, row, margin = 0):
-        cts = self.cts_dr(op = "op1", row = row, margin = margin)
+    def efuse_row_read(self, row, margin_opt = 0):
+        """
+        From xilskey_jscmd's JtagRead function:
 
-        ops = [self.cmd_run(50),
-               self.cmd_dr_shift(self.IR_FUSE_CTS, cts, 64, read_tdo = False),
+        - Go to TLR to clear FUSE_CTS
+        - Load FUSE_CTS instruction on IR
+        - Step to CDR/SDR to shift in 32-bits FUSE_CTS command word
+          a_row<4:0>;  dma=1;  pgm=0; tp_sel<1:0>; ecc_dma
+          Shift in MAGIC_CTS_WRITE "A08A28AC"
+        - Step to E1DR/UDR to update FUSE_CTS reg
+        - Step to SDS/CDR/SDR to shift out captured row
+          while shifting in a new command with next row
+          address w/ or w/o new tp_sel or ecc_dma setting
+        - Captured macro word (32 bits) is stored in jtag_dr[63:32]
+        - If ecc_dma = 1, jtag_dr[61:32] = {DED check-sum, SEC syndrome, decoded payload}
+
+        Except we do not go through TLR because it causes problems
+        with other TAPs. Instead, shift FUSE_CTS with zeroes.
+        """
+        cts = self.dr_cts_write(row = row, bit = 0, margin_opt = margin_opt, program = 0, dma = 1)
+
+        ops = [self.cmd_dr_shift(self.IR_FUSE_CTS, 0, 64, read_tdo = False),
                self.cmd_run(12),
+               self.cmd_dr_shift(self.IR_FUSE_CTS, cts, 64, read_tdo = False),
                self.cmd_dr_shift(self.IR_FUSE_CTS, 0, 64, read_tdo = True),
                self.cmd_run(1),
-               self.cmd_dr_shift(-1, None),
+               self.cmd_dr_shift(self.IR_BYPASS, None),
                ]
         self.execute(ops)
 
-        value = ops[3].tdo >> 32
+        value = (ops[3].tdo >> 32) & 0x3fffffff
 
         return value
 
     def cmd_efuse_bit_set(self, row, bit):
-        cts = self.cts_dr(op = "op1", row = row, bit = bit, margin = 1, dma = 1)
+        """
+        From xilskey_jscmd's JtagWrite function:
+        
+        - Go to TLR to clear FUSE_CTS
+        - Load FUSE_CTS instruction on IR
+        - Step to CDR/SDR to shift in the command word
+          dma=1; pgm=1; a_row<4:0> & a_bit<4:0>
+          (Continuously shift in MAGIC_CTS_WRITE)
+        - Loop back to E1DR/UDR/SDS/CDR/E1DR/UDR
+        - Go to RTI and stay in RTI EXACTLY Tpgm = 12 us (tbd) and immediately exit to SDS
+        - Go to TLR to clear FUSE_CTS
 
-        return [self.cmd_run(12),
+        Except we do not go through TLR because it causes problems
+        with other TAPs. Instead, shift FUSE_CTS with zeroes.
+        """
+        cts = self.dr_cts_write(row = row, bit = bit, margin_opt = 0, program = 1, dma = 1)
+
+        return [self.cmd_dr_shift(self.IR_FUSE_CTS, 0, 64, read_tdo = False),
+                self.cmd_run(1),
                 self.cmd_dr_shift(self.IR_FUSE_CTS, cts, 64, read_tdo = False),
-                self.cmd_run(12*50),
+                self.cmd_dr_shift(self.IR_FUSE_CTS, None, read_tdo = False),
+                self.cmd_run(int(self.port.freq * 12e-6) or 1),
                 self.cmd_dr_shift(self.IR_FUSE_CTS, 0, 64, read_tdo = False),
-                self.cmd_run(12),
+                self.cmd_dr_shift(self.IR_BYPASS, None),
+                self.cmd_run(1),
                 ]
 
     def efuse_cfg_set(self, bit):
@@ -403,7 +433,6 @@ class Series7(Series67):
         self.dr_shift(self.IR_JPROGRAM, None)
         self.dr_shift(self.IR_ISC_NOP, None)
         self.run(10000)
-        self.efuse_row_read(0)
 
     def bbram_close(self):
         self.dr_shift(self.IR_ISC_DISABLE, None)

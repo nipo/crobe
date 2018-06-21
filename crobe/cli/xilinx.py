@@ -80,7 +80,7 @@ def efuse_dump(roots):
 
     root.bbram_open()
     click.echo("Target: %s" % root)
-    for row in range(0x1f):
+    for row in range(0x20):
         value = root.efuse_row_read(row)
         try:
             pretty = getattr(root, "Efuse%d" % row)
