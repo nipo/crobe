@@ -97,11 +97,11 @@ class Puppet(Component):
         dump = False
         if st == self.cpu.State.RUN:
             self.cpu.halt()
-            self.logger.warning("Forced stop of target")
+            self.logger.error("Forced stop of target")
             dump = True
 
         if st in [self.cpu.State.LOCKUP, self.cpu.State.FAULT]:
-            self.logger.warning("CPU ended up in bad state")
+            self.logger.error("CPU ended up in bad state")
             dump = True
 
         if dump:
