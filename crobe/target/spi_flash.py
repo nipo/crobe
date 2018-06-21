@@ -1,6 +1,7 @@
 from . import model
 from ..component import spi_flash as component_spi_flash
 from . import memory
+import click
 
 __all__ = ["SpiFlash"]
 
@@ -13,8 +14,8 @@ class Bank(memory.NandFlash):
         if not size:
             return
 
-        assert 0 <= offset < size, (offset, size)
-        assert 0 <= offset + size <= size, (offset, size)
+        assert 0 <= offset < self.size, (offset, size, self.size)
+        assert 0 <= offset + size <= self.size, (offset, size, self.size)
 
         if size == self.size:
             self.flash.erase_all()
@@ -23,8 +24,20 @@ class Bank(memory.NandFlash):
             self.flash.erase(offset, size)
 
     def write(self, offset, data):
-        self.flash.write(offset, data)
-        self.blank = False
+        with click.progressbar(length = len(data), label = self.name) as bar:
+            off = 0
+
+            while off < len(data):
+                alignment = (offset + off) % self.flash.page_size
+                size = self.flash.page_size - alignment
+
+                chunk = data[off : off + size]
+
+                self.flash.write(offset + off, chunk)
+                self.blank = False
+
+                off += len(chunk)
+                bar.update(len(chunk))
 
     def read(self, offset, size):
         return self.flash.read(offset, size)

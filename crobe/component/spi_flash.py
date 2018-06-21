@@ -112,7 +112,10 @@ class SpiFlash(PortComponent):
             self = IdCfiFlash(port, idr)
 
         if self is None:
-            self = cls(port)
+            if idr not in [0, 0xffffff]:
+                self = cls(port)
+            else:
+                raise NoMatch()
         
         self.info()
 
@@ -221,23 +224,22 @@ class SpiFlash(PortComponent):
         self.write_enable(False)
 
     def write(self, base, data):
-        si = self.SECTOR_INFO[0]
+        write_chunk_size = self.write_buffer_size
+        offset = 0
 
-        page_size = si["size"]
+        while offset < len(data):
+            self.logger.debug("Writing chunk at 0x%08x... (%02x)", offset, self.CMD_PAGE_PROGRAM[0])
 
-        for offset in range(0, len(data), page_size):
+            alignment = (base + offset) % write_chunk_size
+            size = write_chunk_size - alignment
 
-            chunk = data[offset : offset + page_size]
-            chunk += b"\xff" * ((-len(chunk)) % page_size)
+            self.write_enable(True)
+            self.command(self.CMD_PAGE_PROGRAM + self.addr(base + offset)
+                         + data[offset : offset + size], 0)
+            while self.status & self.STATUS_WIP:
+                pass
 
-            write_chunk_size = self.write_buffer_size
-            for offset2 in range(0, page_size, write_chunk_size):
-                self.logger.debug("Writing chunk at 0x%08x... (%02x)", offset + offset2, self.CMD_PAGE_PROGRAM[0])
-                self.write_enable(True)
-                self.command(self.CMD_PAGE_PROGRAM + self.addr(base + offset + offset2)
-                             + chunk[offset2 : offset2 + write_chunk_size], 0)
-                while self.status & self.STATUS_WIP:
-                    pass
+            offset += size
 
         self.write_enable(False)
 
