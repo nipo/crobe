@@ -480,6 +480,10 @@ class Tap(PortComponent):
         self.ir = None
 
     @property
+    def IR_BYPASS(self):
+        return (1 << self.irlen) - 1
+
+    @property
     def idcode(self):
         return self.port.idcode_at(self.index)
 
