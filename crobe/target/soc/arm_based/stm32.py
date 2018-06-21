@@ -6,10 +6,15 @@ from .soc import SoC, StubFlash, BusRam
 import struct
 from .puppet_code import stm32f01
 from ... import pin_control
+import binascii
 
 class Stm32f1Flash(StubFlash):
     RANGE_ERASE = stm32f01["flash_erase"]
     PAGE_WRITE = stm32f01["flash_write"]
+
+class Stm32f1Opt(StubFlash):
+    RANGE_ERASE = stm32f01["opt_erase"]
+    PAGE_WRITE = stm32f01["opt_write"]
 
 class Stm32f0PinCtrl(pin_control.Controller):
     MODE   = 0x000
@@ -57,7 +62,9 @@ class Stm32f0PinCtrl(pin_control.Controller):
         bank, pin = self.pin_map[name]
         word = 0x1 if value else 0x10000
         word <<= pin
-        self.bus.u32_write(self.reg(bank, self.BSR), word)
+        ops = [self.bus.cmd_u32_write(self.reg(bank, self.BSR), word)]
+        #print(ops)
+        self.bus.execute(ops)
 
     def pin_config(self, name, mode = pin_control.Mode.Input):
         bank, pin = self.pin_map[name]
@@ -68,6 +75,7 @@ class Stm32f0PinCtrl(pin_control.Controller):
             self.bus.cmd_u32_read(self.reg(bank, self.PUPD)),
             ]
         self.bus.execute(rb)
+        #print([(x, hex(x.data)) for x in rb])
         m, o, p = [x.data for x in rb]
 
         pin2 = pin * 2
@@ -94,11 +102,13 @@ class Stm32f0PinCtrl(pin_control.Controller):
         else:
             raise NotSupportedError(mode)
 
-        self.bus.execute([
+        ops = [
             self.bus.cmd_u32_write(self.reg(bank, self.MODE), m),
             self.bus.cmd_u32_write(self.reg(bank, self.OTYPE), o),
             self.bus.cmd_u32_write(self.reg(bank, self.PUPD), p),
-            ])
+            ]
+        #print(ops)
+        self.bus.execute(ops)
 
 @SoC.db.register(*[PartId(0, 0x20, did) for did in Info.parts.keys() if did])
 class Stm(SoC, pin_control.Controller):
@@ -115,7 +125,7 @@ class Stm(SoC, pin_control.Controller):
         ram_size = self.ram_size_probe(0x20000000, 512 * 1024)
         self.info.flash_add(lambda name, base, size, page: self.child_add(Stm32f1Flash(name, base, size, page, self)),
                             self.info.flash_kb_get(self))
-
+        self.child_add(Stm32f1Opt("opt", 0x1ffff800, 16, 16, self))
         self.child_add(BusRam("ram", 0x20000000, ram_size, self.buses[0]))
 
         if self.info.uid_blob_is_coords:
@@ -134,6 +144,7 @@ class Stm(SoC, pin_control.Controller):
 
         SoC.attach(self)
         cpu, = self.children_of_class(Cortex)
+        cpu.reset()
         if self.info.dbgmcu_addr:
             ops = []
             for a, v in sorted(self.info.dbgmcu_init.items()):
@@ -145,7 +156,6 @@ class Stm(SoC, pin_control.Controller):
                 ]
             if ops:
                 self.bus.execute(ops)
-        cpu.reset()
 
     def detach(self):
         if not self.attached:
@@ -176,7 +186,7 @@ class Stm(SoC, pin_control.Controller):
         self.attach()
         p = self.puppet()
         code = p.stub(stm32f01["mass_erase"])
-        code.call(timeout = 1)
+        code.call(timeout = 2)
 
     @property
     def pin_names(self):

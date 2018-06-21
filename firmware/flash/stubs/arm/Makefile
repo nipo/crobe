@@ -12,7 +12,7 @@ efm32g-cflags = -mcpu=cortex-m0 -mthumb -Os -fPIC -DGECKO
 efm32g-arch = arm
 
 stm32f01-src = stm32f01.c
-stm32f01-sections = flash_erase flash_write mass_erase
+stm32f01-sections = flash_erase flash_write mass_erase opt_erase opt_write
 stm32f01-cflags = -mcpu=cortex-m0 -mthumb -Os -fPIC -DFLASH_BASE=0x40022000
 stm32f01-arch = arm
 

@@ -17,32 +17,98 @@ struct flash_s {
 #define KEY_RDPRT          0x00A5
 #define KEY_1              0x45670123
 #define KEY_2              0xCDEF89AB
-#define STATUS_BUSY        0x01
-#define STATUS_PAGE_ERR    0x04
-#define STATUS_PROT_ERR    0x10
-#define STATUS_EOP         0x20
-#define CONTROL_PROG       0x01
-#define CONTROL_ERASE      0x02
-#define CONTROL_MASS_ERASE 0x04
-#define CONTROL_OPT_PROG   0x10
-#define CONTROL_OPT_ERASE  0x20
-#define CONTROL_START      0x40
-#define CONTROL_LOCK       0x80
+#define STATUS_BUSY        0x00000001
+#define STATUS_PAGE_ERR    0x00000004
+#define STATUS_PROT_ERR    0x00000010
+#define STATUS_EOP         0x00000020
+#define CONTROL_PROG       0x00000001
+#define CONTROL_ERASE      0x00000002
+#define CONTROL_MASS_ERASE 0x00000004
+#define CONTROL_OPT_PROG   0x00000010
+#define CONTROL_OPT_ERASE  0x00000020
+#define CONTROL_OPT_WRE    0x00000200
+#define CONTROL_START      0x00000040
+#define CONTROL_LOCK       0x00000080
 
-static inline
+static inline __attribute__((always_inline))
 void unlock(struct flash_s *flash)
 {
-    if (!(flash->control & CONTROL_LOCK))
-        return;
-    
+    while (flash->status & STATUS_BUSY)
+        ;
+
+    if (flash->control & CONTROL_LOCK)
+        flash->control = 0;
+    else
+        flash->control = CONTROL_LOCK;
+
+    while (flash->status & STATUS_BUSY)
+        ;
+
     flash->key = KEY_1;
     flash->key = KEY_2;
 }
 
-static inline
-void lock(struct flash_s *flash)
+void flash_erase(uintptr_t addr, size_t bytes, size_t page_size)
 {
-    flash->control |= CONTROL_LOCK;
+    uintptr_t end = addr + bytes;
+    struct flash_s *flash = FLASH;
+
+    addr &= ~(page_size - 1);
+
+    unlock(flash);
+
+    while (addr < end) {
+        flash->control |= CONTROL_ERASE;
+
+        flash->address = addr;
+
+        flash->control |= CONTROL_START;
+
+        while (flash->status & STATUS_BUSY)
+            ;
+
+        addr += page_size;
+    }
+
+    flash->control = CONTROL_LOCK;
+}
+
+void flash_write(uintptr_t dest_, const void *src_, size_t size)
+{
+    struct flash_s *flash = FLASH;
+    volatile uint16_t *dest = (uint16_t*)(dest_);
+    const uint16_t *src = (uint16_t*)src_;
+
+    unlock(flash);
+
+    for (size_t i = 0; i < size / 2; i++) {
+        flash->control |= CONTROL_PROG;
+
+        dest[i] = src[i];
+
+        while (flash->status & STATUS_BUSY)
+            ;
+    }
+
+    flash->control = CONTROL_LOCK;
+}
+
+void opt_erase(void)
+{
+    struct flash_s *flash = FLASH;
+
+    unlock(flash);
+
+    flash->optkey = KEY_1;
+    flash->optkey = KEY_2;
+
+    flash->control |= CONTROL_OPT_ERASE | CONTROL_OPT_WRE;
+    flash->control |= CONTROL_OPT_ERASE | CONTROL_OPT_WRE | CONTROL_START;
+
+    while (flash->status & STATUS_BUSY)
+        ;
+
+    flash->control = CONTROL_LOCK;
 }
 
 void mass_erase(void)
@@ -56,46 +122,10 @@ void mass_erase(void)
     while (flash->status & STATUS_BUSY)
         ;
 
-    if (flash->status & STATUS_EOP)
-        flash->status = STATUS_EOP;
-
-    flash->control = 0;
-    lock(flash);
+    flash->control = CONTROL_LOCK;
 }
 
-void flash_erase(uintptr_t addr, size_t bytes, size_t page_size)
-{
-    uintptr_t end = addr + bytes;
-    struct flash_s *flash = FLASH;
-
-    addr &= ~(page_size - 1);
-
-    unlock(flash);
-
-    while (flash->status & STATUS_BUSY)
-        ;
-
-    while (addr < end) {
-        flash->control |= CONTROL_ERASE;
-
-        flash->address = addr;
-
-        flash->control |= CONTROL_START;
-
-        while (flash->status & STATUS_BUSY)
-            ;
-
-        if (flash->status & STATUS_EOP)
-            flash->status = STATUS_EOP;
-
-        addr += page_size;
-    }
-
-    flash->control = 0;
-    lock(flash);
-}
-
-void flash_write(uintptr_t dest_, const void *src_, size_t size)
+void opt_write(uintptr_t dest_, const void *src_, size_t size)
 {
     struct flash_s *flash = FLASH;
     volatile uint16_t *dest = (uint16_t*)(dest_);
@@ -103,8 +133,19 @@ void flash_write(uintptr_t dest_, const void *src_, size_t size)
 
     unlock(flash);
 
+    flash->optkey = KEY_1;
+    flash->optkey = KEY_2;
+
+    flash->control |= CONTROL_OPT_ERASE;
+    flash->control |= CONTROL_START;
+
+    while (flash->status & STATUS_BUSY)
+        ;
+
+    flash->control &= ~CONTROL_OPT_ERASE;
+
     for (size_t i = 0; i < size / 2; i++) {
-        flash->control = CONTROL_PROG;
+        flash->control |= CONTROL_OPT_PROG;
 
         dest[i] = src[i];
 
@@ -112,6 +153,5 @@ void flash_write(uintptr_t dest_, const void *src_, size_t size)
             ;
     }
 
-    flash->control = 0;
-    lock(flash);
+    flash->control = CONTROL_LOCK;
 }
