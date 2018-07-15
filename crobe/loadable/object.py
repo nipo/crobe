@@ -205,6 +205,9 @@ class Program:
             for secno in range(elf.num_sections()):
                 section = elf.get_section(secno)
 
+                if section["sh_type"] != 'SHT_PROGBITS':
+                    continue
+
                 if not seg.section_in_segment(section):
                     continue
 
