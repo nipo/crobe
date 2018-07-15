@@ -1,4 +1,4 @@
-targets = efm32 efm32g nrf51 lpc11 stm32f01 mkl
+targets = efm32 efm32g efm32gg11 nrf51 lpc11 stm32f01 mkl
 arm-prefix = arm-mutekh-eabi-
 
 efm32-src = efm32.c
@@ -10,6 +10,11 @@ efm32g-src = efm32.c
 efm32g-sections = flash_erase flash_write
 efm32g-cflags = -mcpu=cortex-m0 -mthumb -Os -fPIC -DGECKO
 efm32g-arch = arm
+
+efm32gg11-src = efm32.c
+efm32gg11-sections = flash_erase flash_write
+efm32gg11-cflags = -mcpu=cortex-m3 -mthumb -Os -fPIC -DGG11
+efm32gg11-arch = arm
 
 stm32f01-src = stm32f01.c
 stm32f01-sections = flash_erase flash_write mass_erase opt_erase opt_write

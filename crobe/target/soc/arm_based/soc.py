@@ -216,6 +216,7 @@ class SoC(model.SoC):
         puppet = self.puppet()
 
         for f in flashs:
+            blank = f.is_blank
             code = puppet.stub(f.PAGE_WRITE)
 
             page_zone = puppet.allocate(f.page_size, f.page_size), \
@@ -224,6 +225,9 @@ class SoC(model.SoC):
             pages = program\
                     .within(f.address, f.address + f.size)\
                     .paged(f.page_size, fill = b'\xff')
+
+            if not blank:
+                f.erase(pages.address - f.address, pages.end - pages.address)
 
             with click.progressbar(pages, label = "Writing %-8s" % f.name) as bar:
                 running = None
@@ -235,7 +239,7 @@ class SoC(model.SoC):
                     z.write(page.data)
 
                     if running is not None:
-                        code.wait(.4)
+                        code.wait(1)
                         running = None
 
                     code.prepare(page.address, z.address, f.page_size)
@@ -243,7 +247,7 @@ class SoC(model.SoC):
                     running = page.address
 
                 if running:
-                    code.wait(.4)
+                    code.wait(1)
 
                 puppet.unallocate(page_zone[0])
                 puppet.unallocate(page_zone[1])

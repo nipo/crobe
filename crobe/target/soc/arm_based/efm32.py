@@ -2,18 +2,116 @@ from ....part_id import PartId
 from .soc import SoC, StubFlash, BusRam
 import binascii
 import struct
-from .puppet_code import efm32
+from .puppet_code import efm32, efm32gg11
 
 class EfmFlash(StubFlash):
     RANGE_ERASE = efm32["flash_erase"]
     PAGE_WRITE = efm32["flash_write"]
+    CMU = 0x400c8000
+    CMU_LOCK = CMU | 0x084
+    CMU_OSCENCMD = CMU | 0x020
+    CMU_STATUS = CMU | 0x02c
 
     def prepare(self):
-        self.soc.buses[0].u32_write(0x400c8084, 0x580e)
-        self.soc.buses[0].u32_write(0x400c8020, 0x10)
-        while not (self.soc.buses[0].u32_read(0x400c802c) & 0x20):
+        self.soc.buses[0].u32_write(self.CMU_LOCK, 0x580e)
+        self.soc.buses[0].u32_write(self.CMU_OSCENCMD, 0x10)
+        while not (self.soc.buses[0].u32_read(self.CMU_STATUS) & 0x20):
             pass
-        self.soc.buses[0].u32_write(0x400c8084, 0)
+        self.soc.buses[0].u32_write(self.CMU_LOCK, 0)
+
+class Efm1GFlash(EfmFlash):
+    RANGE_ERASE = efm32gg11["flash_erase"]
+    PAGE_WRITE = efm32gg11["flash_write"]
+    CMU = 0x400e4000
+    CMU_LOCK = CMU | 0x180
+    CMU_OSCENCMD = CMU | 0x60
+    CMU_STATUS = CMU | 0x90
+
+    MSC_LOCK = 0x40
+    MSC_LOCK_MAGIC = 0xab71
+    MSC_WRITECTRL = 0x8
+    MSC_WRITECMD = 0xc
+    MSC_WRITECMD_ERASEMAIN0 = 1 << 8
+    MSC_WRITECMD_ERASEMAIN1 = 1 << 9
+    MSC_WRITECMD_ERASEPAGE = 1 << 1
+    MSC_WRITECMD_LADDRIM = 1 << 0
+    MSC_STATUS = 0x1c
+    MSC_STATUS_BUSY = 0x1c
+    MSC_MASSLOCK = 0x54
+    MSC_MASSLOCK_MAGIC = 0x631a
+    MSC_ADDRB = 0x10
+
+    def msc_unlock(self):
+        self.soc.buses[0].u32_write(msc | self.MSC_LOCK, self.MSC_LOCK_MAGIC)
+
+    def msc_lock(self):
+        self.soc.buses[0].u32_write(msc | self.MSC_LOCK, 0)
+
+    def mass_erase(self):
+        msc = self.soc.info.msc
+        self.msc_unlock()
+        self.soc.buses[0].u32_write(msc | self.MSC_MASSLOCK, self.MSC_MASSLOCK_MAGIC)
+        self.soc.buses[0].u32_write(msc | self.MSC_WRITECMD, self.MSC_WRITECMD_ERASEMAIN0)
+        while self.soc.buses[0].u32_read(msc | self.MSC_STATUS) & self.MSC_STATUS_BUSY:
+            pass
+        self.soc.buses[0].u32_write(msc | self.MSC_WRITECMD, self.MSC_WRITECMD_ERASEMAIN1)
+        while self.soc.buses[0].u32_read(msc | self.MSC_STATUS) & self.MSC_STATUS_BUSY:
+            pass
+        self.soc.buses[0].u32_write(msc | self.MSC_MASSLOCK, 0)
+        self.msc_lock()
+
+    def _page_erase(self, page):
+        print("Page erase", hex(page))
+        self.soc.buses[0].u32_write(msc | self.MSC_ADDRB, page)
+        self.soc.buses[0].u32_write(msc | self.MSC_WRITECMD, self.MSC_WRITECMD_LADDRIM)
+        self.soc.buses[0].u32_write(msc | self.MSC_WRITECMD, self.MSC_WRITECMD_ERASEPAGE)
+        while self.soc.buses[0].u32_read(msc | self.MSC_STATUS) & self.MSC_STATUS_BUSY:
+            pass
+
+    def erase(self, offset, size):
+        self.soc.attach()
+        self.msc_unlock()
+        addr = offset & ~(self.page_size - 1)
+        while addr < offset + size:
+            self._page_erase(addr)
+        self.msc_lock()
+
+        if size == self.size:
+            self.is_blank = True
+
+class Part:
+    def __init__(self, name, msc, flash_class):
+        self.name = name
+        self.msc = msc
+        self.flash_class = flash_class
+
+PARTS = {
+     71: Part("EFM32G",      0x400C0000, EfmFlash),
+     72: Part("EFM32GG",     0x400C0000, Efm1GFlash),
+     73: Part("EFM32TG",     0x400C0000, EfmFlash),
+     74: Part("EFM32LG",     0x400C0000, EfmFlash),
+     75: Part("EFM32WG",     0x400C0000, EfmFlash),
+     76: Part("EFM32ZG",     0x400C0000, EfmFlash),
+     77: Part("EFM32HG",     0x400C0000, EfmFlash),
+    100: Part("EFM32GG11B",  0x40000000, EfmFlash),
+    120: Part("EZR32WG",     0x400C0000, EfmFlash),
+    121: Part("EZR32LG",     0x400C0000, EfmFlash),
+    122: Part("EZR32HG",     0x400C0000, EfmFlash),
+     81: Part("EFM32PG",     0x400E0000, EfmFlash),
+     83: Part("EFM32JG",     0x400E0000, EfmFlash),
+     16: Part("EFR32MG1P",   0x400E0000, EfmFlash),
+     17: Part("EFR32MG1B",   0x400E0000, EfmFlash),
+     18: Part("EFR32MG1V",   0x400E0000, EfmFlash),
+     19: Part("EFR32BG1P",   0x400E0000, EfmFlash),
+     20: Part("EFR32BG1B",   0x400E0000, EfmFlash),
+     21: Part("EFR32BG1V",   0x400E0000, EfmFlash),
+     25: Part("EFR32FG1B",   0x400E0000, EfmFlash),
+     26: Part("EFR32FG1V",   0x400E0000, EfmFlash),
+     27: Part("EFR32FG1x",   0x400E0000, EfmFlash),
+     28: Part("EFR32MG12P",  0x400E0000, EfmFlash),
+    }
+
+DEFAULT_PART = Part("EFx32xG", 0, None)
 
 @SoC.db.register(PartId(6, 0x73, 0x1),
                  PartId(6, 0x73, 0x81),
@@ -22,6 +120,7 @@ class EfmFlash(StubFlash):
                  PartId(6, 0x73, 0xc9),
                  PartId(6, 0x73, 0x101),
                  PartId(6, 0x73, 0x2c1),
+                 PartId(6, 0x73, 0x401),
                  PartId(6, 0x73, 0x901))
 class Gecko(SoC):
     DI_BASE = 0x0fe081b0
@@ -32,6 +131,12 @@ class Gecko(SoC):
         self.device_identify()
 
         self.logger.info("MCU UID: %016x", self.uid)
+
+    def erase_all(self):
+        print("mass erase")
+        flash, = self.children_of_class(EfmFlash)
+        flash.prepare()
+        flash.mass_erase()
 
     def device_identify(self):
         self.di_data = self.buses[0].mem_read(self.DI_BASE, self.DI_EMUTEMP)
@@ -44,12 +149,15 @@ class Gecko(SoC):
         pkgtype = chr(pkgtype)
         flash_page_size = 2 ** ((flash_page_size + 10) & 0xff)
 
-        name = self.PART_NAMES.get(family, "EFM32[%d]" % family) \
+        self.info = PARTS.get(family, DEFAULT_PART)
+
+        name = self.info.name \
                + str(dev_number) + "F" + str(flash_size)
         if pincount:
             name += pkgtype + str(pincount)
 
         self.name = name
+
 
         if name.startswith("EFR"):
             self.mac = self.di_data[self.DI_EUI48+5:self.DI_EUI48-1:-1]
@@ -57,8 +165,9 @@ class Gecko(SoC):
 
         if pincount:
             self.logger.info("Package: %s%d", self.PACKAGE_NAMES.get(pkgtype, pkgtype), pincount)
-            
-        self.child_add(EfmFlash("code", 0, flash_size * 1024, flash_page_size, self))
+
+        if self.info.flash_class:
+            self.child_add(self.info.flash_class("code", 0, flash_size * 1024, flash_page_size, self))
         self.child_add(BusRam("ram", 0x20000000, ram_size * 1024, self.buses[0]))
 
     PACKAGE_NAMES = {
@@ -66,30 +175,6 @@ class Gecko(SoC):
         'L': "BGA",
         'M': "QFN",
         'Q': "QFP",
-        }
-    
-    PART_NAMES = {
-        16: "EFR32MG1P",
-        17: "EFR32MG1B",
-        18: "EFR32MG1V",
-        19: "EFR32BG1P",
-        20: "EFR32BG1B",
-        21: "EFR32BG1V",
-        25: "EFR32FG1B",
-        26: "EFR32FG1V",
-        28: "EFR32MG12P",
-        71: "EFM32G",
-        72: "EFM32GG",
-        73: "EFM32TG",
-        74: "EFM32LG",
-        75: "EFM32WG",
-        76: "EFM32ZG",
-        77: "EFM32HG",
-        81: "EFM32PG1B",
-        83: "EFM32JG1B",
-        120: "EZR32WG",
-        121: "EZR32LG",
-        122: "EZR32HG",
         }
 
     DI_EUI48            = 0x028

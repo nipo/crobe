@@ -1,24 +1,48 @@
 #include "common.h"
 
+#ifdef GG11
+#define MSC (struct msc_s*)0x40000000
+#else
 #define MSC (struct msc_s*)0x400c0000
+#endif
 
 struct msc_s {
-    volatile uint32_t r0;
-    volatile uint32_t r1;
+    volatile uint32_t ctrl;
+    volatile uint32_t readctrl;
     volatile uint32_t writectrl;
     volatile uint32_t writecmd;
     volatile uint32_t addrb;
-    volatile uint32_t r5;
+    volatile uint32_t pad0;
     volatile uint32_t wdata;
     volatile uint32_t status;
-    volatile uint32_t r8;
-    volatile uint32_t r9;
-    volatile uint32_t r10;
-    volatile uint32_t r11;
-    volatile uint32_t r12;
-    volatile uint32_t r13;
-    volatile uint32_t r14;
+#ifdef GG11
+    volatile uint32_t pad1[4];
+#else
+    volatile uint32_t pad1[3];
+#endif
+    volatile uint32_t irq[4];
     volatile uint32_t lock;
+    volatile uint32_t cachecmd;
+    volatile uint32_t cachehits;
+    volatile uint32_t cachemisses;
+    volatile uint32_t pad2;
+    volatile uint32_t masslock;
+#ifdef GG11
+    volatile uint32_t pad3;
+    volatile uint32_t startup;
+    volatile uint32_t pad4[4];
+    volatile uint32_t bankswitchlock;
+    volatile uint32_t cmd;
+    volatile uint32_t pad5[6];
+    volatile uint32_t bootloaderctrl;
+    volatile uint32_t aapunlockcmd;
+    volatile uint32_t cacheconfig0;
+    volatile uint32_t pad6[2];
+    volatile uint32_t ramctrl;
+    volatile uint32_t eccctrl;
+    volatile uint32_t rameccaddr;
+    volatile uint32_t ram1eccaddr;
+#endif
 };
 
 #define LOCK_KEY     0x1b71
@@ -46,8 +70,10 @@ void flash_erase(uintptr_t addr, size_t size, size_t page_size)
     while (addr < end) {
         msc->addrb = addr;
         msc->writecmd = WRITECMD_LADDRIM;
-        msc->writecmd = WRITECMD_ERASEPAGE;
+        while (msc->status & STATUS_BUSY)
+            ;
 
+        msc->writecmd = WRITECMD_ERASEPAGE;
         addr += page_size;
 
         while (msc->status & STATUS_BUSY)
