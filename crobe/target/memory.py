@@ -85,8 +85,12 @@ class Flash(Region):
                     self.logger.error("Comparison for %s failed: %d/%d bytes differ", s, diffs, len(s))
                     dumped = 0
                     for off in range(0, len(s.data), 16):
-                        self.logger.error("Expect 0x%08x %s", s.address + off, binascii.b2a_hex(s.data[off:off+16]))
-                        self.logger.error("Memory 0x%08x %s", s.address + off, binascii.b2a_hex(flash_data[off:off+16]))
+                        a = s.data[off:off+16]
+                        b = flash_data[off:off+16]
+                        if a == b:
+                            continue
+                        self.logger.error("Expect 0x%08x %s", s.address + off, binascii.b2a_hex(a))
+                        self.logger.error("Memory 0x%08x %s", s.address + off, binascii.b2a_hex(b))
                         
                         dumped += 1
                         if dumped >= 10:
@@ -257,6 +261,8 @@ class Loadable:
                         for off in range(0, len(segment), 16):
                             orig = segment.data[off : off + 16]
                             rb = actual[off : off + 16]
+                            if orig == rb:
+                                continue
                             self.logger.error("Expected %08x: %s",
                                               segment.address + off,
                                               str(binascii.b2a_hex(orig), "ascii"))
