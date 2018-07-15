@@ -54,7 +54,7 @@ def poke(ctx, raw, reg32):
 
 @memory.command(help = "Arbitrary getter")
 @click.argument('address', metavar = 'ADDRESS', type = str)
-@click.argument('size', metavar = 'size', type = str, default = 4)
+@click.argument('size', metavar = 'size', type = str, default = "4")
 @click.pass_context
 def peek(ctx, address, size):
     bus = ctx.obj["bus"]
