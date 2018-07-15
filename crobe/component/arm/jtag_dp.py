@@ -187,6 +187,7 @@ class JtagDp(dp.Dp):
 @jtag.Tap.db.register(PartId(4, 0x3b, 0xba01))
 class JtagDpTap(jtag.Tap):
     irlen = 4
+    max_freq = 30e6
 
     def __init__(self, port, index):
         jtag.Tap.__init__(self, port, index)
