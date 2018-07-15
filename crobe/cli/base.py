@@ -17,7 +17,7 @@ class DomainFilter(logging.Filter):
 class RelativeFormatter(logging.Formatter):
     def __init__(self):
         logging.Formatter.__init__(self,
-                                   '%(asctime)-15s %(name)-15s %(message)s',
+                                   '\x1b[G\x1b[2K%(asctime)-15s %(name)-15s %(message)s',
                                    None, "%")
         self.start = datetime.now()
 
