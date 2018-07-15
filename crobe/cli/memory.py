@@ -8,7 +8,8 @@ import binascii
 @click.pass_context
 def memory(ctx, roots, bus):
     from ..component.model import Bus
-    buses = roots[0].children_of_class(Bus)
+    buses = list(roots[0].children_of_class(Bus))
+    buses += list(x for x in roots if isinstance(x, Bus))
 
     if bus:
         try:
