@@ -5,3 +5,4 @@ from . import lattice
 from . import jlink
 from . import xvcd
 from . import icestick
+from . import smartfusion
