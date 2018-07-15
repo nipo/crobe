@@ -8,3 +8,4 @@ from . import bscan
 from . import svf
 from . import pin
 from . import nordic
+from . import ws2812
