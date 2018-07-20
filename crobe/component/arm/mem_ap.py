@@ -158,7 +158,7 @@ class MemAp(ap.Ap, model.Bus):
                         address = t.address
 
                     if len(transfers) > i+1:
-                        nt = t[i+1]
+                        nt = transfers[i+1]
                         if nt.size_l2 == t.size_l2 and nt.address == t.address + (1 << t.size_l2):
                             csw = (csw & ~0x030) | 0x10
                             csw_dirty = True
