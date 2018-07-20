@@ -51,19 +51,23 @@ class Dp(PortComponent):
 
             self.logger.info("DP Target ID %s", self.target_id)
 
-        from .ap import Ap
-
         for i in range(16):
-            ap = Ap(self, i)
-
-            self.abort(1)
-
-            if ap.idr == 0:
-                continue
-
-            self.child_add(ap.cast())
+            self.__ap_discover(i)
+        for i in range(240, 256):
+            self.__ap_discover(i)
 
         PortComponent.start(self)
+
+    def __ap_discover(self, no):
+        from .ap import Ap
+
+        ap = Ap(self, no)
+        self.abort(1)
+
+        if ap.idr == 0:
+            return
+
+        self.child_add(ap.cast())
 
     def child_lookup(self, crit):
         if crit.lower().startswith("ap#"):
