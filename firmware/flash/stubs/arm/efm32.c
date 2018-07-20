@@ -65,6 +65,10 @@ void flash_erase(uintptr_t addr, size_t size, size_t page_size)
     do {
         msc->lock = LOCK_KEY;
     } while (msc->lock);
+
+    while (msc->status & STATUS_BUSY)
+        ;
+
     msc->writectrl = WRITECTRL_WREN;
 
     while (addr < end) {

@@ -2,33 +2,34 @@ from ....part_id import PartId
 from .soc import SoC, StubFlash, BusRam
 import binascii
 import struct
+import time
 from .puppet_code import efm32, efm32gg11
 
 class EfmFlash(StubFlash):
     RANGE_ERASE = efm32["flash_erase"]
     PAGE_WRITE = efm32["flash_write"]
     CMU = 0x400c8000
-    CMU_LOCK = CMU | 0x084
-    CMU_OSCENCMD = CMU | 0x020
-    CMU_STATUS = CMU | 0x02c
+    CMU_LOCK = 0x084
+    CMU_OSCENCMD = 0x020
+    CMU_STATUS = 0x02c
 
     def prepare(self):
-        self.soc.buses[0].u32_write(self.CMU_LOCK, 0x580e)
-        self.soc.buses[0].u32_write(self.CMU_OSCENCMD, 0x10)
-        while not (self.soc.buses[0].u32_read(self.CMU_STATUS) & 0x20):
+        self.soc.buses[0].u32_write(self.CMU | self.CMU_LOCK, 0x580e)
+        self.soc.buses[0].u32_write(self.CMU | self.CMU_OSCENCMD, 0x10)
+        while not (self.soc.buses[0].u32_read(self.CMU | self.CMU_STATUS) & 0x20):
             pass
-        self.soc.buses[0].u32_write(self.CMU_LOCK, 0)
+        self.soc.buses[0].u32_write(self.CMU | self.CMU_LOCK, 0)
 
 class Efm1GFlash(EfmFlash):
     RANGE_ERASE = efm32gg11["flash_erase"]
     PAGE_WRITE = efm32gg11["flash_write"]
     CMU = 0x400e4000
-    CMU_LOCK = CMU | 0x180
-    CMU_OSCENCMD = CMU | 0x60
-    CMU_STATUS = CMU | 0x90
+    CMU_LOCK = 0x180
+    CMU_OSCENCMD = 0x60
+    CMU_STATUS = 0x90
 
     MSC_LOCK = 0x40
-    MSC_LOCK_MAGIC = 0xab71
+    MSC_LOCK_MAGIC = 0x1b71
     MSC_WRITECTRL = 0x8
     MSC_WRITECMD = 0xc
     MSC_WRITECMD_ERASEMAIN0 = 1 << 8
@@ -36,32 +37,47 @@ class Efm1GFlash(EfmFlash):
     MSC_WRITECMD_ERASEPAGE = 1 << 1
     MSC_WRITECMD_LADDRIM = 1 << 0
     MSC_STATUS = 0x1c
-    MSC_STATUS_BUSY = 0x1c
+    MSC_STATUS_BUSY = 0x1
     MSC_MASSLOCK = 0x54
     MSC_MASSLOCK_MAGIC = 0x631a
     MSC_ADDRB = 0x10
 
     def msc_unlock(self):
+        msc = self.soc.info.msc
         self.soc.buses[0].u32_write(msc | self.MSC_LOCK, self.MSC_LOCK_MAGIC)
 
     def msc_lock(self):
+        msc = self.soc.info.msc
         self.soc.buses[0].u32_write(msc | self.MSC_LOCK, 0)
+
+    def msc_mass_unlock(self):
+        msc = self.soc.info.msc
+        self.soc.buses[0].u32_write(msc | self.MSC_MASSLOCK, self.MSC_MASSLOCK_MAGIC)
+
+    def msc_mass_lock(self):
+        msc = self.soc.info.msc
+        self.soc.buses[0].u32_write(msc | self.MSC_MASSLOCK, 0)
 
     def mass_erase(self):
         msc = self.soc.info.msc
         self.msc_unlock()
-        self.soc.buses[0].u32_write(msc | self.MSC_MASSLOCK, self.MSC_MASSLOCK_MAGIC)
+        self.msc_mass_unlock()
+        self.soc.buses[0].u32_write(msc | self.MSC_WRITECTRL, 1)
+        while self.soc.buses[0].u32_read(msc | self.MSC_STATUS) & self.MSC_STATUS_BUSY:
+            time.sleep(.01)
         self.soc.buses[0].u32_write(msc | self.MSC_WRITECMD, self.MSC_WRITECMD_ERASEMAIN0)
         while self.soc.buses[0].u32_read(msc | self.MSC_STATUS) & self.MSC_STATUS_BUSY:
-            pass
+            time.sleep(.01)
         self.soc.buses[0].u32_write(msc | self.MSC_WRITECMD, self.MSC_WRITECMD_ERASEMAIN1)
         while self.soc.buses[0].u32_read(msc | self.MSC_STATUS) & self.MSC_STATUS_BUSY:
-            pass
-        self.soc.buses[0].u32_write(msc | self.MSC_MASSLOCK, 0)
+            time.sleep(.01)
+        self.msc_mass_lock()
         self.msc_lock()
+        self.is_blank = True
 
     def _page_erase(self, page):
-        print("Page erase", hex(page))
+        msc = self.soc.info.msc
+        self.soc.buses[0].u32_write(msc | self.MSC_WRITECTRL, 1)
         self.soc.buses[0].u32_write(msc | self.MSC_ADDRB, page)
         self.soc.buses[0].u32_write(msc | self.MSC_WRITECMD, self.MSC_WRITECMD_LADDRIM)
         self.soc.buses[0].u32_write(msc | self.MSC_WRITECMD, self.MSC_WRITECMD_ERASEPAGE)
@@ -74,6 +90,7 @@ class Efm1GFlash(EfmFlash):
         addr = offset & ~(self.page_size - 1)
         while addr < offset + size:
             self._page_erase(addr)
+            addr += self.page_size
         self.msc_lock()
 
         if size == self.size:
@@ -93,7 +110,7 @@ PARTS = {
      75: Part("EFM32WG",     0x400C0000, EfmFlash),
      76: Part("EFM32ZG",     0x400C0000, EfmFlash),
      77: Part("EFM32HG",     0x400C0000, EfmFlash),
-    100: Part("EFM32GG11B",  0x40000000, EfmFlash),
+    100: Part("EFM32GG11B",  0x40000000, Efm1GFlash),
     120: Part("EZR32WG",     0x400C0000, EfmFlash),
     121: Part("EZR32LG",     0x400C0000, EfmFlash),
     122: Part("EZR32HG",     0x400C0000, EfmFlash),
