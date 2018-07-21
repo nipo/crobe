@@ -230,13 +230,15 @@ class Jed:
             if isinstance(s, Value):
                 if s.key == "F":
                     self.fuse_count = int(s.value)
+                if s.key == "P":
+                    self.pin_count = int(s.value)
             elif isinstance(s, DeviceIdentification):
                 self.device_architecture = s.architecture
                 self.device_pinout = s.pinout
             elif isinstance(s, FuseCrc):
                 self.__fuse_crc = s.crc
             elif isinstance(s, SecurityFuse):
-                self.security = s.value
+                self.security = s.enable
             elif isinstance(s, Fuse):
                 self.__fuses.append(s)
 
@@ -252,4 +254,4 @@ class Jed:
         if crc != self.__fuse_crc:
             raise ValueError("Bad fuse crc")
 
-        self.__fuses = fuse_map
+        self.fuses = fuse_map
