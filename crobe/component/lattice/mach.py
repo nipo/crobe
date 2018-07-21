@@ -1,5 +1,6 @@
+from ...model import PortComponent
 from ...part_id import PartId
-from ...protocol import jtag
+from ...protocol import jtag, spi, i2c
 from ... import bitfield
 from ...util.endian import bitswap8
 import struct
@@ -44,6 +45,430 @@ class BsReader:
 
     def __bool__(self):
         return self.point != len(self.blob)
+
+class MachXO2Config:
+    ENABLE_ARG = b'\x08\x00\x00'
+    DISABLE_ARG = b'\x00\x00'
+
+    IR_BYPASS               = 0xff
+    IR_CLAMP                = 0x78
+    IR_EXTEST               = 0x15
+    IR_HIGHZ                = 0x18
+    IR_IDCODE               = 0xe0
+    IR_IDCODE_PRIV          = 0x16
+    IR_ISC_ADDRESS_SHIFT    = 0x42
+    IR_ISC_DATA_SHIFT       = 0x0a
+    IR_ISC_DISABLE          = 0x26
+    IR_ISC_DISCHARGE        = 0x14
+    IR_ISC_ENABLE           = 0xc6
+    IR_ISC_ERASE            = 0x0e
+    IR_ISC_ERASE_DONE       = 0x24
+    IR_ISC_NOOP             = 0x30
+    IR_ISC_PROGRAM          = 0x67
+    IR_ISC_PROGRAM_DONE     = 0x5e
+    IR_ISC_PROGRAM_SECURITY = 0xce
+    IR_ISC_PROGRAM_USERCODE = 0xc2
+    IR_ISC_READ             = 0x80
+    IR_LSC_ENABLE_X         = 0x74
+    IR_LSC_RESET_CRC        = 0x3b
+    IR_LSC_PROG_SED_CRC     = 0xa2
+    IR_LSC_WRITE_BUS_ADDRESS= 0xf6
+    IR_LSC_EBR_WRITE        = 0xb2
+    IR_LSC_PCS_WRITE        = 0x72
+    IR_LSC_WRITE_ADDRESS    = 0xb4
+    IR_VERIFY_ID            = 0xe2
+    IR_LSC_WRITE_COMP_DIC   = 0x02
+    IR_LSC_INIT_ADDRESS     = 0x46
+    IR_LSC_INIT_ADDRESS_UFM = 0x47
+    IR_LSC_PROGRAM_SECPLUS  = 0xcf
+    IR_LSC_PROG_INCR_RTI    = 0x82
+    IR_LSC_VERIFY_INCR_RTI  = 0x6a
+    IR_LSC_PROG_INCR_CMP    = 0xb8
+    IR_LSC_PROG_INCR_NV     = 0x70
+    IR_LSC_PROG_CTRL0       = 0x22
+    IR_LSC_PROG_FEATURE     = 0xe4
+    IR_LSC_READ_FEATURE     = 0xe7
+    IR_LSC_PROG_FEABITS     = 0xf8
+    IR_LSC_READ_FEABITS     = 0xfb
+    IR_LSC_READ_PASSWORD    = 0xf2
+    IR_LSC_READ_CTRL0       = 0x20
+    IR_LSC_READ_STATUS      = 0x3c
+    IR_LSC_READ_INCR_NV     = 0x73
+    IR_LSC_CHECK_BUSY       = 0xf0
+    IR_LSC_REFRESH          = 0x79
+    IR_LSC_BITSTREAM_BURST  = 0x7a
+    IR_LSC_UIDCODE_PUB      = 0x19
+    IR_PRELOAD              = 0x1c
+    IR_SAMPLE               = 0x1c
+    IR_USERCODE             = 0xc0
+
+    ERASE_SRAM = 1
+    ERASE_FEATURE = 2
+    ERASE_FLASH = 4
+    ERASE_UFM = 8
+
+    class Status(bitfield.Register):
+        name = "Status"
+        fields = [
+            bitfield.BinaryField("Transparent mode", 0, "No", "Yes"),
+            bitfield.Field("Target", (1, 3), {0: "SRAM", 1: "EFUSE", 2: "Feature", 4:"Flash"}),
+            bitfield.EnableField("JTAG", 4),
+            bitfield.BinaryField("Logic is pw prot.", 5, "No", "Yes"),
+            bitfield.EnableField("SRAM OTP", 6),
+            bitfield.EnableField("Decrypt", 7),
+            bitfield.BinaryField("Done", 8, "No", "Yes"),
+            bitfield.EnableField("ISC", 9),
+            bitfield.EnableField("Write", 10),
+            bitfield.EnableField("Read", 11),
+            bitfield.BinaryField("Busy", 12, "No", "Yes"),
+            bitfield.BinaryField("Fail", 13, "No", "Yes"),
+            bitfield.BinaryField("Feature OTP", 14, "No", "Yes"),
+            bitfield.BinaryField("Decrypt only", 15, "No", "Yes"),
+            bitfield.EnableField("Passw prot.", 16),
+            bitfield.EnableField("UFM OTP", 17),
+            bitfield.EnableField("Assp", 18),
+            bitfield.EnableField("Sdmen", 19),
+            bitfield.BinaryField("Enc. preamble", 20, "none", "detected"),
+            bitfield.BinaryField("Std. Pream", 21, "none", "detected"),
+            bitfield.BinaryField("SPI", 22, "OK", "Fail"),
+            bitfield.Field("Error", (23, 25), ["OK", "ID", "Bad command", "CRC", "Preamble", "Abort", "Overflow", "SRAM ovr."]),
+            bitfield.BinaryField("Execution error", 26, "No", "Yes"),
+            bitfield.BinaryField("ID Mismatch", 27, "No", "Yes"),
+            bitfield.BinaryField("Invalid Command", 28, "No", "Yes"),
+            bitfield.BinaryField("SED Error", 29, "No", "Yes"),
+            bitfield.BinaryField("Bypass", 30, "No", "Yes"),
+            bitfield.BinaryField("Flow through mode", 31, "No", "Yes"),
+            ]
+
+    class Ctrl0(bitfield.Register):
+        name = "Control 0"
+        fields = [
+            bitfield.ValueField("Master clock Freq", (0, 5)),
+            bitfield.ValueField("SPI Mode", (6, 7)),
+            bitfield.BinaryField("SPI bit order", 8, "MSB First", "LSB First"),
+            bitfield.ValueField("MCLKB", 9),
+            bitfield.ValueField("STX DUM", (10, 11)),
+            bitfield.ValueField("DONE", (12, 14)),
+            bitfield.ValueField("INIT", (15, 17)),
+            bitfield.ValueField("P_DONE", (18, 19)),
+            bitfield.EnableField("SPI Master", 20),
+            bitfield.EnableField("SPI Slave Slow Respond Mode", 21),
+            bitfield.BinaryField("CPU Mon", 22, "No", "Yes"),
+            bitfield.BinaryField("SSPI Auto", 23, "No", "Yes"),
+            bitfield.BinaryField("HFC", 24, "No", "Yes"),
+            bitfield.BinaryField("TranEdit", 25, "No", "Yes"),
+            bitfield.DisableField("CDM", 26),
+            bitfield.DisableField("BKE", 27),
+            bitfield.BinaryField("NDR", 28, "No", "Yes"),
+            bitfield.BinaryField("Wake Up", 29, "No", "Yes"),
+            bitfield.ValueField("Core clock sel", (30, 31)),
+            ]
+
+    class Feature(bitfield.Register):
+        name = "Feature"
+        fields = [
+            bitfield.ValueField("IDCODE", (0, 31)),
+            bitfield.ValueField("TRACEID", (32, 39)),
+            bitfield.ValueField("I2C Addr", (40, 47)),
+            bitfield.EnableField("Secpwd",  48),
+            bitfield.EnableField("Deconly",  49),
+            bitfield.EnableField("Pwdflash",  50),
+            bitfield.EnableField("Pwdall",  51),
+            bitfield.EnableField("Myassp",  52),
+            bitfield.EnableField("Program",  53),
+            bitfield.EnableField("Init",  54),
+            bitfield.EnableField("Done",  55),
+            bitfield.EnableField("Jtag",  56),
+            bitfield.EnableField("Sspi",  57),
+            bitfield.EnableField("I2c",  58),
+            bitfield.EnableField("Mspi",  59),
+            bitfield.EnableField("Boots1",  60),
+            bitfield.EnableField("Boots2",  61),
+            bitfield.EnableField("Rsvd",  62),
+            ]
+
+    def __init__(self):
+        pass
+
+    @property
+    def idcode(self):
+        return int.from_bytes(self.cmd(MachXO2.IR_IDCODE, None, 4), "big")
+
+    def start(self):
+        idcode = self.idcode
+        parts = [p for p in PARTS if int(idcode) == p.idcode]
+        if len(parts) > 1:
+            suffixes = [p.name.split("-", 1)[1] for p in parts]
+            prefix = parts[0].name.split("-", 1)[0]
+            self.name = prefix + "-" + "/".join(suffixes)
+            self.info = parts[0]
+        else:
+            self.info = parts[0]
+            self.name = self.info.name
+
+        self.config_memory_size = self.info.row_count * self.info.col_bit_count // 8
+        self.flash_size = (self.info.flash_page_count + self.info.ufm_page_count) * 16
+        self.__bg_enable = None
+
+        self.logger.info("Found %s", self.info.name)
+
+        self.uid = int.from_bytes(self.cmd(self.IR_LSC_UIDCODE_PUB, None, 8), "big")
+        self.logger.info("UID: 0x%08x", self.uid)
+
+        self._isc_enable(True)
+        self.Status(self.status).dump(self.logger.info)
+        self.Feature(self.feature).dump(self.logger.info)
+        self._isc_disable()
+
+        jtag.Tap.start(self)
+
+    ERASE_SRAM = 1
+    ERASE_FEATURE = 2
+    ERASE_FLASH = 4
+    ERASE_UFM = 8
+
+    def _isc_enable(self, background = None):
+        if self.__bg_enable is None and background is None:
+            raise ValueError("Cannot reenable with no previous enable")
+        if background is None:
+            background = self.__bg_enable
+
+        self.cmd(self.IR_ISC_DISABLE, self.DISABLE_ARG)
+        self.wait_no_fail()
+        self.cmd(self.IR_LSC_ENABLE_X if background else self.IR_ISC_ENABLE, self.ENABLE_ARG)
+        self.wait_no_fail()
+        self.__bg_enable = background
+
+        self.status_check(0, 0x0200)
+
+    def _isc_disable(self):
+        self.cmd(self.IR_ISC_DISABLE, self.DISABLE_ARG)
+        self.wait_no_fail()
+        self.cmd(self.IR_BYPASS, None)
+        self.__bg_enable = None
+
+    def _erase(self, what):
+        assert self.__bg_enable is not None
+        self.cmd(self.IR_ISC_ERASE, bytes([what, 0, 0]))
+        self.wait_no_fail()
+
+    def _stop(self):
+        self._erase(self.ERASE_SRAM)
+
+    def stop(self):
+        self._isc_enable(False)
+        self._stop()
+        self._isc_disable()
+
+    def erase_all(self):
+        self._isc_enable(False)
+        self._erase(self.ERASE_SRAM | self.ERASE_UFM | self.ERASE_FLASH | self.ERASE_FEATURE)
+        self._isc_disable()
+
+    @property
+    def status(self):
+        return int.from_bytes(self.cmd(self.IR_LSC_READ_STATUS, None, 4), 'big')
+
+    @property
+    def feature(self):
+        return int.from_bytes(self.cmd(self.IR_LSC_READ_FEATURE, None, 8), 'big')
+
+    def status_check(self, expect_clear, expect_set):
+        mask = expect_set | expect_clear
+        assert self.status & mask == expect_set
+
+    def wait_idle(self, timeout = 1.):
+        step = .01
+
+        for i in range(max(int(timeout / step), 1)):
+            b = self.cmd(self.IR_LSC_CHECK_BUSY, None, 1)[0]
+            if b == 0:
+                return
+            time.sleep(.01)
+
+        raise RuntimeError("Busy flag stuck", b)
+
+    def wait_no_fail(self, timeout = 1.):
+        self.wait_idle(timeout)
+        self.status_check(3 << 12, 0)
+
+    def _flash_erase(self):
+        assert self.__bg_enable is not None
+        self._erase(self.ERASE_FLASH)
+
+    def _ufm_erase(self):
+        assert self.__bg_enable is not None
+        self._erase(self.ERASE_UFM)
+
+    def _feature_erase(self):
+        assert self.__bg_enable is not None
+        self._erase(self.ERASE_FEATURE)
+
+    def _flash_read(self, offset, size):
+        return self._mem_read(offset, size, self.IR_LSC_INIT_ADDRESS, 0)
+
+    def _ufm_read(self, offset, size):
+        return self._mem_read(offset, size, self.IR_LSC_INIT_ADDRESS_UFM, 0x40000000)
+
+    def _mem_read(self, offset, size, addr_init, offset_base):
+        assert self.__bg_enable is not None
+        self.status_check(0, 0xa00)
+
+        self.cmd(addr_init, bytes([offset_base >> 28, 0, 0]))
+        self.wait_no_fail()
+
+        self.cmd(self.IR_LSC_WRITE_ADDRESS, None,
+                 (offset_base + offset // 16).to_bytes(4, "big"))
+        self.wait_no_fail()
+
+        self.cmd(self.IR_LSC_READ_INCR_NV, b'\x00\x00\x01', 16),
+
+        data = b''
+        for addr in range(offset & ~0xf, offset + size, 16):
+            r = self.cmd(self.IR_LSC_READ_INCR_NV, b'\x00\x00\x01', 16)
+
+            row_count = ((offset & 0xf) + size + 0xf) // 16
+            data += r
+
+        data = self.row_flip(data)
+
+        return data[offset & 0xf : (offset & 0xf) + size]
+
+    def _mem_write(self, offset, data, addr_init, offset_base):
+        assert self.__bg_enable is not None
+        self.status_check(0, 0x600)
+
+        if offset % 16:
+            prelen = (-offset % 16)
+            self.logger.info("Pre len %d", prelen)
+            data = b'\x00' * prelen + data
+            offset = offset & ~0xf
+
+        if len(data) % 16:
+            postlen = (-len(data) % 16)
+            self.logger.info("Post len %d", postlen)
+            data += b'\x00' * postlen
+
+        self.dr_shift(addr_init, 4, 8)
+        self.wait_no_fail()
+
+        self.dr_shift(self.IR_LSC_WRITE_ADDRESS, offset_base + offset // 16, 32)
+        self.wait_no_fail()
+
+        data = self.row_flip(data)
+
+        for off in range(0, len(data), 16):
+            self.execute([
+                self.cmd_dr_shift(self.IR_LSC_PROG_INCR_NV, None),
+                self.cmd_dr_shift(None, bytes(data[off : off+16]), read_tdo = False),
+                ])
+            assert not self.wait_no_fail()
+
+    def _flash_write(self, offset, data):
+        return self._mem_write(offset, data, self.IR_LSC_INIT_ADDRESS, 0)
+
+    def _ufm_write(self, offset, data):
+        return self._mem_write(offset, data, self.IR_LSC_INIT_ADDRESS_UFM, 0x40000000)
+
+    def lol(self):
+        assert self.__bg_enable is not None
+        self.status_check(0, 0x600)
+
+        #self.logger.info("Flash write 0x%08x %d", offset, len(data))
+        if offset:# % 16:
+            #prelen = (-offset % 16)
+            prelen = offset
+            self.logger.info("Pre len %d", prelen)
+            data = b'\x00' * prelen + data
+            #offset = offset & ~0xf
+            offset = 0
+
+        if len(data) % 16:
+            postlen = (-len(data) % 16)
+            self.logger.info("Post len %d", postlen)
+            data += b'\x00' * postlen
+
+        self.dr_shift(self.IR_LSC_INIT_ADDRESS, 4, 8)
+        self.wait_no_fail()
+
+        #self.dr_shift(self.IR_LSC_WRITE_ADDRESS, offset // 16, 32)
+        #self.wait_no_fail()
+
+        data = self.row_flip(data)
+
+        for off in range(0, len(data), 16):
+            self.dr_shift(self.IR_LSC_PROG_INCR_NV,
+                          bytes(data[off : off+16]),
+                          read_tdo = False)
+            assert not self.wait_no_fail()
+
+    def _flash_done_set(self):
+        assert self.__bg_enable is not None
+        self.dr_shift(self.IR_ISC_PROGRAM_DONE, None)
+
+    def flash_erase(self):
+        self._isc_enable(True)
+        self._flash_erase()
+        self._isc_disable()
+
+    def ufm_erase(self):
+        self._isc_enable(True)
+        self._ufm_erase()
+        self._isc_disable()
+
+    def flash_read(self, offset, size):
+        self._isc_enable(False)
+        ret = self._flash_read(offset, size)
+        self._isc_disable()
+        return ret
+
+    def ufm_read(self, offset, size):
+        self._isc_enable(False)
+        ret = self._ufm_read(offset, size)
+        self._isc_disable()
+        return ret
+
+    def flash_write(self, offset, data):
+        self._isc_enable(True)
+        self._flash_write(offset, data)
+        self._isc_disable()
+
+    def ufm_write(self, offset, data):
+        self._isc_enable(True)
+        self._ufm_write(offset, data)
+        self._isc_disable()
+
+    def feature_read(self):
+        self._isc_enable(True)
+        ret = self.cmd(self.IR_LSC_READ_FEATURE, None, 8)
+        self._isc_disable()
+        return ret
+
+    def feature_write(self, feature):
+        self._isc_enable(True)
+
+        self.dr_shift(self.IR_LSC_INIT_ADDRESS, 0x02, 8)
+
+        self.dr_shift(self.IR_LSC_PROG_FEATURE, bytes(feature))
+
+        self._isc_disable()
+
+    @staticmethod
+    def row_flip(data):
+        assert len(data) % 16 == 0
+        tmp = b""
+        for offset in range(0, len(data), 16):
+            tmp += bitswap8(data[offset : offset + 16])
+        return tmp
+
+    def reset(self):
+        self._isc_enable(True)
+        self.dr_shift(self.IR_ISC_PROGRAM_DONE, None)
+        self.dr_shift(self.IR_LSC_REFRESH, None)
+        self._isc_disable()
+
+    def cmd(self, op, args, data = None):
+        raise NotImplementedError()
 
 class MachXOBitstream:
     HEADER = bytes([0xff, 0xff, 0xbd, 0xb3, 0xff, 0xff])
@@ -167,141 +592,9 @@ PARTS = [
 ]        
 
 @jtag.Tap.db.register(*set([PartId.from_idcode(p.idcode).drop_revision() for p in PARTS]))
-class MachXO2(jtag.Tap):
+class MachXO2(jtag.Tap, MachXO2Config):
     irlen = 8
     max_freq = 25e6
-
-    class Status(bitfield.Register):
-        name = "Status"
-        fields = [
-            bitfield.BinaryField("Transparent mode", 0, "No", "Yes"),
-            bitfield.Field("Target", (1, 3), {0: "SRAM", 1: "EFUSE", 2: "Feature", 4:"Flash"}),
-            bitfield.EnableField("JTAG", 4),
-            bitfield.BinaryField("Logic is pw prot.", 5, "No", "Yes"),
-            bitfield.EnableField("SRAM OTP", 6),
-            bitfield.EnableField("Decrypt", 7),
-            bitfield.BinaryField("Done", 8, "No", "Yes"),
-            bitfield.EnableField("ISC", 9),
-            bitfield.EnableField("Write", 10),
-            bitfield.EnableField("Read", 11),
-            bitfield.BinaryField("Busy", 12, "No", "Yes"),
-            bitfield.BinaryField("Fail", 13, "No", "Yes"),
-            bitfield.BinaryField("Feature OTP", 14, "No", "Yes"),
-            bitfield.BinaryField("Decrypt only", 15, "No", "Yes"),
-            bitfield.EnableField("Passw prot.", 16),
-            bitfield.EnableField("UFM OTP", 17),
-            bitfield.EnableField("Assp", 18),
-            bitfield.EnableField("Sdmen", 19),
-            bitfield.BinaryField("Enc. preamble", 20, "none", "detected"),
-            bitfield.BinaryField("Std. Pream", 21, "none", "detected"),
-            bitfield.BinaryField("SPI", 22, "OK", "Fail"),
-            bitfield.Field("Error", (23, 25), ["OK", "ID", "Bad command", "CRC", "Preamble", "Abort", "Overflow", "SRAM ovr."]),
-            bitfield.BinaryField("Execution error", 26, "No", "Yes"),
-            bitfield.BinaryField("ID Mismatch", 27, "No", "Yes"),
-            bitfield.BinaryField("Invalid Command", 28, "No", "Yes"),
-            bitfield.BinaryField("SED Error", 29, "No", "Yes"),
-            bitfield.BinaryField("Bypass", 30, "No", "Yes"),
-            bitfield.BinaryField("Flow through mode", 31, "No", "Yes"),
-            ]
-
-    class Ctrl0(bitfield.Register):
-        name = "Control 0"
-        fields = [
-            bitfield.ValueField("Master clock Freq", (0, 5)),
-            bitfield.ValueField("SPI Mode", (6, 7)),
-            bitfield.BinaryField("SPI bit order", 8, "MSB First", "LSB First"),
-            bitfield.ValueField("MCLKB", 9),
-            bitfield.ValueField("STX DUM", (10, 11)),
-            bitfield.ValueField("DONE", (12, 14)),
-            bitfield.ValueField("INIT", (15, 17)),
-            bitfield.ValueField("P_DONE", (18, 19)),
-            bitfield.EnableField("SPI Master", 20),
-            bitfield.EnableField("SPI Slave Slow Respond Mode", 21),
-            bitfield.BinaryField("CPU Mon", 22, "No", "Yes"),
-            bitfield.BinaryField("SSPI Auto", 23, "No", "Yes"),
-            bitfield.BinaryField("HFC", 24, "No", "Yes"),
-            bitfield.BinaryField("TranEdit", 25, "No", "Yes"),
-            bitfield.DisableField("CDM", 26),
-            bitfield.DisableField("BKE", 27),
-            bitfield.BinaryField("NDR", 28, "No", "Yes"),
-            bitfield.BinaryField("Wake Up", 29, "No", "Yes"),
-            bitfield.ValueField("Core clock sel", (30, 31)),
-            ]
-
-    class Feature(bitfield.Register):
-        name = "Feature"
-        fields = [
-            bitfield.ValueField("IDCODE", (0, 31)),
-            bitfield.ValueField("TRACEID", (32, 39)),
-            bitfield.ValueField("I2C Addr", (40, 47)),
-            bitfield.EnableField("Secpwd",  48),
-            bitfield.EnableField("Deconly",  49),
-            bitfield.EnableField("Pwdflash",  50),
-            bitfield.EnableField("Pwdall",  51),
-            bitfield.EnableField("Myassp",  52),
-            bitfield.EnableField("Program",  53),
-            bitfield.EnableField("Init",  54),
-            bitfield.EnableField("Done",  55),
-            bitfield.EnableField("Jtag",  56),
-            bitfield.EnableField("Sspi",  57),
-            bitfield.EnableField("I2c",  58),
-            bitfield.EnableField("Mspi",  59),
-            bitfield.EnableField("Boots1",  60),
-            bitfield.EnableField("Boots2",  61),
-            bitfield.EnableField("Rsvd",  62),
-            ]
-
-    IR_BYPASS               = 0xff
-    IR_CLAMP                = 0x78
-    IR_EXTEST               = 0x15
-    IR_HIGHZ                = 0x18
-    IR_IDCODE               = 0xe0
-    IR_IDCODE_PRIV          = 0x16
-    IR_ISC_ADDRESS_SHIFT    = 0x42
-    IR_ISC_DATA_SHIFT       = 0x0a
-    IR_ISC_DISABLE          = 0x26
-    IR_ISC_DISCHARGE        = 0x14
-    IR_ISC_ENABLE           = 0xc6
-    IR_ISC_ERASE            = 0x0e
-    IR_ISC_ERASE_DONE       = 0x24
-    IR_ISC_NOOP             = 0x30
-    IR_ISC_PROGRAM          = 0x67
-    IR_ISC_PROGRAM_DONE     = 0x5e
-    IR_ISC_PROGRAM_SECURITY = 0xce
-    IR_ISC_PROGRAM_USERCODE = 0xc2
-    IR_ISC_READ             = 0x80
-    IR_LSC_ENABLE_X         = 0x74
-    IR_LSC_RESET_CRC        = 0x3b
-    IR_LSC_PROG_SED_CRC     = 0xa2
-    IR_LSC_WRITE_BUS_ADDRESS= 0xf6
-    IR_LSC_EBR_WRITE        = 0xb2
-    IR_LSC_PCS_WRITE        = 0x72
-    IR_LSC_WRITE_ADDRESS    = 0xb4
-    IR_VERIFY_ID            = 0xe2
-    IR_LSC_WRITE_COMP_DIC   = 0x02
-    IR_LSC_INIT_ADDRESS     = 0x46
-    IR_LSC_INIT_ADDRESS_UFM = 0x47
-    IR_LSC_PROGRAM_SECPLUS  = 0xcf
-    IR_LSC_PROG_INCR_RTI    = 0x82
-    IR_LSC_VERIFY_INCR_RTI  = 0x6a
-    IR_LSC_PROG_INCR_CMP    = 0xb8
-    IR_LSC_PROG_INCR_NV     = 0x70
-    IR_LSC_PROG_CTRL0       = 0x22
-    IR_LSC_PROG_FEATURE     = 0xe4
-    IR_LSC_READ_FEATURE     = 0xe7
-    IR_LSC_PROG_FEABITS     = 0xf8
-    IR_LSC_READ_FEABITS     = 0xfb
-    IR_LSC_READ_PASSWORD    = 0xf2
-    IR_LSC_READ_CTRL0       = 0x20
-    IR_LSC_READ_STATUS      = 0x3c
-    IR_LSC_READ_INCR_NV     = 0x73
-    IR_LSC_CHECK_BUSY       = 0xf0
-    IR_LSC_REFRESH          = 0x79
-    IR_LSC_BITSTREAM_BURST  = 0x7a
-    IR_LSC_UIDCODE_PUB      = 0x19
-    IR_PRELOAD              = 0x1c
-    IR_SAMPLE               = 0x1c
-    IR_USERCODE             = 0xc0
     
     def __init__(self, port, index):
         jtag.Tap.__init__(self, port, index)
@@ -328,11 +621,6 @@ class MachXO2(jtag.Tap):
         self._isc_disable()
 
         jtag.Tap.start(self)
-
-    ERASE_SRAM = 1
-    ERASE_FEATURE = 2
-    ERASE_FLASH = 4
-    ERASE_UFM = 8
 
     def _isc_enable(self, background = None):
         if self.__bg_enable is None and background is None:
@@ -659,3 +947,44 @@ class MachXO2(jtag.Tap):
         self.run(10000)
 
         self.dr_shift(self.IR_BYPASS, None)
+
+@i2c.Interface.db.register("machxo2")
+class MachXO2I2c(PortComponent, MachXO2Config):
+    ENABLE_ARG = b'\x08\x00'
+    DISABLE_ARG = b'\x00\x00'
+    
+    def __init__(self, bus):
+        PortComponent.__init__(self, bus, "MachXO2")
+        MachXO2Config.__init__(self)
+        self.saddr = None
+
+    def start(self):
+        assert self.saddr is not None
+        MachXO2Config.start(self)
+
+    def cmd(self, op, args, data = None):
+        if args is None:
+            args = b'\x00\x00\x00'
+        cmd = bytes([op]) + args
+        for i in range(10, -1, -1):
+            try:
+                if isinstance(data, int):
+                    return self.port.write_read(self.saddr, cmd, data)
+                else:
+                    return self.port.write(self.saddr, cmd + (data or b''))
+            except i2c.AddressNack:
+                if not i:
+                    raise
+            time.sleep(.001)
+
+    def option_set(self, opt):
+        k, v = opt.split('=', 1)
+        if k == 'saddr':
+            self.saddr = int(v, 16)
+        else:
+            return PortComponent.option_set(opt)
+
+@spi.Target.db.register("machxo2")
+class MachXO2Spi(MachXO2Config):
+    ENABLE_ARG = b'\x08\x00\x00'
+    DISABLE_ARG = b'\x00\x00'

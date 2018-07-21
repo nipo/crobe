@@ -1,7 +1,7 @@
 from . import model
 from ..component.xilinx.spartan6 import Spartan6
 from ..component.xilinx.zynq import Zynq
-from ..component.lattice.mach import MachXO2
+from ..component.lattice.mach import MachXO2Config
 from . import memory
 
 __all__ = ["Fpga"]
@@ -108,7 +108,7 @@ class MachFeature(MachMem):
 
         self.fpga.feature_write(data)
 
-@model.Target.register(MachXO2)
+@model.Target.register(MachXO2Config)
 class MachXO(model.Target, memory.Loadable):
     """
     Mach-XO2 target
