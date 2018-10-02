@@ -261,7 +261,7 @@ class Series7(Series67):
     # Efuse 31:    USER[321] (24 bit + ECC)
 
     @staticmethod
-    def efuse_ecc_update(value):
+    def efuse_ecc_update_old(value):
         value &= 0xc0ffffff
         for bit, mask in enumerate([0x0003ff0f,
                                     0x001c78ee,
@@ -278,6 +278,30 @@ class Series7(Series67):
             t &= 1
             value |= t << (24 + bit)
         return value
+
+    @staticmethod
+    def efuse_ecc_update_new(value):
+        ecc = 0
+        p = 0
+        for i, v in enumerate([
+            0x1d, 0x1b, 0x17, 0x0f, 0x1c, 0x1a, 0x16, 0x0e,
+            0x19, 0x15, 0x0d, 0x13, 0x0b, 0x07, 0x03, 0x05,
+            0x09, 0x11, 0x06, 0x0a, 0x12, 0x0c, 0x14, 0x18,
+            ]):
+            if (value >> i) & 1:
+                ecc ^= v
+                p ^= 1
+        for i in range(5):
+            if (ecc >> i) & 1:
+                p ^= 1
+        return (value & 0xc0ffffff) | (ecc << 24) | (p << 29)
+
+    @classmethod
+    def efuse_ecc_update(cls, value):
+        a = cls.efuse_ecc_update_old(value)
+        b = cls.efuse_ecc_update_new(value)
+        assert a == b
+        return a
 
     @classmethod
     def dr_cts_write(cls, row, bit, margin_opt, program, dma):
@@ -349,7 +373,7 @@ class Series7(Series67):
                 self.cmd_run(1),
                 self.cmd_dr_shift(self.IR_FUSE_CTS, cts, 64, read_tdo = False),
                 self.cmd_dr_shift(self.IR_FUSE_CTS, None, read_tdo = False),
-                self.cmd_run(int(self.port.freq * 12e-6) or 1),
+                self.cmd_run(int(self.port.port.freq * 12e-6) or 1),
                 self.cmd_dr_shift(self.IR_FUSE_CTS, 0, 64, read_tdo = False),
                 self.cmd_dr_shift(self.IR_BYPASS, None),
                 self.cmd_run(1),
@@ -380,6 +404,7 @@ class Series7(Series67):
 
     def efuse_key_read(self):
         ret = 0
+        self.efuse_row_read(20)
         for i in range(11):
             row = self.efuse_row_read(20 + i)
             if self.efuse_ecc_update(row) != row:
