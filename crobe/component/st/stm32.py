@@ -101,12 +101,55 @@ class Rm0008(Info):
     dbgmcu_addr = 0xe0042000
     dbgmcu_init = {4: 0x186}
 
+class Rm0091Flash:
+    BASE = 0x40022000
+
+    ACR     = BASE + 0x00
+    KEYR    = BASE + 0x04
+    OPTKEYR = BASE + 0x08
+    SR      = BASE + 0x0c
+    CR      = BASE + 0x10
+    AR      = BASE + 0x14
+    OBR     = BASE + 0x1c
+    WRPR    = BASE + 0x20
+
+    KEY_RDPRT   = 0x00A5
+    KEY_1       = 0x45670123
+    KEY_2       = 0xCDEF89AB
+
+    SR_BSY      = 0x00000001
+    SR_PGERR    = 0x00000004
+    SR_WRPRTERR = 0x00000010
+    SR_EOP      = 0x00000020
+
+    CR_PG       = 0x00000001
+    CR_PER      = 0x00000002
+    CR_MER      = 0x00000004
+    CR_OPTPG    = 0x00000010
+    CR_OPTER    = 0x00000020
+    CR_STRT     = 0x00000040
+    CR_LOCK     = 0x00000080
+    CR_OPTWRE   = 0x00000200
+
+    def __init__(self, bus):
+        self.bus = bus
+
+    def mass_erase(self):
+        self.bus.u32_write(self.CR, self.bus.u32_read(self.CR) | self.CR_MER)
+        self.bus.u32_write(self.CR, self.bus.u32_read(self.CR) | self.CR_STRT)
+        while self.bus.u32_read(self.SR) & self.SR_BSY:
+            time.sleep(.01)
+        if self.bus.u32_read(self.SR) & self.SR_EOP:
+            self.bus.u32_write(self.SR, self.SR_EOP)
+        self.bus.u32_write(self.CR, self.bus.u32_read(self.CR) & ~self.CR_MER)
+
 class Rm0360(Info):
     flash_size_addr = 0x1ffff7cc
     dbgmcu_addr = 0x40015800
     dbgmcu_init = {4: 0x6, 8:0x1800}
     gpio = 0x48000000, (0xffffffff, 0xffffffff, 0xffffffff, 0xffffffff,
                         0x00000000, 0xffffffff)
+    flash_class = Rm0091Flash
 
 class Rm0385(Info):
     flash_size_addr = 0x1ff0f442
@@ -141,7 +184,7 @@ Info.parts = {
     0x413: Rm0008("F10x/High-Density",   2048),
     0x418: Rm0008("F10x/Connectivity",   2048),
     0x430: Rm0008("F10x/XL",             2048),
-    # RM0360
+    # RM0360/RM0091
     0x440: Rm0360("F030x8",              1024),
     0x444: Rm0360("F030x4/6",            1024),
     0x445: Rm0360("F070x6",              1024),

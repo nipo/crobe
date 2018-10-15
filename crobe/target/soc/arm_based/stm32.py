@@ -184,9 +184,7 @@ class Stm(SoC, pin_control.Controller):
 
     def erase_all(self):
         self.attach()
-        p = self.puppet()
-        code = p.stub(stm32f01["mass_erase"])
-        code.call(timeout = 2)
+        self.info.flash_class(self.bus).mass_erase()
 
     @property
     def pin_names(self):
