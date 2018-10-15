@@ -46,3 +46,29 @@ def poll(roots, pkg, ignore):
 
     dumper = Dumper(roots[0], packages)
     dumper.run(ignores)
+
+@bscan.command(help = "Pin set poller")
+@base.roots()
+@click.option("--pkg", help = "Set packages for ICs in chain", type = str, metavar = "PKG,PKG", default = "")
+def ones(roots, pkg):
+    from ..bscan.dumper import Dumper
+
+    packages = pkg.split(",")
+    dumper = Dumper(roots[0], packages)
+    before = {}
+    for d, tap in dumper.definitions:
+        before[d.name] = set()
+
+    while True:
+        values = dumper.pin_values()
+        for chip_name, chip in sorted(values.items()):
+            pins = set()
+            for pin, value in chip.items():
+                if value:
+                    pins.add(pin.name)
+            if before[chip_name] != pins:
+                if len(pins) > 10:
+                    print(chip_name, "too_many")
+                else:
+                    print(chip_name, list(sorted(pins)))
+                before[chip_name] = pins
