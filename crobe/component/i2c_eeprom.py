@@ -60,7 +60,7 @@ class I2cEeprom(PortComponent, Bus):
         deadline = time.time() + .1
         while time.time() < deadline:
             try:
-                return self.port.write(saddr, addr + data)
+                return self.port.write(saddr, baddr + data)
             except i2c.AddressNack:
                 continue
 
