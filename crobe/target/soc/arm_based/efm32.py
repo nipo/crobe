@@ -13,21 +13,6 @@ class EfmFlash(StubFlash):
     CMU_OSCENCMD = 0x020
     CMU_STATUS = 0x02c
 
-    def prepare(self):
-        self.soc.buses[0].u32_write(self.CMU | self.CMU_LOCK, 0x580e)
-        self.soc.buses[0].u32_write(self.CMU | self.CMU_OSCENCMD, 0x10)
-        while not (self.soc.buses[0].u32_read(self.CMU | self.CMU_STATUS) & 0x20):
-            pass
-        self.soc.buses[0].u32_write(self.CMU | self.CMU_LOCK, 0)
-
-class Efm1GFlash(EfmFlash):
-    RANGE_ERASE = efm32gg11["flash_erase"]
-    PAGE_WRITE = efm32gg11["flash_write"]
-    CMU = 0x400e4000
-    CMU_LOCK = 0x180
-    CMU_OSCENCMD = 0x60
-    CMU_STATUS = 0x90
-
     MSC_LOCK = 0x40
     MSC_LOCK_MAGIC = 0x1b71
     MSC_WRITECTRL = 0x8
@@ -41,6 +26,13 @@ class Efm1GFlash(EfmFlash):
     MSC_MASSLOCK = 0x54
     MSC_MASSLOCK_MAGIC = 0x631a
     MSC_ADDRB = 0x10
+
+    def prepare(self):
+        self.soc.buses[0].u32_write(self.CMU | self.CMU_LOCK, 0x580e)
+        self.soc.buses[0].u32_write(self.CMU | self.CMU_OSCENCMD, 0x10)
+        while not (self.soc.buses[0].u32_read(self.CMU | self.CMU_STATUS) & 0x20):
+            pass
+        self.soc.buses[0].u32_write(self.CMU | self.CMU_LOCK, 0)
 
     def msc_unlock(self):
         msc = self.soc.info.msc
@@ -57,6 +49,28 @@ class Efm1GFlash(EfmFlash):
     def msc_mass_lock(self):
         msc = self.soc.info.msc
         self.soc.buses[0].u32_write(msc | self.MSC_MASSLOCK, 0)
+
+    def mass_erase(self):
+        msc = self.soc.info.msc
+        self.msc_unlock()
+        self.msc_mass_unlock()
+        self.soc.buses[0].u32_write(msc | self.MSC_WRITECTRL, 1)
+        while self.soc.buses[0].u32_read(msc | self.MSC_STATUS) & self.MSC_STATUS_BUSY:
+            time.sleep(.01)
+        self.soc.buses[0].u32_write(msc | self.MSC_WRITECMD, self.MSC_WRITECMD_ERASEMAIN0)
+        while self.soc.buses[0].u32_read(msc | self.MSC_STATUS) & self.MSC_STATUS_BUSY:
+            time.sleep(.01)
+        self.msc_mass_lock()
+        self.msc_lock()
+        self.is_blank = True
+
+class Efm1GFlash(EfmFlash):
+    RANGE_ERASE = efm32gg11["flash_erase"]
+    PAGE_WRITE = efm32gg11["flash_write"]
+    CMU = 0x400e4000
+    CMU_LOCK = 0x180
+    CMU_OSCENCMD = 0x60
+    CMU_STATUS = 0x90
 
     def mass_erase(self):
         msc = self.soc.info.msc
