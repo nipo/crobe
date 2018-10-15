@@ -4,6 +4,7 @@ from enum import Enum
 from ..util.pretty import base2
 import click
 import binascii
+import time
 
 __all__ = ["Region", "Flash", "NandFlash", "NorFlash", "Eeprom", "Ram", "Peripheral", "Loadable", "Flag", "Type"]
 
@@ -254,6 +255,8 @@ class Loadable:
         with click.progressbar(length = total_size, label = "Checking...") as pb:
             for region, programmed in to_check:
                 for segment in programmed:
+                    self.logger.debug("Reading 0x%x +0x%x", segment.address, len(segment))
+                    time.sleep(.01)
                     actual = region.read(segment.address - region.address, len(segment))
                     pb.update(len(segment))
                     if actual != segment.data:
