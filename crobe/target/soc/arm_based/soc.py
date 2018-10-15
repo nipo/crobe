@@ -131,6 +131,18 @@ class SoC(model.SoC):
     def puppet(self):
         return ArmMPuppet(self)
 
+    def reattach(self):
+        assert self.attached
+        model.SoC.detach(self)
+
+        self.bus.port.port.reset = True
+        self.bus.port.port.line_reset()
+        self.bus.port.port.reset = False
+        self.bus.port.debug_enable(True)
+        self.bus.enable()
+
+        self.attach()
+
     def attach(self):
         if self.attached:
             return

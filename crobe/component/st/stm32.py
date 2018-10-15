@@ -1,5 +1,6 @@
 from ..arm.coresight.rom_table import RomTable
 import binascii
+import time
 
 class Info:
     DBGMCU_IDCODE = [0xe0042000, 0x40015800]
@@ -130,11 +131,32 @@ class Rm0091Flash:
     CR_STRT     = 0x00000040
     CR_LOCK     = 0x00000080
     CR_OPTWRE   = 0x00000200
+    CR_OBL_LAUNCH = 0x00002000
 
     def __init__(self, bus):
         self.bus = bus
 
+    def unlock(self):
+        while self.bus.u32_read(self.SR) & self.SR_BSY:
+            time.sleep(.01)
+        if self.bus.u32_read(self.CR) & self.CR_LOCK:
+            self.bus.u32_write(self.KEYR, self.KEY_1)
+            self.bus.u32_write(self.KEYR, self.KEY_2)
+
+    def opt_unlock(self):
+        self.unlock()
+        if not (self.bus.u32_read(self.CR) & self.CR_OPTWRE):
+            self.bus.u32_write(self.OPTKEYR, self.KEY_1)
+            self.bus.u32_write(self.OPTKEYR, self.KEY_2)
+
+    def lock(self):
+        if self.bus.u32_read(self.CR) & self.CR_OPTWRE:
+            self.bus.u32_write(self.CR, self.bus.u32_read(self.CR) & ~self.CR_OPTWRE)
+        if not (self.bus.u32_read(self.CR) & self.CR_LOCK):
+            self.bus.u32_write(self.CR, self.bus.u32_read(self.CR) | self.CR_LOCK)
+
     def mass_erase(self):
+        self.unlock()
         self.bus.u32_write(self.CR, self.bus.u32_read(self.CR) | self.CR_MER)
         self.bus.u32_write(self.CR, self.bus.u32_read(self.CR) | self.CR_STRT)
         while self.bus.u32_read(self.SR) & self.SR_BSY:
@@ -142,6 +164,20 @@ class Rm0091Flash:
         if self.bus.u32_read(self.SR) & self.SR_EOP:
             self.bus.u32_write(self.SR, self.SR_EOP)
         self.bus.u32_write(self.CR, self.bus.u32_read(self.CR) & ~self.CR_MER)
+
+    def opt_erase(self):
+        self.unlock()
+        self.bus.u32_write(self.CR, self.bus.u32_read(self.CR) | self.CR_OPTER)
+        self.bus.u32_write(self.CR, self.bus.u32_read(self.CR) | self.CR_STRT)
+        while self.bus.u32_read(self.SR) & self.SR_BSY:
+            time.sleep(.01)
+        if self.bus.u32_read(self.SR) & self.SR_EOP:
+            self.bus.u32_write(self.SR, self.SR_EOP)
+        self.bus.u32_write(self.CR, self.bus.u32_read(self.CR) & ~self.CR_OPTER)
+
+    def reload(self):
+        self.bus.u32_write(self.CR, self.bus.u32_read(self.CR) | self.CR_OBL_LAUNCH)
+        time.sleep(0.1)
 
 class Rm0360(Info):
     flash_size_addr = 0x1ffff7cc

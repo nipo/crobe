@@ -142,6 +142,9 @@ class Stm(SoC, pin_control.Controller):
         if self.attached:
             return
 
+        self._attach()
+
+    def _attach(self):
         SoC.attach(self)
         cpu, = self.children_of_class(Cortex)
         cpu.reset()
@@ -184,7 +187,17 @@ class Stm(SoC, pin_control.Controller):
 
     def erase_all(self):
         self.attach()
-        self.info.flash_class(self.bus).mass_erase()
+        f = self.info.flash_class(self.bus)
+        f.mass_erase()
+        f.opt_erase()
+
+        self.reset()
+        self.reattach()
+        
+    def reset(self):
+        self.attach()
+        f = self.info.flash_class(self.bus)
+        f.reload()
 
     @property
     def pin_names(self):
