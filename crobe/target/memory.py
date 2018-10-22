@@ -214,31 +214,54 @@ class Loadable:
             f.erase(0, f.size)
         self.force_blank()
 
-    def write(self, program):
-        regions = self.children_of_class(Region)
-        for r in regions:
-            blank = r.is_blank
+    def program_begin(self, do_erase):
+        if do_erase:
+            self.erase_all()
 
-            region_program = program.within(r.address, r.address + r.size)
+    def program_end(self, success, do_start):
+        if do_start:
+            if not success:
+                return
+            try:
+                self.reset()
+            except AttributeError:
+                click.echo("WARNING: Target does not handle reset")
 
-            print(r, list(region_program))
+    def write(self, program, do_erase = False, do_verify = False, do_start = False):
+        self.program_begin(do_erase)
 
-            if not blank and region_program:
-                r0 = []
+        regions = list(self.children_of_class(Region))
+
+        with click.progressbar(regions, label = "programming") as bar:
+            for r in bar:
+                blank = r.is_blank
+
+                region_program = program.within(r.address, r.address + r.size)
+
+                #print(r, list(region_program))
+
+                if not blank and region_program:
+                    r0 = []
+                    for p in region_program:
+                        r0.append((p.address - r.address, len(p)))
+                    r0.sort()
+                    r1 = [r0.pop(0)]
+                    for r2 in r0:
+                        if r1[-1][0] + r1[-1][1] >= r2[0]:
+                            r1[-1] = r1[-1][0], r2[0] + r2[1]
+                        else:
+                            r1.append(r2)
+                    for r2 in r1:
+                        r.erase(r2[0], r2[1])
+
                 for p in region_program:
-                    r0.append((p.address - r.address, len(p)))
-                r0.sort()
-                r1 = [r0.pop(0)]
-                for r2 in r0:
-                    if r1[-1][0] + r1[-1][1] >= r2[0]:
-                        r1[-1] = r1[-1][0], r2[0] + r2[1]
-                    else:
-                        r1.append(r2)
-                for r2 in r1:
-                    r.erase(r2[0], r2[1])
+                    r.write(p.address - r.address, p.data)
 
-            for p in region_program:
-                r.write(p.address - r.address, p.data)
+        success = True
+        if do_verify:
+            success = self.verify(program)
+
+        self.program_end(success, do_start)
 
     def verify(self, program):
         regions = self.children_of_class(Region)

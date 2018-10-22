@@ -32,23 +32,20 @@ def program(ctx, program, erase, check, run):
 
     click.echo("Target: %s" % target)
 
-    if erase:
-        target.erase_all()
-
     if program:
-        target.write(program)
+        target.write(program,
+                     do_erase = erase,
+                     do_verify = check,
+                     do_start = run)
 
-    if check:
-        ok = target.verify(program)
-        if not ok:
-            print("Comparison failure")
-            return 1
-
-    if run:
-        try:
-            target.reset()
-        except AttributeError:
-            click.echo("WARNING: Target does not handle reset")
+    else:
+        if erase:
+            target.erase_all()
+        if run:
+            try:
+                target.reset()
+            except AttributeError:
+                click.echo("WARNING: Target does not handle reset")
 
 @chip.command(help = "Readback target")
 @click.argument('filename', type = str)
