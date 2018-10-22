@@ -380,7 +380,7 @@ class Program:
 
         while True:
             option = filename.split(":")[-1].lower()
-            if len(option) == 3 and option in cls.EXT_MAP.values():
+            if option in cls.EXT_MAP.values():
                 parser = option
             elif option.startswith("+"):
                 offset += int(option[1:], 16)
