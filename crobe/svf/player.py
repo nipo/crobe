@@ -2,6 +2,8 @@ from . import svf
 import binascii
 from ..bitstring import BitString
 import warnings
+import time
+import click
 
 class Context:
     def __init__(self):
@@ -38,8 +40,9 @@ class Context:
 
 class Player:
     def run(self, svf):
-        for op in svf:
-            self.handle(op)
+        with click.progressbar(list(svf)) as ops:
+            for op in ops:
+                self.handle(op)
         self.flush()
 
 class ChainPlayer(Player):
@@ -196,15 +199,15 @@ class TapRegContext:
         if rb:
             self.player.flush()
 
-            print("Expected :", str(binascii.b2a_hex(bytes(self.tdo)), "ascii"))
-            print("Actual   :", str(binascii.b2a_hex(bytes(cmd.tdo)), "ascii"))
-
             tdo = int(cmd.tdo)
             ctdo = int(self.tdo)
             if self.mask:
                 tdo &= int(self.mask)
                 ctdo &= int(self.mask)
             if tdo != ctdo:
+                print()
+                print("Expected :", str(binascii.b2a_hex(bytes(self.tdo)), "ascii"))
+                print("Actual   :", str(binascii.b2a_hex(bytes(cmd.tdo)), "ascii"))
                 raise ValueError(self.__class__.__name__ + " Expected TDO:%r/%r, had %r" % (self.tdo, self.mask, cmd.tdo))
 
         self.tdi = BitString()
@@ -271,13 +274,23 @@ class TapPlayer(Player):
             raise NotImplementedError("Unknown operation", op)
 
     def test_run(self, op):
+        maxrun = int(self.tap.port.port.freq) // 2
         clocks = [0]
+        passed = 0
+        t = op.min_time or 0
         self.ir.run()
         self.dr.run()
         if op.run_count:
             clocks.append(op.run_count)
         if op.tck:
             clocks.append(op.tck)
-        if op.min_time:
-            clocks.append(int(self.tap.port.port.freq * op.min_time))
-        self.pending.append(self.tap.cmd_run(max(clocks)))
+        clocks = max(clocks)
+        if clocks > maxrun:
+            clocks = maxrun
+            t += self.tap.port.port.freq * (clocks - maxrun)
+        if clocks:
+            self.pending.append(self.tap.cmd_run(clocks))
+            t -= self.tap.port.port.freq * clocks
+        if t > 0:
+            self.flush()
+            time.sleep(t)
