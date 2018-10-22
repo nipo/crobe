@@ -57,8 +57,12 @@ class Program:
     def within(self, begin, end):
         ret = self.__class__()
         for s in self.segments:
-            if begin <= s.address and s.address + len(s) <= end:
-                ret.append(s)
+            left = max(begin, s.address)
+            right = min(s.address + len(s), end)
+            #print(hex(begin), hex(end), hex(left), hex(right), hex(left-s.address), hex(right-s.address))
+            if left > right:
+                continue
+            ret.append(Segment(left, s[left-s.address : right-s.address]))
         return ret
         
     def __getitem__(self, index):
