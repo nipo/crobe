@@ -557,6 +557,21 @@ class Tap(PortComponent):
         """
         self.execute([TapRun(cycles)])
 
+    @property
+    def ir_status(self):
+        """
+        Shift BYPASS to IR and get back IR status.
+        """
+        op = self.cmd_ir_status()
+        self.execute([op])
+        return op.tdo
+
+    def cmd_ir_status(self):
+        """
+        Shift BYPASS to IR and get back IR status.
+        """
+        return TapDrShift(self.IR_BYPASS, None, read_ir = True, return_type = int)
+
     def cmd_dr_shift(self, ir, dr, length = None, read_tdo = True, read_ir = False, return_type = None):
         """
         Shifts DR having a given IR selected. Will only reload IR if needed.
