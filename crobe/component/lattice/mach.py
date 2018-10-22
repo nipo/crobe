@@ -5,46 +5,43 @@ from ... import bitfield
 from ...util.endian import bitswap8
 import struct
 from ... import bitstring
+from . import bitstream
 import datetime
 import time
 import binascii
 
-class Frame:
-    def __init__(self, data, crc = None):
-        self.data = data
-        self.crc = crc
+class MachXO2Info:
+    def __init__(self, idcode, name, col_bit_count, row_count, flash_page_count, ufm_page_count):
+        self.idcode = idcode
+        self.name = name
+        self.col_bit_count = col_bit_count
+        self.row_count = row_count
+        self.flash_page_count = flash_page_count
+        self.ufm_page_count = ufm_page_count
 
-class BsReader:
-    def __init__(self, blob):
-        self.blob = blob
-        self.point = 0
-
-    def get(self, count):
-        if not count:
-            return b''
-        r = self.blob[self.point : self.point + count]
-        self.point += count
-        if self.point > len(self.blob):
-            raise ValueError("Read overflow")
-        return r
-
-    def big_get(self, count):
-        return int.from_bytes(self.get(count), "big")
-
-    def inc_get(self, count, crc, padding, frame_bit_size):
-        frame_byte_size = (frame_bit_size + 7) // 8
-        ret = []
-        c = None
-        for i in range(count):
-            data = bitswap8(self.get(frame_byte_size))
-            if crc:
-                c = self.big_get(2)
-            ret.append(Frame(data, c))
-            padding = self.get(padding)
-        return ret
-
-    def __bool__(self):
-        return self.point != len(self.blob)
+# Relevant info in data/vmdata/database/xpga/xo2/{ispVM_018a.xdf,XO2.svp}
+PARTS = [
+    MachXO2Info(0x012B0043, "LCMXO2-256ZE", 504, 186, 575, 0),
+    MachXO2Info(0x012B8043, "LCMXO2-256HC", 504, 186, 575, 0),
+    MachXO2Info(0x012B1043, "LCMXO2-640ZE", 888, 215, 1151, 192),
+    MachXO2Info(0x012B9043, "LCMXO2-640HC", 888, 215, 1151, 192),
+    MachXO2Info(0x012BA043, "LCMXO2-640UHC", 1080, 333, 2175, 512),
+    MachXO2Info(0x012B2043, "LCMXO2-1200ZE", 1080, 333, 2175, 512),
+    MachXO2Info(0x012BA043, "LCMXO2-1200HC", 1080, 333, 2175, 512),
+    MachXO2Info(0x012B3043, "LCMXO2-2000ZE", 1272, 420, 3198, 640),
+    MachXO2Info(0x012BB043, "LCMXO2-1200UHC", 1272, 420, 3198, 640),
+    MachXO2Info(0x012BB043, "LCMXO2-2000HC", 1272, 420, 3198, 640),
+    MachXO2Info(0x012B3043, "LCMXO2-2000HE", 1272, 420, 3198, 640),
+    MachXO2Info(0x012B4043, "LCMXO2-4000ZE", 1560, 623, 5758, 768),
+    MachXO2Info(0x012BC043, "LCMXO2-2000UHC", 1560, 623, 5758, 768),
+    MachXO2Info(0x012BC043, "LCMXO2-4000HC", 1560, 623, 5758, 768),
+    MachXO2Info(0x012B4043, "LCMXO2-2000UHE", 1560, 623, 5758, 768),
+    MachXO2Info(0x012B4043, "LCMXO2-4000HE", 1560, 623, 5758, 768),
+    MachXO2Info(0x012B5043, "LCMXO2-7000HE", 1992, 770, 9212, 2048),
+    MachXO2Info(0x012B5043, "LCMXO2-7000ZE", 1992, 770, 9212, 2048),
+    MachXO2Info(0x012BD043, "LCMXO2-4000UHC", 1992, 770, 9212, 2048),
+    MachXO2Info(0x012BD043, "LCMXO2-7000HC", 1992, 770, 9212, 2048),
+]        
 
 class MachXO2Config:
     ENABLE_ARG = b'\x08\x00\x00'
@@ -222,19 +219,14 @@ class MachXO2Config:
 
         jtag.Tap.start(self)
 
-    ERASE_SRAM = 1
-    ERASE_FEATURE = 2
-    ERASE_FLASH = 4
-    ERASE_UFM = 8
-
     def _isc_enable(self, background = None):
         if self.__bg_enable is None and background is None:
             raise ValueError("Cannot reenable with no previous enable")
         if background is None:
             background = self.__bg_enable
 
-        self.cmd(self.IR_ISC_DISABLE, self.DISABLE_ARG)
-        self.wait_no_fail()
+#        self.cmd(self.IR_ISC_DISABLE, self.DISABLE_ARG)
+#        self.wait_no_fail()
         self.cmd(self.IR_LSC_ENABLE_X if background else self.IR_ISC_ENABLE, self.ENABLE_ARG)
         self.wait_no_fail()
         self.__bg_enable = background
@@ -243,26 +235,50 @@ class MachXO2Config:
 
     def _isc_disable(self):
         self.cmd(self.IR_ISC_DISABLE, self.DISABLE_ARG)
-        self.wait_no_fail()
-        self.cmd(self.IR_BYPASS, None)
+        self.run(10000)
+#        self.status_check(0x3200, 0)
+#        self.cmd(self.IR_BYPASS, None)
         self.__bg_enable = None
+
+    @property
+    def done(self):
+        return self.ir_status & 0x84 == 0x04
+
+    def _bypass(self):
+        self.cmd(self.IR_BYPASS, None)
+        self.run(100)
+
+    def _addr_set(self, addr = None):
+        pass
 
     def _erase(self, what):
         assert self.__bg_enable is not None
         self.cmd(self.IR_ISC_ERASE, bytes([what, 0, 0]))
-        self.wait_no_fail()
+        self._addr_set(None)
+        for retry in range(4):
+            try:
+                self._isc_enable()
+                self.wait_no_fail()
+            except:
+                time.sleep(.5)
+                if retry == 3:
+                    raise
 
     def _stop(self):
         self._erase(self.ERASE_SRAM)
+        self.__bg_enable = None
 
     def stop(self):
         self._isc_enable(False)
         self._stop()
         self._isc_disable()
 
+    def _erase_all(self):
+        self._erase(self.ERASE_SRAM | self.ERASE_UFM | self.ERASE_FLASH | self.ERASE_FEATURE)
+
     def erase_all(self):
         self._isc_enable(False)
-        self._erase(self.ERASE_SRAM | self.ERASE_UFM | self.ERASE_FLASH | self.ERASE_FEATURE)
+        self._erase_all()
         self._isc_disable()
 
     @property
@@ -273,15 +289,25 @@ class MachXO2Config:
     def feature(self):
         return int.from_bytes(self.cmd(self.IR_LSC_READ_FEATURE, None, 8), 'big')
 
+    @property
+    def busy(self):
+        return self.cmd(self.IR_LSC_CHECK_BUSY, None, 1)[0]
+
     def status_check(self, expect_clear, expect_set):
         mask = expect_set | expect_clear
-        assert self.status & mask == expect_set
+        status = self.status
+        if status & mask == expect_set:
+            return
+        self.Status(status).dump(self.logger.error)
+        raise ValueError("Expected status with 0x%08x set, 0x%08x clear, got 0x%08x" %
+                         (expect_set, expect_clear, status))
 
     def wait_idle(self, timeout = 1.):
         step = .01
 
         for i in range(max(int(timeout / step), 1)):
-            b = self.cmd(self.IR_LSC_CHECK_BUSY, None, 1)[0]
+            self.run(1)
+            b = self.busy
             if b == 0:
                 return
             time.sleep(.01)
@@ -317,25 +343,26 @@ class MachXO2Config:
         self.cmd(addr_init, bytes([offset_base >> 28, 0, 0]))
         self.wait_no_fail()
 
-        self.cmd(self.IR_LSC_WRITE_ADDRESS, None,
-                 (offset_base + offset // 16).to_bytes(4, "big"))
-        self.wait_no_fail()
-
-        self.cmd(self.IR_LSC_READ_INCR_NV, b'\x00\x00\x01', 16),
+ 
+#        self.cmd(self.IR_LSC_READ_INCR_NV, b'\x00\x00\x01', 16),
 
         data = b''
         for addr in range(offset & ~0xf, offset + size, 16):
-            r = self.cmd(self.IR_LSC_READ_INCR_NV, b'\x00\x00\x01', 16)
+            self.cmd(self.IR_LSC_WRITE_ADDRESS, None,
+                     (offset_base + (addr + offset) // 16).to_bytes(4, "big"))
+            self.wait_no_fail()
+
+            r = self.cmd(self.IR_LSC_READ_INCR_NV, b'\x00\x00\x01', 16)[-16:]
 
             row_count = ((offset & 0xf) + size + 0xf) // 16
             data += r
 
-        data = self.row_flip(data)
+#        data = self.row_flip(data)
 
         return data[offset & 0xf : (offset & 0xf) + size]
 
     def _mem_write(self, offset, data, addr_init, offset_base):
-        assert self.__bg_enable is not None
+#        assert self.__bg_enable is not None
         self.status_check(0, 0x600)
 
         if offset % 16:
@@ -349,23 +376,23 @@ class MachXO2Config:
             self.logger.info("Post len %d", postlen)
             data += b'\x00' * postlen
 
-        self.dr_shift(addr_init, 4, 8)
+        self.cmd(addr_init, b"\x00\x00\x00")
+        self.run(1)
         self.wait_no_fail()
 
-        self.dr_shift(self.IR_LSC_WRITE_ADDRESS, offset_base + offset // 16, 32)
-        self.wait_no_fail()
+        if offset:
+            self.cmd(self.IR_LSC_WRITE_ADDRESS, offset_base + offset // 16, 32)
+            self.run(1)
+            self.wait_no_fail()
 
-        data = self.row_flip(data)
+#        data = self.row_flip(data)
 
         for off in range(0, len(data), 16):
-            self.execute([
-                self.cmd_dr_shift(self.IR_LSC_PROG_INCR_NV, None),
-                self.cmd_dr_shift(None, bytes(data[off : off+16]), read_tdo = False),
-                ])
+            self.cmd(self.IR_LSC_PROG_INCR_NV, None, bytes(data[off : off+16]))
             assert not self.wait_no_fail()
 
     def _flash_write(self, offset, data):
-        return self._mem_write(offset, data, self.IR_LSC_INIT_ADDRESS, 0)
+        return self._mem_write(offset, data, self.IR_LSC_INIT_ADDRESS, 0x20000000)
 
     def _ufm_write(self, offset, data):
         return self._mem_write(offset, data, self.IR_LSC_INIT_ADDRESS_UFM, 0x40000000)
@@ -403,8 +430,8 @@ class MachXO2Config:
             assert not self.wait_no_fail()
 
     def _flash_done_set(self):
-        assert self.__bg_enable is not None
-        self.dr_shift(self.IR_ISC_PROGRAM_DONE, None)
+        self.cmd(self.IR_ISC_PROGRAM_DONE, None)
+        self.run(20000)
 
     def flash_erase(self):
         self._isc_enable(True)
@@ -429,7 +456,7 @@ class MachXO2Config:
         return ret
 
     def flash_write(self, offset, data):
-        self._isc_enable(True)
+        self._isc_enable(False)
         self._flash_write(offset, data)
         self._isc_disable()
 
@@ -438,20 +465,34 @@ class MachXO2Config:
         self._ufm_write(offset, data)
         self._isc_disable()
 
+    def _feature_read(self):
+        return bytes(self.cmd(self.IR_LSC_READ_FEATURE, None, 8))
+
+    def _feabits_read(self):
+        return bytes(self.cmd(self.IR_LSC_READ_FEABITS, None, 2))
+
     def feature_read(self):
         self._isc_enable(True)
-        ret = self.cmd(self.IR_LSC_READ_FEATURE, None, 8)
+        ret = self._feature_read(self)
         self._isc_disable()
         return ret
 
-    def feature_write(self, feature):
+    def feabits_read(self):
         self._isc_enable(True)
+        ret = self._feabits_read(self)
+        self._isc_disable()
+        return ret
 
+    def _feature_write(self, feature):
         self.dr_shift(self.IR_LSC_INIT_ADDRESS, 0x02, 8)
+        self.run(1000)
 
         self.dr_shift(self.IR_LSC_PROG_FEATURE, bytes(feature))
+        self.run(1000)
 
-        self._isc_disable()
+    def _feabits_write(self, feabits):
+        self.dr_shift(self.IR_LSC_PROG_FEABITS, bytes(feabits))
+        self.run(1000)
 
     @staticmethod
     def row_flip(data):
@@ -461,135 +502,19 @@ class MachXO2Config:
             tmp += bitswap8(data[offset : offset + 16])
         return tmp
 
-    def reset(self):
-        self._isc_enable(True)
-        self.dr_shift(self.IR_ISC_PROGRAM_DONE, None)
-        self.dr_shift(self.IR_LSC_REFRESH, None)
-        self._isc_disable()
+    def _refresh(self):
+        self.cmd(self.IR_LSC_REFRESH, None)
+        self.wait_no_fail(5)
+
+    def _assert_done(self):
+        self.wait_idle(10)
+        self.status_check(0x2000, 0x100)
 
     def cmd(self, op, args, data = None):
         raise NotImplementedError()
 
-class MachXOBitstream:
-    HEADER = bytes([0xff, 0xff, 0xbd, 0xb3, 0xff, 0xff])
-
-    def __init__(self, prog):
-        reader = BsReader(prog.segment_at(0).data)
-
-        if "Part" not in prog.info:
-            raise ValueError("Can only parse bitstream with ASCII header")
-
-        if reader.get(len(self.HEADER)) != self.HEADER:
-            raise ValueError("Bitstream data does not start with expected header")
-
-        part = "-".join(prog.info["Part"].split("-")[:2])
-        
-        self.info = [p for p in PARTS if p.name == part][0]
-        self.rti = []
-        self.ebr = {}
-        self.usercode = 0
-        ebr_addr = 0
-
-        assert self.info.col_bit_count == int(prog.info["Cols"])
-        assert self.info.row_count == int(prog.info["Rows"])
-        
-        while reader:
-            cmd = reader.big_get(1)
-        
-            if cmd == 0xff:
-                continue
-
-            args = reader.big_get(3)
-        
-            if cmd == MachXO2.IR_LSC_RESET_CRC:
-                pass
-
-            elif cmd == MachXO2.IR_VERIFY_ID:
-                idcode = reader.big_get(4)
-                assert idcode == self.info.idcode
-
-            elif cmd == MachXO2.IR_LSC_WRITE_COMP_DIC:
-                raise NotImplementedError("Compressed bitstream support not implemented")
-                reader.get(8)
-
-            elif cmd == MachXO2.IR_LSC_PROG_CTRL0:
-                reader.get(4)
-
-            elif cmd == MachXO2.IR_LSC_INIT_ADDRESS:
-                addr = 0
-
-            elif cmd == MachXO2.IR_LSC_PROG_INCR_RTI:
-                padding = 0 if (args & 0x200000) else (((args >> 16) & 0xf) if args & 0x100000 else 1)
-
-                rows = reader.inc_get(args & 0xffff, not (args & 0x400000), padding, self.info.col_bit_count)
-                self.rti = rows
-
-            elif cmd == MachXO2.IR_LSC_PROG_INCR_CMP:
-                raise NotImplementedError("Compressed bitstream support not implemented")
-                reader.get(8)
-
-            elif cmd == MachXO2.IR_LSC_PROG_SED_CRC:
-                reader.get(4)
-
-            elif cmd == MachXO2.IR_ISC_PROGRAM_SECURITY:
-                pass
-
-            elif cmd == MachXO2.IR_ISC_PROGRAM_USERCODE:
-                self.usercode = reader.big_get(4)
-
-            elif cmd == MachXO2.IR_LSC_WRITE_BUS_ADDRESS:
-                ebr_addr = reader.big_get(4)
-
-            elif cmd == MachXO2.IR_LSC_EBR_WRITE:
-                padding = 0 if (args & 0x200000) else (((args >> 16) & 0xf) if args & 0x100000 else 1)
-
-                rows = reader.inc_get(args & 0xffff, bool(args & 0x400000), padding, 72)
-                self.ebr[ebr_addr] = rows
-
-            elif cmd == MachXO2.IR_ISC_PROGRAM_DONE:
-                pass
-
-            elif cmd == MachXO2.IR_LSC_PCS_WRITE:
-                reader.big_get(args & 0xff)
-
-            else:
-                raise ValueError("UNKNOWN: %02x" % cmd, point)
-        
-            if args & 0x800000:
-                reader.big_get(2)
-
-class MachXO2Info:
-    def __init__(self, idcode, name, col_bit_count, row_count, flash_page_count, ufm_page_count):
-        self.idcode = idcode
-        self.name = name
-        self.col_bit_count = col_bit_count
-        self.row_count = row_count
-        self.flash_page_count = flash_page_count
-        self.ufm_page_count = ufm_page_count
-
-# Relevant info in data/vmdata/database/xpga/xo2/{ispVM_018a.xdf,XO2.svp}
-PARTS = [
-    MachXO2Info(0x012B0043, "LCMXO2-256ZE", 504, 186, 575, 0),
-    MachXO2Info(0x012B8043, "LCMXO2-256HC", 504, 186, 575, 0),
-    MachXO2Info(0x012B1043, "LCMXO2-640ZE", 888, 215, 1151, 192),
-    MachXO2Info(0x012B9043, "LCMXO2-640HC", 888, 215, 1151, 192),
-    MachXO2Info(0x012BA043, "LCMXO2-640UHC", 1080, 333, 2175, 512),
-    MachXO2Info(0x012B2043, "LCMXO2-1200ZE", 1080, 333, 2175, 512),
-    MachXO2Info(0x012BA043, "LCMXO2-1200HC", 1080, 333, 2175, 512),
-    MachXO2Info(0x012B3043, "LCMXO2-2000ZE", 1272, 420, 3198, 640),
-    MachXO2Info(0x012BB043, "LCMXO2-1200UHC", 1272, 420, 3198, 640),
-    MachXO2Info(0x012BB043, "LCMXO2-2000HC", 1272, 420, 3198, 640),
-    MachXO2Info(0x012B3043, "LCMXO2-2000HE", 1272, 420, 3198, 640),
-    MachXO2Info(0x012B4043, "LCMXO2-4000ZE", 1560, 623, 5758, 768),
-    MachXO2Info(0x012BC043, "LCMXO2-2000UHC", 1560, 623, 5758, 768),
-    MachXO2Info(0x012BC043, "LCMXO2-4000HC", 1560, 623, 5758, 768),
-    MachXO2Info(0x012B4043, "LCMXO2-2000UHE", 1560, 623, 5758, 768),
-    MachXO2Info(0x012B4043, "LCMXO2-4000HE", 1560, 623, 5758, 768),
-    MachXO2Info(0x012B5043, "LCMXO2-7000HE", 1992, 770, 9212, 2048),
-    MachXO2Info(0x012B5043, "LCMXO2-7000ZE", 1992, 770, 9212, 2048),
-    MachXO2Info(0x012BD043, "LCMXO2-4000UHC", 1992, 770, 9212, 2048),
-    MachXO2Info(0x012BD043, "LCMXO2-7000HC", 1992, 770, 9212, 2048),
-]        
+    def _usercode_write(self, uc):
+        self.cmd(self.IR_ISC_PROGRAM_USERCODE, None, uc.to_bytes(4, "big"))
 
 @jtag.Tap.db.register(*set([PartId.from_idcode(p.idcode).drop_revision() for p in PARTS]))
 class MachXO2(jtag.Tap, MachXO2Config):
@@ -625,8 +550,8 @@ class MachXO2(jtag.Tap, MachXO2Config):
     def _isc_enable(self, background = None):
         if self.__bg_enable is None and background is None:
             raise ValueError("Cannot reenable with no previous enable")
-        if background is None:
-            background = self.__bg_enable
+        #if background is None:
+        #    background = self.__bg_enable
 
         self.dr_shift(self.IR_ISC_DISABLE, None)
         self.wait_no_fail()
@@ -636,30 +561,16 @@ class MachXO2(jtag.Tap, MachXO2Config):
 
         self.status_check(0, 0x0200)
 
-    def _isc_disable(self):
-        self.dr_shift(self.IR_ISC_DISABLE, None)
-        self.wait_no_fail()
-        self.dr_shift(self.IR_BYPASS, None)
-        self.__bg_enable = None
+    #def _isc_disable(self):
+    #    self.dr_shift(self.IR_ISC_DISABLE, None)
+    #    self.wait_no_fail()
+    #    self.__bg_enable = None
 
     def _erase(self, what):
         assert self.__bg_enable is not None
         self.dr_shift(self.IR_ISC_ERASE, what, 8)
         self.run(1)
-        self.wait_no_fail()
-
-    def _stop(self):
-        self._erase(self.ERASE_SRAM)
-
-    def stop(self):
-        self._isc_enable(False)
-        self._stop()
-        self._isc_disable()
-
-    def erase_all(self):
-        self._isc_enable(False)
-        self._erase(self.ERASE_SRAM | self.ERASE_UFM | self.ERASE_FLASH | self.ERASE_FEATURE)
-        self._isc_disable()
+        self.wait_no_fail(10)
 
     @property
     def status(self):
@@ -669,42 +580,25 @@ class MachXO2(jtag.Tap, MachXO2Config):
     def feature(self):
         return self.dr_shift(self.IR_LSC_READ_FEATURE, 0, 64, read_tdo = True)
 
-    def status_check(self, expect_clear, expect_set):
-        mask = expect_set | expect_clear
-        assert self.status & mask == expect_set
+    @property
+    def feabits(self):
+        return self.dr_shift(self.IR_LSC_READ_FEABITS, 0, 16, read_tdo = True)
 
-    def wait_idle(self, timeout = 1.):
-        step = .01
-
-        for i in range(max(int(timeout / step), 1)):
-            self.run(1)
-            if self.dr_shift(self.IR_LSC_CHECK_BUSY, 0, 1, read_tdo = True) == 0:
-                return
-            time.sleep(.01)
-
-        raise RuntimeError("Busy flag stuck")
-
-    def wait_no_fail(self, timeout = 1.):
-        self.wait_idle(timeout)
-        self.status_check(3 << 12, 0)
-
-    def _flash_erase(self):
-        assert self.__bg_enable is not None
-        self._erase(self.ERASE_FLASH)
-
-    def _ufm_erase(self):
-        assert self.__bg_enable is not None
-        self._erase(self.ERASE_UFM)
-
-    def _feature_erase(self):
-        assert self.__bg_enable is not None
-        self._erase(self.ERASE_FEATURE)
-
-    def _flash_read(self, offset, size):
-        return self._mem_read(offset, size, self.IR_LSC_INIT_ADDRESS, 0)
-
-    def _ufm_read(self, offset, size):
-        return self._mem_read(offset, size, self.IR_LSC_INIT_ADDRESS_UFM, 0x40000000)
+    def cmd(self, op, args, data = None):
+        self.logger.info("CMD %02x", op)
+        if args and data:
+            raise NotImplementedError()
+        if args is None and isinstance(data, int):
+            return self.dr_shift(op, b'\x00' * data, read_tdo = True)
+        if args is None and isinstance(data, bytes):
+            self.dr_shift(op, data, read_tdo = False)
+            self.run()
+            return
+        if data is None:
+            self.dr_shift(op, args or None, read_tdo = False)
+            self.run()
+            return
+        raise NotImplementedError()
 
     def _mem_read(self, offset, size, addr_init, offset_base):
         assert self.__bg_enable is not None
@@ -748,7 +642,7 @@ class MachXO2(jtag.Tap, MachXO2Config):
         return data[offset & 0xf : (offset & 0xf) + size]
 
     def _mem_write(self, offset, data, addr_init, offset_base):
-        assert self.__bg_enable is not None
+#        assert self.__bg_enable is not None
         self.status_check(0, 0x600)
 
         if offset % 16:
@@ -766,26 +660,22 @@ class MachXO2(jtag.Tap, MachXO2Config):
         self.run(1)
         self.wait_no_fail()
 
-        self.dr_shift(self.IR_LSC_WRITE_ADDRESS, offset_base + offset // 16, 32)
-        self.run(1)
-        self.wait_no_fail()
+        if offset:
+            self.dr_shift(self.IR_LSC_WRITE_ADDRESS, offset_base + offset // 16, 32)
+            self.run(1)
+            self.wait_no_fail()
 
         data = self.row_flip(data)
 
         for off in range(0, len(data), 16):
             self.execute([
                 self.cmd_dr_shift(self.IR_LSC_PROG_INCR_NV, None),
-                self.run(1),
                 self.cmd_dr_shift(None, bytes(data[off : off+16]), read_tdo = False),
-                self.run(1),
                 ])
             assert not self.wait_no_fail()
 
     def _flash_write(self, offset, data):
         return self._mem_write(offset, data, self.IR_LSC_INIT_ADDRESS, 0)
-
-    def _ufm_write(self, offset, data):
-        return self._mem_write(offset, data, self.IR_LSC_INIT_ADDRESS_UFM, 0x40000000)
 
     def lol(self):
         assert self.__bg_enable is not None
@@ -819,77 +709,17 @@ class MachXO2(jtag.Tap, MachXO2Config):
                           read_tdo = False)
             assert not self.wait_no_fail()
 
-    def _flash_done_set(self):
-        assert self.__bg_enable is not None
-        self.dr_shift(self.IR_ISC_PROGRAM_DONE, None)
-        self.run()
-
-    def flash_erase(self):
-        self._isc_enable(True)
-        self._flash_erase()
-        self._isc_disable()
-
-    def ufm_erase(self):
-        self._isc_enable(True)
-        self._ufm_erase()
-        self._isc_disable()
-
-    def flash_read(self, offset, size):
-        self._isc_enable(False)
-        ret = self._flash_read(offset, size)
-        self._isc_disable()
-        return ret
-
-    def ufm_read(self, offset, size):
-        self._isc_enable(False)
-        ret = self._ufm_read(offset, size)
-        self._isc_disable()
-        return ret
-
-    def flash_write(self, offset, data):
-        self._isc_enable(True)
-        self._flash_write(offset, data)
-        self._isc_disable()
-
-    def ufm_write(self, offset, data):
-        self._isc_enable(True)
-        self._ufm_write(offset, data)
-        self._isc_disable()
-
     def feature_read(self):
         self._isc_enable(True)
         ret = self.dr_shift(self.IR_LSC_READ_FEATURE, None, 64, read_tdo = True, return_type = bytes)
         self._isc_disable()
         return ret
 
-    def feature_write(self, feature):
+    def feabits_read(self):
         self._isc_enable(True)
-
-        self.dr_shift(self.IR_LSC_INIT_ADDRESS, 0x02, 8)
-        self.run()
-
-        self.dr_shift(self.IR_LSC_PROG_FEATURE, bytes(feature))
-        self.run()
-
+        ret = self.dr_shift(self.IR_LSC_READ_FEABITS, None, 16, read_tdo = True, return_type = bytes)
         self._isc_disable()
-
-    @staticmethod
-    def row_flip(data):
-        assert len(data) % 16 == 0
-        tmp = b""
-        for offset in range(0, len(data), 16):
-            tmp += bitswap8(data[offset : offset + 16])
-        return tmp
-
-    def reset(self):
-        self._isc_enable(True)
-        self.dr_shift(self.IR_ISC_PROGRAM_DONE, None)
-        self.run()
-        self.dr_shift(self.IR_LSC_REFRESH, None)
-        self.run()
-        self._isc_disable()
-
-
+        return ret
 
     ###
     ### Experimental
@@ -962,7 +792,12 @@ class MachXO2I2c(PortComponent, MachXO2Config):
         assert self.saddr is not None
         MachXO2Config.start(self)
 
+    def _addr_set(self, addr = None):
+        time.sleep(.5)
+        self.saddr = 0x40 if addr is None else addr
+
     def cmd(self, op, args, data = None):
+#        self.logger.info("CMD %02x", op)
         if args is None:
             args = b'\x00\x00\x00'
         cmd = bytes([op]) + args
@@ -983,6 +818,33 @@ class MachXO2I2c(PortComponent, MachXO2Config):
             self.saddr = int(v, 16)
         else:
             return PortComponent.option_set(opt)
+
+    def run(self, cycles):
+        self.cmd(0xff, None)
+        if cycles > 1000:
+            time.sleep(.5)
+
+    def _feature_write(self, feature):
+        self.status_check(0, 0x0200)
+        self.cmd(self.IR_LSC_PROG_FEATURE, None, bytes(feature)[::-1])
+        self._addr_set(bytes(feature)[5] * 4)
+        self.wait_no_fail()
+
+    def _feabits_write(self, feabits):
+        self.status_check(0, 0x0200)
+        self.cmd(self.IR_LSC_PROG_FEABITS, None, bytes(feabits)[::-1])
+        self.wait_no_fail()
+
+    def _feature_read(self):
+        return bytes(self.cmd(self.IR_LSC_READ_FEATURE, None, 8))[::-1]
+
+    def _feabits_read(self):
+        return bytes(self.cmd(self.IR_LSC_READ_FEABITS, None, 2))[::-1]
+
+    @property
+    def done(self):
+        s = self.status
+        return s & 0x2100 == 0x0100
 
 @spi.Target.db.register("machxo2")
 class MachXO2Spi(MachXO2Config):
