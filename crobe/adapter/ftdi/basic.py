@@ -80,7 +80,7 @@ class AdapterEnumerator(model.Enumerator):
         return serial
 
 class BaseInterface(object):
-    MAX_PACKET_SIZE = 2048
+    MAX_PACKET_SIZE = 1024
 
     def __init__(self, adapter,
                  channel = "A",
@@ -397,11 +397,10 @@ class SwdInterface(BaseInterface, swd.Interface):
 
             cmd = []
             cmd.append(self.cmd_activity(True))
-
             rsp_length = 0
             with_rsp = []
 
-            while ops and len(cmd) < self.MAX_PACKET_SIZE - 48 and rsp_length < self.MAX_PACKET_SIZE - 48:
+            while ops and sum(len(x) for x in cmd) < self.MAX_PACKET_SIZE - 48 and rsp_length < self.MAX_PACKET_SIZE - 48:
                 op = ops.pop(0)
                 pending.append(op)
 
