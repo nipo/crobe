@@ -217,7 +217,7 @@ class MachXO2Config:
         self.Feature(self.feature).dump(self.logger.info)
         self._isc_disable()
 
-        jtag.Tap.start(self)
+        #jtag.Tap.start(self)
 
     def _isc_enable(self, background = None):
         if self.__bg_enable is None and background is None:
