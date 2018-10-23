@@ -107,7 +107,7 @@ class Hs2Adapter(DigilentAdapter):
         14: 0,
         },
         swd_pins = {
-        tms_oe: 1,
+        tms_oe: 0,
         tdi_oe: 0,
         tck_oe: 1,
         13: 1,
