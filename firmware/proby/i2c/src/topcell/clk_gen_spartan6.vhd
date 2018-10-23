@@ -49,7 +49,7 @@ begin
       )
     port map (
       clkfbout            => s_clkfb,
-      clkout0             => p_sys_clk,
+      clkout0             => s_sys_clk,
       clkout1             => open,
       clkout2             => open,
       clkout3             => open,
@@ -61,6 +61,12 @@ begin
       clkin               => s_clk_60
       );
 
+  clk_buf: unisim.vcomponents.bufg
+    port map(
+      i => s_sys_clk,
+      o => p_sys_clk
+      );
+  
   p_sys_clk_ready <= s_pll_locked and s_dcm_locked;
 
 end architecture;

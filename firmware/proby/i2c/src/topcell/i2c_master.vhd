@@ -2,7 +2,7 @@ library ieee;
 use ieee.std_logic_1164.all;
 use ieee.numeric_std.all;
 
-library util, nsl, unisim;
+library util, nsl, unisim, signalling;
 
 entity i2c_master is
   port (
@@ -49,11 +49,13 @@ architecture arch of i2c_master is
   signal s_routed_cs_cmd, s_routed_cs_rsp : nsl.routed.routed_bus;
   signal s_cs_cmd, s_cs_rsp : nsl.framed.framed_bus;
 
-  signal s_srst, s_sda_drain, s_scl_drain : std_ulogic;
+  signal s_srst : std_ulogic;
   signal s_io_config: std_ulogic_vector(1 downto 0);
   signal s_config_data: nsl.cs.cs_reg;
   signal s_config_write: std_ulogic_vector(1 downto 0);
   signal s_status: nsl.cs.cs_reg_array(1 downto 0);
+  signal s_i2c_c: signalling.i2c.i2c_c;
+  signal s_i2c_s: signalling.i2c.i2c_s;
 
   constant sys_clk_mhz : natural := 4;
 
@@ -190,16 +192,14 @@ begin
     port map(
       p_clk  => s_sys_clk,
       p_resetn => s_sys_resetn_soft,
-      
+
       p_cmd_val => s_i2c_cmd.req,
       p_cmd_ack => s_i2c_cmd.ack,
       p_rsp_val => s_i2c_rsp.req,
       p_rsp_ack => s_i2c_rsp.ack,
-      
-      p_scl => scl,
-      p_sda => sda,
-      p_scl_drain => s_scl_drain,
-      p_sda_drain => s_sda_drain
+
+      p_i2c_c => s_i2c_c,
+      p_i2c_s => s_i2c_s
       );
 
   cs: nsl.cs.cs_framed_reg
@@ -294,6 +294,20 @@ begin
       p_rsp_in_ack => s_i2c_rsp.ack
       );
 
+  scl_driver: signalling.io.od_std_logic_driver
+    port map(
+      control => s_i2c_c.scl,
+      status => s_i2c_s.scl,
+      io => scl
+      );
+
+  sda_driver: signalling.io.od_std_logic_driver
+    port map(
+      control => s_i2c_c.sda,
+      status => s_i2c_s.sda,
+      io => sda
+      );
+  
   process(s_sys_clk, s_sys_resetn_soft, s_config_write)
   begin
     if s_sys_resetn_soft = '0' then
@@ -316,7 +330,7 @@ begin
     port map(
       p_resetn => s_sys_resetn_soft,
       p_clk => s_sys_clk,
-      p_togglable => s_scl_drain,
+      p_togglable => s_i2c_c.scl.drain,
       p_activity => user_led
       );
   
@@ -325,9 +339,6 @@ begin
   dbg_tms <= 'H';
   dbg_tck <= 'H';
   dbg_srst <= '0' when s_srst = '1' else 'Z';
-
-  scl <= '0' when s_scl_drain = '1' else 'Z';
-  sda <= '0' when s_sda_drain = '1' else 'Z';
   
   io_en <= s_sys_resetn;
   jtag_en <= '0';

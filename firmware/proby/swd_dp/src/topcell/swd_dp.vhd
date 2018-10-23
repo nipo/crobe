@@ -55,7 +55,7 @@ architecture arch of swd_dp is
   signal s_config_data: nsl.cs.cs_reg;
   signal s_config_write: std_ulogic_vector(2 downto 0);
   signal s_status: nsl.cs.cs_reg_array(2 downto 0);
-
+  
   constant sys_clk_hz : natural := 900000000 / 6;
 
   component clk_gen
@@ -200,10 +200,10 @@ begin
       p_rsp_val => s_swd_rsp.req,
       p_rsp_ack => s_swd_rsp.ack,
       
-      p_swclk => s_swclk,
-      p_swdio_i => s_swdio_i,
-      p_swdio_o => s_swdio_o,
-      p_swdio_oe => s_swdio_oe
+      p_swd_c.clk => s_swclk,
+      p_swd_c.dio.v => s_swdio_o,
+      p_swd_c.dio.en => s_swdio_oe,
+      p_swd_s.dio.v => s_swdio_i
       );
 
   cs: nsl.cs.cs_framed_reg

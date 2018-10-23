@@ -1,23 +1,23 @@
 # FTDI Synchronous FIFO (Port A)
-NET "fifo_data<0>" LOC = "P70" | IOSTANDARD = LVCMOS33 | SLEW = FAST;
-NET "fifo_data<1>" LOC = "P69" | IOSTANDARD = LVCMOS33 | SLEW = FAST;
-NET "fifo_data<2>" LOC = "P67" | IOSTANDARD = LVCMOS33 | SLEW = FAST;
-NET "fifo_data<3>" LOC = "P66" | IOSTANDARD = LVCMOS33 | SLEW = FAST;
-NET "fifo_data<4>" LOC = "P65" | IOSTANDARD = LVCMOS33 | SLEW = FAST;
-NET "fifo_data<5>" LOC = "P64" | IOSTANDARD = LVCMOS33 | SLEW = FAST;
-NET "fifo_data<6>" LOC = "P62" | IOSTANDARD = LVCMOS33 | SLEW = FAST;
-NET "fifo_data<7>" LOC = "P61" | IOSTANDARD = LVCMOS33 | SLEW = FAST;
+NET "fifo_data<0>" LOC = "P70" | IOSTANDARD = LVCMOS33 | DRIVE = 4 | SLEW = SLOW;
+NET "fifo_data<1>" LOC = "P69" | IOSTANDARD = LVCMOS33 | DRIVE = 4 | SLEW = SLOW;
+NET "fifo_data<2>" LOC = "P67" | IOSTANDARD = LVCMOS33 | DRIVE = 4 | SLEW = SLOW;
+NET "fifo_data<3>" LOC = "P66" | IOSTANDARD = LVCMOS33 | DRIVE = 4 | SLEW = SLOW;
+NET "fifo_data<4>" LOC = "P65" | IOSTANDARD = LVCMOS33 | DRIVE = 4 | SLEW = SLOW;
+NET "fifo_data<5>" LOC = "P64" | IOSTANDARD = LVCMOS33 | DRIVE = 4 | SLEW = SLOW;
+NET "fifo_data<6>" LOC = "P62" | IOSTANDARD = LVCMOS33 | DRIVE = 4 | SLEW = SLOW;
+NET "fifo_data<7>" LOC = "P61" | IOSTANDARD = LVCMOS33 | DRIVE = 4 | SLEW = SLOW;
 # Data ready in RX buffer (act low)
-NET "fifo_rxfn"    LOC = "P60" | IOSTANDARD = LVCMOS33 | SLEW = FAST;
+NET "fifo_rxfn"    LOC = "P60" | IOSTANDARD = LVCMOS33 | DRIVE = 4 | SLEW = SLOW;
 # Room available in TX buffer (act low)
-NET "fifo_txen"    LOC = "P59" | IOSTANDARD = LVCMOS33 | SLEW = FAST;
+NET "fifo_txen"    LOC = "P59" | IOSTANDARD = LVCMOS33 | DRIVE = 4 | SLEW = SLOW;
 
 # Read data from FTDI (oen must be low 1 cycle before, act low)
-NET "fifo_rdn"     LOC = "P58" | IOSTANDARD = LVCMOS33 | SLEW = FAST;
+NET "fifo_rdn"     LOC = "P58" | IOSTANDARD = LVCMOS33 | DRIVE = 4 | SLEW = SLOW;
 
 # Put date to FTDI (oen must be high one cycle before, act low)
-NET "fifo_wrn"     LOC = "P57" | IOSTANDARD = LVCMOS33 | SLEW = FAST;
+NET "fifo_wrn"     LOC = "P57" | IOSTANDARD = LVCMOS33 | DRIVE = 4 | SLEW = SLOW;
 
-NET "fifo_clk"     LOC = "P56" | IOSTANDARD = LVCMOS33 | SLEW = FAST | BUFG = CLK | PERIOD = 16.66 ns;
+NET "fifo_clk"     LOC = "P56" | IOSTANDARD = LVCMOS33 | DRIVE = 4 | SLEW = SLOW | BUFG = CLK | PERIOD = 16.66 ns;
 # when low, fifo_data[] is ftdi -> fpga
-NET "fifo_oen"     LOC = "P51" | IOSTANDARD = LVCMOS33 | SLEW = FAST;
+NET "fifo_oen"     LOC = "P51" | IOSTANDARD = LVCMOS33 | DRIVE = 4 | SLEW = SLOW;
