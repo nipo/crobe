@@ -215,7 +215,9 @@ class SoC(model.SoC):
         self.port.port.reset = False
         self.port.port.reset = False
 
-    def write(self, program):
+    def write(self, program, do_erase = False, do_verify = False, do_start = False):
+        self.program_begin(do_erase)
+
         cpu, = self.children_of_class(Cortex)
         cpu.halt()
 
@@ -276,6 +278,12 @@ class SoC(model.SoC):
             with click.progressbar(pages, label = "Writing %-8s" % r.name) as bar:
                 for p in bar:
                     r.write(p.address - r.address, p.data)
+
+        success = True
+        if do_verify:
+            success = self.verify(program)
+
+        self.program_end(success, do_start)
 
 @SoC.db.register_default
 def default_soc(ap):
