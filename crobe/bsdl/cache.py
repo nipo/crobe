@@ -6,7 +6,10 @@ import sys
 import os.path
 import logging
 import glob
-from hashlib import blake2b
+try:
+    from hashlib import blake2b
+except:
+    from hashlib import md5 as blake2b
 
 class Cache:
     def __init__(self, path):
