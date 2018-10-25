@@ -6,3 +6,4 @@ from . import jlink
 from . import xvcd
 from . import icestick
 from . import smartfusion
+from . import xilinx
