@@ -163,6 +163,8 @@ class Handle(Context):
         self.check(api.set_latency_timer(self.context, 1))
         self.check(api.set_bitmode(self.context, 0, api.BITMODE[mode]))
 
+        self.max_packet_size = self.context.contents.max_packet_size
+
     def close(self):
         if self.opened:
             self.check(api.usb_close(self.context))
