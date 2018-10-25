@@ -80,8 +80,6 @@ class AdapterEnumerator(model.Enumerator):
         return serial
 
 class BaseInterface(object):
-    MAX_PACKET_SIZE = 1024
-
     def __init__(self, adapter,
                  channel = "A",
                  gpio_output = 0, gpio_value = 0,
@@ -262,7 +260,9 @@ class JtagInterface(BaseInterface, jtag.Interface):
             cmd = [self.cmd_activity(True)]
             tdo_length = 0
 
-            while ops and len(cmd) < self.MAX_PACKET_SIZE - 48 and tdo_length < self.MAX_PACKET_SIZE - 48:
+            while ops \
+                      and sum(len(x) for x in cmd) < self.handle.max_packet_size - 48 \
+                      and tdo_length < self.handle.max_packet_size - 48:
                 op = ops.pop(0)
                 pending.append(op)
 
@@ -400,7 +400,7 @@ class SwdInterface(BaseInterface, swd.Interface):
             rsp_length = 0
             with_rsp = []
 
-            while ops and sum(len(x) for x in cmd) < self.MAX_PACKET_SIZE - 48 and rsp_length < self.MAX_PACKET_SIZE - 48:
+            while ops and sum(len(x) for x in cmd) < self.handle.max_packet_size - 48 and rsp_length < self.handle.max_packet_size - 48:
                 op = ops.pop(0)
                 pending.append(op)
 
