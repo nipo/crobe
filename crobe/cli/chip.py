@@ -57,5 +57,6 @@ def readback(ctx, filename):
 
     click.echo("Target: %s" % target)
 
+    target.attach()
     p = target.read()
     p.save(filename)
