@@ -110,14 +110,15 @@ class nRF5(SoC, pin_control.Controller):
     def part_probe(self):
         partinfo = self.buses[0].mem_read(self.FICR_PARTINFO, 20)
         configid = self.buses[0].u32_read(self.FICR_CONFIGID)
-
+        package_name = "xx"
         configid_hw = configid & 0xffff
 
+        part, variant, package, ram, flash = struct.unpack("<L4s3L", partinfo)
+
         if b'\xff\xff\xff\xff' not in partinfo:
-            part, variant, package, ram, flash = struct.unpack("<L4s3L", partinfo)
             variant = ''.join(chr(x) for x in variant[::-1] if 0x20 < x < 0x7f)
             package_code, package_name, gpio_count \
-                          = self.PACKAGES.get(package, ("Unknown (%04x)" % package, 0))
+                          = self.PACKAGES.get(package, ("xx", "Unknown (%04x)" % package, 0))
 
             if not variant and configid_hw in self.CONFIGID_HW:
                 variant = self.CONFIGID_HW[configid_hw][2]
@@ -129,6 +130,12 @@ class nRF5(SoC, pin_control.Controller):
         elif configid_hw in self.CONFIGID_HW:
             # Fallback on legacy CONFIGID.HW
             part, package_code, variant, gpio_count = self.CONFIGID_HW[configid_hw]
+
+            if package_name == "xx":
+                if package_code.startswith("Q"):
+                    package_name = "QFN"
+                elif package_code.startswith("C"):
+                    package_name = "BGA"
 
         else:
             a, b, c, d, e = struct.unpack("<5L", partinfo)
