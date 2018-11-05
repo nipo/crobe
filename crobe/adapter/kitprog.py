@@ -96,7 +96,8 @@ class Adapter(model.Adapter):
 
     @classmethod
     def from_device(cls, d, pre):
-        return cls(d, "%s-%d" % (pre, d.address))
+        serial = usb.util.get_string(d, d.iSerialNumber)
+        return cls(d, "%s-%s" % (pre, serial))
 
     def __init__(self, device, name):
         model.Adapter.__init__(self, name)
