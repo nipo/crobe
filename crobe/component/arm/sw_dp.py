@@ -29,7 +29,7 @@ class SwDp(dp.Dp):
         self.abort(0x1f)
         dp.Dp.debug_enable(self, enable)
         
-        if self.version >= 1 and not self.minimal and enable:
+        if self.version >= 1 and not self.minimal and enable and self.port.turnaround_supported:
             self.dlcr = (self.dlcr & ~0x300) | 0x300
             self.port.turnaround_cycles = 4
         if self.minimal:
