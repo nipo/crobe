@@ -405,12 +405,8 @@ class SwdInterface(BaseInterface, swd.Interface):
                 pending.append(op)
 
                 if isinstance(op, swd.Read):
-                    addr = op.addr & 0x3
-                    ap = int(bool(op.ap))
-                    parity = ap ^ (addr & 1) ^ (addr >> 1) ^ 1
-
                     cmd.append(self.__cmd_oe_on1)
-                    cmd.append(self.handle.cmd_out(BitString((ap << 2) | (addr << 4) | (parity << 6) | 0x10a, 9)))
+                    cmd.append(self.handle.cmd_out(op.cmd << 1, 9))
                     cmd.append(self.__cmd_oe_off1)
                     cmd.append(cmd_turn)
                     c, ack = self.__cmd_in3
@@ -434,15 +430,7 @@ class SwdInterface(BaseInterface, swd.Interface):
                     with_rsp.append(op)
 
                 elif isinstance(op, swd.Write):
-                    addr = op.addr & 0x3
-                    ap = int(bool(op.ap))
-                    parity = ap ^ (addr & 1) ^ (addr >> 1)
-                    dparity = (op.data ^ (op.data >> 16))
-                    dparity ^= (dparity >> 8)
-                    dparity ^= (dparity >> 4)
-                    dparity = (0x6996 >> (dparity & 0xf)) & 1
-
-                    cmd.append(self.handle.cmd_out(BitString((ap << 2) | (addr << 4) | (parity << 6) | 0x102, 9)))
+                    cmd.append(self.handle.cmd_out(BitString(op.cmd << 1, 9)))
                     cmd.append(self.__cmd_oe_off1)
                     cmd.append(cmd_turn)
                     c, ack = self.__cmd_in3

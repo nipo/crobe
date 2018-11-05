@@ -222,6 +222,11 @@ class Read(Operation):
         self.ap = ap
         self.addr = addr
 
+    @property
+    def cmd(self):
+        parity = int(self.ap) ^ (self.addr & 1) ^ ((self.addr >> 1) & 1) ^ 1
+        return (int(self.ap) << 1) | ((self.addr & 0x3) << 3) | (parity << 5) | 0x85
+
     # When executed
     data = None
     ack = None
@@ -237,6 +242,11 @@ class Write(Operation):
         self.ap = ap
         self.addr = addr
         self.data = data
+
+    @property
+    def cmd(self):
+        parity = int(self.ap) ^ (self.addr & 1) ^ ((self.addr >> 1) & 1)
+        return (int(self.ap) << 1) | ((self.addr & 0x3) << 3) | (parity << 5) | 0x81
 
     # When executed
     ack = None
