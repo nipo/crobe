@@ -7,3 +7,4 @@ from . import xvcd
 from . import icestick
 from . import smartfusion
 from . import xilinx
+from . import kitprog
