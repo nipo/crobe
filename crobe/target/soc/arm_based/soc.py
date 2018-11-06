@@ -208,12 +208,8 @@ class SoC(model.SoC):
         cpu.reset(False)
 
     def reset(self):
-        import time
-        self.port.port.reset = True
-        self.port.port.reset = True
-        time.sleep(100e-3)
-        self.port.port.reset = False
-        self.port.port.reset = False
+        cpu, = self.children_of_class(Cortex)
+        cpu.reset(False)
 
     def write(self, program, do_erase = False, do_verify = False, do_start = False):
         self.program_begin(do_erase)
