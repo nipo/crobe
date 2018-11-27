@@ -13,3 +13,4 @@ from . import macronix
 from . import microchip
 from . import i2c_eeprom
 from . import winbond
+from . import adesto

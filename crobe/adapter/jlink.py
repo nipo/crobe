@@ -303,8 +303,8 @@ class SwdInterface(JLinkInterface, swd.Interface):
                 #      01234567N123
                 # Out: _SpRaax_P.-------------------------------------.
                 # In:  _-------.OWFddddddddddddddddddddddddddddddddp.._
-                op = swd.Read(ap, addr)
-                cmdval = op.cmd << 8
+                parity = ap ^ (addr & 1) ^ (addr >> 1) ^ 1
+                cmdval = (ap << 9) | (addr << 11) | (parity << 13) | 0x8500
                 cmd = (cmdval >> (cycles + 2)).to_bytes(7, 'little')
                 cmd_begin_mask = 0xffff >> (cycles + 2)
                 cmd_end_mask = (1 << 56) - (1 << (48 + 1 + cycles))
@@ -315,8 +315,8 @@ class SwdInterface(JLinkInterface, swd.Interface):
                 #      012345678N123N
                 # Out: _Spwaax_P.---.ddddddddddddddddddddddddddddddddp
                 # In:  _--------OWF---------------------------------__
-                op = swd.Write(ap, addr, 0)
-                cmdval = op.cmd << 16
+                parity = ap ^ (addr & 1) ^ (addr >> 1)
+                cmdval = (ap << 17) | (addr << 19) | (parity << 21) | 0x810000
                 cmd = (cmdval >> (cycles + 3 + cycles)).to_bytes(3, 'little')
                 cmd_begin_mask = 0xffffff >> (cycles + 3 + cycles)
                 cmd_end_mask = (1 << 64) - (1 << 24)
