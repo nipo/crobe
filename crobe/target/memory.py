@@ -208,6 +208,12 @@ class Loadable:
                 p.append(Segment(region.address, blob))
         return p
 
+    def attach(self):
+        pass
+
+    def detach(self):
+        pass
+
     def erase_all(self):
         flashes = self.children_of_class(Flash)
         for f in flashes:

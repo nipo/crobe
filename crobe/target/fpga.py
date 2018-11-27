@@ -134,6 +134,9 @@ class MachXO(model.Target, memory.Loadable):
         self.component._stop()
         self.component._isc_enable(False)
 
+    def attach(self):
+        self.component._isc_enable(False)
+
     def erase_all(self):
         self.component._erase_all()
         self.force_blank()
