@@ -184,6 +184,17 @@ class MachXO2Config:
             bitfield.EnableField("Rsvd",  62),
             ]
 
+    class TraceId(bitfield.Register):
+        name = "TraceId"
+        fields = [
+            bitfield.ValueField("User", (56, 63)),
+            bitfield.ValueField("Lot", (24, 55)),
+            bitfield.ValueField("Wafer", (19, 23)),
+            bitfield.ValueField("X", (12, 18)),
+            bitfield.ValueField("Y", (5, 11)),
+            bitfield.ValueField("Spare", (0, 4)),
+            ]
+
     def __init__(self):
         pass
 
@@ -211,6 +222,7 @@ class MachXO2Config:
 
         self.uid = int.from_bytes(self.cmd(self.IR_LSC_UIDCODE_PUB, None, 8), "big")
         self.logger.info("UID: 0x%08x", self.uid)
+        self.TraceId(self.uid).dump(self.logger.info)
 
         self._isc_enable(True)
         self.Status(self.status).dump(self.logger.info)
@@ -539,6 +551,7 @@ class MachXO2(jtag.Tap, MachXO2Config):
     def start(self):
         self.uid = self.dr_shift(self.IR_LSC_UIDCODE_PUB, 0, 64)
         self.logger.info("UID: 0x%08x", self.uid)
+        self.TraceId(self.uid).dump(self.logger.info)
 
         self._isc_enable(True)
         self.Status(self.status).dump(self.logger.info)
