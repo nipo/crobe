@@ -130,6 +130,25 @@ class Program:
 
         return ret
 
+    def simplified(self):
+        ret = self.__class__()
+        addr = data = None
+
+        for s in sorted(self.segments, key = lambda x: x.address):
+            if data:
+                if s.address == addr + len(data):
+                    data += s.data
+                    continue
+                ret.append(Segment(addr, data))
+                addr = data = None
+            addr = s.address
+            data = s.data
+
+        if data:
+            ret.append(Segment(addr, data))
+
+        return ret
+
     @classmethod
     def from_ihex(cls, filename, offset = 0):
         """Load a Program from an Intel-Hex file"""
