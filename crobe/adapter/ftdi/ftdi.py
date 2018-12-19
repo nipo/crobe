@@ -110,30 +110,6 @@ class Device(object):
         elif mode == "reset":
             return Handle(self.connection_id, interface, "RESET")
         
-@api.stream_callback_fn
-def _callback(buf, size, progress_info, owner):
-    if buf and size:
-        owner.handle.stream_data(bytes(buf[:size]))
-
-    if progress_info:
-        owner.handle.stream_progress(progress_info)
-    return int(not owner.running)
-
-class StreamerThread(threading.Thread):
-    def __init__(self, handle):
-        threading.Thread.__init__(self)
-        self.handle = handle
-        self.running = False
-
-    def run(self):
-        self.running = True
-        api.readstream(self.handle.context, _callback, ctypes.py_object(self), 1, 4)
-        assert not self.running
-
-    def stop(self):
-        self.running = False
-        self.join()
-        
 class Handle(Context):
     def __init__(self, connection_id, interface, mode):
         self.opened = False
@@ -271,7 +247,7 @@ class Handle(Context):
         self.check(api.set_eeprom_value(self.context, id, value))
 
     def write(self, blob):
-        #self.logger.debug("<< %s", binascii.b2a_hex(blob))
+        self.logger.debug("<< %s", binascii.b2a_hex(blob))
         raw = (ctypes.c_ubyte * len(blob)).from_buffer_copy(blob)
         self.check(api.write_data(self.context, raw, len(blob)))
 
@@ -299,7 +275,7 @@ class Handle(Context):
             retries -= 1
             if not retries:
                 raise base.CommunicationError("Failed to read all data")
-        #self.logger.debug(">> %s", binascii.b2a_hex(ret))
+        self.logger.debug(">> %s", binascii.b2a_hex(ret))
         return ret
     
     def execute(self, blob, rsize = 0):
@@ -313,6 +289,32 @@ class Handle(Context):
         else:
             self.status()
 
+@api.stream_callback_fn
+def _callback(buf, size, progress_info, owner):
+    if buf and size:
+        owner.handle.stream_data(bytes(buf[:size]))
+
+    if progress_info:
+        owner.handle.stream_progress(progress_info)
+    return int(not owner.running)
+
+class StreamerThread(threading.Thread):
+    def __init__(self, handle):
+        threading.Thread.__init__(self)
+        self.handle = handle
+        self.running = False
+
+    def run(self):
+        self.running = True
+        while self.running:
+            blob = self.handle.read(1024)
+            if blob:
+                self.handle.stream_rx_queue.stream_data(blob)
+
+    def stop(self):
+        self.running = False
+        self.join()
+        
 class Ft245SyncFifo(Handle):
     def __init__(self, device, interface, **defaults):
         Handle.__init__(self, device.connection_id, interface, "RESET", **defaults)
