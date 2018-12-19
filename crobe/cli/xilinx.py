@@ -76,7 +76,6 @@ def efuse_key_set(roots, key, protect):
 @base.roots()
 def efuse_dump(roots):
     root = roots[0]
-    assert isinstance(root, zynq.Zynq)
 
     root.bbram_open()
     click.echo("Target: %s" % root)
