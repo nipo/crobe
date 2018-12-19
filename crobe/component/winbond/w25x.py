@@ -15,6 +15,7 @@ class W25x(SpiFlash):
         {"type": 3, "size": 64 * 1024, "erase_cmd": b'\xd8'},
         ]
     page_size = 256
+    write_buffer_size = 256
     total_size = 4 * 1024 * 1024 / 8
 
     def __init__(self, port, idr):
