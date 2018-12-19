@@ -76,6 +76,7 @@ class Interface(base.Interface):
             time.sleep(.1)
             self.reset = False
 
+        idcode_read = self.cmd_read(False, self.IDCODE)
         ops = [self.cmd_wakeup(), self.cmd_wakeup(),
                self.cmd_wakeup(), self.cmd_wakeup(),
                self.cmd_wakeup(), self.cmd_jtag_to_swd(),
@@ -83,10 +84,10 @@ class Interface(base.Interface):
                self.cmd_wakeup(), self.cmd_wakeup(),
                self.cmd_wakeup(), self.cmd_wakeup(),
                self.cmd_run(1),
-               self.cmd_read(False, self.IDCODE),
+               idcode_read,
                ]
         self.execute(ops)
-        return ops[-1].data
+        return idcode_read.data
 
     def cypress_line_reset(self):
         for delay in range(int(self.freq * 1.2e-3),
