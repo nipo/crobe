@@ -219,7 +219,7 @@ class SoC(model.SoC):
 
         flashs = list(self.children_of_class(StubFlash))
         if not flashs:
-            return Loadable.write(self, program)
+            return memory.Loadable.write(self, program)
 
         others = [r for r in self.children_of_class(memory.Region) if r not in flashs]
 
