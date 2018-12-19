@@ -264,16 +264,16 @@ class PSoC4(SoC):
         else:
             self.srom.erase_all()
 
-    def write(self, program):
-        self.attach()
-        flash, = self.children_of_class(PSoC4Flash)
+#    def write(self, program):
+#        self.attach()
+#        flash, = self.children_of_class(PSoC4Flash)
 
-        data = program.within(flash.address, flash.address + flash.size)
-        pages = list(data.paged(flash.page_size))
+#        data = program.within(flash.address, flash.address + flash.size)
+#        pages = list(data.paged(flash.page_size))
 
-        with click.progressbar(pages, label = "Writing flash") as bar:
-            for p in bar:
-                flash.write(p.address - flash.address, p.data)
+#        with click.progressbar(pages, label = "Writing flash") as bar:
+#            for p in bar:
+#                flash.write(p.address - flash.address, p.data)
 
     @property
     def protection_level(self):
