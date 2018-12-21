@@ -146,6 +146,7 @@ class Program:
 
         if data:
             ret.append(Segment(addr, data))
+        ret.info.update(self.info)
 
         return ret
 
