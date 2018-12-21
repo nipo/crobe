@@ -236,32 +236,36 @@ class Loadable:
     def write(self, program, do_erase = False, do_verify = False, do_start = False):
         self.program_begin(do_erase)
 
-        regions = list(self.children_of_class(Region))
+        to_erase = []
+        to_flash = []
 
-        with click.progressbar(regions, label = "programming") as bar:
-            for r in bar:
-                blank = r.is_blank
+        for r in self.children_of_class(Region):
+            region_program = program.within(r.address, r.address + r.size)
 
-                region_program = program.within(r.address, r.address + r.size)
-
-                #print(r, list(region_program))
-
-                if not blank and region_program:
-                    r0 = []
-                    for p in region_program:
-                        r0.append((p.address - r.address, len(p)))
-                    r0.sort()
-                    r1 = [r0.pop(0)]
-                    for r2 in r0:
-                        if r1[-1][0] + r1[-1][1] >= r2[0]:
-                            r1[-1] = r1[-1][0], r2[0] + r2[1]
-                        else:
-                            r1.append(r2)
-                    for r2 in r1:
-                        r.erase(r2[0], r2[1])
-
+            if not r.is_blank and region_program:
+                r0 = []
                 for p in region_program:
-                    r.write(p.address - r.address, p.data)
+                    r0.append((p.address - r.address, len(p)))
+                r0.sort()
+                r1 = [r0.pop(0)]
+                for r2 in r0:
+                    if r1[-1][0] + r1[-1][1] >= r2[0]:
+                        r1[-1] = r1[-1][0], r2[0] + r2[1]
+                    else:
+                        r1.append(r2)
+                for r2 in r1:
+                    to_erase.append((r, r2[0], r2[1]))
+
+            for p in region_program.paged(r.page_size):
+                to_flash.append((r, p.address - r.address, p.data))
+
+        with click.progressbar(to_erase, label = "Erasing ") as bar:
+            for r, addr, size in bar:
+                r.erase(addr, size)
+
+        with click.progressbar(to_flash, label = "Writing ") as bar:
+            for r, offset, data in bar:
+                r.write(offset, data)
 
         success = True
         if do_verify:
@@ -281,7 +285,7 @@ class Loadable:
 
         count = 0
 
-        with click.progressbar(length = total_size, label = "Checking...") as pb:
+        with click.progressbar(length = total_size, label = "Checking") as pb:
             for region, programmed in to_check:
                 for segment in programmed:
                     self.logger.debug("Reading 0x%x +0x%x", segment.address, len(segment))
