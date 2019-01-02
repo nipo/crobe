@@ -2,6 +2,7 @@ from .. import model
 from ...protocol import jtag
 from ... import bitstring
 from ...util.pretty import metric
+from ..cypress import fx2
 from collections import deque
 import usb.core
 import usb.util
@@ -12,38 +13,14 @@ import math
 
 __all__ = []
 
-class Adapter(model.Adapter):
+class Adapter(fx2.Adapter):
     supported_interfaces = ["jtag"]
-
-    def ctrl_out(self, op, value, index, data = b''):
-        #self.logger.debug("CTRL OUT %02x v %04x i %04x %s",
-        #                  op, value, index,
-        #                  binascii.b2a_hex(data))
-
-        self.device.ctrl_transfer(0x40, bRequest = op,
-                                  wValue = value, wIndex = index,
-                                  data_or_wLength = data)
-
-    def ctrl_in(self, op, value, index, length = 0):
-        #self.logger.debug("CTRL IN %02x v %04x i %04x s %d",
-        #                  op, value, index, length)
-
-        data = self.device.ctrl_transfer(0xc0, bRequest = op,
-                                         wValue = value,
-                                         wIndex = index,
-                                         data_or_wLength = length)
-        self.logger.debug("-> %s", binascii.b2a_hex(data))
-        return data
-
-    def bulk_out(self, ep, data, timeout = None):
-        self.logger.debug("BULK OUT %02x %d", ep, len(data))
-        self.device.write(ep, data, int((timeout or 1.) * 1000))
-
-    def bulk_in(self, ep, size, timeout = None):
-        self.logger.debug("BULK IN %02x %d", ep, size)
-        data = self.device.read(ep, size, int((timeout or 1.) * 1000))
-        #self.logger.debug("-> %s", binascii.b2a_hex(data))
-        return data
+    VID_PIDS = [(0x03fd, 0x0007),
+                (0x03fd, 0x0009),
+                (0x03fd, 0x000d),
+                (0x03fd, 0x000f),
+                (0x03fd, 0x0013),
+                (0x03fd, 0x0015)]
 
     OP_OUTPUT_DISABLE = 0x10
     OP_OUTPUT_ENABLE = 0x18
@@ -111,38 +88,9 @@ class Adapter(model.Adapter):
     def fw_version(self):
         return self._version_get(0)
 
-    @classmethod
-    def from_device(cls, d, pre):
-        return cls(d, "%s-%d" % (pre, d.address))
-
     def __init__(self, device, name):
-        model.Adapter.__init__(self, name)
-
-        self.device = device
+        fx2.Adapter.__init__(self, device, name)
         self.__inited = False
-
-    def _init(self):
-        if self.__inited:
-            return
-
-        self.firmware_load()
-
-        self.serial_number = "%016x" % self.serial
-
-        self.gpio = 0x8008
-        self.ctrl_out(0xb0, 0x2062, 0x0080)
-        self.output_enable(True)
-        self.ctrl_out(0xb0, 0x2062, 0x0000)
-        self.div_set(0x11)
-
-        self.jtag_io(bitstring.BitString(0, 8),
-                     bitstring.BitString(0, 8),
-                     bitstring.BitString(0, 8))
-
-
-        self.div_set(0x11)
-        self.output_enable(1)
-        self.div_set(0x12)
 
     fw = {}
     fw[0x03fd0007] = os.path.abspath(os.path.join(os.path.dirname(__file__), "xusbdfwu.hex"))
@@ -151,64 +99,6 @@ class Adapter(model.Adapter):
     fw[0x03fd000f] = os.path.abspath(os.path.join(os.path.dirname(__file__), "xusb_xlp.hex"))
     fw[0x03fd0013] = os.path.abspath(os.path.join(os.path.dirname(__file__), "xusb_xp2.hex"))
     fw[0x03fd0015] = os.path.abspath(os.path.join(os.path.dirname(__file__), "xusb_xse.hex"))
-
-    CTRL_MAX_PACKET_SIZE = 4096
-    REQ_WRITE = (usb.core.util.ENDPOINT_OUT | usb.core.util.CTRL_TYPE_VENDOR |
-                 usb.core.util.CTRL_RECIPIENT_DEVICE)
-    REQ_READ = (usb.core.util.ENDPOINT_IN | usb.core.util.CTRL_TYPE_VENDOR |
-                usb.core.util.CTRL_RECIPIENT_DEVICE)
-    CMD_RW_INTERNAL = 0xA0
-    CMD_RW_EEPROM = 0xA2
-    MAX_CTRL_BUFFER_LENGTH = 4096
-
-    def mem_write(self, addr, data):
-        self.device.ctrl_transfer(self.REQ_WRITE, self.CMD_RW_INTERNAL,
-                                  addr & 0xffff, addr >> 16, data)
-
-    def firmware_load(self):
-        from crobe.loadable.object import Program
-        program = Program.from_ihex(self.fw[(self.device.idVendor << 16)
-                                           | self.device.idProduct])
-
-        self.device.set_configuration(0)
-        self.reset(True)
-
-        for segment in program:
-            for off in range(0, len(segment), self.CTRL_MAX_PACKET_SIZE):
-                chunk = segment.data[off : off + self.CTRL_MAX_PACKET_SIZE]
-                addr = segment.address + off
-
-                #self.logger.debug("Loading %4d bytes at 0x%08x", len(chunk), addr)
-
-                self.mem_write(addr, chunk)
-
-        self.reset(False)
-        self.device.set_configuration(1)
-        self.device.set_interface_altsetting(0, 1)
-#        self.device.reset()
-#        time.sleep(.1)
-#        self.reopen()
-
-    def reset(self, enable_cpu):
-        cpu_address = 0xE600
-        data = bytes([int(bool(enable_cpu))])
-        self.mem_write(cpu_address, data)
-
-    def reopen(self):
-        bus = self.device.bus
-        address = self.device.address
-
-        print("Reopening %d/%d %04x:%04x" % (bus, address, self.device.idVendor, self.device.idProduct))
-
-        for retry in range(3):
-            devices = usb.core.find(find_all = True)
-            for d in devices:
-                if d.address >= address and d.idVendor == 0x03fd and d.idProduct == 0x000f:
-                    print("Got %d/%d %04x:%04x" % (bus, d.address, d.idVendor, d.idProduct))
-                    self.device = d
-                    return
-            time.sleep(0.2)
-        self.device = None
 
     @property
     def firmware_info(self):
@@ -287,7 +177,32 @@ class Adapter(model.Adapter):
         if interface_name.lower() not in self.supported_interfaces:
             raise NotImplementedError("Unsupported interface %s" % interface_name)
 
-        self._init()
+        if not self.__inited:
+            from crobe.loadable.object import Program
+            program = Program.from_ihex(self.fw[(self.device.idVendor << 16)
+                                               | self.device.idProduct])
+            self.firmware_load(program)
+            self.device.set_configuration(1)
+            self.device.set_interface_altsetting(0, 1)
+
+            self.serial_number = "%016x" % self.serial
+
+            self.gpio = 0x8008
+            self.ctrl_out(0xb0, 0x2062, 0x0080)
+            self.output_enable(True)
+            self.ctrl_out(0xb0, 0x2062, 0x0000)
+            self.div_set(0x11)
+
+            self.jtag_io(bitstring.BitString(0, 8),
+                         bitstring.BitString(0, 8),
+                         bitstring.BitString(0, 8))
+
+
+            self.div_set(0x11)
+            self.output_enable(1)
+            self.div_set(0x12)
+
+            self.__inited = True
 
         if interface_name.lower() == "jtag":
             return JtagInterface(self)
@@ -328,7 +243,7 @@ class JtagInterface(jtag.Interface):
 
     @freq.setter
     def freq(self, freq):
-        div = 771e9 / freq
+        div = 771e9 / float(freq)
         div = math.ceil(math.log2(div))
         div = max(4, min(255, div))
         self.__div = div
@@ -504,15 +419,6 @@ class JtagInterface(jtag.Interface):
             o.tdo = tdo
 
 @model.Enumerator.register
-class Enumerator(model.Enumerator):
+class Enumerator(fx2.Enumerator):
     adapter_class = Adapter
     prefix = "xpc"
-
-    def __init__(self):
-        model.Enumerator.__init__(self, self.prefix)
-
-    def start(self):
-        for dev in usb.core.find(idVendor = 0x3fd, idProduct = 0x000f, find_all = True):
-            self.child_add(self.adapter_class.from_device(dev, self.prefix))
-
-        model.Enumerator.start(self)
