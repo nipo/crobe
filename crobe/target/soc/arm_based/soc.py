@@ -212,14 +212,14 @@ class SoC(model.SoC):
         cpu.reset(False)
 
     def write(self, program, do_erase = False, do_verify = False, do_start = False):
+        flashs = list(self.children_of_class(StubFlash))
+        if not flashs:
+            return memory.Loadable.write(self, program, do_erase, do_verify, do_start)
+
         self.program_begin(do_erase)
 
         cpu, = self.children_of_class(Cortex)
         cpu.halt()
-
-        flashs = list(self.children_of_class(StubFlash))
-        if not flashs:
-            return memory.Loadable.write(self, program)
 
         others = [r for r in self.children_of_class(memory.Region) if r not in flashs]
 

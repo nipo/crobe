@@ -242,6 +242,9 @@ class Loadable:
         for r in self.children_of_class(Region):
             region_program = program.within(r.address, r.address + r.size)
 
+            if not region_program:
+                continue
+
             if not r.is_blank and region_program:
                 r0 = []
                 for p in region_program:
