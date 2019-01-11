@@ -407,12 +407,19 @@ class Series7(Series67):
         self.efuse_row_read(20)
         for i in range(11):
             row = self.efuse_row_read(20 + i)
-            if self.efuse_ecc_update(row) != row:
-                row = 0
             row &= 0xffffff
             ret |= row << (24 * i)
         ret &= (1 << 256) - 1
         return ret.to_bytes(32, "big")
+
+    def efuse_key_ecc_valid(self):
+        ret = 0
+        self.efuse_row_read(20)
+        for i in range(11):
+            row = self.efuse_row_read(20 + i)
+            if self.efuse_ecc_update(row) != row:
+                return False
+        return True
     
     ###
     ### BBRAM
