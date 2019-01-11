@@ -83,11 +83,10 @@ class Target(PortComponent, base.FreqCapper):
         PortComponent.__init__(self, port, name)
         base.FreqCapper.__init__(self)
         self.cs = cs
+        self.port.freq_cap("target", self.freq)
 
     def execute(self, ops):
-        self.port.freq_cap("target", self.freq)
         r = self.port.execute(ops)
-        self.port.freq_cap("target", None)
         return r
 
     def transaction(self, mosi, read_miso = True):

@@ -29,9 +29,9 @@ class FreqCapper:
         self.freq = freq
 
         if not freq:
-            self.logger.info("Frequency now uncapped, had %s", metric(self.freq, "Hz"))
+            self.logger.debug("Frequency now uncapped, had %s", metric(self.freq, "Hz"))
         else:
-            self.logger.info("Frequency now capped to %s because of %s, had %s",
+            self.logger.debug("Frequency now capped to %s because of %s, had %s",
                              metric(freq, "Hz"), reason, metric(self.freq, "Hz"))
 
     # property, writable, Hz
