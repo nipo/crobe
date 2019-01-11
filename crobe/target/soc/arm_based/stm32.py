@@ -1,5 +1,6 @@
 from ....part_id import PartId
 from ....component.arm.coresight.scs import Scs
+from ....component.arm.dp import DpAccessFailure
 from ....component.st.stm32 import Info
 from ....component.arm.cortex import Cortex
 from .soc import SoC, StubFlash, BusRam
@@ -197,7 +198,10 @@ class Stm(SoC, pin_control.Controller):
     def reset(self):
         self.attach()
         f = self.info.flash_class(self.bus)
-        f.reload()
+        try:
+            f.reload()
+        except DpAccessFailure:
+            pass
 
     @property
     def pin_names(self):
