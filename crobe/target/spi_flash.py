@@ -24,20 +24,18 @@ class Bank(memory.NandFlash):
             self.flash.erase(offset, size)
 
     def write(self, offset, data):
-        with click.progressbar(length = len(data), label = self.name) as bar:
-            off = 0
+        off = 0
 
-            while off < len(data):
-                alignment = (offset + off) % self.flash.page_size
-                size = self.flash.page_size - alignment
+        while off < len(data):
+            alignment = (offset + off) % self.flash.page_size
+            size = self.flash.page_size - alignment
 
-                chunk = data[off : off + size]
+            chunk = data[off : off + size]
 
-                self.flash.write(offset + off, chunk)
-                self.blank = False
+            self.flash.write(offset + off, chunk)
+            self.blank = False
 
-                off += len(chunk)
-                bar.update(len(chunk))
+            off += len(chunk)
 
     def read(self, offset, size):
         return self.flash.read(offset, size)

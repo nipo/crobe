@@ -259,7 +259,9 @@ class Loadable:
                 for r2 in r1:
                     to_erase.append((r, r2[0], r2[1]))
 
-            for p in region_program.paged(r.page_size):
+            if hasattr(r, "page_size"):
+                region_program = region_program.paged(r.page_size)
+            for p in region_program:
                 to_flash.append((r, p.address - r.address, p.data))
 
         with click.progressbar(to_erase, label = "Erasing ") as bar:
@@ -291,7 +293,7 @@ class Loadable:
         with click.progressbar(length = total_size, label = "Checking") as pb:
             for region, programmed in to_check:
                 for segment in programmed:
-                    self.logger.debug("Reading 0x%x +0x%x", segment.address, len(segment))
+                    self.logger.info("Reading 0x%x +0x%x", segment.address, len(segment))
                     time.sleep(.01)
                     actual = region.read(segment.address - region.address, len(segment))
                     pb.update(len(segment))
