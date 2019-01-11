@@ -598,7 +598,7 @@ class MachXO2(jtag.Tap, MachXO2Config):
         return self.dr_shift(self.IR_LSC_READ_FEABITS, 0, 16, read_tdo = True)
 
     def cmd(self, op, args, data = None):
-        self.logger.info("CMD %02x", op)
+        self.logger.debug("CMD %02x", op)
         if args and data:
             raise NotImplementedError()
         if args is None and isinstance(data, int):
