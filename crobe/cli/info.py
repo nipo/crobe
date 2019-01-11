@@ -62,7 +62,7 @@ def i2c_scan(roots, first, last, addr):
 
     for addr in addresses:
         try:
-            bus.write(addr, b'')
+            bus.read(addr, 1)
         except AddressNack:
             continue
         click.echo("Slave on address %02x" % addr)
