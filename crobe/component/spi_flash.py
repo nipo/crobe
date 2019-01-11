@@ -45,7 +45,9 @@ class SpiFlash(PortComponent):
         if not idr:
             idr = self.idr_get()
         self.idr = idr
-        self.logger.info("SPI flash, IDR %06x", self.idr)
+        self.logger.info("SPI flash with IDR=%06x", self.idr)
+        if idr == 0x9f0000:
+            raise ValueError("Bad IDR: %06x" % idr)
 
     @property
     def page_size(self):
