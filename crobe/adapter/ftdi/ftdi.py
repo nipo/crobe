@@ -274,7 +274,8 @@ class Handle(Context):
             ret += chunk
             retries -= 1
             if not retries:
-                raise base.CommunicationError("Failed to read all data")
+                print(">> %s" % binascii.b2a_hex(ret))
+                raise base.CommunicationError("Short read, expected %d bytes, had %d" % (rsize, len(ret)))
         self.logger.debug(">> %s", binascii.b2a_hex(ret))
         return ret
     

@@ -1,0 +1,15 @@
+vhdl-sources += topcell.vhd
+vhdl-sources += clk_gen_spartan6.vhd
+vhdl-sources += jtag_swd_i2c.vhd
+deps += nsl.ftdi
+deps += nsl.cs
+deps += nsl.framed
+deps += nsl.sized
+deps += nsl.tick
+deps += nsl.routed
+deps += nsl.i2c
+deps += signalling.jtag
+deps += nsl.jtag
+deps += util.sync
+deps += util.activity
+deps += coresight.dp

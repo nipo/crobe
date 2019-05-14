@@ -406,7 +406,7 @@ class SwdInterface(BaseInterface, swd.Interface):
 
                 if isinstance(op, swd.Read):
                     cmd.append(self.__cmd_oe_on1)
-                    cmd.append(self.handle.cmd_out(op.cmd << 1, 9))
+                    cmd.append(self.handle.cmd_out(BitString(op.cmd << 1, 9)))
                     cmd.append(self.__cmd_oe_off1)
                     cmd.append(cmd_turn)
                     c, ack = self.__cmd_in3
@@ -418,7 +418,7 @@ class SwdInterface(BaseInterface, swd.Interface):
                     cmd.append(cmd_turn)
                     cmd.append(self.cmd_oe(True, 0))
 
-                    if ap:
+                    if op.ap:
                         cmd.append(self.__cmd_idle8)
 
                     op.__ack = rsp_length, ack
@@ -437,9 +437,16 @@ class SwdInterface(BaseInterface, swd.Interface):
                     cmd.append(c)
                     cmd.append(cmd_turn)
                     cmd.append(self.__cmd_oe_on1 if op.data & 1 else self.__cmd_oe_on0)
+                    dparity = int(op.data) & 0xffffffff
+                    dparity ^= dparity >> 16
+                    dparity ^= dparity >> 8
+                    dparity ^= dparity >> 4
+                    dparity ^= dparity >> 2
+                    dparity ^= dparity >> 1
+                    dparity &= 1
                     cmd.append(self.handle.cmd_out(BitString(op.data | (dparity << 32), 33)))
 
-                    if ap:
+                    if op.ap:
                         cmd.append(self.__cmd_idle8)
 
                     op.__ack = rsp_length, ack
@@ -557,6 +564,8 @@ class ChipconInterface(BaseInterface, chipcon.Interface):
         self.handle.execute(self.cmd_activity(False))
 
 class SpiInterface(BaseInterface, spi.Interface):
+    MAX_PACKET_SIZE = 2048
+
     def __init__(self, adapter, csn_pin = None, name = None, **args):
         spi.Interface.__init__(self, adapter, name)
         BaseInterface.__init__(self, adapter, **args)
