@@ -35,9 +35,6 @@ class Fpga(model.Target, memory.Loadable):
         self.child_add(Config(comp))
         self.component = comp
 
-    def write(self, program):
-        self.component.load(program)
-
 class MachMem(memory.Region):
     def __init__(self, fpga, name, offset, size):
         memory.Region.__init__(self, name, offset, size)
