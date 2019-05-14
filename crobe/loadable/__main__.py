@@ -18,6 +18,12 @@ def dump(program):
 def to_bin(program, bin):
     Program.from_files(program).bin_dump(bin)
 
+@cli.command(help = "Convert to hex")
+@click.argument("program", type = click.Path(dir_okay = False), nargs = -1)
+@click.argument("hex", type = click.File("w"))
+def to_hex(program, hex):
+    Program.from_files(program).save_hex(hex.name)
+
 @cli.command(help = "Convert to FX2 eeprom image")
 @click.argument("program", type = click.Path(dir_okay = False), nargs = -1)
 @click.argument("bin", type = click.File("wb"))
