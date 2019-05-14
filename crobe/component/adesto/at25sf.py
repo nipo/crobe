@@ -16,6 +16,7 @@ class At25sf(SpiFlash):
         ]
     page_size = 256
     total_size = 4 * 1024 * 1024 / 8
+    write_buffer_size = 256
 
     def __init__(self, port, idr):
         SpiFlash.__init__(self, port, idr, "AT25SFxx")
