@@ -1,9 +1,16 @@
 vhdl-sources += topcell.vhd
 vhdl-sources += clk_gen_spartan6.vhd
 vhdl-sources += jtag_swd_i2c.vhd
+constraint-sources += ../../../pinout/ftdi_fifo.ucf
+constraint-sources += ../../../pinout/io0_dbg.ucf
+constraint-sources += ../../../pinout/io1_i2c.ucf
+constraint-sources += ../../../pinout/user.ucf
+constraint-sources += ../../../pinout/clk.ucf
+constraint-sources += clocks.ccf
 deps += nsl.ftdi
 deps += nsl.cs
 deps += nsl.framed
+deps += nsl.ti
 deps += nsl.sized
 deps += nsl.tick
 deps += nsl.routed

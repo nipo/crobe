@@ -1,6 +1,0 @@
-NET "fifo_clk" TNM_NET="fifo_clk_tnm";
-NET "sys_clk_gen/core_clock_gen/CLKOUT0" TNM_NET="sys_clk_tnm";
-TIMEGRP "fifo_clk_grp" = "fifo_clk_tnm";
-TIMEGRP "sys_clk_grp" = "sys_clk_tnm";
-TIMESPEC "TSsys_clk_async1" = FROM "fifo_clk_grp" TO "sys_clk_grp" TIG;
-TIMESPEC "TSsys_clk_async2" = FROM "sys_clk_grp" TO "fifo_clk_grp" TIG;

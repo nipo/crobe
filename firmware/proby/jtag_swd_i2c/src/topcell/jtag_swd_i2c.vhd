@@ -53,7 +53,8 @@ architecture arch of jtag_swd_i2c is
     framed_cmd, framed_rsp : nsl.framed.framed_bus;
   end record;
 
-  signal comm_swd, comm_i2c, comm_cs, comm_jtag : endpoint_comm;
+  signal comm_swd, comm_i2c, comm_cs, comm_jtag, comm_cc : endpoint_comm;
+  signal s_cc_dc, s_cc_ddo, s_cc_ddoe, s_cc_srst : std_ulogic;
   signal swd_o : signalling.swd.swd_master_c;
   signal swd_i : signalling.swd.swd_master_s;
   signal jtag_o : signalling.jtag.jtag_ate_o;
@@ -61,7 +62,7 @@ architecture arch of jtag_swd_i2c is
   
   signal s_srst, s_trst : std_ulogic;
 
-  signal jtag_mode: std_ulogic;
+  signal mode: std_ulogic_vector(1 downto 0);
   
   signal s_config_data: nsl.cs.cs_reg;
   signal s_config_write: std_ulogic_vector(cs_reg_count-1 downto 0);
@@ -69,7 +70,7 @@ architecture arch of jtag_swd_i2c is
   signal s_i2c_o: signalling.i2c.i2c_o;
   signal s_i2c_i: signalling.i2c.i2c_i;
   
-  constant sys_clk_hz : natural := 900000000 / 6;
+  constant sys_clk_hz : natural := 900000000 / 7;
 
 begin
 
@@ -191,9 +192,9 @@ begin
   cmd_router: nsl.routed.routed_router
     generic map(
       in_port_count => 1,
-      out_port_count => 4,
+      out_port_count => 5,
       routing_table => (0, 1, 2, 3,
-                        0, 0, 0, 0,
+                        4, 0, 0, 0,
                         0, 0, 0, 0,
                         0, 0, 0, 0)
       )
@@ -206,15 +207,17 @@ begin
       p_out_val(1) => comm_jtag.routed_cmd.req,
       p_out_val(2) => comm_i2c.routed_cmd.req,
       p_out_val(3) => comm_cs.routed_cmd.req,
+      p_out_val(4) => comm_cc.routed_cmd.req,
       p_out_ack(0) => comm_swd.routed_cmd.ack,
       p_out_ack(1) => comm_jtag.routed_cmd.ack,
       p_out_ack(2) => comm_i2c.routed_cmd.ack,
-      p_out_ack(3) => comm_cs.routed_cmd.ack
+      p_out_ack(3) => comm_cs.routed_cmd.ack,
+      p_out_ack(4) => comm_cc.routed_cmd.ack
       );
 
   rsp_router: nsl.routed.routed_router
     generic map(
-      in_port_count => 4,
+      in_port_count => 5,
       out_port_count => 1,
       routing_table => (0, 0, 0, 0,
                         0, 0, 0, 0,
@@ -230,10 +233,12 @@ begin
       p_in_val(1) => comm_jtag.routed_rsp.req,
       p_in_val(2) => comm_i2c.routed_rsp.req,
       p_in_val(3) => comm_cs.routed_rsp.req,
+      p_in_val(4) => comm_cc.routed_rsp.req,
       p_in_ack(0) => comm_swd.routed_rsp.ack,
       p_in_ack(1) => comm_jtag.routed_rsp.ack,
       p_in_ack(2) => comm_i2c.routed_rsp.ack,
-      p_in_ack(3) => comm_cs.routed_rsp.ack
+      p_in_ack(3) => comm_cs.routed_rsp.ack,
+      p_in_ack(4) => comm_cc.routed_rsp.ack
       );
 
   swd_endpoint: nsl.routed.routed_endpoint
@@ -298,6 +303,22 @@ begin
       p_cmd_out_ack  => comm_cs.framed_cmd.ack,
       p_rsp_in_val => comm_cs.framed_rsp.req,
       p_rsp_in_ack => comm_cs.framed_rsp.ack
+      );
+
+  cc_endpoint: nsl.routed.routed_endpoint
+    port map(
+      p_resetn => s_sys_resetn_soft,
+      p_clk => s_sys_clk,
+
+      p_cmd_in_val  => comm_cc.routed_cmd.req,
+      p_cmd_in_ack  => comm_cc.routed_cmd.ack,
+      p_rsp_out_val => comm_cc.routed_rsp.req,
+      p_rsp_out_ack => comm_cc.routed_rsp.ack,
+
+      p_cmd_out_val  => comm_cc.framed_cmd.req,
+      p_cmd_out_ack  => comm_cc.framed_cmd.ack,
+      p_rsp_in_val => comm_cc.framed_rsp.req,
+      p_rsp_in_ack => comm_cc.framed_rsp.ack
       );
   
   dp: coresight.dp.dp_framed_swdp
@@ -379,12 +400,32 @@ begin
       p_status => s_status
       );
 
+  cc: nsl.ti.ti_framed_cc
+    generic map(
+      divisor_shift => 2
+      )
+    port map(
+      p_clk  => s_sys_clk,
+      p_resetn => s_sys_resetn_soft,
+      
+      p_cmd_val => comm_cc.framed_cmd.req,
+      p_cmd_ack => comm_cc.framed_cmd.ack,
+      p_rsp_val => comm_cc.framed_rsp.req,
+      p_rsp_ack => comm_cc.framed_rsp.ack,
+      
+      p_cc_resetn => s_cc_srst,
+      p_cc_dc     => s_cc_dc,
+      p_cc_ddo    => s_cc_ddo,
+      p_cc_ddi    => dbg_tms,
+      p_cc_ddoe   => s_cc_ddoe
+      );
+
   process(s_sys_clk, s_sys_resetn_soft, s_config_write)
   begin
     if s_sys_resetn_soft = '0' then
       s_srst <= '0';
       s_trst <= '0';
-      jtag_mode <= '0';
+      mode <= (others => '0');
     elsif rising_edge(s_sys_clk) then
       if s_config_write(1) = '1' then
         s_srst <= s_config_data(0);
@@ -395,7 +436,7 @@ begin
       end if;
 
       if s_config_write(3) = '1' then
-        jtag_mode <= s_config_data(0);
+        mode <= s_config_data(mode'range);
       end if;
     end if;
   end process;
@@ -403,9 +444,9 @@ begin
   s_status(0) <= std_ulogic_vector(to_unsigned(sys_clk_hz, s_status(0)'length)); -- s_sys_clk
   s_status(1)(0) <= dbg_srst;
   s_status(2)(0) <= dbg_trst;
-  s_status(3)(0) <= jtag_mode;
+  s_status(3)(mode'range) <= mode;
 
-  ios: process(jtag_o, jtag_mode, swd_o, s_trst, s_srst)
+  ios: process(jtag_o, mode, swd_o, s_trst, s_srst, s_cc_ddoe, s_cc_ddo, s_cc_dc)
   begin
     dbg_trst <= 'Z';
     dbg_srst <= 'Z';
@@ -420,17 +461,23 @@ begin
     if s_srst = '1' then
       dbg_srst <= '0';
     end if;
-      
-    if jtag_mode = '1' then
-      dbg_tdi <= jtag_o.tdi;
-      dbg_tms <= jtag_o.tms;
-      dbg_tck <= jtag_o.tck;
-    else
+
+    if mode = "00" then
       dbg_tdi <= '0';
       if swd_o.dio.en = '1' then
         dbg_tms <= swd_o.dio.v;
       end if;
       dbg_tck <= swd_o.clk;
+    elsif mode = "01" then
+      dbg_tdi <= jtag_o.tdi;
+      dbg_tms <= jtag_o.tms;
+      dbg_tck <= jtag_o.tck;
+    elsif mode = "10" then
+      dbg_tck <= s_cc_dc;
+      dbg_srst <= s_cc_srst;
+      if s_cc_ddoe = '1' then
+        dbg_tms <= s_cc_ddo;
+      end if;
     end if;
   end process;
   
