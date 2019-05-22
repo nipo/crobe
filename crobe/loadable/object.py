@@ -197,6 +197,8 @@ class Program:
 
         self.info["entry"] = address
         self.info["checksum"] = checksum
+        self.info["flash_config"] = ctl
+        self.info["type"] = typ
 
         return self
 
@@ -272,6 +274,27 @@ class Program:
         raise ValueError("Not a known bitstream format")
 
     @classmethod
+    def from_jed(cls, filename, offset = 0):
+        from ..jed import jed
+        j = jed.Jed(filename)
+
+        self = cls()
+
+        self.info["fuse_count"] = j.fuse_count
+        self.info["pin_count"] = j.pin_count
+        self.info["device_architecture"] = j.device_architecture
+        self.info["device_pinout"] = j.device_pinout
+        self.info["security"] = j.security
+        self.info["notes"] = '\n'.join(j.notes)
+        for n in j.notes:
+            if n.lower().startswith("device name: "):
+                self.info["device"] = n[13:]
+            elif n.lower().startswith("device "):
+                self.info["device"] = n[7:]
+        self.append(Segment(0, bytes(j.fuses)))
+        return self
+
+    @classmethod
     def from_lattice_bit(cls, filename, offset = 0):
         """Load a Program from an Lattice bit file"""
         HEADER = b"\xff\x00Lattice Semiconductor Corporation Bitstream\x00"
@@ -279,6 +302,7 @@ class Program:
         START = bytes([0xff, 0xff, 0xbd, 0xb3, 0xff, 0xff])
         import struct
         import datetime
+        from ..util.endian import bitswap8
         
         self = cls()
 
@@ -292,7 +316,13 @@ class Program:
         fd.close()
 
         has_header = blob.startswith(HEADER)
-        start = blob.index(START)
+        start = blob.find(START)
+        
+        if start < 0:
+            start = blob.index(bitswap8(START))
+
+            if 0 <= start < 1024:
+                blob = bitswap8(blob)
 
         if start > 1024:
             raise ValueError("Start too far from file begin")
@@ -372,6 +402,7 @@ class Program:
         raise ValueError("Not bitstream data in %s" % filename)
 
     EXT_MAP = {
+        ".jed": "jed",
         ".bin": "bin",
         ".bit": "bit",
         ".bit.gz": "bit",

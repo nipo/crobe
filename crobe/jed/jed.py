@@ -156,7 +156,10 @@ class Parser:
                 yield i
 
     def handle_N(self, data):
-        yield Note(" ".join(data))
+        data = " ".join(data)
+        if data.lower().startswith("ote "):
+            data = data[4:]
+        yield Note(data)
 
     def handle_Q(self, data):
         yield Value(data[0][0], data[0][1:])
@@ -217,6 +220,9 @@ class Jed:
         self.device_architecture = None
         self.device_pinout = None
         self.fuses = None
+        self.security = None
+        self.pin_count = None
+        self.notes = []
         self.__fuse_default = 0
         self.__fuses = []
         self.__fuse_crc = 0
@@ -241,6 +247,8 @@ class Jed:
                 self.security = s.enable
             elif isinstance(s, Fuse):
                 self.__fuses.append(s)
+            elif isinstance(s, Note):
+                self.notes.append(s.text)
 
         c = self.fuse_count
         fuse_map = BitString(-self.__fuse_default, c)

@@ -123,11 +123,29 @@ class MachXO(model.Target, memory.Loadable):
         self.child_add(MachFea(comp))
         self.component = comp
 
-    def program_begin(self, do_erase = False):
+    def write(self, program,
+              do_erase = False,
+              do_verify = False,
+              do_start = False,
+              assume_clean = False):
+        from ..component.lattice import bitstream, parts
+
+        try:
+            bs = bitstream.Bitstream(parts.PARTS, program)
+        except Exception as e:
+            return memory.Loadable.write(self, program, do_erase, do_verify, do_start, assume_clean)
+
+        if not do_erase or not do_start:
+            raise NotImplementedError("Cannot program live FPGA without erasing and restarting")
+
+        self.component.ram_load(bs)
+        
+
+    def program_begin(self, do_erase = False, assume_clean = False):
         if not do_erase:
             raise NotImplementedError("Cannot program FPGA without erasing")
         self.component._isc_enable(False)
-        memory.Loadable.program_begin(self, do_erase)
+        memory.Loadable.program_begin(self, do_erase, assume_clean)
         self.component._stop()
         self.component._isc_enable(False)
 
@@ -135,7 +153,7 @@ class MachXO(model.Target, memory.Loadable):
         self.component._isc_enable(False)
 
     def erase_all(self):
-        self.component._erase_all()
+        self.component.erase_all()
         self.force_blank()
 
     def reset(self):
