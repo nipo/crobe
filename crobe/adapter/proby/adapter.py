@@ -360,131 +360,119 @@ class JtagInterface(jtag.Interface):
     def _execute(self, operation_list):
         ops = deque(operation_list)
         max_size = 2040
+        pending = deque()
         
-        while ops:
-            cmd = bytearray([0] * max_size)
+        for op in operation_list:
+            if self.__rate_dirty:
+                pending.append(([self.CMD_DIVISOR | self.__divisor], 1, None, 0))
+                self.__rate_dirty = False
+
+            if isinstance(op, jtag.CaptureDr):
+                pending.append(([self.CMD_DR_CAPTURE], 1, None, 0))
+
+            elif isinstance(op, jtag.CaptureIr):
+                pending.append(([self.CMD_IR_CAPTURE], 1, None, 0))
+
+            elif isinstance(op, jtag.Reset):
+                cycles = len(op.tms)
+                while cycles > 8:
+                    packs = cycles // 8
+                    count = min(packs, 16) - 1
+                    pending.append(([self.CMD_RESET8 | count], 1, None, 0))
+                    cycles -= (count + 1) * 8
+                if cycles:
+                    pending.append(([self.CMD_RESET | (cycles - 1)], 1, None, 0))
+
+            elif isinstance(op, jtag.Run):
+                cycles = op.cycles + 1
+                while cycles > 8:
+                    packs = cycles // 8
+                    count = min(packs, 16) - 1
+                    pending.append(([self.CMD_RTI8 | count], 1, None, 0))
+                    cycles -= (count + 1) * 8
+                if cycles:
+                    pending.append(([self.CMD_RTI | (cycles - 1)], 1, None, 0))
+
+            elif isinstance(op, jtag.SwdToJtag):
+                pending.append(([self.CMD_SWD_TO_JTAG], 1, None, 0))
+
+            elif isinstance(op, jtag.Shift):
+                shift_bytes = self.CMD_SHIFT_BYTE
+                shift_bits = self.CMD_SHIFT_BIT
+
+                if isinstance(op.tdi, int):
+                    has_tdi = False
+                    data = b''
+                    bit_count = op.tdi
+                else:
+                    assert isinstance(op.tdi, BitString)
+                    has_tdi = True
+                    shift_bytes |= self.CMD_SHIFT_BYTE_W
+                    shift_bits |= self.CMD_SHIFT_BIT_W
+                    bit_count = len(op.tdi)
+                    data = bytes(op.tdi)
+
+                if op.read_tdo:
+                    shift_bytes |= self.CMD_SHIFT_BYTE_R
+                    shift_bits |= self.CMD_SHIFT_BIT_R
+                    op.tdo = BitString()
+                    has_tdo = True
+                else:
+                    has_tdo = False
+
+                while bit_count >= 8:
+                    byte_count = bit_count // 8
+                    byte_count = min(byte_count, 32)
+
+                    if has_tdi:
+                        pending.append(([shift_bytes | (byte_count - 1)] + list(bytes(data[:byte_count])),
+                                        (1 + byte_count) if has_tdo else 1,
+                                        op if has_tdo else None,
+                                        byte_count * 8))
+                        data = data[byte_count:]
+                    else:
+                        pending.append(([shift_bytes | (byte_count - 1)],
+                                        (1 + byte_count) if has_tdo else 1,
+                                        op if has_tdo else None,
+                                        byte_count * 8))
+                    bit_count -= byte_count * 8
+
+                if bit_count:
+                    if has_tdi:
+                        pending.append(([shift_bits | (bit_count - 1), data[0]],
+                                        2 if has_tdo else 1,
+                                        op if has_tdo else None,
+                                        bit_count))
+                    else:
+                        pending.append(([shift_bits | (bit_count - 1)],
+                                        2 if has_tdo else 1,
+                                        op if has_tdo else None,
+                                        bit_count))
+
+            else:
+                raise base.ProtocolError("Unknown JTAG operation %s" % type(op))
+
+        while pending:
+            cmd = bytearray(max_size)
             cmd_size = 0
             rsp_size = 0
+            tdo_gather = []
 
-            pending = deque()
+            while pending and cmd_size < max_size - 32 and rsp_size < max_size - 32:
+                op_cmd, op_rsp_size, op_tdo_target, tdo_length = pending.popleft()
+                cmd[cmd_size:cmd_size+len(op_cmd)] = bytes(op_cmd)
 
-            while ops and cmd_size < max_size - 16 and rsp_size < max_size - 16:
-                op = ops.popleft()
-                pending.append(op)
+                if op_tdo_target:
+                    tdo_gather.append((op_tdo_target, rsp_size, tdo_length))
 
-                if self.__rate_dirty:
-                    cmd[cmd_size] = self.CMD_DIVISOR | self.__divisor
-                    cmd_size += 1
-                    rsp_size += 1
-                    self.__rate_dirty = False
+                cmd_size += len(op_cmd)
+                rsp_size += op_rsp_size
 
-                if isinstance(op, jtag.CaptureDr):
-                    cmd[cmd_size] = self.CMD_DR_CAPTURE
-                    cmd_size += 1
-                    rsp_size += 1
-
-                elif isinstance(op, jtag.CaptureIr):
-                    cmd[cmd_size] = self.CMD_IR_CAPTURE
-                    cmd_size += 1
-                    rsp_size += 1
-
-                elif isinstance(op, jtag.Reset):
-                    cycles = len(op.tms)
-                    while cycles > 8:
-                        packs = cycles // 8
-                        count = min(packs, 16) - 1
-                        cmd[cmd_size] = self.CMD_RESET8 | count
-                        cmd_size += 1
-                        rsp_size += 1
-                        cycles -= (count + 1) * 8
-                    if cycles:
-                        cmd[cmd_size] = self.CMD_RESET | (cycles - 1)
-                        cmd_size += 1
-                        rsp_size += 1
-
-                elif isinstance(op, jtag.Run):
-                    cycles = op.cycles + 1
-                    while cycles > 8:
-                        packs = cycles // 8
-                        count = min(packs, 16) - 1
-                        cmd[cmd_size] = self.CMD_RTI8 | count
-                        cmd_size += 1
-                        rsp_size += 1
-                        cycles -= (count + 1) * 8
-                    if cycles:
-                        cmd[cmd_size] = self.CMD_RTI | (cycles - 1)
-                        cmd_size += 1
-                        rsp_size += 1
-                    
-                elif isinstance(op, jtag.SwdToJtag):
-                    cmd[cmd_size] = self.CMD_SWD_TO_JTAG
-                    cmd_size += 1
-                    rsp_size += 1
-
-                elif isinstance(op, jtag.Shift):
-                    shift_bytes = self.CMD_SHIFT_BYTE
-                    shift_bits = self.CMD_SHIFT_BIT
-                    rsp_offsets = []
-
-                    if isinstance(op.tdi, int):
-                        has_tdi = False
-                        data = b''
-                        bit_count = op.tdi
-                    else:
-                        assert isinstance(op.tdi, BitString)
-                        has_tdi = True
-                        shift_bytes |= self.CMD_SHIFT_BYTE_W
-                        shift_bits |= self.CMD_SHIFT_BIT_W
-                        bit_count = len(op.tdi)
-                        data = bytes(op.tdi)
-
-                    if op.read_tdo:
-                        shift_bytes |= self.CMD_SHIFT_BYTE_R
-                        shift_bits |= self.CMD_SHIFT_BIT_R
-                        has_tdo = True
-                    else:
-                        has_tdo = False
-                            
-                    while bit_count > 8:
-                        byte_count = bit_count // 8
-                        byte_count = min(byte_count, 32)
-
-                        if has_tdo:
-                            rsp_offsets.append((rsp_size, byte_count * 8))
-
-                        cmd[cmd_size] = shift_bytes | (byte_count - 1)
-                        if has_tdi:
-                            cmd[cmd_size+1:cmd_size+byte_count] = bytes(data[:byte_count])
-                            data = data[byte_count:]
-                        cmd_size += (1 + byte_count) if has_tdi else 1
-                        rsp_size += (1 + byte_count) if has_tdo else 1
-                        bit_count -= byte_count * 8
-
-                    if bit_count:
-                        if has_tdo:
-                            rsp_offsets.append((rsp_size, bit_count))
-
-                        cmd[cmd_size] = shift_bits | (bit_count - 1)
-                        if has_tdi:
-                            cmd[cmd_size+1] = data[0]
-                        cmd_size += 2 if has_tdi else 1
-                        rsp_size += 2 if has_tdo else 1
-
-                    if has_tdo:
-                        op.__offset = rsp_offsets
-                        
-                else:
-                    raise base.ProtocolError("Unknown JTAG operation %s" % type(op))
-
+            assert cmd_size
             in_blob = self.mux.execute(self.JTAG_PORT_CID, cmd[:cmd_size], rsp_size)
 
-            for idx, op in enumerate(pending):
-                if isinstance(op, jtag.Shift) and op.read_tdo:
-                    tdo = BitString()
-                    
-                    for off, bit_count in op.__offset:
-                        tdo += BitString(in_blob[off : off + ((bit_count + 7) // 8)], bit_count)
-                    op.tdo = tdo
+            for op, offset, bit_count in tdo_gather:
+                op.tdo += BitString(in_blob[offset : offset + ((bit_count + 7) // 8)], bit_count)
 
 class I2cInterface(i2c.Interface):
     CMD_READ_ACK     = 0xc0
@@ -630,11 +618,10 @@ class CcInterface(chipcon.Interface):
     CMD_WAIT         = staticmethod(lambda d: (0x40 | d))
     CMD_DIV          = staticmethod(lambda d: (0xc0 | (0x3f & (d-1))))
 
-    CC_PORT_CID = 0
+    CC_PORT_CID = 4
     CONFIG_CID = 1
     
-    REG_SRST = 0
-    REG_BASE_FREQ = 1
+    REG_BASE_FREQ = 0
 
     def __init__(self, adapter, mux):
         chipcon.Interface.__init__(self, adapter, adapter.name)
@@ -645,7 +632,7 @@ class CcInterface(chipcon.Interface):
 
         self.logger.info("Found CC proby with internal clock of %s", metric(self.base_freq, "Hz"))
         self.__reset = False
-        self.__div = 4
+        self.__div = 16
 
     @property
     def reset(self):
@@ -665,13 +652,13 @@ class CcInterface(chipcon.Interface):
         
     @property
     def freq(self):
-        return self.base_freq / self.__div / 2
+        return self.base_freq / self.__div / 2 / 4
 
     @freq.setter
     def freq(self, freq):
         if not freq:
             freq = self.base_freq
-        self.__div = min(0x40, max(1, int(self.base_freq / float(freq) / 2)))
+        self.__div = max(1, min(0x40, int(self.base_freq / float(freq) / 2 / 4)))
         self.logger.info("Divisor now %d", self.__div)
 
     def _execute(self, operation_list):
