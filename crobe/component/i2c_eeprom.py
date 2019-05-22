@@ -77,7 +77,7 @@ class I2cEeprom(PortComponent, Bus):
         elif k == 'page_size':
             self.page_size = int(v)
         else:
-            return PortComponent.option_set(opt)
+            return PortComponent.option_set(self, opt)
 
 @i2c.Interface.db.register("eeprom")
 def i2c_eeprom_gen(bus):
