@@ -444,6 +444,26 @@ class Program:
         self.bin_dump(fd)
         fd.close()
 
+    def save_cypress_img(self, filename, type = 0xb0):
+        fd = open(filename, "wb")
+
+        fd.write(b"CY")
+        fd.write(bytes([self.info.get("flash_config", 0x20), 0xb0]))
+
+        chk = 0
+
+        for s in self.segments:
+            for off in range(0, len(s), 4096):
+                blob = s.data[off:off+4096]
+                if len(blob) % 4:
+                    blob += b"\x00" * (-len(blob) % 4)
+                fd.write(struct.pack("<LL", len(blob) // 4, s.address + off))
+                fd.write(blob)
+                chk += sum(struct.unpack("<%dL" % (len(blob) // 4), blob))
+        fd.write(struct.pack("<LL", 0, self.info["entry"]))
+        fd.write(struct.pack("<L", chk & 0xffffffff))
+        fd.close()
+
     def bin_dump(self, fd):
         begin = self.address
         end = self.end
