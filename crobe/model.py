@@ -36,7 +36,9 @@ class Component(object):
         self.__in_enum = False
 
     def start(self):
-        assert not self.__started
+        if self.__started:
+            return
+
         self.__started = True
         
         if not self.__in_enum:
@@ -108,7 +110,7 @@ class Component(object):
     def child_summon(self, crit = None, *invocation):
         options = []
 
-        self.logger.info("Summon %s", crit)
+        self.logger.info("Summon %s %s", crit, invocation)
 
         if crit and crit.endswith(')'):
             try:
@@ -117,13 +119,13 @@ class Component(object):
                 raise ValueError("Unmatched parenthesis", crit)
             options = crit[index + 1 : -1].split(",")
             crit = crit[: index]
-            
+
         if not crit and not invocation:
             if not self.__started:
                 self.start()
             return self
-
-        if not self.__started:
+        
+        if not self.__started and "nostart" not in options:
             self.__in_enum = True
             self.start()
             self.__in_enum = False
@@ -136,6 +138,8 @@ class Component(object):
         self.logger.info("Had %s", child)
 
         for opt in options:
+            if opt == "nostart":
+                return child
             child.option_set(opt)
             
         return child.child_summon(*invocation)
