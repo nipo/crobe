@@ -270,8 +270,8 @@ class SwdInterface(swd.Interface):
                     except ValueError:
                         ack = swd.Ack.INVALID
 
-                    if rsp & self.RSP_PAR_ERROR:
-                        ack = swd.Ack.INVALID
+                    if ack == swd.Ack.OK and rsp & self.RSP_PAR_ERROR:
+                        ack = swd.Ack.PARITY_ERR
 
                     op.ack = ack
 

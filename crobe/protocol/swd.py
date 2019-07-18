@@ -13,7 +13,10 @@ class Ack(IntEnum):
     ERROR = 4
     HIGH = 7
     LOW = 0
-    INVALID = 5
+    INVALID110 = 6
+    INVALID101 = 5
+    INVALID011 = 3
+    PARITY_ERR = 8
 
 class Interface(base.Interface):
     """

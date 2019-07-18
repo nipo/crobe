@@ -437,13 +437,11 @@ class SwdInterface(BaseInterface, swd.Interface):
                     cmd.append(c)
                     cmd.append(cmd_turn)
                     cmd.append(self.__cmd_oe_on1 if op.data & 1 else self.__cmd_oe_on0)
-                    dparity = int(op.data) & 0xffffffff
+                    dparity = int(op.data)
                     dparity ^= dparity >> 16
                     dparity ^= dparity >> 8
                     dparity ^= dparity >> 4
-                    dparity ^= dparity >> 2
-                    dparity ^= dparity >> 1
-                    dparity &= 1
+                    dparity = (0x6996 >> (dparity & 0xf)) & 1
                     cmd.append(self.handle.cmd_out(BitString(op.data | (dparity << 32), 33)))
 
                     if op.ap:
@@ -577,6 +575,8 @@ class SpiInterface(BaseInterface, spi.Interface):
 
         self.child_add(spi.Target(self, "cs0", 0))
 
+    MAX_PACKET_SIZE = 2048
+        
     def _execute(self, operation_list):
         ops = deque(operation_list)
 
