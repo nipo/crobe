@@ -9,10 +9,9 @@ def xilinx():
     pass
 
 @xilinx.command(help = "BBRAM key setter")
-@base.roots()
+@click.option('-r', '--root', type = base.ROOT)
 @click.argument("key", type = str)
-def bbram_key_set(roots, key):
-    root = roots[0]
+def bbram_key_set(root, key):
     assert isinstance(root, zynq.Zynq)
 
     key = binascii.a2b_hex(key.encode("ascii"))
@@ -28,9 +27,8 @@ def bbram_key_set(roots, key):
     assert key == rbkey
 
 @xilinx.command(help = "Info dumper")
-@base.roots()
-def info(roots):
-    root = roots[0]
+@click.option('-r', '--root', type = base.ROOT)
+def info(root):
     assert isinstance(root, series67.Series67)
 
     if root.done:
@@ -40,11 +38,10 @@ def info(roots):
     root.cfg_status_dump()
 
 @xilinx.command(help = "Efuse key setter")
-@base.roots()
+@click.option('-r', '--root', type = base.ROOT)
 @click.argument("key", type = str, default = "")
 @click.option("--protect", is_flag = True)
-def efuse_key_set(roots, key, protect):
-    root = roots[0]
+def efuse_key_set(root, key, protect):
     assert isinstance(root, zynq.Zynq)
 
     click.echo("Target: %s" % root)
@@ -73,10 +70,8 @@ def efuse_key_set(roots, key, protect):
         root.bbram_close()
 
 @xilinx.command(help = "EFUSE dumper")
-@base.roots()
-def efuse_dump(roots):
-    root = roots[0]
-
+@click.option('-r', '--root', type = base.ROOT)
+def efuse_dump(root):
     root.bbram_open()
     click.echo("Target: %s" % root)
     for row in range(0x20):
@@ -92,9 +87,9 @@ def efuse_dump(roots):
     root.bbram_close()
 
 @xilinx.command(help = "XADC Temperature monitor")
-@base.roots()
-def xadc_temp(roots):
-    z = roots[0]
+@click.option('-r', '--root', type = base.ROOT)
+def xadc_temp(root):
+    z = root
     assert isinstance(z, zynq.Zynq)
 
     z.xadc_init_defaults()
@@ -104,13 +99,13 @@ def xadc_temp(roots):
 
 @xilinx.command(help = "Xilinx Virtual Cable server")
 @click.option("--port", type = int, default = 2542, help = "TCP port to bind")
-@base.roots()
-def vcd_server(roots, port):
+@click.option('-r', '--root', type = base.ROOT)
+def vcd_server(root, port):
     from ..protocol.jtag import Interface
     from ..xvcd.server import XvcdServer
     from ..util.pretty import metric
 
-    intf = roots[0]
+    intf = root
 
     if not isinstance(intf, Interface):
         raise ValueError("Expected a JTAG interface. Try -e [adapter]/jtag.")

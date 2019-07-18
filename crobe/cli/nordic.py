@@ -9,9 +9,8 @@ def nordic():
     pass
 
 @nordic.command(help = "Erase using Ctrl-AP")
-@base.roots()
-def erase(roots):
-    root = roots[0]
+@click.option('-r', '--root', type = base.ROOT)
+def erase(root):
     try:
         ap, = root.children_of_class(ctrl_ap.CtrlAp)
     except ValueError:

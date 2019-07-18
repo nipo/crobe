@@ -4,7 +4,7 @@ import time
 from ..target import pin_control
 
 @base.cli.group(help = "Target chip manipulation")
-@base.roots()
+@click.option('-r', '--root', "roots", type = base.ROOT, multiple = True)
 @base.field()
 @click.option('--target', '-t', metavar = 'INDEX', type = int, help = 'Target index', default = 0)
 @click.pass_context

@@ -415,13 +415,20 @@ class Program:
 
     @classmethod
     def from_files(cls, filenames):
-        if len(filenames) == 1:
-            return cls.from_file(filenames[0])
+        return cls.from_programs([cls.from_file(f) for f in filenames])
+
+    @classmethod
+    def from_programs(cls, programs):
+        if not programs:
+            return None
+
+        if len(programs) == 1:
+            return programs[0]
 
         program = Program()
 
-        for filename in filenames:
-            program += cls.from_file(filename)
+        for p in programs:
+            program += p
 
         return program
 

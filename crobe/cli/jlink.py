@@ -6,10 +6,12 @@ def jlink():
     pass
 
 @jlink.command(help = "Nickname setter")
-@base.roots()
+@click.option('-r', '--root', type = base.ROOT)
 @click.argument("nickname", type = str)
-def nickname(roots, nickname):
-    jlink = roots[0]
+def nickname(root, nickname):
+    jlink = root
+
+    print(jlink, type(jlink))
 
     from ..adapter.jlink import Adapter
 

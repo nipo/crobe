@@ -9,14 +9,13 @@ def svf():
 
 @svf.command(help = "SVF playback machine")
 @click.argument("file", type = click.File("rb"))
-@base.roots()
-def play(roots, file):
+@click.option('-r', '--root', type = base.ROOT)
+def play(root, file):
     from ..svf.player import ChainPlayer, TapPlayer
     from ..svf.svf import SvfParser
     from ..protocol.jtag import Interface, Chain, Tap
 
     svf = SvfParser(file)
-    root = roots[0]
 
     if isinstance(root, Interface):
         root = root.children[0]

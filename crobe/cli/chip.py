@@ -11,7 +11,7 @@ from ..loadable.object import Program, Segment
 import logging
 
 @base.cli.group(help = "Target chip manipulation")
-@base.roots()
+@click.option('-r', '--root', "roots", type = base.ROOT, multiple = True)
 @base.field()
 @click.option('--target', '-t', metavar = 'INDEX', type = int, help = 'Target index', default = 0)
 @click.pass_context
@@ -22,21 +22,25 @@ def chip(ctx, roots, field, target):
     ctx.obj["target"] = targets[target]
 
 @chip.command(help = "Program target")
-@base.program()
+@click.argument("programs", type = base.PROGRAM, nargs = -1)
+@click.option('-C', '--assume-clean', is_flag = True, help = "Assume chip is clean")
 @click.option('-e', '--erase', is_flag = True, help = "Mass erase before write")
 @click.option('-c', '--check', is_flag = True, help = "Check written memory")
 @click.option('--run', is_flag = True, help = "Run target after programming")
 @click.pass_context
-def program(ctx, program, erase, check, run):
+def program(ctx, programs, assume_clean, erase, check, run):
     target = ctx.obj["target"]
 
     click.echo("Target: %s" % target)
+
+    program = Program.from_programs(programs)
 
     if program:
         target.write(program,
                      do_erase = erase,
                      do_verify = check,
-                     do_start = run)
+                     do_start = run,
+                     assume_clean = assume_clean)
 
     else:
         if erase:

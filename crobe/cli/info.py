@@ -30,7 +30,7 @@ def adapters():
     enumerator_dump(Enumerator.singleton)
 
 @info.command(help = "Component tree enumerator")
-@base.roots()
+@click.option('-r', '--root', "roots", type = base.ROOT, multiple = True)
 @base.field()
 @click.option("--cpuid", is_flag = True)
 def enumerate(roots, field, cpuid):
@@ -50,19 +50,17 @@ def enumerate(roots, field, cpuid):
             CpuidDumper(c.scs).dump(click.echo)
 
 @info.command(help = "I2C bus scan")
-@base.roots()
-@click.option("--first", callback = base.hex_parse, default = 0x01, help = "First address to scan")
-@click.option("--last", callback = base.hex_parse, default = 0x7f, help = "Last address to scan")
-@click.option("--addr", callback = base.hex_parse_list, help = "Explicitly add address to scan", multiple = True)
-def i2c_scan(roots, first, last, addr):
+@click.option('-r', '--root', type = base.ROOT)
+@click.option("--first", type = base.HEX, default = 0x01, help = "First address to scan")
+@click.option("--last", type = base.HEX, default = 0x7f, help = "Last address to scan")
+@click.option("--addr", type = base.HEX, help = "Explicitly add address to scan", multiple = True)
+def i2c_scan(root, first, last, addr):
     from ..protocol.i2c import AddressNack
     addresses = list(addr or range(first, last + 1))
 
-    bus = roots[0]
-
     for addr in addresses:
         try:
-            bus.read(addr, 1)
+            root.read(addr, 1)
         except AddressNack:
             continue
         click.echo("Slave on address %02x" % addr)

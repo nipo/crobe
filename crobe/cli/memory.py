@@ -3,13 +3,12 @@ import click
 import binascii
 
 @base.cli.group(help = "Memory manipulation")
-@base.roots()
+@click.option('-r', '--root', type = base.ROOT)
 @click.option('--bus', '-b', metavar = 'NAME', type = str, help = 'Bus id')
 @click.pass_context
-def memory(ctx, roots, bus):
+def memory(ctx, root, bus):
     from ..component.model import Bus
-    buses = list(roots[0].children_of_class(Bus))
-    buses += list(x for x in roots if isinstance(x, Bus))
+    buses = list(root.children_of_class(Bus))
 
     if bus:
         try:

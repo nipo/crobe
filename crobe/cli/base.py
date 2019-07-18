@@ -25,17 +25,6 @@ class RelativeFormatter(logging.Formatter):
         elapsed = datetime.now() - self.start
         return str(elapsed)
 
-def hex_parse(ctx, param, value):
-    if isinstance(value, int):
-        return value
-    try:
-        return int(value, 16)
-    except ValueError:
-        raise click.BadParameter('%s should be an hex value')
-
-def hex_parse_list(ctx, param, value):
-    return [hex_parse(ctx, param, v) for v in value]
-
 @click.group()
 @click.option('-v', '--verbose', count = True)
 @click.option('-q', '--quiet', count = True)
@@ -55,20 +44,59 @@ def cli(ctx, verbose, quiet, silent):
     root.setLevel(10 * (4 + quiet - verbose))
     root.info("Starting at %s", formatter.start)
 
-def _root_parse(ctx, param, value):
-    from ..adapter.model import Enumerator
+##
+## Custom CLI types
+##
 
-    Enumerator.singleton.start()
+class AddressRangeParamType(click.ParamType):
+    name = "address_range"
 
-    r = []
-    for root in value:
-        parts = root.split("/")
-        r.append(Enumerator.singleton.child_summon(*parts))
-    ctx.params["roots"] = r
+    def convert(self, value, param, ctx):
+        try:
+            begin, end = value.split(":", 1)
+        except ValueError:
+            self.fail(f"{value!r} is not a valid begin:end range", param, ctx)
 
-def roots():
-    return click.option('-r', '--root', multiple = True, type = str,
-                        callback = _root_parse, expose_value = False)
+        try:
+            return int(begin, 16), int(end, 16)
+        except ValueError:
+            self.fail(f"{value!r} is not a valid integer", param, ctx)
+
+ADDRESS_RANGE = AddressRangeParamType()
+
+class HexParamType(click.ParamType):
+    name = "hex"
+
+    def convert(self, value, param, ctx):
+        if isinstance(value, int):
+            return value
+        try:
+            return int(value, 16)
+        except ValueError:
+            self.fail(f"{value!r} is not a valid hex string", param, ctx)
+
+HEX = HexParamType()
+    
+class RootParamType(click.ParamType):
+    name = "root"
+
+    def convert(self, value, param, ctx):
+        try:
+            from ..root import root
+            return root(value)
+        except:
+            self.fail(f"{value!r} is not a valid root", param, ctx)
+
+ROOT = RootParamType()
+
+class ProgramParamType(click.ParamType):
+    name = "program"
+
+    def convert(self, value, param, ctx):
+        from ..loadable.object import Program
+        return Program.from_file(value)
+
+PROGRAM = ProgramParamType()
 
 def arg_adder(handler):
     name = handler.__name__
@@ -93,18 +121,3 @@ def field(ctx):
     for t in field.children:
         t.start()
     return field
-
-def _program_parse(ctx, param, value):
-    from ..loadable.object import Program
-
-    ctx.params[param.name] = Program.from_files(value) if value else None
-
-def program(name = "program"):
-    return click.argument(name, nargs = -1, type = str,
-                          callback = _program_parse, expose_value = False)
-
-def program_opt(name = "program"):
-    return click.option(name, multiple = True,
-                        type = str,
-                        callback = _program_parse,
-                        expose_value = False)

@@ -32,10 +32,10 @@ def bsdl(list, rebuild, id, name, pkg, dump):
             entity.pprint()
 
 @bscan.command(help = "Pin value poller")
-@base.roots()
+@click.option('-r', '--root', type = base.ROOT)
 @click.option("--pkg", help = "Set packages for ICs in chain", type = str, metavar = "PKG,PKG", default = "")
 @click.option("--ignore", help = "Ignore some IOs", type = str, metavar = "TAP/PIN,...", default = "")
-def poll(roots, pkg, ignore):
+def poll(root, pkg, ignore):
     from ..bscan.dumper import Dumper
 
     packages = pkg.split(",")
@@ -44,17 +44,17 @@ def poll(roots, pkg, ignore):
         t, p = tp.split("/", 1)
         ignores.add((t, p))
 
-    dumper = Dumper(roots[0], packages)
+    dumper = Dumper(root, packages)
     dumper.run(ignores)
 
 @bscan.command(help = "Pin set poller")
-@base.roots()
+@click.option('-r', '--root', type = base.ROOT)
 @click.option("--pkg", help = "Set packages for ICs in chain", type = str, metavar = "PKG,PKG", default = "")
-def ones(roots, pkg):
+def ones(root, pkg):
     from ..bscan.dumper import Dumper
 
     packages = pkg.split(",")
-    dumper = Dumper(roots[0], packages)
+    dumper = Dumper(root, packages)
     before = {}
     for d, tap in dumper.definitions:
         before[d.name] = set()

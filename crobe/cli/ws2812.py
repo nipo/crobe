@@ -19,10 +19,10 @@ def color_code(r, g, b):
     return binascii.a2b_hex(color_word)
 
 @ws2812.command(help = "Set color")
-@base.roots()
+@click.option('-r', '--root', type = base.ROOT)
 @click.argument("color", type = str)
 @click.argument("count", type = int)
-def set(roots, color, count):
+def set(root, color, count):
     color = int(color, 16)
     r = (color >> 16) & 0xff
     g = (color >> 8) & 0xff
@@ -31,13 +31,13 @@ def set(roots, color, count):
     reset_word = b'\x00' * 30
     data = reset_word + color_code(r, g, b) * count
 
-    roots[0].freq_cap("ws2812", 10e6)
-    roots[0].shift(data, read_miso = False)
+    root.freq_cap("ws2812", 10e6)
+    root.shift(data, read_miso = False)
 
 @ws2812.command(help = "Rotate colors")
-@base.roots()
+@click.option('-r', '--root', type = base.ROOT)
 @click.argument("count", type = int)
-def rotate(roots, count):
+def rotate(root, count):
     reset_word = b'\x00' * 40
 
     angle = 0
@@ -51,6 +51,6 @@ def rotate(roots, count):
         print(r, g, b)
         data = reset_word + color_code(r, g, b) * count
 
-        roots[0].freq_cap("ws2812", 10e6)
-        roots[0].shift(data, read_miso = False)
+        root.freq_cap("ws2812", 10e6)
+        root.shift(data, read_miso = False)
         time.sleep(.01)
