@@ -218,3 +218,18 @@ class Stm(SoC, pin_control.Controller):
 
     def pin_config(self, name, mode = pin_control.Mode.Input):
         self.gpio.pin_config(name, mode)
+
+    def program_end(self, success, do_start):
+        f = self.info.flash_class(self.bus)
+        f.mass_erase()
+
+        if hasattr(f, "reload"):
+            SoC.program_end(self, success, False)
+            if do_start:
+                if not success:
+                    return
+                f.opt_unlock()
+                f.reload()
+        else:
+            SoC.program_end(self, success, do_start)
+

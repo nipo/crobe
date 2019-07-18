@@ -3,7 +3,7 @@ import binascii
 from ..bitstring import BitString
 import warnings
 import time
-import click
+from tqdm import tqdm
 
 class Context:
     def __init__(self):
@@ -40,7 +40,7 @@ class Context:
 
 class Player:
     def run(self, svf):
-        with click.progressbar(list(svf)) as ops:
+        with tqdm(list(svf)) as ops:
             for op in ops:
                 self.handle(op)
         self.flush()

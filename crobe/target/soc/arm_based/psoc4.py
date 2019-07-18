@@ -7,7 +7,7 @@ from ... import memory
 from .soc import SoC, BusRam
 import time
 import binascii
-import click
+from tqdm import tqdm
 
 class PSoC4Flash(memory.Flash):
     def __init__(self, name, address, size, page_size, soc):
@@ -264,16 +264,22 @@ class PSoC4(SoC):
         else:
             self.srom.erase_all()
 
-    def program_begin(self, do_erase):
+    def program_begin(self, do_erase, assume_clean):
         self.attach()
         if do_erase:
             self.erase_all()
+        if assume_clean:
+            self.force_blank()
 
-    def write(self, program, do_erase = False, do_verify = False, do_start = False):
+    def write(self, program,
+              do_erase = False,
+              do_verify = False,
+              do_start = False,
+              assume_clean = False):
         flash, = self.children_of_class(PSoC4Flash)
         program = program.within(flash.address, flash.address + flash.size)
 
-        SoC.write(self, program, do_erase, do_verify, do_start)
+        SoC.write(self, program, do_erase, do_verify, do_start, assume_clean)
 
 #        assert do_erase
 #

@@ -1,13 +1,12 @@
 from . import model
 from ..component import spi_flash as component_spi_flash
 from . import memory
-import click
 
 __all__ = ["SpiFlash"]
 
 class Bank(memory.NandFlash):
     def __init__(self, flash):
-        memory.NandFlash.__init__(self, flash.name + " data", 0, flash.total_size, flash.page_size)
+        memory.NandFlash.__init__(self, flash.name + " data", 0, flash.total_size, 4096)
         self.flash = flash
 
     def erase(self, offset, size):
@@ -27,8 +26,8 @@ class Bank(memory.NandFlash):
         off = 0
 
         while off < len(data):
-            alignment = (offset + off) % self.flash.page_size
-            size = self.flash.page_size - alignment
+            alignment = (offset + off) % self.page_size
+            size = self.page_size - alignment
 
             chunk = data[off : off + size]
 

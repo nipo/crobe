@@ -2,9 +2,9 @@ from ..loadable.object import Program, Segment
 from .. import model
 from enum import Enum
 from ..util.pretty import base2
-import click
 import binascii
 import time
+from tqdm import tqdm
 
 __all__ = ["Region", "Flash", "NandFlash", "NorFlash", "Eeprom", "Ram", "Peripheral", "Loadable", "Flag", "Type"]
 
@@ -75,28 +75,27 @@ class Flash(Region):
     
     def verify(self, program):
         pages = program.paged(self.page_size)
-        with click.progressbar(pages, label = "Checking") as bar:
-            for s in bar:
-                flash_data = self.read(s.address - self.address, len(s))
-                diffs = 0
-                for orig, found in zip(s.data, flash_data):
-                    diffs += int(orig != found)
+        for s in tqdm(pages, desc = "Checking"):
+            flash_data = self.read(s.address - self.address, len(s))
+            diffs = 0
+            for orig, found in zip(s.data, flash_data):
+                diffs += int(orig != found)
 
-                if diffs:
-                    self.logger.error("Comparison for %s failed: %d/%d bytes differ", s, diffs, len(s))
-                    dumped = 0
-                    for off in range(0, len(s.data), 16):
-                        a = s.data[off:off+16]
-                        b = flash_data[off:off+16]
-                        if a == b:
-                            continue
-                        self.logger.error("Expect 0x%08x %s", s.address + off, binascii.b2a_hex(a))
-                        self.logger.error("Memory 0x%08x %s", s.address + off, binascii.b2a_hex(b))
-                        
-                        dumped += 1
-                        if dumped >= 10:
-                            break
-                    return False
+            if diffs:
+                self.logger.error("Comparison for %s failed: %d/%d bytes differ", s, diffs, len(s))
+                dumped = 0
+                for off in range(0, len(s.data), 16):
+                    a = s.data[off:off+16]
+                    b = flash_data[off:off+16]
+                    if a == b:
+                        continue
+                    self.logger.error("Expect 0x%08x %s", s.address + off, binascii.b2a_hex(a))
+                    self.logger.error("Memory 0x%08x %s", s.address + off, binascii.b2a_hex(b))
+
+                    dumped += 1
+                    if dumped >= 10:
+                        break
+                return False
         return True
     
     def __str__(self):
@@ -190,22 +189,23 @@ class Loadable:
             total_size += region.size
             to_read.append(region)
 
-        with click.progressbar(length = total_size, label = "Reading...") as pb:
-            p = Program()
-            for region in to_read:
-                try:
-                    cs = region.page_size
-                except AttributeError:
-                    cs = 1024
+        pb = tqdm(total = total_size, desc = "Reading...")
+        p = Program()
+        for region in to_read:
+            try:
+                cs = region.page_size
+            except AttributeError:
+                cs = 1024
 
-                blob = bytearray()
-                for offset in range(0, region.size, cs):
-                    chunk = region.read(offset, min(cs, region.size - offset))
-                    blob += chunk
+            blob = bytearray()
+            for offset in range(0, region.size, cs):
+                chunk = region.read(offset, min(cs, region.size - offset))
+                blob += chunk
 
-                    pb.update(len(chunk))
+                pb.update(len(chunk))
 
-                p.append(Segment(region.address, blob))
+            p.append(Segment(region.address, blob))
+        pb.close()
         return p
 
     def attach(self):
@@ -220,9 +220,11 @@ class Loadable:
             f.erase(0, f.size)
         self.force_blank()
 
-    def program_begin(self, do_erase):
+    def program_begin(self, do_erase, assume_clean):
         if do_erase:
             self.erase_all()
+        if assume_clean:
+            self.force_blank()
 
     def program_end(self, success, do_start):
         if do_start:
@@ -231,10 +233,14 @@ class Loadable:
             try:
                 self.reset()
             except AttributeError:
-                click.echo("WARNING: Target does not handle reset")
+                print("WARNING: Target does not handle reset")
 
-    def write(self, program, do_erase = False, do_verify = False, do_start = False):
-        self.program_begin(do_erase)
+    def write(self, program,
+              do_erase = False,
+              do_verify = False,
+              do_start = False,
+              assume_clean = False):
+        self.program_begin(do_erase, assume_clean)
 
         to_erase = []
         to_flash = []
@@ -264,13 +270,11 @@ class Loadable:
             for p in region_program:
                 to_flash.append((r, p.address - r.address, p.data))
 
-        with click.progressbar(to_erase, label = "Erasing ") as bar:
-            for r, addr, size in bar:
-                r.erase(addr, size)
+        for r, addr, size in tqdm(to_erase, desc = "Erasing"):
+            r.erase(addr, size)
 
-        with click.progressbar(to_flash, label = "Writing ") as bar:
-            for r, offset, data in bar:
-                r.write(offset, data)
+        for r, offset, data in tqdm(to_flash, desc = "Writing"):
+            r.write(offset, data)
 
         success = True
         if do_verify:
@@ -290,27 +294,28 @@ class Loadable:
 
         count = 0
 
-        with click.progressbar(length = total_size, label = "Checking") as pb:
-            for region, programmed in to_check:
-                for segment in programmed:
-                    self.logger.info("Reading 0x%x +0x%x", segment.address, len(segment))
-                    time.sleep(.01)
-                    actual = region.read(segment.address - region.address, len(segment))
-                    pb.update(len(segment))
-                    if actual != segment.data:
-                        self.logger.error("Mismatch in %s", segment)
-                        for off in range(0, len(segment), 16):
-                            orig = segment.data[off : off + 16]
-                            rb = actual[off : off + 16]
-                            if orig == rb:
-                                continue
-                            self.logger.error("Expected %08x: %s",
-                                              segment.address + off,
-                                              str(binascii.b2a_hex(orig), "ascii"))
-                            self.logger.error("Readback %08x: %s",
-                                              segment.address + off,
-                                              str(binascii.b2a_hex(rb), "ascii"))
-                            count += 1
-                            if count > 3:
-                                return False
+        pb = tqdm(total = total_size, desc = "Checking")
+        for region, programmed in to_check:
+            for segment in programmed:
+                self.logger.info("Reading 0x%x +0x%x", segment.address, len(segment))
+                time.sleep(.01)
+                actual = region.read(segment.address - region.address, len(segment))
+                pb.update(len(segment))
+                if actual != segment.data:
+                    self.logger.error("Mismatch in %s", segment)
+                    for off in range(0, len(segment), 16):
+                        orig = segment.data[off : off + 16]
+                        rb = actual[off : off + 16]
+                        if orig == rb:
+                            continue
+                        self.logger.error("Expected %08x: %s",
+                                          segment.address + off,
+                                          str(binascii.b2a_hex(orig), "ascii"))
+                        self.logger.error("Readback %08x: %s",
+                                          segment.address + off,
+                                          str(binascii.b2a_hex(rb), "ascii"))
+                        count += 1
+                        if count > 3:
+                            pb.close()
+                            return False
         return True

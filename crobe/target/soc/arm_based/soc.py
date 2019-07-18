@@ -13,7 +13,7 @@ from ... import memory
 from ....puppet import Puppet
 from ....db import Db
 from ....util.info import TimedLogger
-import click
+from tqdm import tqdm
 
 __all__ = ["SoC", 'ArmMPuppet', 'StubFlash']
 
@@ -211,12 +211,16 @@ class SoC(model.SoC):
         cpu, = self.children_of_class(Cortex)
         cpu.reset(False)
 
-    def write(self, program, do_erase = False, do_verify = False, do_start = False):
+    def write(self, program,
+              do_erase = False,
+              do_verify = False,
+              do_start = False,
+              assume_clean = False):
         flashs = list(self.children_of_class(StubFlash))
         if not flashs:
-            return memory.Loadable.write(self, program, do_erase, do_verify, do_start)
+            return memory.Loadable.write(self, program, do_erase, do_verify, do_start, assume_clean)
 
-        self.program_begin(do_erase)
+        self.program_begin(do_erase, assume_clean)
 
         cpu, = self.children_of_class(Cortex)
         cpu.halt()
@@ -235,32 +239,31 @@ class SoC(model.SoC):
             pages = program\
                     .within(f.address, f.address + f.size)\
                     .paged(f.page_size, fill = b'\xff')
-
+            
             if not blank:
                 f.erase(pages.address - f.address, pages.end - pages.address)
 
-            with click.progressbar(pages, label = "Writing %-8s" % f.name) as bar:
-                running = None
+            running = None
 
-                for i, page in enumerate(bar):
-                    self.logger.debug("Loading page at 0x%08x...", page.address)
-                    z = page_zone[i % 2]
+            for i, page in enumerate(tqdm(pages, desc = "Writing %-8s" % f.name)):
+                self.logger.debug("Loading page at 0x%08x...", page.address)
+                z = page_zone[i % 2]
 
-                    z.write(page.data)
+                z.write(page.data)
 
-                    if running is not None:
-                        code.wait(1)
-                        running = None
-
-                    code.prepare(page.address, z.address, f.page_size)
-                    code.run()
-                    running = page.address
-
-                if running:
+                if running is not None:
                     code.wait(1)
+                    running = None
 
-                puppet.unallocate(page_zone[0])
-                puppet.unallocate(page_zone[1])
+                code.prepare(page.address, z.address, f.page_size)
+                code.run()
+                running = page.address
+
+            if running:
+                code.wait(1)
+
+            puppet.unallocate(page_zone[0])
+            puppet.unallocate(page_zone[1])
 
         for r in others:
             if isinstance(r, memory.Ram):
@@ -271,9 +274,8 @@ class SoC(model.SoC):
             if not blank:
                 r.erase(pages.address - r.address, pages.end - pages.address)
 
-            with click.progressbar(pages, label = "Writing %-8s" % r.name) as bar:
-                for p in bar:
-                    r.write(p.address - r.address, p.data)
+            for p in tqdm(pages, desc = "Writing %-8s" % r.name):
+                r.write(p.address - r.address, p.data)
 
         success = True
         if do_verify:
