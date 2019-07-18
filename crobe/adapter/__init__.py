@@ -8,3 +8,4 @@ from . import icestick
 from . import smartfusion
 from . import xilinx
 from . import kitprog
+from . import ch341
