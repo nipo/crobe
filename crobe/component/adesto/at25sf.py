@@ -3,9 +3,11 @@ import binascii
 
 @SpiFlash.db.register(0x1f8401)
 class At25sf(SpiFlash):
-    max_freq = 50e6
-    
-    CMD_WRITE_STATUS = b'\x50'
+    max_freq = 85e6
+
+    CMD_CHIP_ERASE = b'\x60'
+    CMD_WRITE_STATUS = b'\x01'
+    CMD_WRITE_VOLATILE_STATUS = b'\x50'
     CMD_RESET_ENABLE = None
     CMD_RESET = None
     CMD_4KB_ERASE = b'\x20'

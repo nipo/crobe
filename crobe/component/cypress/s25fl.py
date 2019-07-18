@@ -5,7 +5,8 @@ import binascii
 class S25FL(SfdpFlash):
     max_freq = 106e6
     CMD_READ_OTP = b"\x4b"
-    write_buffer_size = 256
+    write_buffer_size = 512
+    CMD_WRITE_STATUS = b'\x01'
 
     def __init__(self, port, idr):
         SfdpFlash.__init__(self, port, idr, "S25FL")
@@ -24,8 +25,7 @@ class S25FL204(SpiFlash):
         {"type": 1, "size": 4 * 1024, "erase_cmd": b'\x20'},
         {"type": 2, "size": 64 * 1024, "erase_cmd": b'\xd8'},
         ]
-    page_size = 256
-    write_buffer_size = 256
+    write_buffer_size = 512
     total_size = 4 * 1024 * 1024 / 8
 
     def __init__(self, port, idr):

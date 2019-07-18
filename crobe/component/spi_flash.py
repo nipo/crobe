@@ -29,6 +29,7 @@ class SpiFlash(PortComponent):
     CMD_READ_JEDEC_ID = b"\x9f"
     CMD_PAGE_PROGRAM = b"\x02"
     CMD_WRITE_STATUS = None
+    CMD_WRITE_VOLATILE_STATUS = None
     CMD_CHIP_ERASE = b'\xc7'
     CMD_WRITE_ENABLE = b'\x06'
     CMD_WRITE_DISABLE = b'\x04'
@@ -61,8 +62,8 @@ class SpiFlash(PortComponent):
             self.logger.info("- type %d: %d x %s sectors, erase command: %s",
                              s["type"], self.total_size / s["size"], base2(s["size"], 'B'),
                              ("0x%02x" % s["erase_cmd"][0]) if s["erase_cmd"] else "-")
-        if self.CMD_WRITE_STATUS:
-            self.logger.info("Volatile status write op: 0x%02x", self.CMD_WRITE_STATUS[0])
+        if self.CMD_WRITE_VOLATILE_STATUS:
+            self.logger.info("Volatile status write op: 0x%02x", self.CMD_WRITE_VOLATILE_STATUS[0])
 
     @classmethod
     def detect(cls, port):
@@ -179,8 +180,15 @@ class SpiFlash(PortComponent):
         st = self.command(self.CMD_READ_STATUS, 1)[0]
 #        self.logger.debug("Status: %02x", st)
         return st
-            
+
+    def status_write(self, *values):
+        assert self.CMD_WRITE_STATUS is not None
+        self.write_enable(True)
+        self.command(self.CMD_WRITE_STATUS + bytes(values), 0)
+
     def erase_all(self):
+        if self.CMD_WRITE_STATUS:
+            self.status_write(0)
         self.write_enable(True)
         self.logger.debug("Chip erase (%02x)", self.CMD_CHIP_ERASE[0])
         self.command(self.CMD_CHIP_ERASE, 0)
@@ -230,7 +238,7 @@ class SpiFlash(PortComponent):
         offset = 0
 
         while offset < len(data):
-            self.logger.debug("Writing chunk at 0x%08x... (%02x)", offset, self.CMD_PAGE_PROGRAM[0])
+            self.logger.debug("Writing chunk at 0x%08x... (%02x)", base + offset, self.CMD_PAGE_PROGRAM[0])
 
             alignment = (base + offset) % write_chunk_size
             size = write_chunk_size - alignment
@@ -300,6 +308,10 @@ class SfdpFlash(SelfDescriptiveFlash):
 
         headers = self.sfdp_read(8, header_count * 8)
 
+        sfdp_desc = None, None
+        four_byte = None
+        id_cfi = None
+        
         for i in range(header_count):
             jid, minor, major, length, ptp = struct.unpack("<BBBBL", headers[i * 8: (i+1)*8])
             jid |= (ptp & 0xff000000) >> 16
@@ -313,21 +325,15 @@ class SfdpFlash(SelfDescriptiveFlash):
             if jid & 0xff00 == 0xff00:
                 # JEDEC std
                 if jid == 0xff00:
-                    if major == 1 and minor <= 5:
-                        self._sfdp_1_5_parse(data)
-                        continue
-                    elif major == 1 and minor == 6:
-                        self._sfdp_1_6_parse(data)
-                        continue
-                    else:
-                        self.logger.warning("Unsupported SFDP version: %d.%d" % (major, minor))
+                    if sfdp_desc[0] is None or sfdp_desc[0] < (major, minor):
+                        sfdp_desc = (major, minor), data
                 elif jid == 0xff81:
                     if major == 1 and minor == 0:
                         self._sector_map_parse(data)
                         continue
                 elif jid == 0xff84:
                     if major == 1 and minor == 0:
-                        self._4byte_addr_insts_parse(data)
+                        four_byte = data
                         continue
 
                 self.logger.info("    Data: %s", binascii.b2a_hex(data))
@@ -337,10 +343,25 @@ class SfdpFlash(SelfDescriptiveFlash):
 
             if jid == 0x0101:
                 if major == 1 and minor == 1:
-                    self._id_cfi_parse(data)
+                    id_cfi = data
             else:
                 self.logger.info("    Data: %s", binascii.b2a_hex(data))
 
+        if sfdp_desc[0] is not None:
+            (major, minor), data = sfdp_desc
+            if major == 1 and minor <= 5:
+                self._sfdp_1_5_parse(data)
+            elif major == 1 and minor == 6:
+                self._sfdp_1_6_parse(data)
+            else:
+                self.logger.warning("Unsupported SFDP version: %d.%d" % (major, minor))
+
+        if four_byte:
+            self._4byte_addr_insts_parse(four_byte)
+
+        if id_cfi:
+            self._id_cfi_parse(id_cfi)
+                
         if self.total_size > (1 << (self.ADDRESS_SIZE * 8)):
             self.total_size = 1 << (self.ADDRESS_SIZE * 8)
             self.logger.warning("Only lower %s accessible with %d-byte addresses",
@@ -399,7 +420,7 @@ class SfdpFlash(SelfDescriptiveFlash):
         if data[0] & 3 == 1:
             self.block_size = 4096
         if data[0] & 0x8:
-            self.CMD_WRITE_STATUS = "\x06" if data[0] & 0x10 else "\x50"
+            self.CMD_WRITE_VOLATILE_STATUS = "\x06" if data[0] & 0x10 else "\x50"
         if data[1] != 0xff:
             self.CMD_4KB_ERASE = bytes([data[1]])
         if data[2] & 0x6 == 0:
@@ -414,6 +435,10 @@ class SfdpFlash(SelfDescriptiveFlash):
         else:
             self.total_size = (density + 1) / 8
 
+        print(data, len(data))
+            
+        self.write_buffer_size = 2**(data[36]>>4)
+            
         self.SECTOR_INFO = []
 
         for i in range(4):
