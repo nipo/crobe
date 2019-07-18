@@ -9,3 +9,4 @@ from . import svf
 from . import pin
 from . import nordic
 from . import ws2812
+from . import secu
