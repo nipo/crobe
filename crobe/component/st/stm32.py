@@ -1,4 +1,5 @@
 from ..arm.coresight.rom_table import RomTable
+from ..arm.coresight.scs import Scs
 import binascii
 import time
 
@@ -38,19 +39,19 @@ class Info:
             if rom_tables:
                 mcu_id = rom_tables[0].partid.part_no
 
-        return cls.from_id(mcu_id & 0xfff)
+        return cls.from_id(soc, mcu_id & 0xfff)
 
     @classmethod
-    def from_id(cls, part):
+    def from_id(cls, soc, part):
         part &= 0xfff
         if part == 0x411:
-            scs, = dp.children_of_class(Scs)
+            scs, = soc.buses[0].children_of_class(Scs)
             if "M4" in scs.cpu_name:
                 part = 0x433
             else:
                 part = 0x10033
 
-        return cls.parts.get(part, 0)
+        return cls.parts[part]
 
     def flash_add(self, flash_cb, kb):
         if not self.flash_page_size:
@@ -217,7 +218,7 @@ Info.parts = {
     # RM0008
     0x410: Rm0008("F10x/Medium-Density", 1024),
     0x412: Rm0008("F10x/Low-Density",    1024),
-    0x413: Rm0008("F10x/High-Density",   2048),
+    0x414: Rm0008("F10x/High-Density",   2048),
     0x418: Rm0008("F10x/Connectivity",   2048),
     0x430: Rm0008("F10x/XL",             2048),
     # RM0360/RM0091
@@ -242,5 +243,8 @@ Info.parts = {
     # RM0368
     0x433: Rm0368("F401",                   0),
     # RM0033
+    0x411: Rm0033("F2xx",                 0),
+    # Actual ID is 0x433, but collides with other parts.
+    # ID 0x10033 does not exist, it is a hack for code in from_id
     0x10033: Rm0033("F2xx",                 0),
 }
