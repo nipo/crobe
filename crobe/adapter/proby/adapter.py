@@ -134,6 +134,7 @@ class SwdInterface(swd.Interface):
         self.logger.info("Found proby with internal clock of %s", metric(self.base_freq, "Hz"))
         
         self.__reset = False
+        self.__trst = None
         self.__divisor = int(self.base_freq / 1e6) - 1
         self.__rate_dirty = True
 
@@ -151,6 +152,19 @@ class SwdInterface(swd.Interface):
         self.logger.info("%s reset pin", "holding" if value else "releasing")
         self.__reset = bool(value)
         self.mux.execute(self.CONFIG_CID, struct.pack("<BL", self.CONFIG_REG_SRST, int(self.__reset)), 1)
+
+    @property
+    def trst(self):
+        return self.__trst
+
+    @trst.setter
+    def trst(self, value):
+        if self.__trst == bool(value):
+            return
+
+        self.logger.info("trst pin %d", int(value))
+        self.__trst = bool(value)
+        self.mux.execute(self.CONFIG_CID, struct.pack("<BL", self.CONFIG_REG_TRST, int(not self.__trst)), 1)
         
     @property
     def freq(self):
