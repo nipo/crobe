@@ -421,6 +421,8 @@ class SpiInterface(JLinkInterface, spi.Interface):
         self.max_speed_set()
         self.__cs = False
 
+        self.child_add(spi.Target(self, "cs0", 0))
+
     def _execute(self, operation_list):
         ops = deque(operation_list)
         
@@ -438,10 +440,10 @@ class SpiInterface(JLinkInterface, spi.Interface):
                     op.__offset = len(out_pending)
                     mosi = op.mosi
                     if isinstance(mosi, bytes):
-                        cs_pending += (b"\x00" if self.__cs else b"\xff") * len(mosi)
+                        cs_pending += (b"\x00" if self.__cs is not None else b"\xff") * len(mosi)
                         out_pending += bitswap8(mosi)
                     elif isinstance(mosi, int):
-                        cs_pending += (b"\x00" if self.__cs else b"\xff") * mosi
+                        cs_pending += (b"\x00" if self.__cs is not None else b"\xff") * mosi
                         out_pending += b"\x00" * mosi
                     else:
                         raise ValueError("Unhandled data type for mosi", mosi)
