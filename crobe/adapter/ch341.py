@@ -1,7 +1,8 @@
 from . import model
-from ..protocol import i2c
+from ..protocol import i2c, spi
 from .. import bitstring
 from ..util.pretty import metric
+from ..util import endian
 from collections import deque
 import usb.core
 import usb.util
@@ -47,8 +48,9 @@ class Adapter(model.Adapter):
     CMD_SPI_BEGIN  = 0xA8
 
     VENDOR_VERSION_GET = 0x5F
+    VENDOR_BUFFER_CLEAR = 0xb2
 
-    supported_interfaces = ["i2c"]
+    supported_interfaces = ["i2c", "spi"]
 
     EP_IN  = 0x82
     EP_OUT = 0x02
@@ -75,7 +77,10 @@ class Adapter(model.Adapter):
 
     def version_get(self):
         return int.from_bytes(self.ctrl_in(self.VENDOR_VERSION_GET, 0, 0, 2), "little")
-    
+
+    def buffer_clear(self):
+        self.ctrl_out(self.VENDOR_BUFFER_CLEAR, 0, 0, b'')
+
     def bulk_out(self, data, timeout = None):
         self.logger.debug("BULK OUT %s", binascii.b2a_hex(data))
         self.device.write(self.EP_OUT, data, int((timeout or 1.) * 1000))
@@ -85,6 +90,12 @@ class Adapter(model.Adapter):
         data = self.device.read(self.EP_IN, size, int((timeout or 1.) * 1000))
         self.logger.debug("-> %s", binascii.b2a_hex(data))
         return data
+
+    def do_io(self, blob, read_size = 0):
+        self.bulk_out(blob)
+        if read_size:
+            return self.bulk_in(read_size)
+        return b''
 
     @classmethod
     def from_device(cls, d, pre):
@@ -102,7 +113,83 @@ class Adapter(model.Adapter):
         if interface_name.lower() == "i2c":
             return I2cInterface(self)
 
+        if interface_name.lower() == "spi":
+            return SpiInterface(self)
+
         raise NotImplementedError("Unsupported interface %s" % interface_name)
+
+class SpiInterface(spi.Interface):
+    def __init__(self, port):
+        spi.Interface.__init__(self, port)
+
+        self.child_add(spi.Target(self, "cs0", 0))
+        self.child_add(spi.Target(self, "cs1", 1))
+        self.child_add(spi.Target(self, "cs2", 2))
+        self.child_add(spi.Target(self, "cs3", 3))
+
+        self.__fast = False
+        self.__fast_dirty = True
+
+        self.port.buffer_clear()
+
+    # Bitrate logic disabled, it does not work.
+    @property
+    def freq(self):
+        return 1.5e6
+
+        return 1e6 if self.__fast else 500e3
+
+    @freq.setter
+    def freq(self, freq):
+        return
+
+        fast = freq > 1e6
+        if self.__fast == fast:
+            return
+        self.__fast = fast
+        self.__fast_dirty = True
+
+    def _do_spi_shift(self, mosi):
+        miso = b''
+        mosi = endian.bitswap8(mosi)
+        for off in range(0, len(mosi), 0x1f):
+            chunk = mosi[off:][:0x1f]
+            miso += self.port.do_io(bytes([self.port.CMD_SPI_BEGIN]) + chunk, len(chunk))
+        return endian.bitswap8(miso)
+
+    def _do_spi_cs(self, no):
+        assert no is None or 0 <= no <= 3
+        cs_mask = [0x01, 0x02, 0x04, 0x10][no] if no is not None else 0
+        out_val_mask = 0x37 # Keep D3 low
+        self.port.do_io(bytes([self.port.CMD_GPIO_BEGIN,
+                               self.port.CMD_GPIO_OUT(out_val_mask & ~cs_mask),
+                               self.port.CMD_GPIO_OE(0x3f),
+                               self.port.CMD_GPIO_END]))
+
+    def _do_spi_rate(self, v):
+        self.port.do_io(bytes([self.port.CMD_I2C_BEGIN,
+                               self.port.CMD_I2C_RATE(v, 0),
+                               self.port.CMD_I2C_END]))
+
+    def _execute(self, operation_list):
+        pending = []
+
+        if self.__fast_dirty:
+            self.__fast_dirty = False
+            self._do_spi_rate(self.__fast)
+
+        for op in operation_list:
+            if isinstance(op, spi.Shift):
+                if isinstance(op.mosi, int):
+                    op.miso = self._do_spi_shift(b'\x00' * op.mosi)
+                else:
+                    op.miso = self._do_spi_shift(op.mosi)
+
+            elif isinstance(op, spi.Cs):
+                self._do_spi_cs(op.value)
+
+            else:
+                raise base.ProtocolError("Unknown SPI operation %s" % type(op))
 
 class I2cInterface(i2c.Interface):
     def __init__(self, port):
@@ -114,7 +201,9 @@ class I2cInterface(i2c.Interface):
 
         # 100k+ has glitches on SCL
         self.freq_cap("crappy hardware", 20e3)
-        
+
+        self.port.buffer_clear()
+
     @property
     def freq(self):
         return self.port.RATE[self.__freq_index]
@@ -139,12 +228,9 @@ class I2cInterface(i2c.Interface):
 
         if len(self.__i2c_req) > 1 and (force or len(self.__i2c_req) + req > mps or self.__i2c_rsp_size + rsp > mps):
             self.__i2c_req += b"\x00"
-            self.port.bulk_out(self.__i2c_req)
+            self.__i2c_rsp += self.port.do_io(self.__i2c_req, self.__i2c_rsp_size)
             self.__i2c_req = bytes([self.port.CMD_I2C_BEGIN])
-
-            if self.__i2c_rsp_size:
-                self.__i2c_rsp += self.port.bulk_in(self.__i2c_rsp_size)
-                self.__i2c_rsp_size = 0
+            self.__i2c_rsp_size = 0
 
         return self.__i2c_rsp
 
@@ -196,7 +282,7 @@ class I2cInterface(i2c.Interface):
         if self.__freq_dirty:
             self.i2c_rate(self.__freq_index)
             self.__freq_dirty = False
-        
+
         for idx, op in enumerate(ops):
             as_prev = bool(prev) and isinstance(prev, i2c.Read) == isinstance(op, i2c.Read)
 
