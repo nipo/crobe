@@ -57,6 +57,8 @@ def ones(root, pkg):
     dumper = Dumper(root, packages)
     before = {}
     for d, tap in dumper.definitions:
+        if not d:
+            continue
         before[d.name] = set()
 
     while True:
