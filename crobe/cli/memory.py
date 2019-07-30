@@ -4,24 +4,9 @@ import binascii
 
 @base.cli.group(help = "Memory manipulation")
 @click.option('-r', '--root', type = base.ROOT)
-@click.option('--bus', '-b', metavar = 'NAME', type = str, help = 'Bus id')
 @click.pass_context
-def memory(ctx, root, bus):
-    from ..component.model import Bus
-    buses = list(root.children_of_class(Bus))
-
-    if bus:
-        try:
-            index = int(bus)
-        except ValueError:
-            index = None
-
-        if index is not None:
-            buses = buses[idx:idx+1]
-        else:
-            buses = list(filter(lambda x: bus.lower() in x.name.lower(), buses))
-
-    ctx.obj["bus"] = buses[0]
+def memory(ctx, root):
+    ctx.obj["bus"] = root
 
 @memory.command(help = "Arbitrary setter")
 @click.option('--raw', metavar = 'ADDRESS=DATA',
