@@ -10,3 +10,4 @@ from . import pin
 from . import nordic
 from . import ws2812
 from . import secu
+from . import ltc_poe
