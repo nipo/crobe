@@ -261,43 +261,23 @@ class SoC(model.SoC):
 
         puppet = self.puppet()
 
-        for f in flashs:
+        for f in tqdm(flashs, desc = "Flashing"):
             blank = f.is_blank
-            code = puppet.stub(f.PAGE_WRITE)
 
-            page_zone = puppet.allocate(f.page_size, f.page_size), \
-                        puppet.allocate(f.page_size, f.page_size)
+            mp = program\
+                 .within(f.address, f.address + f.size)\
+                 .paged(f.page_size, fill = b'\xff')
 
-            pages = program\
-                    .within(f.address, f.address + f.size)\
-                    .paged(f.page_size, fill = b'\xff')
-            
             if not blank:
-                f.erase(pages.address - f.address, pages.end - pages.address)
+                f.erase(mp.address - f.address, mp.end - mp.address)
 
-            running = None
+            pages = {}
+            for p in mp:
+                pages[p.address] = p.data
 
-            for i, page in enumerate(tqdm(pages, desc = "Writing %-8s" % f.name)):
-                self.logger.debug("Loading page at 0x%08x...", page.address)
-                z = page_zone[i % 2]
+            f.puppet_write(puppet, pages)
 
-                z.write(page.data)
-
-                if running is not None:
-                    code.wait(1)
-                    running = None
-
-                code.prepare(page.address, z.address, f.page_size)
-                code.run()
-                running = page.address
-
-            if running:
-                code.wait(1)
-
-            puppet.unallocate(page_zone[0])
-            puppet.unallocate(page_zone[1])
-
-        for r in others:
+        for r in tqdm(others, desc = "Writing"):
             if isinstance(r, memory.Ram):
                 continue
             blank = r.is_blank
