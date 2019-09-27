@@ -192,6 +192,10 @@ class IHex(object):
     return output
 
   def write_file(self, fname):
-    f = open(fname, "wb")
+    try:
+      fname.write
+      f = fname
+    except:
+      f = open(fname, "wb")
     f.write(self.write())
     f.close()
