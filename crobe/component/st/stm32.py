@@ -165,6 +165,7 @@ class Rm0091Flash:
         if self.bus.u32_read(self.SR) & self.SR_EOP:
             self.bus.u32_write(self.SR, self.SR_EOP)
         self.bus.u32_write(self.CR, self.bus.u32_read(self.CR) & ~self.CR_MER)
+        self.lock()
 
     def opt_erase(self):
         self.unlock()
@@ -175,6 +176,7 @@ class Rm0091Flash:
         if self.bus.u32_read(self.SR) & self.SR_EOP:
             self.bus.u32_write(self.SR, self.SR_EOP)
         self.bus.u32_write(self.CR, self.bus.u32_read(self.CR) & ~self.CR_OPTER)
+        self.lock()
 
     def reload(self):
         self.bus.u32_write(self.CR, self.bus.u32_read(self.CR) | self.CR_OBL_LAUNCH)

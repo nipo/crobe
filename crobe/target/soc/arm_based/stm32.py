@@ -221,7 +221,6 @@ class Stm(SoC, pin_control.Controller):
 
     def program_end(self, success, do_start):
         f = self.info.flash_class(self.bus)
-        f.mass_erase()
 
         if hasattr(f, "reload"):
             SoC.program_end(self, success, False)

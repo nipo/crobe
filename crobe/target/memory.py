@@ -304,28 +304,28 @@ class Loadable:
 
         count = 0
 
-        pb = tqdm(total = total_size, desc = "Checking")
-        for region, programmed in to_check:
+        for region, programmed in tqdm(to_check, desc = "Checking"):
+            spb = tqdm(total = programmed.size, desc = region.name)
             for segment in programmed:
-                self.logger.info("Reading 0x%x +0x%x", segment.address, len(segment))
-                time.sleep(.01)
-                actual = region.read(segment.address - region.address, len(segment))
-                pb.update(len(segment))
-                if actual != segment.data:
-                    self.logger.error("Mismatch in %s", segment)
-                    for off in range(0, len(segment), 16):
-                        orig = segment.data[off : off + 16]
-                        rb = actual[off : off + 16]
-                        if orig == rb:
-                            continue
-                        self.logger.error("Expected %08x: %s",
-                                          segment.address + off,
-                                          str(binascii.b2a_hex(orig), "ascii"))
-                        self.logger.error("Readback %08x: %s",
-                                          segment.address + off,
-                                          str(binascii.b2a_hex(rb), "ascii"))
-                        count += 1
-                        if count > 3:
-                            pb.close()
-                            return False
+                for off in range(0, len(segment), 4096):
+                    ssize = min(len(segment) - off, 4096)
+
+                    self.logger.info("Reading 0x%x +0x%x", segment.address + off, ssize)
+                    actual = region.read(segment.address - region.address + off, ssize)
+                    spb.update(ssize)
+                    if actual != segment.data[off : off + ssize]:
+                        self.logger.error("Mismatch in %s", segment)
+                        for off2 in range(0, ssize, 16):
+                            orig = segment.data[off + off2 : off + off2 + 16]
+                            rb = actual[off2 : off2 + 16]
+                            if orig == rb:
+                                continue
+                            self.logger.error("Expected %08x: %s",
+                                              segment.address + off + off2,
+                                              str(binascii.b2a_hex(orig), "ascii"))
+                            self.logger.error("Readback         : %s",
+                                              str(binascii.b2a_hex(rb), "ascii"))
+                            count += 1
+                            if count > 3:
+                                return False
         return True

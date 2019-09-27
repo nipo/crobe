@@ -83,10 +83,8 @@ class StubFlash(BusFlash):
 
     def erase(self, offset, size):
         self.soc.attach()
-
         puppet = self.soc.puppet()
-        code = puppet.stub(self.RANGE_ERASE)
-        code.call(self.address + offset, size, self.page_size)
+        self.puppet_erase(puppet, self.address + offset, size)
 
         if size == self.size:
             self.is_blank = True
@@ -96,16 +94,50 @@ class StubFlash(BusFlash):
         self.soc.attach()
 
         puppet = self.soc.puppet()
-        code = puppet.stub(self.PAGE_WRITE)
+        if not self.is_blank:
+            self.puppet_erase(puppet, self.address + offset, len(data))
 
-        page_zone = puppet.allocate(self.page_size, self.page_size)
-        for off in range(0, len(data), self.page_size):
-            chunk = data[off : off + self.page_size]
-            page_zone.write(chunk)
-            code.call(self.address + offset + off, page_zone.address, len(chunk))
-        puppet.unallocate(page_zone)
+        self.puppet_write(puppet, {self.address + offset: data})
+            
+        self.is_blank = False
 
-        #self.is_blank = False
+    def puppet_erase(self, puppet, address, size):
+        code = puppet.stub(self.RANGE_ERASE)
+        code.call(address, size, size)
+
+    def puppet_write(self, puppet, pages):
+        try:
+            code = puppet.stub(self.PAGE_WRITE)
+            write_buffer = puppet.allocate(self.page_size, self.page_size)
+            try:
+                other_buffer = puppet.allocate(self.page_size, self.page_size)
+            except:
+                other_buffer = None
+
+            running = False
+            for i, (address, data) in enumerate(tqdm(sorted(pages.items()), desc = self.name)):
+                write_buffer.write(data)
+
+                if running:
+                    code.wait(1)
+                    running = False
+
+                code.prepare(address, write_buffer.address, self.page_size)
+                code.run()
+                running = True
+
+                if other_buffer:
+                    other_buffer, write_buffer = write_buffer, other_buffer
+                else:
+                    code.wait(1)
+                    running = False
+
+            if running:
+                code.wait(1)
+        finally:
+            puppet.unallocate(write_buffer)
+            if other_buffer:
+                puppet.unallocate(other_buffer)
 
 class SoC(model.SoC):
     db = Db()
