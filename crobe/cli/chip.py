@@ -51,6 +51,30 @@ def program(ctx, programs, assume_clean, erase, check, run):
             except AttributeError:
                 click.echo("WARNING: Target does not handle reset")
 
+@chip.command(help = "Check target")
+@click.argument("programs", type = base.PROGRAM, nargs = -1)
+@click.option('--run', is_flag = True, help = "Run target after programming")
+@click.pass_context
+def check(ctx, programs, run):
+    target = ctx.obj["target"]
+
+    click.echo("Target: %s" % target)
+
+    program = Program.from_programs(programs)
+
+    target.attach()
+    
+    if not target.verify(program):
+        print("Verification failed")
+
+    target.detach()
+
+    if run:
+        try:
+            target.reset()
+        except AttributeError:
+            click.echo("WARNING: Target does not handle reset")
+
 @chip.command(help = "Readback target")
 @click.argument('filename', type = str)
 @click.option('--begin', type = base.HEX, default = 0)
