@@ -124,7 +124,7 @@ class Operation(object):
 
 class Shift(Operation):
     def __init__(self, mosi, read_miso = True):
-        self.mosi = mosi
+        self.mosi = mosi if isinstance(mosi, int) else bytes(mosi)
         self.read_miso = read_miso
 
     # When executed
