@@ -22,3 +22,7 @@ class At25sf(SpiFlash):
 
     def __init__(self, port, idr):
         SpiFlash.__init__(self, port, idr, "AT25SFxx")
+
+    def start(self):
+        SpiFlash.start(self)
+        print("Status: %02x %02x" % (self.status, self.command(b'\x35', rsize = 1)[0]))

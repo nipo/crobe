@@ -82,6 +82,12 @@ class SpiFlash(PortComponent):
             port.cmd_cs(False),
             ])
         time.sleep(.3)
+        port.execute([
+            port.cmd_cs(True),
+            port.cmd_shift(b'\xf0', read_miso = False),
+            port.cmd_cs(False),
+            ])
+        time.sleep(.3)
 
         sfdp = port.cmd_shift(4)
         idr = port.cmd_shift(0x13)
@@ -133,25 +139,29 @@ class SpiFlash(PortComponent):
         except NotImplementedError:
             pass
 
-    def command(self, cmd, size, dummy_words = 0):
+    def command(self, cmd, arg = b'', wdata = b'', rsize = 0, dummy_words = 0):
         cmds = [self.port.cmd_cs(True),
                 self.port.cmd_shift(cmd, read_miso = False)]
+        if arg:
+            cmds.append(self.port.cmd_shift(arg, read_miso = False))
         if dummy_words:
             cmds.append(self.port.cmd_shift(b"\xff"*dummy_words, read_miso = False))
-        if size:
-            rsp = self.port.cmd_shift(size)
+        if wdata:
+            cmds.append(self.port.cmd_shift(wdata, read_miso = False))
+        if rsize:
+            rsp = self.port.cmd_shift(rsize)
             cmds.append(rsp)
         cmds += [self.port.cmd_cs(False)]
-        #self.logger.debug("<< %s %d", binascii.b2a_hex(cmd), size)
+        self.logger.debug("<< %s %s %s %d", cmd.hex(), arg.hex(), wdata.hex(), rsize)
         self.port.execute(cmds)
-        if size:
-            #self.logger.debug(">> %s", binascii.b2a_hex(rsp.miso))
+        if rsize:
+            self.logger.debug(">> %s", rsp.miso.hex())
             return rsp.miso
-        #self.logger.debug(">> -")
-
+        self.logger.debug(">> -")
+        return b''
         
     def idr_get(self):
-        return int.from_bytes(self.command(self.CMD_READ_JEDEC_ID, 3), byteorder = 'big')
+        return int.from_bytes(self.command(self.CMD_READ_JEDEC_ID, rsize = 3), byteorder = 'big')
 
     def addr(self, value):
         return value.to_bytes(self.ADDRESS_SIZE, byteorder = "big")
@@ -159,17 +169,17 @@ class SpiFlash(PortComponent):
     def read(self, address, size, op = None):
         if op is None:
             op = self.CMD_FAST_READ
-        return self.command(op + self.addr(address), size, dummy_words = 1)
+        return self.command(op, arg = self.addr(address), rsize = size, dummy_words = 1)
 
     def write_enable(self, enable):
         retries = 0
         while bool(self.status & self.STATUS_WEL) != enable:
             if enable:
                 self.logger.debug("Write enable (%02x)", self.CMD_WRITE_ENABLE[0])
-                self.command(self.CMD_WRITE_ENABLE, 0)
+                self.command(self.CMD_WRITE_ENABLE)
             else:
                 self.logger.debug("Write disable (%02x)", self.CMD_WRITE_DISABLE[0])
-                self.command(self.CMD_WRITE_DISABLE, 0)
+                self.command(self.CMD_WRITE_DISABLE)
             retries += 1
 
             if retries & 0xff == 0:
@@ -177,21 +187,21 @@ class SpiFlash(PortComponent):
 
     @property
     def status(self):
-        st = self.command(self.CMD_READ_STATUS, 1)[0]
+        st = self.command(self.CMD_READ_STATUS, rsize = 1)[0]
 #        self.logger.debug("Status: %02x", st)
         return st
 
     def status_write(self, *values):
         assert self.CMD_WRITE_STATUS is not None
         self.write_enable(True)
-        self.command(self.CMD_WRITE_STATUS + bytes(values), 0)
+        self.command(self.CMD_WRITE_STATUS, arg = bytes(values), rsize = 0)
 
     def erase_all(self):
         if self.CMD_WRITE_STATUS:
             self.status_write(0)
         self.write_enable(True)
         self.logger.debug("Chip erase (%02x)", self.CMD_CHIP_ERASE[0])
-        self.command(self.CMD_CHIP_ERASE, 0)
+        self.command(self.CMD_CHIP_ERASE)
         self.logger.debug("Waiting for erase to complete")
         while self.status & self.STATUS_WIP:
             time.sleep(.1)
@@ -199,7 +209,7 @@ class SpiFlash(PortComponent):
         self.write_enable(False)
     
     def erase(self, base, size):
-        self.logger.debug("Erasing %08x, %s", base, base2(base+size, 'B'))
+        self.logger.info("Erasing %08x, %s", base, base2(base+size, 'B'))
 
         chosen = None
         while size > 0:
@@ -227,28 +237,50 @@ class SpiFlash(PortComponent):
 
     def erase_sector(self, addr, si):
         self.write_enable(True)
-        self.logger.debug("Erasing %d bytes at %08x (%02x)", si["size"], addr, si["erase_cmd"][0])
-        self.command(si["erase_cmd"] + self.addr(addr), 0)
+        self.logger.info("Erasing %d bytes at %08x (%02x)", si["size"], addr, si["erase_cmd"][0])
+        self.command(si["erase_cmd"], arg = self.addr(addr))
         while self.status & self.STATUS_WIP:
             pass
         self.write_enable(False)
+
+    def write_chunk(self, addr, data):
+        for retry in range(10):
+            self.write_enable(True)
+            self.command(self.CMD_PAGE_PROGRAM, arg = self.addr(addr), wdata = data)
+            while self.status & self.STATUS_WIP:
+                pass
+
+            readback = self.read(addr, len(data))
+            if readback == data:
+                return
+
+            unrecoverable = [x & ~y for (x, y) in zip(data, readback)]
+            if any(unrecoverable):
+                print(data.hex())
+                print(readback.hex())
+                print(bytes(unrecoverable).hex())
+                raise RuntimeError("Unrecoverable bitflips !")
+
+            #matching = [x == y for (x, y) in zip(data, readback)]
+            #off = matching.index(False)
+            #addr += off
+            #data = data[off:]
+            #
+            #if not data:
+            #    break
+        raise RuntimeError("Unrecoverable bad write !")
 
     def write(self, base, data):
         write_chunk_size = self.write_buffer_size
         offset = 0
 
         while offset < len(data):
-            self.logger.debug("Writing chunk at 0x%08x... (%02x)", base + offset, self.CMD_PAGE_PROGRAM[0])
+            self.logger.info("Writing chunk at 0x%08x... (%02x)", base + offset, self.CMD_PAGE_PROGRAM[0])
 
             alignment = (base + offset) % write_chunk_size
             size = write_chunk_size - alignment
 
-            self.write_enable(True)
-            self.command(self.CMD_PAGE_PROGRAM + self.addr(base + offset)
-                         + data[offset : offset + size], 0)
-            while self.status & self.STATUS_WIP:
-                pass
-
+            self.write_chunk(base + offset, data[offset : offset + size])
             offset += size
 
         self.write_enable(False)
@@ -285,10 +317,10 @@ class IdCfiFlash(SelfDescriptiveFlash):
     def __init__(self, port, idr, name = "ID-CFI Flash"):
         SelfDescriptiveFlash.__init__(self, port, idr, name)
 
-        hdr = self.command(self.CMD_READ_JEDEC_ID, 4)
+        hdr = self.command(self.CMD_READ_JEDEC_ID, rsize = 4)
         length = hdr[3]
 
-        id_cfi_blob = self.command(self.CMD_READ_JEDEC_ID, 4 + (length or 0x100))
+        id_cfi_blob = self.command(self.CMD_READ_JEDEC_ID, rsize = 4 + (length or 0x100))
 
         self._id_cfi_parse(id_cfi_blob)
 
@@ -435,8 +467,6 @@ class SfdpFlash(SelfDescriptiveFlash):
         else:
             self.total_size = (density + 1) / 8
 
-        print(data, len(data))
-            
         self.write_buffer_size = 2**(data[36]>>4)
             
         self.SECTOR_INFO = []
@@ -454,4 +484,7 @@ class SfdpFlash(SelfDescriptiveFlash):
 #        raise ValueError("Unsupported SFDP version: 1.6")
         
     def sfdp_read(self, offset, size):
-        return self.command(self.CMD_SFDP_READ + offset.to_bytes(3, byteorder = 'big') + b'\x00', size)
+        return self.command(self.CMD_SFDP_READ,
+                            arg = offset.to_bytes(3, byteorder = 'big'),
+                            dummy_words = 1,
+                            rsize = size)
