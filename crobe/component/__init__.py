@@ -15,3 +15,4 @@ from . import i2c_eeprom
 from . import winbond
 from . import adesto
 from . import ltc
+from . import melexis
