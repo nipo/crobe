@@ -9,3 +9,4 @@ from . import smartfusion
 from . import xilinx
 from . import kitprog
 from . import ch341
+from . import dc590
