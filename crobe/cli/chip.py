@@ -53,8 +53,10 @@ def program(ctx, programs, assume_clean, erase, check, run):
 
 @chip.command(help = "Readback target")
 @click.argument('filename', type = str)
+@click.option('--begin', type = base.HEX, default = 0)
+@click.option('--end', type = base.HEX, default = None)
 @click.pass_context
-def readback(ctx, filename):
+def readback(ctx, filename, begin, end):
     import math
 
     target = ctx.obj["target"]
@@ -62,5 +64,5 @@ def readback(ctx, filename):
     click.echo("Target: %s" % target)
 
     target.attach()
-    p = target.read()
+    p = target.read(begin, end)
     p.save(filename)

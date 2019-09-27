@@ -178,33 +178,43 @@ class Loadable:
         for region in self.children_of_class(Region):
             region.is_blank = True
 
-    def read(self):
+    def read(self, begin = 0, end = None):
         total_size = 0
         to_read = []
+        if end is None:
+            end = 0
+            for region in self.children_of_class(Region):
+                end = max(end, region.address + region.size)
+
         for region in self.children_of_class(Region):
             if region.type not in [Type.FLASH, Type.EEPROM]:
                 continue
             if not (region.flags & set([Flag.PARTIAL_READ, Flag.MM_READ])):
                 continue
-            total_size += region.size
-            to_read.append(region)
-
+            roff = max(0, begin - region.address)
+            rend = min((region.address + region.size, end))
+            rsize = max(0, rend - region.address)
+            if not rsize:
+                continue
+            total_size += rsize
+            to_read.append((region, roff, rsize))
+            
         pb = tqdm(total = total_size, desc = "Reading...")
         p = Program()
-        for region in to_read:
+        for region, off, s in to_read:
             try:
                 cs = region.page_size
             except AttributeError:
                 cs = 1024
 
             blob = bytearray()
-            for offset in range(0, region.size, cs):
-                chunk = region.read(offset, min(cs, region.size - offset))
+            for offset in range(0, s, cs):
+                chunk = region.read(off + offset, min(cs, s - offset))
                 blob += chunk
 
                 pb.update(len(chunk))
 
-            p.append(Segment(region.address, blob))
+            p.append(Segment(region.address + off, blob))
         pb.close()
         return p
 
