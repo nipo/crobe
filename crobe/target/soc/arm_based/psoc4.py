@@ -259,7 +259,7 @@ class PSoC4(SoC):
         self.attach()
         pl = self.protection_level
         self.logger.info("Protection level: %d", pl)
-        if pl >= 1:
+        if pl > 1:
             self.srom.protection_open()
         else:
             self.srom.erase_all()
