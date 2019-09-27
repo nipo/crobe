@@ -47,6 +47,7 @@ class Program:
         self.info = {}
 
     def append(self, seg):
+        assert isinstance(seg, Segment)
         self.segments.append(seg)
 
     def segment_at(self, addr):
@@ -81,6 +82,10 @@ class Program:
             except ValueError:
                 pass
         raise ValueError("Not found")
+    
+    @property
+    def size(self):
+        return sum([len(s) for s in self.segments], 0)
     
     @property
     def address(self):
