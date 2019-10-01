@@ -100,6 +100,8 @@ class Adapter(model.Adapter):
         self.ctrl_out(self.CMD_RW_INTERNAL, addr & 0xffff, addr >> 16, data)
 
     def mem_read(self, addr, size):
+        if addr & 1:
+            return self.ctrl_in(self.CMD_RW_INTERNAL, (addr & ~1) & 0xffff, addr >> 16, size+1)[1:]
         return self.ctrl_in(self.CMD_RW_INTERNAL, addr & 0xffff, addr >> 16, size)
 
     def reopen(self):
