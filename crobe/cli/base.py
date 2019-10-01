@@ -55,12 +55,12 @@ class AddressRangeParamType(click.ParamType):
         try:
             begin, end = value.split(":", 1)
         except ValueError:
-            self.fail(f"{value!r} is not a valid begin:end range", param, ctx)
+            self.fail("%r is not a valid begin:end range" % (value,), param, ctx)
 
         try:
             return int(begin, 16), int(end, 16)
         except ValueError:
-            self.fail(f"{value!r} is not a valid integer", param, ctx)
+            self.fail("%r is not a valid integer" % (value,), param, ctx)
 
 ADDRESS_RANGE = AddressRangeParamType()
 
@@ -73,7 +73,7 @@ class HexParamType(click.ParamType):
         try:
             return int(value, 16)
         except ValueError:
-            self.fail(f"{value!r} is not a valid hex string", param, ctx)
+            self.fail("%r is not a valid hex string" % (value,), param, ctx)
 
 HEX = HexParamType()
     
@@ -85,7 +85,7 @@ class RootParamType(click.ParamType):
             from ..root import root
             return root(value)
         except:
-            self.fail(f"{value!r} is not a valid root", param, ctx)
+            self.fail("%r is not a valid root" % (value,), param, ctx)
 
 ROOT = RootParamType()
 
