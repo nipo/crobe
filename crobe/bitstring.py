@@ -113,6 +113,8 @@ class BitString:
         if isinstance(data, (bytes, bytearray)):
             if length is None:
                 length = len(data) * 8
+            else:
+                data = data.ljust((length + 7) // 8, b'\x00')
 
             if self.__length & 7:
                 data = int.from_bytes(data, byteorder = "little")
@@ -120,6 +122,7 @@ class BitString:
                 data |= self.__last_byte
                 length += self.__length & 7
                 self.__length &= ~7
+                self.__last_byte = 0
                 data = data.to_bytes(length = (length + 7) // 8, byteorder = "little")
         elif isinstance(data, int):
             if data < 0:
@@ -146,16 +149,18 @@ class BitString:
     def __iadd__(self, other):
         if not self.__length and isinstance(other, BitString):
             self.__length = other.__length
-            self.__bytes = other.__bytes
+            self.__bytes = other.__bytes[:]
             self.__last_byte = other.__last_byte
-            self.__data_cache = other.__data_cache
+            self.__data_cache = None
             return self
-        self.append(other)
+        if len(other):
+            self.append(other)
         return self
 
     def __add__(self, other):
-        n = BitString(self.data, len(self))
-        n.append(other)
+        n = BitString(self)
+        if len(other):
+            n.append(other)
         return n
 
     @property
@@ -168,6 +173,8 @@ class BitString:
                 self.__data_cache = b''.join(self.__bytes + [bytes([self.__last_byte])])
             else:
                 self.__data_cache = b''.join(self.__bytes)
+
+            assert 0 <= self.__length <= len(self.__data_cache) * 8, (self.__length, len(self.__data_cache), len(self.__data_cache) * 8, id(self))
 
         return self.__data_cache
 
@@ -187,8 +194,7 @@ class BitString:
         If used to retrieve a slice, a BitString is returned.
         Negative indices are supported, stride is not.
         """
-        data = self.data
-
+        
         if isinstance(offset, slice):
             b, e = offset.start, offset.stop
             if b is None:
@@ -209,10 +215,48 @@ class BitString:
 
             return BitStringSlice(self, b, e)
 
+        data = self.data
+        
+        assert 0 <= self.__length <= len(data) * 8, (self.__length, len(data), len(data) * 8)
+
         if offset < 0:
             offset += self.__length
 
-        return bool(data[offset // 8] & (1 << (offset & 7)))
+        if not (0 <= offset < self.__length):
+            raise IndexError(offset)
+        
+        return bool((data[offset // 8] >> (offset & 7)) & 1)
+
+    def __setitem__(self, offset, value):
+        """
+        Can only set a single bit
+        """
+        if isinstance(offset, slice):
+            raise ValueError(offset)
+
+        if offset < 0:
+            offset += self.__length
+
+        if not (0 <= offset < self.__length):
+            raise IndexError(offset)
+
+        byte = offset // 8
+        bit = offset & 7
+
+        if byte < sum((len(x) for x in self.__bytes), 0):
+            if len(self.__bytes) > 1 or not isinstance(self.__bytes[0], bytearray):
+                self.__bytes = [bytearray(b'').join(self.__bytes)]
+            if value:
+                self.__bytes[0][byte] |= 1 << bit
+            else:
+                self.__bytes[0][byte] &= ~(1 << bit)
+        else:
+            if value:
+                self.__last_byte |= 1 << bit
+            else:
+                self.__last_byte &= ~(1 << bit)
+
+        self.__data_cache = None
 
     def __str__(self):
         """
