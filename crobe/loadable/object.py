@@ -8,9 +8,10 @@ __doc__ = """Program memory"""
 class Segment:
     """A blob with a base address"""
 
-    def __init__(self, address = 0, data = b""):
+    def __init__(self, address = 0, data = b"", source = None):
         self.data = bytearray(data)
         self.address = address
+        self.source = source
 
     def __setitem__(self, index, data):
         self.data[index] = data
@@ -42,8 +43,11 @@ class Segment:
     
 class Program:
     """Program memory contents"""
-    def __init__(self):
+    def __init__(self, filename = None):
         self.segments = []
+        self.sources = []
+        if filename:
+            self.sources.append(filename)
         self.info = {}
 
     def append(self, seg):
@@ -63,7 +67,7 @@ class Program:
             #print(hex(begin), hex(end), hex(left), hex(right), hex(left-s.address), hex(right-s.address))
             if left > right:
                 continue
-            ret.append(Segment(left, s[left-s.address : right-s.address]))
+            ret.append(Segment(left, s[left-s.address : right-s.address], s.source))
         return ret
         
     def __getitem__(self, index):
@@ -105,6 +109,8 @@ class Program:
     def __iadd__(self, other):
         for s in other:
             self.append(s)
+        for source in other.sources:
+            self.sources.append(source)
         return self
 
     def pprint(self, out = print):
@@ -126,7 +132,7 @@ class Program:
             for page_addr in range(aligned_address, aligned_end, page_size):
                 t = ret.segment_at(page_addr)
                 if not t:
-                    t = Segment(page_addr, page_fill)
+                    t = Segment(page_addr, page_fill, s.source)
                     ret.append(t)
                 source_offset = max((page_addr - s.address, 0))
                 target_offset = (s.address & (page_size - 1)) if page_addr == aligned_address else 0
@@ -144,13 +150,13 @@ class Program:
                 if s.address == addr + len(data):
                     data += s.data
                     continue
-                ret.append(Segment(addr, data))
+                ret.append(Segment(addr, data, s.source))
                 addr = data = None
             addr = s.address
             data = s.data
 
         if data:
-            ret.append(Segment(addr, data))
+            ret.append(Segment(addr, data, s.source))
         ret.info.update(self.info)
 
         return ret
@@ -160,12 +166,12 @@ class Program:
         """Load a Program from an Intel-Hex file"""
         from .ihex import IHex
 
-        self = cls()
+        self = cls(filename)
         ih = IHex.read_file(filename)
 
         segment = None
         for addr, data in ih.areas.items():
-            segment = Segment(addr + offset, data)
+            segment = Segment(addr + offset, data, filename)
             self.append(segment)
         return self
 
@@ -182,7 +188,7 @@ class Program:
         if header != b"CY":
             raise ValueError("Bad file header")
 
-        self = cls()
+        self = cls(filename)
 
         chk = 0
 
@@ -192,7 +198,7 @@ class Program:
             if size == 0:
                 break
             blob = fd.read(size * 4)
-            self.append(Segment(address + offset, blob))
+            self.append(Segment(address + offset, blob, filename))
             chk += sum(struct.unpack("<%dL" % (len(blob) // 4), blob))
 
         checksum, = struct.unpack("<L", fd.read(4))
@@ -223,7 +229,7 @@ class Program:
         """Load a Program from an ELF file"""
         from elftools.elf.elffile import ELFFile
 
-        self = cls()
+        self = cls(filename)
         elf = ELFFile(open(filename, "rb"))
         for segno in range(elf.num_segments()):
             seg = elf.get_segment(segno)
@@ -251,7 +257,7 @@ class Program:
 
                 addr = section["sh_addr"]
 
-                self.append(Segment(addr - vma + lma + offset, data))
+                self.append(Segment(addr - vma + lma + offset, data, filename))
 
         self.info["device"] = elf.get_machine_arch()
         self.info["entry"] = elf.header["e_entry"]
@@ -261,9 +267,9 @@ class Program:
     @classmethod
     def from_bin(cls, filename, offset = 0):
         """Load a Program from an Binary file"""
-        self = cls()
+        self = cls(filename)
         fd = open(filename, 'rb')
-        self.append(Segment(offset, fd.read()))
+        self.append(Segment(offset, fd.read(), filename))
         return self
 
     @classmethod
@@ -283,7 +289,7 @@ class Program:
         from ..jed import jed
         j = jed.Jed(filename)
 
-        self = cls()
+        self = cls(filename)
 
         self.info["fuse_count"] = j.fuse_count
         self.info["pin_count"] = j.pin_count
@@ -296,7 +302,7 @@ class Program:
                 self.info["device"] = n[13:]
             elif n.lower().startswith("device "):
                 self.info["device"] = n[7:]
-        self.append(Segment(0, bytes(j.fuses)))
+        self.append(Segment(0, bytes(j.fuses), filename))
         return self
 
     @classmethod
@@ -309,7 +315,7 @@ class Program:
         import datetime
         from ..util.endian import bitswap8
         
-        self = cls()
+        self = cls(filename)
 
         if filename.endswith(".bit.gz"):
             import gzip
@@ -344,7 +350,7 @@ class Program:
         else:
             warnings.warn("Would prefer Lattice bitstream with ASCII header")
 
-        self.append(Segment(offset, blob[start:]))
+        self.append(Segment(offset, blob[start:], filename))
         return self
 
     @classmethod
@@ -354,7 +360,7 @@ class Program:
         import struct
         import datetime
         
-        self = cls()
+        self = cls(filename)
 
         if filename.endswith(".bit.gz"):
             import gzip
@@ -378,7 +384,7 @@ class Program:
                 if len(blob) != size:
                     raise ValueError("Short payload in %s" % filename, len(blob), size)
             
-                self.append(Segment(offset, blob))
+                self.append(Segment(offset, blob, filename))
 
                 date = info[b'c'].strip() + " " + info[b'd'].strip()
                 try:
@@ -461,7 +467,7 @@ class Program:
         if len(programs) == 1:
             return programs[0]
 
-        program = Program()
+        program = cls()
 
         for p in programs:
             program += p
