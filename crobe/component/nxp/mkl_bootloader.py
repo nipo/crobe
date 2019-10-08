@@ -144,7 +144,16 @@ class MklBootloader(PortComponent):
                 continue
             break
 
-    def command(self, cmd, arg = [], data_pkts = []):
+    def command(self, cmd, arg = [], data_pkts = [], max_retries = 5):
+        for i in range(max_retries - 1, -1, -1):
+            try:
+                return self._command(cmd, arg, data_pkts)
+            except Exception:
+                if i:
+                    continue
+                raise
+
+    def _command(self, cmd, arg = [], data_pkts = []):
         self.logger.info("command %02x %s %d", cmd, arg, len(data_pkts))
         header = bytes([cmd, 0, 0, len(arg)])
         data = b''.join(a.to_bytes(4, "little") for a in arg)

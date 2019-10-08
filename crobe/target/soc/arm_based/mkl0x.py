@@ -164,12 +164,12 @@ class MklBootloaderTarget(model.Target, Loadable):
     def erase_all(self):
         self.bl.command(self.bl.CMD_FLASH_ERASE_ALL_UNSECURE)
 
-    def write(self, program):
+    def write(self, program, *args, **kwargs):
         z = program.segment_at(0)
         if z:
             self.stack_addr = int.from_bytes(z[:4], 'little')
             self.entry_point = int.from_bytes(z[4:8], 'little')
-        self._write(program)
+        Loadable.write(self, program, *args, **kwargs)
 
     def _write(self, program):
         program = program.paged(self.flash.page_size, fill = b'\xff')
