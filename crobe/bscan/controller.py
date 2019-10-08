@@ -6,14 +6,43 @@ import time
 import logging
 
 class Pin:
-    def __init__(self, board, offset, ic, oc, cc):
+    @classmethod
+    def from_definition(cls, board, offset, definition, pin):
+        if pin.index is not None:
+            name = "%s_%d" % (pin.name, pin.index)
+        else:
+            name = pin.name
+
+        ic = definition.pin_input_cell.get(pin)
+        oc = definition.pin_output_cell.get(pin)
+        cc = definition.pin_control_cell.get(pin)
+
+        if not (ic or oc or cc):
+            return None
+
+        ic_idx = ic.number + offset if ic else None
+        oc_idx = oc.number + offset if oc else None
+        cc_idx = cc.number + offset if cc else None
+
+        disable_value = None
+        safe_bit = None
+
+        if cc is not None and oc is not None:
+            disable_value = oc.disable_value
+
+        if oc is not None:
+            safe_bit = oc.safe_bit
+        
+        return cls(board, name, ic_idx, oc_idx, cc_idx, disable_value, safe_bit)
+        
+    def __init__(self, board, name, ic_idx, oc_idx, cc_idx, cc_disable, oc_safe):
         self.board = board
-        self.ic = ic
-        self.oc = oc
-        self.cc = cc
-        self.ic_idx = ic.number + offset if ic else None
-        self.oc_idx = oc.number + offset if oc else None
-        self.cc_idx = cc.number + offset if cc else None
+        self.name = name
+        self.ic_idx = ic_idx
+        self.oc_idx = oc_idx
+        self.cc_idx = cc_idx
+        self.cc_disable = cc_disable
+        self.oc_safe = oc_safe
 
     @property
     def value(self):
@@ -28,17 +57,15 @@ class Pin:
         self.board.boundary_control[self.oc_idx] = bool(value)
 
     def drive(self, drive):
-        if self.cc_idx is None:
+        if self.cc_disable is None:
             raise RuntimeError("Pin has no inout control")
-        if self.oc.disable_result != self.oc.DisableResult.Z:
-            raise RuntimeError("Cannot make output Z")
-        self.board.boundary_control[self.cc_idx] = drive ^ self.oc.disable_value
+        self.board.boundary_control[self.cc_idx] = drive ^ self.cc_disable
 
     def disable(self):
-        if self.cc_idx is None:
-            self.drive(False)
-        if self.oc_idx is not None and self.oc.safe_bit is not None:
-            self.board.boundary_control[self.oc_idx] = self.oc.safe_bit
+        if self.cc_disable is not None:
+            self.board.boundary_control[self.cc_idx] = self.cc_disable
+        if self.oc_safe is not None:
+            self.board.boundary_control[self.oc_idx] = self.oc_safe
 
 class ChipInfo:
     def __init__(self, name, package):
@@ -217,22 +244,13 @@ class ChipController:
                                    definition.ir_length)
         self.boundary_len = definition.registers["boundary"].length
 
-        self.__pins = {}
+        self.pins = {}
         
         for p in sorted(self.definition.pins.values()):
-            if p.index is not None:
-                name = "%s_%d" % (p.name, p.index)
-            else:
-                name = p.name
-
-            input_cell = self.definition.pin_input_cell.get(p)
-            output_cell = self.definition.pin_output_cell.get(p)
-            control_cell = self.definition.pin_control_cell.get(p)
-
-            if not (input_cell or output_cell or control_cell):
+            pin = Pin.from_definition(board, boundary_offset, definition, p)
+            if pin is None:
                 continue
-
-            self.__pins[name] = Pin(board, boundary_offset, input_cell, output_cell, control_cell)
+            self.pins[pin.name] = pin
 
     def disable(self):
         for c in self.definition.boundary:
@@ -243,7 +261,7 @@ class ChipController:
             
     def pin_get_all(self):
         ret = {}
-        for pin_name, pin in self.__pins.items():
+        for pin_name, pin in self.pins.items():
             if not pin.ic:
                 continue
             ret[pin_name] = pin.value
@@ -251,25 +269,25 @@ class ChipController:
 
     @property
     def pin_names(self):
-        return list(self.__pins.keys())
+        return list(self.pins.keys())
 
     def pin_get_many(self, pin_names = []):
         ret = {}
         for n in pin_names:
-            ret[n] = self.__pins[n].value
+            ret[n] = self.pins[n].value
         return ret
 
     def pin_get(self, name):
-        return self.__pins[name].value
+        return self.pins[name].value
 
     def pin_set(self, name, value):
-        self.__pins[name].value = value
+        self.pins[name].value = value
 
     def pin_config(self, name, mode = pin_control.Mode.Input):
         if mode in [pin_control.Mode.Disabled, pin_control.Mode.Input]:
-            self.__pins[name].drive(False)
+            self.pins[name].drive(False)
         elif mode == pin_control.Mode.Pushpull:
-            self.__pins[name].drive(True)
+            self.pins[name].drive(True)
         else:
             raise ValueError("Cannot use mode %s" % mode)
     
