@@ -1,6 +1,7 @@
 from . import base
 import click
 import binascii
+import struct
 
 @base.cli.group(help = "Memory manipulation")
 @click.option('-r', '--root', type = base.ROOT)
