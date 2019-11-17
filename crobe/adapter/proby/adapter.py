@@ -721,7 +721,6 @@ class CcInterface(chipcon.Interface):
                 op.data = rsp[op.__offset:op.__offset + op.rlen]
 
 class ProbyAdapter(basic.Adapter):
-    base_path = os.path.join(os.path.dirname(__file__), "fw")
     supported_interfaces = ["swd", "swd-pt", "jtag", "jtag-raw", "jtag-int", "spi", "cc", "i2c"]
     
     def reprogram(self, mode):
@@ -736,8 +735,11 @@ class ProbyAdapter(basic.Adapter):
 
         self.logger.info("Reprogramming FPGA to use mode %s", mode)
 
-        filename = os.path.join(self.base_path, mode + ".bit.gz")
-        obj = Program.from_file(filename)
+        from pkg_resources import get_resource_stream
+        fw_name = "fw/" + mode + ".bit.gz"
+        fd = get_resource_stream(__name__, fw_name)
+
+        obj = Program.from_file(fd)
                  
         self.logger.info("Using internal chain of Proby, starting discovery")
 

@@ -93,12 +93,12 @@ class Adapter(fx2.Adapter):
         self.__inited = False
 
     fw = {}
-    fw[0x03fd0007] = os.path.abspath(os.path.join(os.path.dirname(__file__), "xusbdfwu.hex"))
-    fw[0x03fd0009] = os.path.abspath(os.path.join(os.path.dirname(__file__), "xusb_xup.hex"))
-    fw[0x03fd000d] = os.path.abspath(os.path.join(os.path.dirname(__file__), "xusb_emb.hex"))
-    fw[0x03fd000f] = os.path.abspath(os.path.join(os.path.dirname(__file__), "xusb_xlp.hex"))
-    fw[0x03fd0013] = os.path.abspath(os.path.join(os.path.dirname(__file__), "xusb_xp2.hex"))
-    fw[0x03fd0015] = os.path.abspath(os.path.join(os.path.dirname(__file__), "xusb_xse.hex"))
+    fw[0x03fd0007] = "xusbdfwu.hex"
+    fw[0x03fd0009] = "xusb_xup.hex"
+    fw[0x03fd000d] = "xusb_emb.hex"
+    fw[0x03fd000f] = "xusb_xlp.hex"
+    fw[0x03fd0013] = "xusb_xp2.hex"
+    fw[0x03fd0015] = "xusb_xse.hex"
 
     @property
     def firmware_info(self):
@@ -179,8 +179,12 @@ class Adapter(fx2.Adapter):
 
         if not self.__inited:
             from crobe.loadable.object import Program
-            program = Program.from_ihex(self.fw[(self.device.idVendor << 16)
-                                               | self.device.idProduct])
+            from pkg_resources import get_resource_stream
+            fw_name = self.fw[(self.device.idVendor << 16)
+                              | self.device.idProduct]
+            fd = get_resource_stream(__name__, fw_name)
+            program = Program.from_file(fd)
+
             self.firmware_load(program)
             self.device.set_configuration(1)
             self.device.set_interface_altsetting(0, 1)

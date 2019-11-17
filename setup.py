@@ -6,7 +6,6 @@ setup(
     description = "Generic probe toolset",
     author = "Nicolas Pouillon",
     author_email = "nipo@ssji.net",
-    zip_safe = False,
     license = "BSD",
     classifiers = [
         "Development Status :: 4 - Beta",
@@ -17,10 +16,10 @@ setup(
     },
     entry_points={
         'console_scripts': [
-            'crobe = crobe.console:cli',
+            'crobe = crobe.cli.console:cli',
         ],
         'setuptools.installation': [
-            'eggsecutable = crobe.console:cli',
+            'eggsecutable = crobe.cli.console:cli',
         ]
     },
     use_2to3 = False,
