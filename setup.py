@@ -6,18 +6,30 @@ setup(
     description = "Generic probe toolset",
     author = "Nicolas Pouillon",
     author_email = "nipo@ssji.net",
+    zip_safe = False,
     license = "BSD",
     classifiers = [
         "Development Status :: 4 - Beta",
         "Programming Language :: Python",
     ],
     package_data = {
-        '': ['*.bit.gz'],
+        '': ['*.bit.gz', '*.hex'],
+    },
+    entry_points={
+        'console_scripts': [
+            'crobe = crobe.console:cli',
+        ],
+        'setuptools.installation': [
+            'eggsecutable = crobe.console:cli',
+        ]
     },
     use_2to3 = False,
     packages = find_packages(),
-    install_requires = ["pyelftools >= 0.23", "vhsic >= 0.1", "click >= 0.6", "crcmod", "tqdm"],
+    install_requires = ["pyelftools >= 0.23", "click >= 0.6", "crcmod", "tqdm"],
     dependency_links=[
         'https://code.ssji.net/git/nipo/vhsic/snapshot/vhsic-c4430e08c1d3680606e01f42ad55bd0d67bb7f73.tar.gz#egg=vhsic-0.1',
     ],
+    extras_require={
+        'bsdl':  ["vhsic >= 0.1"],
+    },
 )
