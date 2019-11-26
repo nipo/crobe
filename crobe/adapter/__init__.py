@@ -10,3 +10,4 @@ from . import xilinx
 from . import kitprog
 from . import ch341
 from . import dc590
+from . import dbg_hub
