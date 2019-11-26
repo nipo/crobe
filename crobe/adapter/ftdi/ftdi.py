@@ -197,6 +197,11 @@ class Handle(Context):
         self.check(api.get_eeprom_buf(self.context, raw, api.MAX_EEPROM_SIZE))
         return bytes(raw)
 
+    def eeprom_reset_defaults(self, manufacturer, product, serial):
+        self.check(api.eeprom_initdefaults(self.context, manufacturer, product, serial))
+        self.__eeprom_data_valid = True
+        self.eeprom_strings_set(manufacturer, product, serial)
+
     def eeprom_reset(self):
         self.check(api.erase_eeprom(self.context))
         self.__eeprom_data_valid = True
@@ -213,6 +218,13 @@ class Handle(Context):
         self.eeprom_value_set("PRODUCT_ID", pid)
         self.eeprom_value_set("USB_VERSION", version)
         self.eeprom_value_set("USE_USB_VERSION", int(version != 0))
+
+    def eeprom_user_data_set(self, blob):
+        eeprom = (ctypes.c_ubyte * 256)()
+        self.eeprom_value_set("USER_DATA_ADDR", 0x14)
+        self.check(api.get_eeprom_buf(self.context, ctypes.cast(eeprom, ctypes.POINTER(ctypes.c_ubyte)), len(eeprom)))
+        ctypes.memmove(ctypes.byref(eeprom, 0x14), blob, len(blob))
+        self.check(api.set_eeprom_buf(self.context, ctypes.cast(eeprom, ctypes.POINTER(ctypes.c_ubyte)), len(eeprom)))
 
     def eeprom_power_set(self, ma = None):
         if not self.__eeprom_data_valid:
@@ -232,6 +244,14 @@ class Handle(Context):
         self.check(api.eeprom_build(self.context))
         self.check(api.write_eeprom(self.context))
         self.check(api.read_eeprom(self.context))
+
+    def eeprom_read_values(self, addr, count):
+        values = (ctypes.c_ushort * count)()
+        for i in range(count):
+            ptr = ctypes.byref(values, ctypes.sizeof(ctypes.c_ushort) * i)
+            ptr = ctypes.cast(ptr, ctypes.POINTER(ctypes.c_ushort))
+            self.check(api.read_eeprom_location(self.context, addr + i, ptr))
+        return values[:]
         
     def eeprom_value_set(self, name, value):
         id = api.EEPROM_VALUE[name]
