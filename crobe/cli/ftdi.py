@@ -50,6 +50,29 @@ def eeprom_dump(ctx):
         except FtdiError:
             pass
 
+@ftdi.command(help = "EEPROM dumper")
+@click.pass_context
+@click.option("--size", type = base.HEX, default = 0x80, help = "Eeprom 16-bit word count")
+def eeprom_dump_raw(ctx, size):
+    connection_id = ctx.obj["connection_id"]
+    handle = Handle(connection_id, "A", "RESET")
+
+    entries = handle.eeprom_read_values(0, size)
+    for i in range(0, size, 8):
+        print("%03x" % (i * 2), end = " ")
+        for j in entries[i : i+8]:
+            print("%04x" % j, end = " ")
+        blob = b''.join([x.to_bytes(2, "little") for x in entries[i : i+8]])
+        for j in blob:
+            print(chr(j) if 0x20 <= j <= 0x7f else ".", end = "")
+        print()
+
+    crc = 0xaaaa
+    for e in entries[:-1]:
+        crc ^= e
+        crc = ((crc << 1) | (crc >> 15)) & 0xffff
+    print("CRC: %04x" % crc)
+        
 @ftdi.command(help = "EEPROM Writer")
 @click.option("--vid", type = base.HEX, required = True, help = "Vendor ID")
 @click.option("--pid", type = base.HEX, required = True, help = "Product ID")
@@ -61,7 +84,7 @@ def eeprom_dump(ctx):
 @click.option("--mode", type = str, help = "Port modes (UART, FIFO, CPU, OPTO), comma separated",
               default = "FIFO,FIFO")
 @click.pass_context
-def eeprom_write(connection_id, vid, pid, version, vendor, product, serial, power, mode):
+def eeprom_write(ctx, vid, pid, version, vendor, product, serial, power, mode):
     connection_id = ctx.obj["connection_id"]
     handle = Handle(connection_id, "A", "RESET")
 
@@ -69,9 +92,6 @@ def eeprom_write(connection_id, vid, pid, version, vendor, product, serial, powe
     product = product.encode('ascii', 'ignore')
     serial = serial.encode('ascii', 'ignore')
     mode_a, mode_b = map(str.upper, mode.split(',', 1))
-    vid = int(vid, 16)
-    pid = int(pid, 16)
-    version = int(version, 16)
     power = power or None
 
     handle.eeprom_strings_set(vendor, product, serial)

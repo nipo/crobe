@@ -13,3 +13,4 @@ from . import secu
 from . import ltc_poe
 from . import melexis
 from . import smbus
+from . import digilent
