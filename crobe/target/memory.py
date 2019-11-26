@@ -44,6 +44,9 @@ class Region(model.Component):
         return "Memory %s '%s' from 0x%08x to 0x%08x (%s)" % (
             self.type.name, self.name,
             self.address, self.address + self.size, base2(self.size, "B"))
+
+    def contains(self, addr):
+        return self.address <= addr < self.address + self.size
     
 class Flash(Region):
     type = Type.FLASH
