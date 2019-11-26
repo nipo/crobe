@@ -85,13 +85,15 @@ class BaseInterface(object):
                  gpio_output = 0, gpio_value = 0,
                  resetn_pin = None, reset_pin = None,
                  reset_oe_pin = None, reset_oen_pin = None,
+                 reset_od_pin = None,
                  powern_pin = None, power_pin = None,
                  activityn_pin = None, activity_pin = None):
-        oe = (gpio_output & 0xfff0) | 0xb
+        oe = gpio_output
         val = gpio_value
 
         self.__reset_pin = None
         self.__reset_oe_pin = None
+        self.__reset_od_pin = None
         self.__power_pin = None
         self.__activity_pin = None
 
@@ -102,6 +104,10 @@ class BaseInterface(object):
             self.__reset_pin = (resetn_pin, False)
             oe |= (1 << resetn_pin)
             val |= (1 << resetn_pin)
+
+        if reset_od_pin is not None:
+            self.__reset_pin = (reset_od_pin, True)
+            self.__reset_od_pin = reset_od_pin
 
         if reset_oe_pin is not None:
             self.__reset_oe_pin = (reset_oe_pin, True)
@@ -160,6 +166,12 @@ class BaseInterface(object):
             oe |= 1 << pin
             value |= int(bool(reset) == polarity) << pin
 
+        elif self.__reset_od_pin:
+            pin, polarity = self.__reset_pin
+            mod = 1 << pin
+            oe = int(not reset) << pin
+            value = 0
+
         elif self.__reset_pin:
             pin, polarity = self.__reset_pin
             mod = 1 << pin
@@ -217,6 +229,7 @@ class BaseInterface(object):
 class JtagInterface(BaseInterface, jtag.Interface):
     def __init__(self, adapter, oe_pin = None, oen_pin = None, name = None, **args):
         jtag.Interface.__init__(self, adapter, name)
+        args["gpio_output"] = (args["gpio_output"] & 0xfff0) | 0xb
         BaseInterface.__init__(self, adapter, **args)
 
         self.__state = None
@@ -363,6 +376,7 @@ class JtagInterface(BaseInterface, jtag.Interface):
 class SwdInterface(BaseInterface, swd.Interface):
     def __init__(self, adapter, oen_pin = None, oe_pin = None, name = None, **args):
         swd.Interface.__init__(self, adapter, name)
+        args["gpio_output"] = (args["gpio_output"] & 0xfff0) | 0x3
         BaseInterface.__init__(self, adapter, **args)
         if oen_pin is None and oe_pin is not None:
             self.oe_pin = (oe_pin, True)
@@ -510,6 +524,7 @@ class SwdInterface(BaseInterface, swd.Interface):
 class ChipconInterface(BaseInterface, chipcon.Interface):
     def __init__(self, adapter, oen_pin = None, oe_pin = None, name = None, **args):
         chipcon.Interface.__init__(self, adapter, name)
+        args["gpio_output"] = (args["gpio_output"] & 0xfff0) | 0x3
         BaseInterface.__init__(self, adapter, **args)
         if oen_pin is None and oe_pin is not None:
             self.oe_pin = (oe_pin, True)
@@ -566,6 +581,7 @@ class SpiInterface(BaseInterface, spi.Interface):
 
     def __init__(self, adapter, csn_pin = None, name = None, **args):
         spi.Interface.__init__(self, adapter, name)
+        args["gpio_output"] = (args["gpio_output"] & 0xfff0) | 0x3
         BaseInterface.__init__(self, adapter, **args)
 
         self.__cmd_cs_on = self.handle.cmd_gpio_mask_set(
