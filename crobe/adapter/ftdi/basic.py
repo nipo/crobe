@@ -109,7 +109,7 @@ class BaseInterface(object):
             val |= (1 << resetn_pin)
 
         if reset_od_pin is not None:
-            self.__reset_pin = (reset_od_pin, True)
+            self.__reset_pin = (reset_od_pin, False)
             self.__reset_od_pin = reset_od_pin
 
         if reset_oe_pin is not None:
@@ -169,10 +169,10 @@ class BaseInterface(object):
             oe |= 1 << pin
             value |= int(bool(reset) == polarity) << pin
 
-        elif self.__reset_od_pin:
-            pin, polarity = self.__reset_pin
+        elif self.__reset_od_pin is not None:
+            pin = self.__reset_od_pin
             mod = 1 << pin
-            oe = int(not reset) << pin
+            oe = mod if reset else 0
             value = 0
 
         elif self.__reset_pin:
