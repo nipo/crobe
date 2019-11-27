@@ -47,8 +47,8 @@ class Spartan6(series6.Series6):
     def spi_interface(self):
         from ...loadable.object import Program
 
-        fw_name = self.name.lower() + "_jtag_spi.bit.gz"
-        fd = pkg_resources.get_resource_stream(__name__, fw_name)
+        fw_name = "fw/" + self.name.lower() + "_jtag_spi.bit.gz"
+        fd = pkg_resources.resource_filename(__name__, fw_name)
         self.load(Program.from_file(fd))
 
         from ..jtag_spi_bridge import JtagSpiBridge

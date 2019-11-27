@@ -179,11 +179,11 @@ class Adapter(fx2.Adapter):
 
         if not self.__inited:
             from crobe.loadable.object import Program
-            from pkg_resources import get_resource_stream
+            from pkg_resources import resource_filename
             fw_name = self.fw[(self.device.idVendor << 16)
                               | self.device.idProduct]
-            fd = get_resource_stream(__name__, fw_name)
-            program = Program.from_file(fd)
+            fn = resource_filename(__name__, fw_name)
+            program = Program.from_file(fn)
 
             self.firmware_load(program)
             self.device.set_configuration(1)
