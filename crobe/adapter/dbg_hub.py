@@ -4,7 +4,7 @@ from .ftdi import basic
 __all__ = []
 
 class Adapter(basic.Adapter):
-    supported_interfaces = ["jtag", "swd"]
+    supported_interfaces = ["jtag", "swd", "i2c"]
 
     def open(self, interface_name):
         if interface_name == "jtag":
@@ -18,6 +18,11 @@ class Adapter(basic.Adapter):
                                       channel = "A",
                                       oen_pin = 6,
                                       reset_od_pin = 4)
+        elif interface_name == "i2c":
+            return basic.Adapter.open(self, interface_name,
+#                                      has_scl_in = True,
+                                      gpio_output = 0, gpio_value = 0,
+                                      channel = "B")
 
 @model.Enumerator.register
 class Enumerator(basic.AdapterEnumerator):
