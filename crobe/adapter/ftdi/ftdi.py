@@ -371,7 +371,14 @@ class Mpsse(Handle):
                             api.MPSSE_ADAPTIVE_DISABLE,
                             api.MPSSE_LOOPBACK_DISABLE])
                      + self.cmd_gpio_mask_set(0xffff, gpio_oe, gpio_val))
+
+        t = api.CHIP_TYPE_NAME.get(self.context.contents.type, "?")
+        self.base_freq = 12e6 if t == "2232C" else 60e6
+        self.can_div5 = t != "2232C"
+        self.can_opendrain = t == "232H"
+        self.cycle_div = 2
         
+        self.__divisor = (self.can_div5, 0)
         self.freq = 1e6
 
     def close(self):
@@ -385,24 +392,35 @@ class Mpsse(Handle):
 
     @property
     def freq(self):
-        return self.__freq
+        div5, div = self.__divisor
+        r = self.base_freq / (div + 1) / self.cycle_div
+        if div5:
+            r /= 5
+        return r
 
     @freq.setter
     def freq(self, freq):
-        divisor = 120000000 / freq
-        if divisor >= 65535:
-            divisor /= 5
-            d = min((max((int(math.ceil(divisor)) - 1, 0)), 65535))
-            self.execute(struct.pack("<BBH",
-                                     api.MPSSE_CLK_DIV5_ENABLE,
-                                     api.MPSSE_CLK_DIV, d))
-            self.__freq = 24000000 // (d + 1)
+        cycles = freq * self.cycle_div
+        div5 = self.can_div5 and cycles < self.base_freq / 5
+        if div5:
+            div = self.base_freq / cycles / 5 - 1
         else:
-            d = min((max((int(math.ceil(divisor)) - 1, 0)), 65535))
-            self.execute(struct.pack("<BBH",
-                                     api.MPSSE_CLK_DIV5_DISABLE,
-                                     api.MPSSE_CLK_DIV, int(divisor - 1)))
-            self.__freq = 120000000 // (d + 1)
+            div = self.base_freq / cycles - 1
+        self.logger.info("freq %s base %s half %s div5 %s div %s",
+                         freq, self.base_freq, self.cycle_div, div5, div)
+
+        self.__divisor = div5, min(max(int(div), 0), 0xffff)
+        self.execute(self.cmd_divisor())
+
+    def cmd_divisor(self, divisor = None):
+        if divisor is None:
+            divisor = self.__divisor
+        div5, div = divisor
+        div5 = div5
+        cmd = b''
+        if self.can_div5:
+            cmd = bytes([api.MPSSE_CLK_DIV5_ENABLE if div5 else api.MPSSE_CLK_DIV5_DISABLE])
+        return cmd + bytes([api.MPSSE_CLK_DIV, div & 0xff, (div & 0xff00) >> 8])
 
     def gpio_get(self, pin):
         if pin < 8:

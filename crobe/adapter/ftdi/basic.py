@@ -1,6 +1,6 @@
 from .. import model
 from ...bitstring import BitString
-from ...protocol import jtag, base, swd, spi, chipcon
+from ...protocol import jtag, base, swd, spi, chipcon, i2c
 from . import ftdi, api
 from ...util.pretty import metric
 from collections import deque
@@ -43,6 +43,9 @@ class Adapter(model.Adapter):
 
         if interface_name.lower() == "swd":
             return SwdInterface(self, **d)
+
+        if interface_name.lower() == "i2c":
+            return I2cInterface(self, **d)
 
         raise NotImplementedError("Unsupported interface %s" % interface_name)
 
@@ -372,6 +375,148 @@ class JtagInterface(BaseInterface, jtag.Interface):
                 tdo += BitString(rsp[base] >> (8 - bits), bits)
             base += bytec
         return tdo
+
+class I2cInterface(BaseInterface, i2c.Interface):
+    def __init__(self, adapter,
+                 has_scl_in = False,
+                 use_open_collector = False,
+                 name = None,
+                 **args):
+        """
+        use_open_collector is only available for FT232HL (not FT4232H, not FT2232H)
+        """
+        i2c.Interface.__init__(self, adapter, name)
+        args["gpio_output"] &= ~0x3
+        args["gpio_value"] |= 0x3
+        BaseInterface.__init__(self, adapter, **args)
+
+        self.handle.cycle_div = 3
+        scl = 1
+        sda = 2
+        out_base = args["gpio_value"] & 0xfc
+        oe_base = args["gpio_output"] & 0xfc
+        self.__sda_start = bytes([api.MPSSE_SET_BITS_LOW, out_base, oe_base | sda])
+        self.__scl_start = bytes([api.MPSSE_SET_BITS_LOW, out_base, oe_base | scl | sda])
+        self.__scl_restart = bytes([api.MPSSE_SET_BITS_LOW, out_base, oe_base | scl])
+        self.__sda_restart = bytes([api.MPSSE_SET_BITS_LOW, out_base, oe_base])
+        self.__scl_stop = bytes([api.MPSSE_SET_BITS_LOW, out_base, oe_base | sda])
+        self.__sda_stop = bytes([api.MPSSE_SET_BITS_LOW, out_base, oe_base])
+
+        self.__sda_out = bytes([api.MPSSE_SET_BITS_LOW, out_base, oe_base | scl | sda])
+        self.__sda_in = bytes([api.MPSSE_SET_BITS_LOW, out_base, oe_base | scl])
+        
+        cmd_init = bytes([api.MPSSE_3_PHASE_ENABLE,
+                          api.MPSSE_ADAPTIVE_ENABLE if has_scl_in else api.MPSSE_ADAPTIVE_DISABLE])
+        if use_open_collector and self.handle.can_opendrain:
+            cmd_init += bytes([api.MPSSE_DRIVE_OPEN_COLLECTOR, 0x03, 0x00])
+        self.handle.execute(cmd_init)
+
+    def _cmd_read(self, size, ack_last):
+        cmd_ack = bytes([
+            api.MPSSE_READ | api.MPSSE_BITS,
+        7]) + self.__sda_out + bytes([
+            api.MPSSE_WRITE | api.MPSSE_WRITE_NEG | api.MPSSE_BITS,
+            0,
+            0,
+        ]) + self.__sda_in
+        cmd_nack = bytes([
+            api.MPSSE_READ | api.MPSSE_BITS,
+            7,
+            api.MPSSE_WRITE | api.MPSSE_WRITE_NEG | api.MPSSE_BITS,
+            0,
+            0xff,
+        ])
+
+        if ack_last:
+            return self.__sda_in + cmd_ack * size
+        else:
+            return self.__sda_in + cmd_ack * (size - 1) + cmd_nack
+
+    def _cmd_write(self, data):
+        cmd = lambda x: self.__sda_out + bytes([
+            api.MPSSE_WRITE_NEG | api.MPSSE_WRITE | api.MPSSE_BITS,
+            7,
+            x]) + self.__sda_in + bytes([
+            api.MPSSE_READ | api.MPSSE_BITS,
+            0,
+        ])
+        return b''.join(cmd(d) for d in data)
+
+    def _cmd_start(self):
+        ret = b''
+        ret += self.__sda_start * 8
+        ret += self.__scl_start * 8
+        return ret
+
+    def _cmd_restart(self):
+        ret = b''
+        ret += self.__scl_restart * 8
+        ret += self.__sda_restart * 8
+        ret += self.__sda_start * 8
+        ret += self.__scl_start * 8
+        return ret
+
+    def _cmd_stop(self):
+        ret = b''
+        ret += self.__scl_stop * 8
+        ret += self.__sda_stop * 8
+        return ret
+
+    def _execute(self, operation_list):
+        ops = list(operation_list)
+        prev = None
+        cmd = bytearray()
+        rsp_size = 0
+        first = True
+
+        for idx, op in enumerate(ops):
+            as_prev = bool(prev) and isinstance(prev, i2c.Read) == isinstance(op, i2c.Read)
+
+            self.logger.info("op: %s", op)
+
+            if isinstance(op, i2c.Read):
+                is_last = idx == len(ops)-1 or not isinstance(ops[idx], i2c.Read)
+                if not as_prev:
+                    cmd += self._cmd_start() if first else self._cmd_restart()
+                    cmd += self._cmd_write(bytes([(op.addr << 1) | 1]))
+                    op.__saddr_ack = rsp_size
+                    rsp_size += 1
+                else:
+                    op.__saddr_ack = None
+                cmd += self._cmd_read(op.size, not is_last)
+                op.__rdata_off = rsp_size
+                rsp_size += op.size
+
+            elif isinstance(op, i2c.Write):
+                if not as_prev:
+                    cmd += self._cmd_start() if first else self._cmd_restart()
+                    cmd += self._cmd_write(bytes([op.addr << 1]))
+                    op.__saddr_ack = rsp_size
+                    rsp_size += 1
+                else:
+                    op.__saddr_ack = None
+                cmd += self._cmd_write(op.data)
+                op.__ack_off = rsp_size
+                rsp_size += len(op.data)
+            else:
+                raise base.ProtocolError("Unknown I2C operation %s" % type(op))
+
+            first = False
+        cmd += self._cmd_stop()
+
+        rsp = self.handle.execute(bytes(cmd), rsp_size)
+
+        for op in ops:
+            if op.__saddr_ack is not None:
+                if rsp[op.__saddr_ack] & 1:
+                    raise i2c.AddressNack()
+
+            if isinstance(op, i2c.Read):
+                op.data = bytes(rsp[op.__rdata_off:op.__rdata_off+op.size])
+            elif isinstance(op, i2c.Write):
+                for off in range(op.__ack_off, op.__ack_off + len(op.data) - 1):
+                    if rsp[off] & 1:
+                        raise i2c.DataNack()
 
 class SwdInterface(BaseInterface, swd.Interface):
     def __init__(self, adapter, oen_pin = None, oe_pin = None, name = None, **args):
