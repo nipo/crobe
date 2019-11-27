@@ -22,10 +22,6 @@ class Mlx90614(PortComponent):
 
         self.port.port.freq_cap(self.name, 100e3)
 
-        self.port.port.freq_cap("lol", 300)
-        self.port.port.write(0, b'')
-        self.port.port.freq_cap("lol")
-
         idr = 0
         for i in range(4):
             idr |= self.port.read_word(self.saddr, self.REG_ID0 + i) << (i * 16)
