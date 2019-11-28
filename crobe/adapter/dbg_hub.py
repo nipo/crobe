@@ -20,7 +20,7 @@ class Adapter(basic.Adapter):
                                       reset_od_pin = 4)
         elif interface_name == "i2c":
             return basic.Adapter.open(self, interface_name,
-#                                      has_scl_in = True,
+                                      has_scl_in = True,
                                       gpio_output = 0, gpio_value = 0,
                                       channel = "B")
 

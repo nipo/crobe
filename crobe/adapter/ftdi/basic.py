@@ -405,8 +405,10 @@ class I2cInterface(BaseInterface, i2c.Interface):
         self.__sda_out = bytes([api.MPSSE_SET_BITS_LOW, out_base, oe_base | scl | sda])
         self.__sda_in = bytes([api.MPSSE_SET_BITS_LOW, out_base, oe_base | scl])
         
-        cmd_init = bytes([api.MPSSE_3_PHASE_ENABLE,
-                          api.MPSSE_ADAPTIVE_ENABLE if has_scl_in else api.MPSSE_ADAPTIVE_DISABLE])
+        self.__adaptive_on = bytes([api.MPSSE_ADAPTIVE_ENABLE]) if has_scl_in else b''
+        self.__adaptive_off = bytes([api.MPSSE_ADAPTIVE_DISABLE]) if has_scl_in else b''
+
+        cmd_init = bytes([api.MPSSE_3_PHASE_ENABLE])
         if use_open_collector and self.handle.can_opendrain:
             cmd_init += bytes([api.MPSSE_DRIVE_OPEN_COLLECTOR, 0x03, 0x00])
         self.handle.execute(cmd_init)
@@ -446,18 +448,22 @@ class I2cInterface(BaseInterface, i2c.Interface):
         ret = b''
         ret += self.__sda_start * 8
         ret += self.__scl_start * 8
+        ret += self.__adaptive_on
         return ret
 
     def _cmd_restart(self):
         ret = b''
+        ret += self.__adaptive_off
         ret += self.__scl_restart * 8
         ret += self.__sda_restart * 8
         ret += self.__sda_start * 8
         ret += self.__scl_start * 8
+        ret += self.__adaptive_on
         return ret
 
     def _cmd_stop(self):
         ret = b''
+        ret += self.__adaptive_off
         ret += self.__scl_stop * 8
         ret += self.__sda_stop * 8
         return ret
