@@ -735,15 +735,16 @@ class ProbyAdapter(basic.Adapter):
 
         self.logger.info("Reprogramming FPGA to use mode %s", mode)
 
-        from pkg_resources import get_resource_stream
+        from pkg_resources import resource_filename
         fw_name = "fw/" + mode + ".bit.gz"
-        fd = get_resource_stream(__name__, fw_name)
+        fd = resource_filename(__name__, fw_name)
 
         obj = Program.from_file(fd)
                  
         self.logger.info("Using internal chain of Proby, starting discovery")
 
-        jtag_intf = basic.Adapter.open(self, "jtag", channel = "B", resetn_pin = 9, name = "pint-"+self.serial_number)
+        jtag_intf = basic.Adapter.open(self, "jtag", channel = "B", resetn_pin = 9, name = "pint-"+self.serial_number,
+                                       gpio_output = 0, gpio_value = 0)
         jtag_intf.logger.setLevel(logging.WARNING)
         jtag_intf.start()
         fpga, = jtag_intf.children_of_class(Spartan6)
