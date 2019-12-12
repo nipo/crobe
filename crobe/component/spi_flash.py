@@ -1,4 +1,5 @@
 from ..model import PortComponent
+from .model import Bus
 from ..db import Db, NoMatch
 from ..protocol import spi
 from ..util.pretty import base2, metric
@@ -16,7 +17,7 @@ def spi_flash_probe(target, *args):
     except ValueError:
         raise NoMatch("Not a spi flash")
 
-class SpiFlash(PortComponent):
+class SpiFlash(PortComponent, Bus):
     db = Db()
 
     max_freq = 33e6
@@ -43,6 +44,7 @@ class SpiFlash(PortComponent):
     
     def __init__(self, port, idr = 0, name = "SPI Flash"):
         PortComponent.__init__(self, port, name)
+        Bus.__init__(self, self.name)
         if not idr:
             idr = self.idr_get()
         self.idr = idr
@@ -53,6 +55,12 @@ class SpiFlash(PortComponent):
     @property
     def page_size(self):
         return self.write_buffer_size
+
+    def mem_read(self, address, size):
+        return self.read(address, size)
+
+    def mem_write(self, address, data):
+        return self.write(address, data)
 
     def info(self):
         self.logger.info("Total size: %s (%s)", base2(self.total_size, "B"), base2(self.total_size * 8, "b"))
