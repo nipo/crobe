@@ -67,12 +67,73 @@ class AtAes132A(PortComponent):
         PortComponent.__init__(self, bus, "ataes132a")
         self.saddr = saddr
 
+    @classmethod
+    def _ccm_mac(cls, key, nonce, maccount, auth_data, enc_data):
+        from Crypto.Cipher import AES
+        from Crypto.Util import strxor
+
+        assert len(nonce) == 12
+
+        cbc = AES(key, mode = AES.MODE_CBC,
+                  iv = bytes([0x79]) + nonce + bytes([maccount, len(enc_data) >> 8, len(enc_data) & 0xff]))
+
+        ad_clear = bytes([len(auth_data) >> 8, len(auth_data) & 0xff]) + auth_data
+        ad_clear += b'\x00' * (-len(ad_clear) % 16)
+        auth_clear = cbc.encrypt(ad_clear)
+
+        ctr = AES(key, mode = AES.MODE_CTR,
+                  iv = bytes([0x01]) + nonce + bytes([maccount, 0, 0]))
+
+        auth_enc = ctr.encrypt(auth_clear)
+        enc_data += b'\x00' * (-len(enc_data) % 16)
+        data_enc = ctr.encrypt(enc_data)
+
+        return auth_enc, data_enc
+
     def start(self):
         PortComponent.start(self)
+        self.__nonce = None
         self.logger.info("%s", self.command(2, 2))
         self.logger.info("%04x %04x %04x %04x",
                          self.info(0), self.info(5),
                          self.info(6), self.info(0xc))
+        self.manufacturing_id = self.block_read(0xf02b, 2)
+        self.serial = self.block_read(0xf000, 8)
+        self.logger.info("ManufacturingID: %s", self.manufacturing_id.hex())
+        self.logger.info("Serial: %s", self.serial.hex())
+        key_config = self.block_read(0xf080, 4 * 8)
+        key_config2 = self.block_read(0xf0a0, 4 * 8)
+        self.key_config = struct.unpack("<" + "L" * 16, key_config + key_config2)
+        counters = self.block_read(0xf100, 8 * 4)
+        counters2 = self.block_read(0xf120, 8 * 4)
+        counters3 = self.block_read(0xf140, 8 * 4)
+        counters4 = self.block_read(0xf160, 8 * 4)
+        counters = counters + counters2 + counters3 + counters4
+        self.counters = [int.from_bytes(counters[x:x+8], "little") for x in range(0, 128, 8)]
+
+        self.logger.info("Key config: %s", ', '.join(map(hex, self.key_config)))
+        self.logger.info("Counters: %s", ', '.join(map(hex, self.counters)))
+
+        for i in range(16):
+            try:
+                self.logger.info("Key %d: %s", i, self.block_read(0xf200 + i * 16, 16))
+            except:
+                pass
+            
+        
+    @property
+    def nonce(self):
+        if self.__nonce is None:
+            code, data = self.command(self.Command.Nonce, 1, 0, 0, data = b'\x00' * 12)
+            if code != 0:
+                raise RuntimeError(code)
+            self.__nonce = data, 0
+        n, i = self.__nonce
+        if i < 255:
+            self.__nonce = n, i+1
+        else:
+            self.__nonce = None
+        return n, i
         
     def option_set(self, opt):
         k, v = opt.split('=', 1)
@@ -177,6 +238,20 @@ class AtAes132A(PortComponent):
                          self.Status.EErr | self.Status.CRCE)
         return self.response_receive()
 
+    def block_read(self, address, length):
+        assert 1 <= length <= 32
+        code, data = self.command(self.Command.BlockRead, 0, address, length)
+        if code != self.ReturnCode.Success:
+            raise RuntimeError(code)
+        return data
+    
+    def auth(self, mode, ):
+        assert 1 <= length <= 32
+        code, data = self.command(self.Command.BlockRead, 0, address, length)
+        if code != self.ReturnCode.Success:
+            raise RuntimeError(code)
+        return data
+    
     def info(self, index):
         code, data = self.command(self.Command.Info, param1 = index)
         if code != self.ReturnCode.Success:
@@ -190,3 +265,4 @@ class AtAes132A(PortComponent):
         if code != self.ReturnCode.Success:
             raise RuntimeError(code)
         return data
+    
