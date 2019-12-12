@@ -400,7 +400,7 @@ class Mpsse(Handle):
 
     @freq.setter
     def freq(self, freq):
-        cycles = freq * self.cycle_div
+        cycles = float(freq * self.cycle_div)
         div5 = self.can_div5 and cycles < self.base_freq / 5
         if div5:
             div = self.base_freq / cycles / 5 - 1
