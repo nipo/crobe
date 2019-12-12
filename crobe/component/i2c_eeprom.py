@@ -60,13 +60,17 @@ class I2cEeprom(PortComponent, Bus):
 
         self.port.write(saddr, baddr + data)
         
+        time.sleep(.05)
         deadline = time.time() + .1
         while time.time() < deadline:
             try:
-                self.port.write_read(saddr, baddr, len(data))
-                return
+                r = self.port.write_read(saddr, baddr, len(data))
+                if r == data:
+                    return
             except i2c.AddressNack:
-                continue
+                pass
+            time.sleep(.01)
+            continue
         raise RuntimeError()
 
     def option_set(self, opt):
