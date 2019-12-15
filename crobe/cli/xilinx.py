@@ -108,7 +108,7 @@ def vcd_server(root, port):
     intf = root
 
     if not isinstance(intf, Interface):
-        raise ValueError("Expected a JTAG interface. Try -e [adapter]/jtag.")
+        raise ValueError("Expected a JTAG interface. Try -r [adapter]/jtag.")
     
     click.echo("Adapter: %s" % intf.port.firmware_info)
     click.echo("Serial: %s" % intf.port.serial_number)
