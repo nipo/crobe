@@ -29,8 +29,8 @@ C7    -> Activity      -> Activity
 
 For setting FTDI EEPROM to relevant values:
 
-python3 -m crobe.cmd.ftdi_eeprom_set \
--c d:003/016 \
+crobe ftdi eeprom_write \
+d:003/016 \
 --vid=0403 --pid=8878 --version=410 \
 --vendor="Dangerous Prototypes" --product="BusBlaster v4.1" \
 --serial=55 \
@@ -41,6 +41,6 @@ something useful for serial.
 
 For loading firmware to the board, once serialized:
 
-python3 -m crobe.cmd.svfplayer -a bb-int:55 -v firmware/busblaster_v4.1.svf
+crobe svf play -r bb-int:55 -v firmware/busblaster_v4.1.svf
 
 With "55" replaced with the actual serial number you set before.
