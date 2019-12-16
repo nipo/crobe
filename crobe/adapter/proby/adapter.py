@@ -10,8 +10,7 @@ from ...util.pretty import metric
 from ...model import PortComponent
 from ...component.arm import dp
 from ...protocol import base as pbase
-from ...protocol import swd, i2c, chipcon, jtag
-from ...bitstring import BitString
+from ...protocol import swd, i2c, chipcon
 import threading
 import struct
 
@@ -96,7 +95,7 @@ class RoutedPath(PortComponent):
     def execute(self, peer, blob, rsp_size, tag = None):
         if tag is None:
             tag = (self.last_tag + 1) & 0xff
-        self.last_tag = tag
+            self.last_tag = tag
         self.put(peer, tag, blob)
         return self.get(peer, tag)
 
@@ -104,7 +103,6 @@ class SwdInterface(swd.Interface):
     CMD_TURNAROUND   = 0xd0
     CMD_RUN          = 0x00
     CMD_ABORT        = 0xc0
-    CMD_DIVISOR      = 0xc1
     CMD_BITBANG      = 0xe0
     CMD_READ         = 0x90
     CMD_WRITE        = 0x80
@@ -114,12 +112,12 @@ class SwdInterface(swd.Interface):
     RSP_PAR_ERROR        = 0x08
 
     SWD_PORT_CID = 0
-    CONFIG_CID = 3
+    CONFIG_CID = 1
 
-    STATUS_REG_BASE_FREQ = 0
+    STATUS_REG_BASE_FREQ = 2
+    CONFIG_REG_RATE = 0
     CONFIG_REG_SRST = 1
     CONFIG_REG_TRST = 2
-    CONFIG_REG_MODE = 3
     
     def __init__(self, adapter, mux):
         self.__turnaround_cycles = 1
@@ -129,13 +127,11 @@ class SwdInterface(swd.Interface):
         self.base_freq = int.from_bytes(
             self.mux.execute(self.CONFIG_CID, struct.pack("<B", 0x80 | self.STATUS_REG_BASE_FREQ), 5)[1:],
             byteorder = 'little')
-        self.mux.execute(self.CONFIG_CID, struct.pack("<BL", self.CONFIG_REG_MODE, 0), 1)
 
         self.logger.info("Found proby with internal clock of %s", metric(self.base_freq, "Hz"))
         
         self.__reset = False
-        self.__trst = None
-        self.__divisor = int(self.base_freq / 1e6) - 1
+        self.__rate = 1000
         self.__rate_dirty = True
 
         self.freq_cap("hardware", 75e6)
@@ -152,30 +148,16 @@ class SwdInterface(swd.Interface):
         self.logger.info("%s reset pin", "holding" if value else "releasing")
         self.__reset = bool(value)
         self.mux.execute(self.CONFIG_CID, struct.pack("<BL", self.CONFIG_REG_SRST, int(self.__reset)), 1)
-
-    @property
-    def trst(self):
-        return self.__trst
-
-    @trst.setter
-    def trst(self, value):
-        if self.__trst == bool(value):
-            return
-
-        self.logger.info("trst pin %d", int(value))
-        self.__trst = bool(value)
-        self.mux.execute(self.CONFIG_CID, struct.pack("<BL", self.CONFIG_REG_TRST, int(not self.__trst)), 1)
         
     @property
     def freq(self):
-        return self.base_freq / ((self.__divisor + 1) * 2)
+        return self.__rate / 2
 
     @freq.setter
     def freq(self, freq):
         if not freq:
             freq = 15e6
-        divisor = int(self.base_freq / 2. / float(freq)) - 1
-        self.__divisor = max(0, min(divisor, 65535))
+        self.__rate = min((1 << 26) - 1, max(1, int(float(freq) * 2)))
         self.__rate_dirty = True
         
     @property
@@ -212,11 +194,7 @@ class SwdInterface(swd.Interface):
                     self.__turnaround_dirty = False
 
                 if self.__rate_dirty:
-                    cmd[cmd_size] = self.CMD_DIVISOR
-                    cmd[cmd_size+1] = self.__divisor & 0xff
-                    cmd[cmd_size+2] = self.__divisor >> 8
-                    cmd_size += 3
-                    rsp_size += 1
+                    self.mux.execute(self.CONFIG_CID, struct.pack("<BL", self.CONFIG_REG_RATE, self.__rate), 1)
                     self.__rate_dirty = False
 
                 if isinstance(op, swd.Read):
@@ -284,195 +262,13 @@ class SwdInterface(swd.Interface):
                     except ValueError:
                         ack = swd.Ack.INVALID
 
-                    if ack == swd.Ack.OK and rsp & self.RSP_PAR_ERROR:
-                        ack = swd.Ack.PARITY_ERR
+                    if rsp & self.RSP_PAR_ERROR:
+                        ack = swd.Ack.INVALID
 
                     op.ack = ack
 
                     if isinstance(op, swd.Read):
                         op.data, = struct.unpack("<L", in_blob[op.__offset + 1 : op.__offset + 5])
-
-class JtagInterface(jtag.Interface):
-    CMD_SHIFT_BYTE   = 0x00 # | 5 bits byte count -1
-    CMD_SHIFT_BYTE_W = 0x40
-    CMD_SHIFT_BYTE_R = 0x20
-    CMD_SHIFT_BIT    = 0xe0 # | 3 bits bit count -1
-    CMD_SHIFT_BIT_W  = 0x10
-    CMD_SHIFT_BIT_R  = 0x08
-    CMD_DR_CAPTURE   = 0x80
-    CMD_IR_CAPTURE   = 0x81
-    CMD_SWD_TO_JTAG  = 0x82
-    CMD_RESET        = 0x98 # | 3 bits cycle count -1
-    CMD_RTI          = 0x90 # | 3 bits cycle count -1
-    CMD_RESET8       = 0x90 # | 4 bits cycle count /8 -1
-    CMD_RTI8         = 0x90 # | 4 bits cycle count /8 -1
-    CMD_DIVISOR      = 0xc0 # | 5 bits divisor -1
-
-    JTAG_PORT_CID = 1
-    CONFIG_CID = 3
-
-    STATUS_REG_BASE_FREQ = 0
-    CONFIG_REG_SRST = 1
-    CONFIG_REG_TRST = 2
-    CONFIG_REG_MODE = 3
-    
-    def __init__(self, adapter, mux):
-        jtag.Interface.__init__(self, adapter, adapter.name)
-        self.mux = RoutedPath(mux, 0xf)
-        self.base_freq = int.from_bytes(
-            self.mux.execute(self.CONFIG_CID, struct.pack("<B", 0x80 | self.STATUS_REG_BASE_FREQ), 5)[1:],
-            byteorder = 'little')
-        self.mux.execute(self.CONFIG_CID, struct.pack("<BL", self.CONFIG_REG_MODE, 1), 1)
-
-        self.logger.info("Found proby with internal clock of %s", metric(self.base_freq, "Hz"))
-        
-        self.__reset = False
-        self.__divisor = int(self.base_freq / 1e6) - 1
-        self.__rate_dirty = True
-
-        self.freq_cap("hardware", 75e6)
-
-    @property
-    def reset(self):
-        return self.__reset
-
-    @reset.setter
-    def reset(self, value):
-        if self.__reset == bool(value):
-            return
-
-        self.logger.info("%s reset pin", "holding" if value else "releasing")
-        self.__reset = bool(value)
-        self.mux.execute(self.CONFIG_CID, struct.pack("<BL", self.CONFIG_REG_SRST, int(self.__reset)), 1)
-        
-    @property
-    def freq(self):
-        return self.base_freq / ((self.__divisor + 1) * 2)
-
-    @freq.setter
-    def freq(self, freq):
-        if not freq:
-            freq = 15e6
-        divisor = int(self.base_freq / 2. / float(freq)) - 1
-        self.__divisor = max(0, min(divisor, 31))
-        self.__rate_dirty = True
-        
-    def _execute(self, operation_list):
-        ops = deque(operation_list)
-        max_size = 2040
-        pending = deque()
-        
-        for op in operation_list:
-            if self.__rate_dirty:
-                pending.append(([self.CMD_DIVISOR | self.__divisor], 1, None, 0))
-                self.__rate_dirty = False
-
-            if isinstance(op, jtag.CaptureDr):
-                pending.append(([self.CMD_DR_CAPTURE], 1, None, 0))
-
-            elif isinstance(op, jtag.CaptureIr):
-                pending.append(([self.CMD_IR_CAPTURE], 1, None, 0))
-
-            elif isinstance(op, jtag.Reset):
-                cycles = len(op.tms)
-                while cycles > 8:
-                    packs = cycles // 8
-                    count = min(packs, 16) - 1
-                    pending.append(([self.CMD_RESET8 | count], 1, None, 0))
-                    cycles -= (count + 1) * 8
-                if cycles:
-                    pending.append(([self.CMD_RESET | (cycles - 1)], 1, None, 0))
-
-            elif isinstance(op, jtag.Run):
-                cycles = op.cycles + 1
-                while cycles > 8:
-                    packs = cycles // 8
-                    count = min(packs, 16) - 1
-                    pending.append(([self.CMD_RTI8 | count], 1, None, 0))
-                    cycles -= (count + 1) * 8
-                if cycles:
-                    pending.append(([self.CMD_RTI | (cycles - 1)], 1, None, 0))
-
-            elif isinstance(op, jtag.SwdToJtag):
-                pending.append(([self.CMD_SWD_TO_JTAG], 1, None, 0))
-
-            elif isinstance(op, jtag.Shift):
-                shift_bytes = self.CMD_SHIFT_BYTE
-                shift_bits = self.CMD_SHIFT_BIT
-
-                if isinstance(op.tdi, int):
-                    has_tdi = False
-                    data = b''
-                    bit_count = op.tdi
-                else:
-                    assert isinstance(op.tdi, BitString)
-                    has_tdi = True
-                    shift_bytes |= self.CMD_SHIFT_BYTE_W
-                    shift_bits |= self.CMD_SHIFT_BIT_W
-                    bit_count = len(op.tdi)
-                    data = bytes(op.tdi)
-
-                if op.read_tdo:
-                    shift_bytes |= self.CMD_SHIFT_BYTE_R
-                    shift_bits |= self.CMD_SHIFT_BIT_R
-                    op.tdo = BitString()
-                    has_tdo = True
-                else:
-                    has_tdo = False
-
-                while bit_count >= 8:
-                    byte_count = bit_count // 8
-                    byte_count = min(byte_count, 32)
-
-                    if has_tdi:
-                        pending.append(([shift_bytes | (byte_count - 1)] + list(bytes(data[:byte_count])),
-                                        (1 + byte_count) if has_tdo else 1,
-                                        op if has_tdo else None,
-                                        byte_count * 8))
-                        data = data[byte_count:]
-                    else:
-                        pending.append(([shift_bytes | (byte_count - 1)],
-                                        (1 + byte_count) if has_tdo else 1,
-                                        op if has_tdo else None,
-                                        byte_count * 8))
-                    bit_count -= byte_count * 8
-
-                if bit_count:
-                    if has_tdi:
-                        pending.append(([shift_bits | (bit_count - 1), data[0]],
-                                        2 if has_tdo else 1,
-                                        op if has_tdo else None,
-                                        bit_count))
-                    else:
-                        pending.append(([shift_bits | (bit_count - 1)],
-                                        2 if has_tdo else 1,
-                                        op if has_tdo else None,
-                                        bit_count))
-
-            else:
-                raise base.ProtocolError("Unknown JTAG operation %s" % type(op))
-
-        while pending:
-            cmd = bytearray(max_size)
-            cmd_size = 0
-            rsp_size = 0
-            tdo_gather = []
-
-            while pending and cmd_size < max_size - 32 and rsp_size < max_size - 32:
-                op_cmd, op_rsp_size, op_tdo_target, tdo_length = pending.popleft()
-                cmd[cmd_size:cmd_size+len(op_cmd)] = bytes(op_cmd)
-
-                if op_tdo_target:
-                    tdo_gather.append((op_tdo_target, rsp_size, tdo_length))
-
-                cmd_size += len(op_cmd)
-                rsp_size += op_rsp_size
-
-            assert cmd_size
-            in_blob = self.mux.execute(self.JTAG_PORT_CID, cmd[:cmd_size], rsp_size)
-
-            for op, offset, bit_count in tdo_gather:
-                op.tdo += BitString(in_blob[offset : offset + ((bit_count + 7) // 8)], bit_count)
 
 class I2cInterface(i2c.Interface):
     CMD_READ_ACK     = 0xc0
@@ -482,11 +278,11 @@ class I2cInterface(i2c.Interface):
     CMD_STOP         = 0x21
     CMD_DIV          = 0x00
 
-    I2C_PORT_CID = 2
-    CONFIG_CID = 3
+    I2C_PORT_CID = 0
+    CONFIG_CID = 1
     
-    REG_BASE_FREQ = 0
-    REG_SRST = 1
+    REG_SRST = 0
+    REG_BASE_FREQ = 1
 
     def __init__(self, adapter, mux):
         i2c.Interface.__init__(self, adapter, adapter.name)
@@ -517,13 +313,13 @@ class I2cInterface(i2c.Interface):
         
     @property
     def freq(self):
-        return self.base_freq / self.__div / 4 / 4
+        return self.base_freq / self.__div / 4
 
     @freq.setter
     def freq(self, freq):
         if not freq:
             freq = 1e6
-        self.__div = min(0x1f, max(2, int(self.base_freq / float(freq * 4) / 4)))
+        self.__div = min(0x1f, max(2, int(self.base_freq / float(freq * 4))))
 
     def _execute(self, operation_list):
         ops = list(operation_list)
@@ -618,10 +414,11 @@ class CcInterface(chipcon.Interface):
     CMD_WAIT         = staticmethod(lambda d: (0x40 | d))
     CMD_DIV          = staticmethod(lambda d: (0xc0 | (0x3f & (d-1))))
 
-    CC_PORT_CID = 4
+    CC_PORT_CID = 0
     CONFIG_CID = 1
     
-    REG_BASE_FREQ = 0
+    REG_SRST = 0
+    REG_BASE_FREQ = 1
 
     def __init__(self, adapter, mux):
         chipcon.Interface.__init__(self, adapter, adapter.name)
@@ -632,7 +429,7 @@ class CcInterface(chipcon.Interface):
 
         self.logger.info("Found CC proby with internal clock of %s", metric(self.base_freq, "Hz"))
         self.__reset = False
-        self.__div = 16
+        self.__div = 4
 
     @property
     def reset(self):
@@ -652,13 +449,13 @@ class CcInterface(chipcon.Interface):
         
     @property
     def freq(self):
-        return self.base_freq / self.__div / 2 / 4
+        return self.base_freq / self.__div / 2
 
     @freq.setter
     def freq(self, freq):
         if not freq:
             freq = self.base_freq
-        self.__div = max(1, min(0x40, int(self.base_freq / float(freq) / 2 / 4)))
+        self.__div = min(0x40, max(1, int(self.base_freq / float(freq) / 2)))
         self.logger.info("Divisor now %d", self.__div)
 
     def _execute(self, operation_list):
@@ -721,7 +518,7 @@ class CcInterface(chipcon.Interface):
                 op.data = rsp[op.__offset:op.__offset + op.rlen]
 
 class ProbyAdapter(basic.Adapter):
-    supported_interfaces = ["swd", "swd-pt", "jtag", "jtag-raw", "jtag-int", "spi", "cc", "i2c"]
+    supported_interfaces = ["swd", "swd-pt", "jtag", "jtag-int", "spi", "cc", "i2c"]
     
     def reprogram(self, mode):
         """
@@ -752,9 +549,8 @@ class ProbyAdapter(basic.Adapter):
         self.logger.info("Got FPGA in chain: %s", fpga)
 
         fpga.load(obj)
-        print(jtag_intf.close)
-        jtag_intf.handle.close()
-        del jtag_intf.handle
+
+        jtag_intf.close()
 
     def open(self, interface_name):
         if interface_name == "spi":
@@ -764,9 +560,9 @@ class ProbyAdapter(basic.Adapter):
                                 csn_pin = 3,
                                 gpio_output = 0x061b, gpio_value = 0x0210)
 
-        elif interface_name == "jtag-raw":
+        elif interface_name == "jtag":
             self.reprogram("jtag_swd_raw")
-            return basic.Adapter.open(self, "jtag", channel = "A",
+            return basic.Adapter.open(self, interface_name, channel = "A",
                                 resetn_pin = 8,
                                 gpio_output = 0x061b, gpio_value = 0x0210)
 
@@ -780,18 +576,8 @@ class ProbyAdapter(basic.Adapter):
                                 oe_pin = 5,
                                 gpio_output = 0x063b, gpio_value = 0x0610)
 
-        elif interface_name == "jtag":
-            self.reprogram("jtag_swd_i2c")
-
-            fifo = self.device.open(interface = "A", mode = "ft245_sync_fifo")
-            print(fifo)
-            mux = MsgMux(fifo)
-            mux.reset()
-
-            return JtagInterface(self, mux)
-
         elif interface_name == "swd":
-            self.reprogram("jtag_swd_i2c")
+            self.reprogram("swd_dp")
 
             fifo = self.device.open(interface = "A", mode = "ft245_sync_fifo")
 
@@ -801,7 +587,7 @@ class ProbyAdapter(basic.Adapter):
             return SwdInterface(self, mux)
 
         elif interface_name == "i2c":
-            self.reprogram("jtag_swd_i2c")
+            self.reprogram("i2c_master")
 
             fifo = self.device.open(interface = "A", mode = "ft245_sync_fifo")
 
