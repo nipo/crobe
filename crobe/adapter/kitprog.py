@@ -407,7 +407,7 @@ class I2cInterface(i2c.Interface):
                                                              size)
                     if not saddr_ack:
                         self.port.i2usb_stop()
-                        raise i2c.AddressNack()
+                        raise i2c.AddressNack(cur.saddr)
 
                     cur.data += data
                     as_prev = True
@@ -423,7 +423,7 @@ class I2cInterface(i2c.Interface):
                                                              chunk)
                     if not saddr_ack:
                         self.port.i2usb_stop()
-                        raise i2c.AddressNack()
+                        raise i2c.AddressNack(cur.saddr)
                     if not all(acks[:-1]):
                         self.port.i2usb_stop()
                         raise i2c.DataNack()

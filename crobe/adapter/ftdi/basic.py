@@ -515,7 +515,7 @@ class I2cInterface(BaseInterface, i2c.Interface):
         for op in ops:
             if op.__saddr_ack is not None:
                 if rsp[op.__saddr_ack] & 1:
-                    raise i2c.AddressNack()
+                    raise i2c.AddressNack(op.addr)
 
             if isinstance(op, i2c.Read):
                 op.data = bytes(rsp[op.__rdata_off:op.__rdata_off+op.size])

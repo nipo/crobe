@@ -105,7 +105,7 @@ class I2cInterface(i2c.Interface):
 
             if not prev or (isinstance(prev, i2c.Read) != isinstance(cur, i2c.Read)):
                 cmd.append(CMD_I2C_START)
-                starts.append(len(cmd))
+                starts.append((len(cmd), cur))
                 cmd.append(CMD_I2C_WRITE((cur.addr << 1) | int(isinstance(cur, i2c.Read))))
 
             last = not next or (isinstance(cur, i2c.Read) != isinstance(next, i2c.Read))
@@ -137,9 +137,9 @@ class I2cInterface(i2c.Interface):
 
         rsp = self.port._run(cmd)
 
-        for s in starts:
+        for s, op in starts:
             if rsp[s] == b'N':
-                raise i2c.AddressNack()
+                raise i2c.AddressNack(op.saddr)
 
         for op in ops:
             data = b''.join(rsp[i] for i in op.__rsp)

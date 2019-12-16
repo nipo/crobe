@@ -26,14 +26,16 @@ class RelativeFormatter(logging.Formatter):
         return str(elapsed)
 
 @click.group()
-@click.option('-v', '--verbose', count = True)
-@click.option('-q', '--quiet', count = True)
-@click.option('--silent', multiple = True, type = str)
+@click.option('-v', '--verbose', count = True, help = "More verbosity")
+@click.option('-e', '--raw-error', is_flag = True, help = "Do not mangle exceptions")
+@click.option('-q', '--quiet', count = True, help = "Less verbosity")
+@click.option('--silent', multiple = True, type = str, help = "Silent one component by name")
 @click.pass_context
-def cli(ctx, verbose, quiet, silent):
+def cli(ctx, verbose, raw_error, quiet, silent):
     formatter = RelativeFormatter()
     f = DomainFilter(silent)
     ctx.obj["log_filter"] = f
+    ctx.obj["raw_error"] = raw_error
 
     handler = logging.StreamHandler()
     handler.setFormatter(formatter)
@@ -84,8 +86,9 @@ class RootParamType(click.ParamType):
         try:
             from ..root import root
             return root(value)
-        except:
-            self.fail("%r is not a valid root" % (value,), param, ctx)
+        except Exception as e:
+            raise click.exceptions.BadParameter("%r is not a valid root" % (value,),
+                                                param = param, ctx = ctx) from e
 
 ROOT = RootParamType()
 

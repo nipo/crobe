@@ -541,7 +541,7 @@ class I2cInterface(i2c.Interface):
                 cmd.append(self.CMD_START)
                 rsp_size += 1
                 cmd += [self.CMD_WRITE | 0, (cur.addr << 1) | int(isinstance(cur, i2c.Read))]
-                starts.append(rsp_total_size + rsp_size)
+                starts.append((cur, rsp_total_size + rsp_size))
                 rsp_size += 1
 
             last = not next or (isinstance(cur, i2c.Read) != isinstance(next, i2c.Read))
@@ -600,9 +600,9 @@ class I2cInterface(i2c.Interface):
 
         rsp += self.mux.execute(self.I2C_PORT_CID, bytes(cmd), rsp_size)
 
-        for s in starts:
+        for op, s in starts:
             if not rsp[s]:
-                raise i2c.AddressNack()
+                raise i2c.AddressNack(op.saddr)
 
         for op in ops:
             data = b''.join(rsp[start:end] for (start, end) in op.__rsp)

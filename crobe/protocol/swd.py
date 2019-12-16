@@ -18,6 +18,18 @@ class Ack(IntEnum):
     INVALID011 = 3
     PARITY_ERR = 8
 
+class BadSwdio(base.ProtocolError):
+    def __init__(self, reason):
+        self.__reason = reason
+        base.ProtocolError.__init__(self, "SWD Initialization failed")
+
+    def message_get(self):
+        return self.__reason
+
+class UnknownDp(base.ProtocolError):
+    def message_get(self):
+        return "Unknown DP IDR: 0x%08x" % (int(self.args[0]),)
+
 class Interface(base.Interface):
     """
     SWD protocol interface.
@@ -135,9 +147,20 @@ class Interface(base.Interface):
 
         self.freq_cap("enumeration")
 
-        if partid is not None:
+        if partid is None:
+            raise BadSwdio("Cannot get IDCODE")
+
+        if int(partid) == 0xffffffff:
+            raise BadSwdio("SWDIO stuck high")
+
+        if int(partid) == 0:
+            raise BadSwdio("SWDIO stuck low")
+        
+        try:
             self.child_add(self.db.call(partid, self))
-            base.Interface.start(self)
+        except:
+            raise UnknownDp(partid)
+        base.Interface.start(self)
         
     def _execute(self, operation_list):
         """

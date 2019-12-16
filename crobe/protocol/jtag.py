@@ -184,11 +184,17 @@ class Run(Operation):
     def __str__(self):
         return "<Run %d>" % self.cycles
 
-class OpenChain(Exception):
-    pass
+class OpenChain(base.ProtocolError):
+    def __init__(self, message):
+        self.__message = message
+        base.ProtocolError.__init__(self, "JTAG Initialization failed")
 
-class ClosedChain(Exception):
-    pass
+    def message_get(self):
+        return self.__message
+
+class ClosedChain(base.ProtocolError):
+    def message_get(self):
+        return "TDI and TDO are shorted"
 
 class Chain(PortComponent):
     """
@@ -273,14 +279,25 @@ class Chain(PortComponent):
         self.port.capture_dr()
         default_dr = self.port.shift(BitString(3, 32))
         dr = True
+        all_z = True
+        all_o = True
         while dr:
             dr = self.port.shift(BitString(0, 32))
             default_dr += dr
             dr = int(dr)
+            if dr:
+                all_z = False
+            if dr != 0xffffffff:
+                all_o = False
+
             if len(default_dr) > 500:
-                raise OpenChain()
+                if all_z:
+                    raise OpenChain("TDO stuck low. Bad TDO connection ?")
+                if all_o:
+                    raise OpenChain("TDO stuck high. Bad TDO connection ?")
+                raise OpenChain("TDO changed, but never got TDI back. Bad TDI/TDO connection ?")
         if int(default_dr) == 0:
-            raise OpenChain()
+            raise OpenChain("TDO stuck low, bad TDO connection ?")
         
         total_dr_length = int(math.log(int(default_dr), 2)) - 1
             
@@ -298,14 +315,14 @@ class Chain(PortComponent):
             default_ir += ir
             ir = int(ir)
             if len(default_ir) >= 500:
-                raise OpenChain()
+                raise OpenChain("IR detection failed. Bad TMS ?")
 
         # Discover IR length
         ir = self.port.shift(BitString(1, 32))
         while not int(ir):
             ir += self.port.shift(BitString(0, 32))
             if len(ir) >= 500:
-                raise OpenChain()
+                raise OpenChain("IR scan never exposed TDI back on TDO. Bad TDI connection ?")
         total_ir_length = int(math.log(int(ir), 2))
 
         # Load bypass

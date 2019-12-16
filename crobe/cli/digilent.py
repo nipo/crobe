@@ -47,6 +47,7 @@ def serialize(ctx, vendor, product, serial, oemid, pdid, user_name, product_name
     info = Serial(oemid, pdid, user_name, product_name, dcap_pub, dcap_priv)
     
     handle.eeprom_reset_defaults(vendor, product, serial)
+    handle.eeprom_value_set("PRODUCT_ID", 0x6014)
     handle.eeprom_power_set(power)
     handle.eeprom_user_data_set(bytes(info))
     

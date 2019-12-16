@@ -18,6 +18,29 @@ class Signal:
         for s in self.__slots:
             s()(*args, **kwargs)
 
+class BadInvocation(Exception):
+    def __init__(self, message):
+        self.__message = message
+        Exception.__init__(self, "Bad invocation")
+
+    def message_get(self):
+        return self.__message
+
+class BadInvocationFormat(Exception):
+    def __init__(self, message):
+        self.__message = message
+        Exception.__init__(self, "Bad invocation formatting")
+
+    def message_get(self):
+        return self.__message
+
+class BadOption(Exception):
+    def __init__(self, o):
+        Exception.__init__(self, "Bad option", o)
+
+    def message_get(self):
+        return "option rejected by component"
+
 class Component(object):
     """
     Crobe base component.  Everything in crobe is a component
@@ -116,7 +139,7 @@ class Component(object):
             try:
                 index = crit.index('(')
             except ValueError:
-                raise ValueError("Unmatched parenthesis", crit)
+                raise BadInvocationFormat("Unmatched parenthesis in \"%s\"" % (crit,))
             options = crit[index + 1 : -1].split(",")
             crit = crit[: index]
 
@@ -133,14 +156,17 @@ class Component(object):
         child = self.child_lookup(crit) or self.child_spawn(crit)
 
         if not child:
-            raise ValueError("Unknown invocation", crit, *invocation)
+            raise BadInvocation("Unknown invocation \"%s\"" % (crit, ))
 
         self.logger.info("Had %s", child)
 
         for opt in options:
             if opt == "nostart":
                 return child
-            child.option_set(opt)
+            try:
+                child.option_set(opt)
+            except Exception as e:
+                raise BadOption(opt) from e
             
         return child.child_summon(*invocation)
 

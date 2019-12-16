@@ -9,7 +9,12 @@ class ProtocolError(base.ProtocolError):
     pass
 
 class AddressNack(ProtocolError):
-    pass
+    def __init__(self, addr):
+        self.__message = addr
+        base.ProtocolError.__init__(self, "I2C Slave error", addr)
+
+    def message_get(self):
+        return "I2C Address NACK at 0x%02x" % self.args[1]
 
 class DataNack(ProtocolError):
     pass
