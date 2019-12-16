@@ -39,6 +39,10 @@ def cli():
         ctx = base.cli.make_context("crobe", sys.argv[1:])
         ctx.obj = {}
         base.cli.invoke(ctx)
+
+    except click.exceptions.Exit as e:
+        sys.exit(e.exit_code)
+
     except Exception as e:
         if ctx.obj.get("raw_error", True):
             raise
@@ -54,5 +58,3 @@ def cli():
             ec = 1
         sys.exit(ec)
 
-    except click.exceptions.Exit as e:
-        sys.exit(e.exit_code)
