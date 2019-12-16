@@ -42,11 +42,6 @@ def cli():
 
     except click.exceptions.Exit as e:
         sys.exit(e.exit_code)
-
-    except click.exceptions.UsageError as e:
-        print("Usage error:", e.args[0])
-        print("Try to add '-h' to command line.")
-        sys.exit(1)
         
     except Exception as e:
         if ctx.obj.get("raw_error", True):
@@ -62,4 +57,3 @@ def cli():
         except:
             ec = 1
         sys.exit(ec)
-
