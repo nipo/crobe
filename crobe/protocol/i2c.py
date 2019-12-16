@@ -24,7 +24,7 @@ class Interface(base.Interface):
     I2C protocol interface.
     """
 
-    db = Db()
+    db = Db("I2C chip type")
 
     def __init__(self, port, name = None):
         base.Interface.__init__(self, port, (name or port.name) + "/I2C")

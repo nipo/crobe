@@ -11,8 +11,8 @@ class MemoryMappedComponent(model.BusComponent):
     PID0 = 0xfe0
     CID = 0xff0
 
-    class_db = Db()
-    db = Db()
+    class_db = Db("Coresight class")
+    db = Db("Coresight part")
 
     def __init__(self, bus, base, name = None):
         model.BusComponent.__init__(self, bus, name or "Memory Component")
@@ -164,8 +164,8 @@ class CoresightComponent(MemoryMappedComponent):
     LOCK_KEY = 0xc5acce55
     AUTHS = 0xfb8
 
-    db = Db()
-
+    db = Db("Coresight component")
+    
     def __init__(self, bus, base, name = None):
         MemoryMappedComponent.__init__(self, bus, base, name)
 

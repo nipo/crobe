@@ -484,7 +484,7 @@ class Tap(PortComponent):
     """
     TAP Registry, by IDCode.
     """
-    db = Db()
+    db = Db("TAP IDCODE")
 
     max_freq = None
     

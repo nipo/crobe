@@ -15,6 +15,10 @@ enumerators are automatically registered at module import time through
 the `Enumerator.signeton.register` decorator.
 """
 
+class BadAdapter(Exception):
+    def message_get(self):
+        return "No such adapter: %s" % (self.args[0],)
+
 class Enumerator(model.Component):
     """
     Adapter enumerator class. An instance of this class is created on
@@ -32,7 +36,7 @@ class Enumerator(model.Component):
         cls.singleton.children.append(enum_class())
         return enum_class
 
-    def find(self, crit, predicate = None):
+    def child_lookup(self, crit, predicate = None):
         adapters = self.children_of_class(Adapter)
 
         if predicate:
@@ -45,26 +49,14 @@ class Enumerator(model.Component):
             pass
 
         adapters = [a for a in adapters if a.name.lower().startswith(crit.lower())]
-        if len(adapters) == 1:
-            return adapters
+        if not adapters:
+            raise BadAdapter(crit)
 
-        adapters = [a for a in adapters if a.name.lower() == crit.lower()]
-        return adapters
-        
-    def get(self, *args, **kwargs):
-        candidates = self.find(*args, **kwargs)
-        if len(candidates) != 1:
-            raise KeyError("Criteria not met")
-        return candidates[0]
-
-    def child_spawn(self, name):
-        adapters = self.find(name)
-
-        if len(adapters) > 1:
-            raise ValueError("Too many possibilities")
+        if len(adapters) != 1:
+            raise BadAdapter("%s is ambiguous, %d adapters matched" % (crit, len(adapters)))
 
         return adapters[0]
-    
+
 class Adapter(model.Component):
     """
     An adapter, this is an actual 'Probe' or 'Emulator' before it is

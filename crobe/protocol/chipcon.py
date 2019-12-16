@@ -24,7 +24,7 @@ class Interface(base.Interface):
     # http://www.ti.com/lit/ug/swra124/swra124.pdf
     # http://www.ti.com/lit/an/swra410/swra410.pdf
 
-    db = Db()
+    db = Db("CC chip type")
 
 
     SFR_CLKCONCMD = 0xc6

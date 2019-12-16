@@ -153,10 +153,9 @@ class Component(object):
             self.start()
             self.__in_enum = False
 
-        child = self.child_lookup(crit) or self.child_spawn(crit)
-
+        child = self.child_lookup(crit)
         if not child:
-            raise BadInvocation("Unknown invocation \"%s\"" % (crit, ))
+            child = self.child_spawn(crit)
 
         self.logger.info("Had %s", child)
 

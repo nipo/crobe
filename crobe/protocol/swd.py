@@ -71,7 +71,7 @@ class Interface(base.Interface):
       on each Read operation object where relevant.
     """
 
-    db = Db()
+    db = Db("SWD DP IDCODE")
 
     IDCODE = 0
 

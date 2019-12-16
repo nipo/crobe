@@ -129,7 +129,7 @@ def kinetis_ducktyping(dp):
     try:
         ap, = dp.children_find(lambda x: isinstance(x, MdmAp))
     except TypeError:
-        raise NoMatch("Not a Kinetis")
+        raise ValueError("Not a Kinetis")
     return MKL0x(dp)
 
 class BootloaderFlash(Flash):

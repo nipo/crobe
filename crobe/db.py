@@ -1,12 +1,22 @@
 import operator
 
-__all__ = ["Db", "NoMatch"]
+__all__ = ["Db", "NoMatch", "InitializationFailure"]
 
 class NoMatch(Exception):
-    pass
+    def __init__(self, db_name, criterion):
+        self.db_name = db_name
+        self.criterion = criterion
+
+    def message_get(self):
+        return "Unable to match '%s' in %s" % (self.criterion, self.db_name)
+
+class InitializationFailure(Exception):
+    def message_get(self):
+        return "Unable to initialize component"
 
 class Db(object):
-    def __init__(self, eq_func = operator.eq):
+    def __init__(self, db_name, eq_func = operator.eq):
+        self.db_name = db_name
         self.registry = {}
         self.eq_func = eq_func
         self.default = None
@@ -34,18 +44,25 @@ class Db(object):
         if self.default is not None and allow_default:
             return [self.default]
 
-        raise NoMatch(id)
+        raise NoMatch(self.db_name, id)
 
     def call(self, id, *args, allow_default = True):
         poss = self.get(id, allow_default = allow_default)
+        exc = []
         
         for i, f in enumerate(poss):
             try:
                 return f(*args)
-            except NoMatch:
-                pass
+            except NoMatch as e:
+                exc.append(e)
+            except InitializationFailure as e:
+                exc.append(e)
+            except Exception as e:
+                exc.append(e)
 
         if self.default is not None and allow_default:
             return self.default(*args)
 
-        raise NoMatch(id)
+        if len(exc) == 1:
+            raise NoMatch(self.db_name, id) from exc[0]
+        raise NoMatch(self.db_name, id)

@@ -5,7 +5,10 @@ import click
 import logging
 
 def print_va(fmt, *args):
-    print(fmt % args)
+    if args:
+        print(fmt % args)
+    else:
+        print(fmt)
 
 def exc_pretty(e, pre = "", printer = print_va):
     m = " ".join(str(x) for x in e.args)

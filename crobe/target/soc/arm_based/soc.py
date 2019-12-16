@@ -140,7 +140,7 @@ class StubFlash(BusFlash):
                 puppet.unallocate(other_buffer)
 
 class SoC(model.SoC):
-    db = Db()
+    db = Db("SoC model")
 
     def __init__(self, name, port):
         model.SoC.__init__(self, name)

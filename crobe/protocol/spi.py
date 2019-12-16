@@ -77,7 +77,7 @@ class Interface(base.Interface):
         return Cs(value)
         
 class Target(PortComponent, base.FreqCapper):
-    db = Db()
+    db = Db("SPI chip type")
 
     def __init__(self, port, name, cs):
         PortComponent.__init__(self, port, name)
@@ -113,10 +113,7 @@ class Target(PortComponent, base.FreqCapper):
         return Cs(None)
 
     def child_spawn(self, sub):
-        try:
-            return self.db.call(sub, self)
-        except NoMatch:
-            pass
+        return self.db.call(sub, self)
 
 class Operation(object):
     def __repr__(self):

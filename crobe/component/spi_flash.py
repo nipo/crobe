@@ -1,6 +1,6 @@
 from ..model import PortComponent
 from .model import Bus
-from ..db import Db, NoMatch
+from ..db import Db, NoMatch, InitializationFailure
 from ..protocol import spi
 from ..util.pretty import base2, metric
 from ..jep106 import name_get
@@ -12,13 +12,10 @@ __all__ = ["SpiFlash"]
 
 @spi.Target.db.register("flash")
 def spi_flash_probe(target, *args):
-    try:
-        return SpiFlash.detect(target)
-    except ValueError:
-        raise NoMatch("Not a spi flash")
+    return SpiFlash.detect(target)
 
 class SpiFlash(PortComponent, Bus):
-    db = Db()
+    db = Db("SPI Flash type")
 
     max_freq = 33e6
     
@@ -116,11 +113,10 @@ class SpiFlash(PortComponent, Bus):
         id_cfi = idr.miso[0x10:0x13]
         idr = int.from_bytes(idr.miso[:3], "big")
 
-        self = None
-        try:
-            self = cls.db.call(idr, port, idr)
-        except NoMatch:
-            pass
+        if idr in [0, 0xffffff]:
+            raise InitializationFailure("Bad SPI IDR: 0x%06x" % idr)
+        
+        self = cls.db.call(idr, port, idr)
 
         if self is None and sfdp == b'SFDP':
             self = SfdpFlash(port, idr)
@@ -129,10 +125,7 @@ class SpiFlash(PortComponent, Bus):
             self = IdCfiFlash(port, idr)
 
         if self is None:
-            if idr not in [0, 0xffffff]:
-                self = cls(port)
-            else:
-                raise NoMatch()
+            raise NoMatch(idr)
         
         self.info()
 
