@@ -15,7 +15,7 @@ class MachFlash(MachMem):
     flags = set([memory.Flag.WRITABLE, memory.Flag.PARTIAL_READ, memory.Flag.MM_READ])
 
     def __init__(self, fpga):
-        MachMem.__init__(self, fpga, "flash", 0x20000000, fpga.info.flash_page_count * 16)
+        MachMem.__init__(self, fpga, "flash", 0, fpga.info.flash_page_count * 16)
 
     def erase(self, offset, size):
         if offset:
@@ -33,7 +33,7 @@ class MachUfm(MachMem):
     flags = set([memory.Flag.WRITABLE, memory.Flag.PARTIAL_READ, memory.Flag.MM_READ])
 
     def __init__(self, fpga):
-        MachMem.__init__(self, fpga, "ufm", 0x20000000 + fpga.info.flash_page_count * 16, fpga.info.ufm_page_count * 16)
+        MachMem.__init__(self, fpga, "ufm", 0 + fpga.info.flash_page_count * 16, fpga.info.ufm_page_count * 16)
 
     def erase(self, offset, size):
         if offset == 0:
@@ -84,6 +84,7 @@ class MachXOFlasher(model.Target, memory.Loadable):
             raise NotImplementedError("Cannot program FPGA without erasing")
         self.component._isc_enable(False)
         memory.Loadable.program_begin(self, do_erase, assume_clean)
+        self.component._isc_enable(False)
         self.component._stop()
         self.component._isc_enable(False)
 
