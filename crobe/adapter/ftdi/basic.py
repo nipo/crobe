@@ -232,7 +232,7 @@ class BaseInterface(object):
 class JtagInterface(BaseInterface, jtag.Interface):
     def __init__(self, adapter, oe_pin = None, oen_pin = None, name = None, **args):
         jtag.Interface.__init__(self, adapter, name)
-        args["gpio_output"] = (args["gpio_output"] & 0xfff0) | 0xb
+        args["gpio_output"] = (args.get("gpio_output", 0) & 0xfff0) | 0xb
         BaseInterface.__init__(self, adapter, **args)
 
         self.__state = None
