@@ -139,7 +139,7 @@ class I2cInterface(i2c.Interface):
 
         for s, op in starts:
             if rsp[s] == b'N':
-                raise i2c.AddressNack(op.saddr)
+                raise i2c.AddressNack(op.addr)
 
         for op in ops:
             data = b''.join(rsp[i] for i in op.__rsp)
