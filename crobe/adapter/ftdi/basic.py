@@ -24,7 +24,7 @@ class Adapter(model.Adapter):
 
     def open(self, interface_name, **defaults):
         if not interface_name.lower() in self.supported_interfaces:
-            raise NotImplementedError("Unsupported interface %s" % interface_name)
+            return None
 
         d = {}
         d.update(self.enumerator.defaults)
@@ -46,8 +46,6 @@ class Adapter(model.Adapter):
 
         if interface_name.lower() == "i2c":
             return I2cInterface(self, **d)
-
-        raise NotImplementedError("Unsupported interface %s" % interface_name)
 
 class AdapterEnumerator(model.Enumerator):
     adapter_class = Adapter

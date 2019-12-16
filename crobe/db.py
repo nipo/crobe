@@ -8,7 +8,7 @@ class NoMatch(Exception):
         self.criterion = criterion
 
     def message_get(self):
-        return "Unable to match '%s' in %s" % (self.criterion, self.db_name)
+        return "Unable to find '%s' in %s" % (self.criterion, self.db_name)
 
 class InitializationFailure(Exception):
     def message_get(self):

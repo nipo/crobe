@@ -156,6 +156,8 @@ class Component(object):
         child = self.child_lookup(crit)
         if not child:
             child = self.child_spawn(crit)
+        if not child:
+            raise BadInvocation(crit)
 
         self.logger.info("Had %s", child)
 
@@ -175,9 +177,11 @@ class Component(object):
 
         try:
             index = int(crit)
-            return self.children[index]
         except ValueError:
-            pass
+            index = None
+
+        if index is not None:
+            return self.children[index]
 
         possible = self.children_find(lambda x:crit.lower() in x.name.lower())
         if len(possible) == 1:

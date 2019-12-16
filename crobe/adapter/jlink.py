@@ -60,7 +60,7 @@ class Adapter(model.Adapter):
 
     def open(self, interface_name):
         if interface_name.lower() not in self.supported_interfaces:
-            raise NotImplementedError("Unsupported interface %s" % interface_name)
+            return None
 
         if interface_name.lower() == "jtag":
             return JtagInterface(self)
@@ -70,8 +70,6 @@ class Adapter(model.Adapter):
 
         if interface_name.lower() == "swd":
             return SwdInterface(self)
-
-        raise NotImplementedError("Unsupported interface %s" % interface_name)
 
 class JLinkInterface(object):
     def __init__(self, device, interface):

@@ -175,7 +175,7 @@ class Adapter(fx2.Adapter):
 
     def open(self, interface_name):
         if interface_name.lower() not in self.supported_interfaces:
-            raise NotImplementedError("Unsupported interface %s" % interface_name)
+            return None
 
         if not self.__inited:
             from crobe.loadable.object import Program
@@ -210,8 +210,6 @@ class Adapter(fx2.Adapter):
 
         if interface_name.lower() == "jtag":
             return JtagInterface(self)
-
-        raise NotImplementedError("Unsupported interface %s" % interface_name)
 
 class JtagInterface(jtag.Interface):
     def __init__(self, port):

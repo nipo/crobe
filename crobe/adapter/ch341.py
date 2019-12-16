@@ -3,6 +3,7 @@ from ..protocol import i2c, spi
 from .. import bitstring
 from ..util.pretty import metric
 from ..util import endian
+from ..db import NoMatch
 from collections import deque
 import usb.core
 import usb.util
@@ -107,16 +108,11 @@ class Adapter(model.Adapter):
         self.version = self.version_get()
 
     def open(self, interface_name):
-        if interface_name.lower() not in self.supported_interfaces:
-            raise NotImplementedError("Unsupported interface %s" % interface_name)
-
         if interface_name.lower() == "i2c":
             return I2cInterface(self)
 
-        if interface_name.lower() == "spi":
+        elif interface_name.lower() == "spi":
             return SpiInterface(self)
-
-        raise NotImplementedError("Unsupported interface %s" % interface_name)
 
 class SpiInterface(spi.Interface):
     def __init__(self, port):

@@ -605,9 +605,6 @@ class ProbyAdapter(basic.Adapter):
             mux.reset()
 
             return CcInterface(self, mux)
-
-        else:
-            raise ValueError("Unknown interface name: %s" % interface_name)
         
 @model.Enumerator.register
 class Enumerator(basic.AdapterEnumerator):

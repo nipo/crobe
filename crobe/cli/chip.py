@@ -13,13 +13,11 @@ import logging
 @base.cli.group(help = "Target chip manipulation")
 @click.option('-r', '--root', "roots", type = base.ROOT, multiple = True)
 @base.field()
-@click.option('--target', '-t', metavar = 'INDEX', type = int, help = 'Target index', default = 0)
+@click.option('--target', '-t', metavar = 'CRIT', help = 'Target criterion', default = "0")
 @click.pass_context
 def chip(ctx, roots, field, target):
     from ..target.model import Target
-    targets = field.children_of_class(Target)
-
-    ctx.obj["target"] = targets[target]
+    ctx.obj["target"] = field.child_summon(target)
 
 @chip.command(help = "Program target")
 @click.argument("programs", type = base.PROGRAM, nargs = -1)
@@ -90,3 +88,12 @@ def readback(ctx, filename, begin, end):
     target.attach()
     p = target.read(begin, end)
     p.save(filename)
+
+@chip.command(help = "Info")
+@click.pass_context
+def info(ctx):
+    import math
+
+    target = ctx.obj["target"]
+
+    click.echo("Target: %s" % target)

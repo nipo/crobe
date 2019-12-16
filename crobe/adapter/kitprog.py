@@ -274,7 +274,7 @@ class Adapter(model.Adapter):
 
     def open(self, interface_name):
         if interface_name.lower() not in self.supported_interfaces:
-            raise NotImplementedError("Unsupported interface %s" % interface_name)
+            return None
 
         if self.device.is_kernel_driver_active(0):
             self.device.detach_kernel_driver(0)
@@ -284,8 +284,6 @@ class Adapter(model.Adapter):
 
         if interface_name.lower() == "swd":
             return SwdInterface(self)
-
-        raise NotImplementedError("Unsupported interface %s" % interface_name)
 
 class SwdInterface(swd.Interface):
     turnaround_supported = False

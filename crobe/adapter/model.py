@@ -1,4 +1,5 @@
 from .. import model
+from .. import db
 
 __all__ = ['Enumerator', 'Adapter']
 
@@ -92,9 +93,13 @@ class Adapter(model.Component):
         Opens the adapter for a given Interface protocol. Queried
         interface name should be listed in `supported_interfaces`.
         """
-        raise NotSupportedError("Unsupported interface %s" % interface_name)
+        return None
 
     def child_spawn(self, name):
-        return self.open(name)
+        child = self.open(name)
+        if child:
+            return child
+        raise db.NoMatch("supported interfaces", name)
+            
             
 Enumerator.singleton = Enumerator("Adapters")

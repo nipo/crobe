@@ -45,8 +45,6 @@ class Adapter(model.Adapter):
         if interface_name.lower() == "jtag":
             return JtagInterface(self)
 
-        raise NotImplementedError("Unsupported interface %s" % interface_name)
-
 class JtagInterface(jtag.Interface):
     def __init__(self, port):
         jtag.Interface.__init__(self, port)
