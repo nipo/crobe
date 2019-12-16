@@ -2,6 +2,7 @@ import struct
 from ... import bitstring
 from ... import bitfield
 from ...util.endian import swib_u16
+from ...loadable.object import Program
 import datetime
 from .series67 import Series67
 
@@ -17,6 +18,7 @@ class Series6(Series67):
     ###
 
     IR_ISC_DNA     = 0x30 # Doc says 0x31, iMPACT does 0x30
+    IR_ISC_NOP     = 0x14
 
     IR_USER1 = 0x02
     IR_USER2 = 0x03

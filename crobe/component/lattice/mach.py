@@ -654,6 +654,14 @@ class MachXO2(jtag.Tap, MachXO2Config):
         self._isc_disable()
         return ret
 
+    def load(self, config):
+        from ...loadable.object import Program
+
+        assert isinstance(config, Program)
+        bs = bitstream.Bitstream(parts.PARTS, config)
+        
+        self.ram_load(bs)
+
     def ram_load(self, bs):
         assert self.idcode.is_same_part(PartId.from_idcode(bs.info.idcode))
         self._isc_enable(False, 0)
