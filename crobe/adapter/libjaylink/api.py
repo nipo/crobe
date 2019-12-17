@@ -25,6 +25,7 @@ LOG_LEVEL = dict(
     WARNING = 2,
     INFO = 3,
     DEBUG = 4,
+    IO = 5,
 )
 
 capability = _c.c_int
@@ -34,7 +35,8 @@ CAP = dict(
 
 host_interface = _c.c_int
 HIF = dict(
-    USB = 0,
+    USB = 1,
+    TCP = 2,
 )
 HIF_NAME = dict([(v, k) for (k, v) in HIF.items()])
 
@@ -250,6 +252,36 @@ device_get_usb_address = _lib.jaylink_device_get_usb_address
 device_get_usb_address.argtypes = [_c.POINTER(device), _c.POINTER(usb_address)]
 device_get_usb_address.restype = _c.c_int
 
+#if hasattr(_lib, "jaylink_device_get_usb_bus_ports"):
+#    device_get_usb_bus_ports = _lib.jaylink_device_get_usb_bus_ports
+#    device_get_usb_bus_ports.argtypes = [_c.POINTER(device), ...]
+#    device_get_usb_bus_ports.restype = _c.c_int
+
+if hasattr(_lib, "jaylink_device_get_ipv4_address"):
+    device_get_ipv4_address = _lib.jaylink_device_get_ipv4_address
+    device_get_ipv4_address.argtypes = [_c.POINTER(device), _c.POINTER(_c.c_char)]
+    device_get_ipv4_address.restype = _c.c_int
+
+if hasattr(_lib, "jaylink_device_get_mac_address"):
+    device_get_mac_address = _lib.jaylink_device_get_mac_address
+    device_get_mac_address.argtypes = [_c.POINTER(device), _c.POINTER(_c.c_byte)]
+    device_get_mac_address.restype = _c.c_int
+
+if hasattr(_lib, "jaylink_device_get_hardware_version"):
+    device_get_hardware_version = _lib.jaylink_device_get_hardware_version
+    device_get_hardware_version.argtypes = [_c.POINTER(device), _c.POINTER(hardware_version)]
+    device_get_hardware_version.restype = _c.c_int
+
+if hasattr(_lib, "jaylink_device_get_product_name"):
+    device_get_product_name = _lib.jaylink_device_get_product_name
+    device_get_product_name.argtypes = [_c.POINTER(device), _c.POINTER(_c.c_char)]
+    device_get_product_name.restype = _c.c_int
+
+if hasattr(_lib, "jaylink_device_get_nickname"):
+    device_get_nickname = _lib.jaylink_device_get_nickname
+    device_get_nickname.argtypes = [_c.POINTER(device), _c.POINTER(_c.c_char)]
+    device_get_nickname.restype = _c.c_int
+
 ref_device = _lib.jaylink_ref_device
 ref_device.argtypes = [_c.POINTER(device)]
 ref_device.restype = _c.POINTER(device)
@@ -319,7 +351,7 @@ unregister.argtypes = [_c.POINTER(device_handle), _c.POINTER(connection), _c.POI
 unregister.restype = _c.c_int
 
 discovery_scan = _lib.jaylink_discovery_scan
-discovery_scan.argtypes = [_c.POINTER(context), _c.c_uint32]
+discovery_scan.argtypes = [_c.POINTER(context), host_interface]
 discovery_scan.restype = _c.c_int
 
 emucom_read = _lib.jaylink_emucom_read

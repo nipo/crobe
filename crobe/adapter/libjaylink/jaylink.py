@@ -74,7 +74,7 @@ class Handle(model.Component):
     @property
     def device(self):
         d = api.get_device(self.handle)
-        ret = Device(d)
+        ret = Device(d, self.context)
         api.unref_device(d)
         return ret
 
@@ -348,7 +348,32 @@ class Device(object):
     def host_interface(self):
         intf = api.host_interface()
         checked(api.device_get_host_interface(self.device, ctypes.byref(intf)))
-        return api.HIF_NAME[int(math.log(intf.value, 2))]
+        return api.HIF_NAME.get(int(intf.value), "?")
+
+# Broken ?
+#    @property
+#    def product_name(self):
+#        if not hasattr(api, "device_get_product_name"):
+#            return "J-Link"
+#        value = (ctypes.c_char * 32)()
+#        checked(api.device_get_product_name(self.device, value))
+#        return str(value).split('\0')[0].rstrip()
+#
+#    @property
+#    def hardware_version(self):
+#        if not hasattr(api, "device_get_hardware_version"):
+#            return None
+#        value = api.hardware_version()
+#        checked(api.device_get_hardware_version(self.device, ctypes.byref(value)))
+#        return value.type, value.major, value.minor, value.revision
+#
+#    @property
+#    def nickname(self):
+#        if not hasattr(api, "device_get_nickname"):
+#            return "?"
+#        value = (ctypes.c_char * 32)()
+#        checked(api.device_get_nickname(self.device, value))
+#        return str(value).split('\0')[0].rstrip()
 
     @property
     def serial_number(self):
@@ -379,7 +404,8 @@ class Context(object):
 
         self.logger = logging.getLogger("jaylink")
         self.log_level_match = {}
-        for name, level in [("DEBUG", logging.DEBUG),
+        for name, level in [("IO", None),
+                            ("DEBUG", logging.DEBUG),
                             ("INFO", logging.DEBUG),
                             ("WARNING", logging.WARNING),
                             ("ERROR", logging.ERROR)]:
@@ -392,7 +418,9 @@ class Context(object):
             return 0
         formatted = ctypes.create_string_buffer(4096)
         _vsnprintf(formatted, 4096, format, ctypes.c_void_p(args))
-        self.logger.log(self.log_level_match[level], str(formatted.value, "utf-8"))
+        tgt = self.log_level_match.get(level, None)
+        if tgt is not None:
+            self.logger.log(tgt, str(formatted.value, "utf-8"))
         return 0
 
     def __del__(self):
@@ -509,4 +537,7 @@ if __name__ == "__main__":
             except Exception:
                 print()
 
-        h.power = False
+        try:
+            h.power = False
+        except:
+            pass
