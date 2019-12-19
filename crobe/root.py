@@ -1,15 +1,15 @@
-from .adapter.model import Enumerator
+from .adapter.model import HwRoot
 
 def roots(paths):
     try:
-        Enumerator.singleton.start()
+        HwRoot.start()
     except:
         pass
 
     r = []
     for root in paths:
         parts = root.split("/")
-        r.append(Enumerator.singleton.child_summon(*parts))
+        r.append(HwRoot.child_summon(*parts))
     return r
 
 def root(path):

@@ -12,7 +12,7 @@ class Adapter(basic.Adapter):
                                       gpio_output = 0x1d, gpio_value = 0x0000,
                                       channel = "A")
 
-@model.Enumerator.register
+@model.HwRoot.register
 class Enumerator(basic.AdapterEnumerator):
     adapter_class = Adapter
 

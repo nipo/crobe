@@ -42,11 +42,10 @@ class Interface(model.PortComponent, FreqCapper):
     Base class for protocol interfaces from an Adapter.
     """
     def __init__(self, port, name):
+        self.do_reset = False
         model.PortComponent.__init__(self, port, name)
         FreqCapper.__init__(self)
-        port.child_add(self, weak = True)
         self._lock = threading.Lock()
-        self.do_reset = False
 
     def close(self):
         self.port.child_remove(self)

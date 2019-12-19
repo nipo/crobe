@@ -2,6 +2,7 @@ import binascii
 from datetime import timedelta, datetime
 import logging
 import click
+import os
 from functools import update_wrapper
 
 class DomainFilter(logging.Filter):
@@ -44,7 +45,7 @@ def cli(ctx, verbose, raw_error, quiet, silent):
     root = logging.getLogger('')
     root.addHandler(handler)
     root.setLevel(10 * (4 + quiet - verbose))
-    root.info("Starting at %s", formatter.start)
+    root.info("Starting at %s, pid %d", formatter.start, os.getpid())
 
 ##
 ## Custom CLI types

@@ -86,9 +86,7 @@ class Interface(base.Interface):
 
     def child_spawn(self, sub):
         try:
-            r = self.db.call(sub, self)
-            self.child_add(r)
-            return r
+            return self.db.call(sub, self)
         except NoMatch:
             return
     

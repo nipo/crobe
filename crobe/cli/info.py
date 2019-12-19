@@ -1,6 +1,6 @@
 from . import base
 import click
-from ..adapter.model import Enumerator, Adapter
+from ..adapter.model import HwRoot, Enumerator, Adapter
 
 def component_dump(comp, prefix = ""):
     click.echo("%s %s" % (prefix, comp))
@@ -8,7 +8,7 @@ def component_dump(comp, prefix = ""):
         component_dump(c, prefix + "  ")
     
 def enumerator_dump(e, prefix = ""):
-    click.echo(prefix + "* Enumerator %s" % e)
+    click.echo(prefix + "* %s" % e)
 
     prefix += "  "
 
@@ -16,7 +16,7 @@ def enumerator_dump(e, prefix = ""):
         if isinstance(c, Enumerator):
             enumerator_dump(c, prefix)
         elif isinstance(c, Adapter):
-            click.echo(prefix + "* Adapter %s supported interfaces: %s" % (c, ", ".join(c.supported_interfaces)))
+            click.echo(prefix + "* %s, interfaces: %s" % (c, ", ".join(c.supported_interfaces)))
         else:
             click.echo(prefix + "* ???? %s" % c)
 
@@ -26,8 +26,8 @@ def info():
 
 @info.command(help = "Adapter list")
 def adapters():
-    Enumerator.singleton.start()
-    enumerator_dump(Enumerator.singleton)
+    HwRoot.start()
+    enumerator_dump(HwRoot)
 
 @info.command(help = "Component tree enumerator")
 @click.option('-r', '--root', "roots", type = base.ROOT, multiple = True)

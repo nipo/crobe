@@ -68,14 +68,6 @@ class Dp(PortComponent):
             return
 
         self.child_add(ap.cast())
-
-    def child_lookup(self, crit):
-        if crit.lower().startswith("ap#"):
-            no = int(crit[3:])
-            ap = [a for a in self.children if a.index == no]
-            if ap:
-                return ap[0]
-        return PortComponent.child_lookup(self, crit)
         
     def __str__(self):
         try:

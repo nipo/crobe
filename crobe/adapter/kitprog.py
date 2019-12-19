@@ -25,6 +25,7 @@ class BackgroundWriter(threading.Thread):
     def run(self):
         self.adapter.bulk_out(self.ep, self.data, int(self.timeout * 1000))
 
+@model.UsbEnumerator.db.register(model.UsbInfo(idVendor = 0x04b4, idProduct = 0xf139))
 class Adapter(model.Adapter):
     # KitProg implements Cypress USB-I2C bridge as documented in
     # AN2352 (http://www.cypress.com/file/42296/download).
@@ -112,9 +113,9 @@ class Adapter(model.Adapter):
         return data
 
     @classmethod
-    def from_device(cls, d, pre):
+    def from_device(cls, d):
         serial = usb.util.get_string(d, d.iSerialNumber)
-        return cls(d, "%s-%s" % (pre, serial))
+        return cls(d, "kitprog-%s" % (serial))
 
     @property
     def firmware_info(self):
@@ -427,16 +428,3 @@ class I2cInterface(i2c.Interface):
                         raise i2c.DataNack()
             else:
                 raise base.ProtocolError("Unknown I2C operation %s" % type(op))
-
-@model.Enumerator.register
-class Enumerator(model.Enumerator):
-    adapter_class = Adapter
-    prefix = "KitProg"
-
-    def __init__(self):
-        model.Enumerator.__init__(self, self.prefix)
-
-    def start(self):
-        for dev in usb.core.find(idVendor = 0x04b4, idProduct = 0xf139, find_all = True):
-            self.child_add(self.adapter_class.from_device(dev, self.prefix))
-        model.Enumerator.start(self)

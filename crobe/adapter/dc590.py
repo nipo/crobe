@@ -16,7 +16,7 @@ import threading
 import struct
 import time
 
-__all__ = ['Enumerator']
+__all__ = []
 
 # DC590 Ascii protocol:
 # D[hhhh]: Delay for N ms, N=hhhh in hex
@@ -187,7 +187,7 @@ class Dc590Adapter(basic.Adapter):
 
         raise ValueError("Unknown interface name: %s" % interface_name)
         
-@model.Enumerator.register
+@model.HwRoot.register
 class Enumerator(basic.AdapterEnumerator):
     adapter_class = Dc590Adapter
 

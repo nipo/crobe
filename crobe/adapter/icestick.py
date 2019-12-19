@@ -7,7 +7,7 @@ class Adapter(basic.Adapter):
     supported_interfaces = ["spi"]
     freq_max = 30e6
 
-@model.Enumerator.register
+@model.HwRoot.register
 class Enumerator(basic.AdapterEnumerator):
     adapter_class = Adapter
 

@@ -7,23 +7,6 @@ from ..util.endian import bitswap8
 import struct
 
 __all__ = []
-
-@model.Enumerator.register
-class Enumerator(model.Enumerator):
-    def __init__(self):
-        from . import libjaylink
-        model.Enumerator.__init__(self, "JLink")
-        self.ctx = libjaylink.Context()
-
-    def start(self):
-        from .libjaylink.jaylink import JaylinkError
-        for index, d in enumerate(self.ctx.devices()):
-            try:
-                self.child_add(Adapter.from_device(d))
-            except JaylinkError:
-                self.logger.error("USB Error while enumerating JLink with serial %d", d.serial_number)
-
-        model.Enumerator.start(self)
             
 class Adapter(model.Adapter):
     @classmethod
@@ -464,3 +447,20 @@ class SpiInterface(JLinkInterface, spi.Interface):
                     else:
                         cl = len(op.mosi)
                     op.miso = bitswap8(in_blob[op.__offset : op.__offset + cl])
+
+@model.HwRoot.register
+class Enumerator(model.AutoEnumerator):
+    def __init__(self):
+        from . import libjaylink
+        super().__init__("JLink")
+        self.ctx = libjaylink.Context()
+
+    def start(self):
+        from .libjaylink.jaylink import JaylinkError
+        for index, d in enumerate(self.ctx.devices()):
+            try:
+                self.child_add(Adapter.from_device(d))
+            except JaylinkError:
+                self.logger.error("USB Error while enumerating JLink with serial %d", d.serial_number)
+
+        super().start()

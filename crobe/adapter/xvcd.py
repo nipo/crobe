@@ -10,21 +10,19 @@ __all__ = []
 class SocketClosed(Exception):
     pass
 
-@model.Enumerator.register
-class Enumerator(model.Enumerator):
+@model.HwRoot.register
+class Enumerator(model.ExplicitEnumerator):
     def __init__(self):
-        model.Enumerator.__init__(self, "XVCD")
+        model.Enumerator.__init__(self, "XVC")
 
     def child_spawn(self, name):
-        r = Adapter.from_target(name, name)
-        self.child_add(r)
-        return r
+        return Adapter.from_target(name)
             
 class Adapter(model.Adapter):
     @classmethod
-    def from_target(cls, name, target):
-        port = target.split(":")[-1]
-        hostname = target[:-len(port)-1]
+    def from_target(cls, name):
+        port = name.split(":")[-1]
+        hostname = name[:-len(port)-1]
         
         return cls(name, hostname, int(port))
 
@@ -32,10 +30,9 @@ class Adapter(model.Adapter):
     nickname = "XVC"
 
     def __init__(self, name, hostname, port):
-        model.Adapter.__init__(self, "xvcd:%s" % name)
-
         self.hostname = hostname
         self.port = port
+        model.Adapter.__init__(self, "xvc@%s" % name)
 
     @property
     def firmware_info(self):
@@ -60,7 +57,7 @@ class JtagInterface(jtag.Interface):
             self.socket = socket.socket(family, socktype, proto)
             try:
                 self.socket.connect(sockaddr)
-            except Exception:
+            except ConnectionRefusedError:
                 if i == len(ais) - 1:
                     raise
                 continue

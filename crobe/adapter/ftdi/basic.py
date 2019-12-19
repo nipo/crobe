@@ -47,13 +47,13 @@ class Adapter(model.Adapter):
         if interface_name.lower() == "i2c":
             return I2cInterface(self, **d)
 
-class AdapterEnumerator(model.Enumerator):
+class AdapterEnumerator(model.AutoEnumerator):
     adapter_class = Adapter
 
     def __init__(self, name, short_name,
                  vid = None, pid = None,
                  **defaults):
-        model.Enumerator.__init__(self, name)
+        super().__init__(name)
         self.short_name = short_name
         self.defaults = defaults
         self.vid_pid = []
@@ -75,7 +75,7 @@ class AdapterEnumerator(model.Enumerator):
                 if not self.filter(a):
                     continue
                 self.child_add(a)
-        model.Enumerator.start(self)
+        super().start()
 
     def serial_mangle(self, serial):
         return serial

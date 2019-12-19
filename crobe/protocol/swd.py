@@ -78,9 +78,9 @@ class Interface(base.Interface):
     turnaround_supported = True
 
     def __init__(self, port, name = None):
-        base.Interface.__init__(self, port, (name or port.name) + "/SWD")
         self.do_cypress_acquire = False
         self.turnaround_cycles = 1
+        base.Interface.__init__(self, port, (name or port.name) + "/SWD")
 
     def line_reset(self):
         if self.do_cypress_acquire:

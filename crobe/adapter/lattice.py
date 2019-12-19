@@ -17,7 +17,7 @@ class Adapter(basic.Adapter):
         elif interface_name == "jtag":
             return basic.Adapter.open(self, "jtag", channel = "A")
 
-@model.Enumerator.register
+@model.HwRoot.register
 class Enumerator(basic.AdapterEnumerator):
     adapter_class = Adapter
 

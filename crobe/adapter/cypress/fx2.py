@@ -3,7 +3,7 @@ import binascii
 import time
 from . import fx
 
-__all__ = ["Adapter", "Enumerator"]
+__all__ = ["Adapter"]
 
 class Adapter(fx.Adapter):
     def reset(self, enable_cpu):
@@ -18,8 +18,3 @@ class Adapter(fx.Adapter):
         fx.Adapter.firmware_load(self, program)
 
         self.reset(False)
-
-@model.Enumerator.register
-class Enumerator(fx.Enumerator):
-    adapter_class = Adapter
-    prefix = "fx2"

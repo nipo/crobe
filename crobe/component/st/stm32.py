@@ -214,6 +214,10 @@ class Rm0033(Info):
     flash_size_addr = 0x1fff7a22
     uid_blob_addr = 0x1fff7a10
 
+class Rm0440(Info):
+    flash_size_addr = 0x1fff75e0
+    uid_blob_addr = 0x1fff7590
+
 Info.parts = {
     0: Info("", 0),
 
@@ -249,4 +253,7 @@ Info.parts = {
     # Actual ID is 0x433, but collides with other parts.
     # ID 0x10033 does not exist, it is a hack for code in from_id
     0x10033: Rm0033("F2xx",                 0),
+    # RM0440
+    0x468: Rm0440("G4[34]x",                0),
+    0x469: Rm0440("G4[78]x",                0),
 }

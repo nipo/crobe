@@ -3,7 +3,7 @@ import binascii
 import time
 from . import fx
 
-__all__ = ["Adapter", "Enumerator"]
+__all__ = ["Adapter"]
 
 class Adapter(fx.Adapter):
     def is_in_bootloader(self):
@@ -33,8 +33,3 @@ class Adapter(fx.Adapter):
         self.jump_to(entry)
 
         time.sleep(.6)
-
-@model.Enumerator.register
-class Enumerator(fx.Enumerator):
-    adapter_class = Adapter
-    prefix = "fx3"

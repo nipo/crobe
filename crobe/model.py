@@ -1,22 +1,4 @@
 import logging
-import weakref
-import inspect
-
-class Signal:
-    def __init__(self):
-        self.__slots = weakref.WeakSet([])
-
-    def connect(self, slot):
-        if inspect.ismethod(slot):
-            r = weakref.WeakMethod(slot)
-        else:
-            r = weakref.ref(slot)
-
-        self.__slots.add(r)
-
-    def __call__(self, *args, **kwargs):
-        for s in self.__slots:
-            s()(*args, **kwargs)
 
 class BadInvocation(Exception):
     def __init__(self, message):
@@ -54,26 +36,19 @@ class Component(object):
     """
     def __init__(self, name):
         self.name = name
-        self.children = []
+        self.__parent = None
+        self.__children = []
         self.__started = False
-        self.__in_enum = False
-
-    def start(self):
-        if self.__started:
-            return
-
-        self.__started = True
-        
-        if not self.__in_enum:
-            for c in self.children[:]:
-                c.start()
-        
-    def __str__(self):
-        return self.__name
 
     @property
-    def started(self):
-        return self.__started
+    def children(self):
+        return self.__children[:]
+
+    def start(self):
+        self.__start()
+
+    def __str__(self):
+        return self.__name
     
     @property
     def name(self):
@@ -86,7 +61,7 @@ class Component(object):
     
     def children_find(self, predicate, include_self = False):
         """
-        Retrieve childrens in the deep subtree matching predicate.
+        Retrieve children in the deep subtree matching predicate.
         """
         ret = []
         if include_self:
@@ -95,11 +70,9 @@ class Component(object):
                     ret.append(self)
             except Exception as e:
                 self.logger.warning("children find predicate exception: %s", e)
-        for c in self.children:
+        for c in self.__children:
             try:
                 if predicate(c):
-                    if isinstance(c, weakref.ProxyTypes):
-                        c = c.ref()
                     ret.append(c)
             except Exception as e:
                 self.logger.warning("children find predicate exception: %s", e)
@@ -108,24 +81,32 @@ class Component(object):
     
     def children_of_class(self, klass, include_self = False):
         """
-        Retrieve childrens in the deep subtree of class klass.
+        Retrieve children in the deep subtree of class klass.
         """
         return self.children_find(lambda x: isinstance(x, klass), include_self)
 
-    def child_add(self, obj, weak = False):
-        if weak:
-            obj = weakref.proxy(obj, self.weak_child_cleanup)
-        self.children.append(obj)
+    def child_add(self, obj):
+        if obj.__parent is self:
+            return
+
+        assert obj.__parent is None, (obj, obj.__parent)
+        obj.__parent = self
+        self.__children.append(obj)
+        if self.__started:
+            obj.__start()
+
+    def __start(self):
+        if self.__started:
+            return
+        self.__started = True
+        self.start()
+        for child in self.__children:
+            child.__start()
 
     def child_remove(self, obj):
-        self.children.remove(obj)
-
-    def weak_child_cleanup(self, proxy):
-        for i in range(len(self.children)-1, -1, -1):
-            try:
-                self.children[i]
-            except ReferenceError:
-                del self.children[i]
+        assert obj.__parent is self
+        obj.__parent = None
+        self.__children.remove(obj)
 
     def option_set(self, opt):
         self.logger.warning("Option %r ignored", opt)
@@ -144,26 +125,19 @@ class Component(object):
             crit = crit[: index]
 
         if not crit and not invocation:
-            if not self.__started:
-                self.start()
             return self
         
-        if not self.__started and "nostart" not in options:
-            self.__in_enum = True
-            self.start()
-            self.__in_enum = False
-
-        child = self.child_lookup(crit)
+        child = self.__child_lookup(crit)
         if not child:
             child = self.child_spawn(crit)
+            if child:
+                self.child_add(child)
         if not child:
             raise BadInvocation(crit)
 
         self.logger.info("Had %s", child)
 
         for opt in options:
-            if opt == "nostart":
-                return child
             try:
                 child.option_set(opt)
             except Exception as e:
@@ -171,9 +145,9 @@ class Component(object):
             
         return child.child_summon(*invocation)
 
-    def child_lookup(self, crit):
-        if crit == "*" and len(self.children) == 1:
-            return self.children[0]
+    def __child_lookup(self, crit):
+        if crit == "*" and len(self.__children) == 1:
+            return self.__children[0]
 
         try:
             index = int(crit)
@@ -181,7 +155,7 @@ class Component(object):
             index = None
 
         if index is not None:
-            return self.children[index]
+            return self.__children[index]
 
         possible = self.children_find(lambda x:crit.lower() in x.name.lower())
         if len(possible) == 1:

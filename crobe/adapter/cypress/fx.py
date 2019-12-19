@@ -8,10 +8,10 @@ import os
 __all__ = []
 
 class Adapter(model.Adapter):
-    VID_PIDS = []
-
     @classmethod
-    def from_device(cls, d, pre):
+    def from_device(cls, d, pre = None):
+        if pre is None:
+            pre = cls.__name__.lower()
         return cls(d, "%s-%d" % (pre, d.address))
 
     @classmethod
@@ -149,18 +149,3 @@ class Adapter(model.Adapter):
                     self.logger.debug("%08x: r %s", addr + i, binascii.b2a_hex(b))
 
                 assert readback == chunk
-
-@model.Enumerator.register
-class Enumerator(model.Enumerator):
-    adapter_class = Adapter
-    prefix = "fx"
-
-    def __init__(self):
-        model.Enumerator.__init__(self, self.prefix)
-
-    def start(self):
-        for vid, pid in self.adapter_class.VID_PIDS:
-            for dev in usb.core.find(idVendor = vid, idProduct = pid, find_all = True):
-                self.child_add(self.adapter_class.from_device(dev, self.prefix))
-
-        model.Enumerator.start(self)

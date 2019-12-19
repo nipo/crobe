@@ -224,7 +224,7 @@ class Hs2Adapter(DigilentAdapter):
         swdio_oe = (tms_oe, 1),
         )
 
-@model.Enumerator.register
+@model.HwRoot.register
 class Enumerator(basic.AdapterEnumerator):
     adapter_class = Hs2Adapter
 
@@ -236,7 +236,7 @@ class Enumerator(basic.AdapterEnumerator):
     def filter(self, adapter):
         return adapter.device.vendor == "Digilent" and adapter.device.model in ["Digilent USB Device"]
 
-@model.Enumerator.register
+@model.HwRoot.register
 class Enumerator(basic.AdapterEnumerator):
     adapter_class = Smt2Adapter
 

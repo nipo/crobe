@@ -13,14 +13,14 @@ import math
 
 __all__ = []
 
+@model.UsbEnumerator.db.register(model.UsbInfo(idVendor = 0x3fd, idProduct = 0x0007))
+@model.UsbEnumerator.db.register(model.UsbInfo(idVendor = 0x3fd, idProduct = 0x0009))
+@model.UsbEnumerator.db.register(model.UsbInfo(idVendor = 0x3fd, idProduct = 0x000d))
+@model.UsbEnumerator.db.register(model.UsbInfo(idVendor = 0x3fd, idProduct = 0x000f))
+@model.UsbEnumerator.db.register(model.UsbInfo(idVendor = 0x3fd, idProduct = 0x0013))
+@model.UsbEnumerator.db.register(model.UsbInfo(idVendor = 0x3fd, idProduct = 0x0015))
 class Adapter(fx2.Adapter):
     supported_interfaces = ["jtag"]
-    VID_PIDS = [(0x03fd, 0x0007),
-                (0x03fd, 0x0009),
-                (0x03fd, 0x000d),
-                (0x03fd, 0x000f),
-                (0x03fd, 0x0013),
-                (0x03fd, 0x0015)]
 
     OP_OUTPUT_DISABLE = 0x10
     OP_OUTPUT_ENABLE = 0x18
@@ -419,8 +419,3 @@ class JtagInterface(jtag.Interface):
             for op in o.__parts:
                 tdo += op.tdo
             o.tdo = tdo
-
-@model.Enumerator.register
-class Enumerator(fx2.Enumerator):
-    adapter_class = Adapter
-    prefix = "xpc"

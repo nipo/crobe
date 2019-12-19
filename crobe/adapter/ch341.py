@@ -27,6 +27,8 @@ class BackgroundWriter(threading.Thread):
     def run(self):
         self.adapter.bulk_out(self.ep, self.data, int(self.timeout * 1000))
 
+        
+@model.UsbEnumerator.db.register(model.UsbInfo(idVendor = 0x1a86, idProduct = 0x5512))
 class Adapter(model.Adapter):
     RATE = [20e3, 100e3, 400e3, 750e3]
 
@@ -99,8 +101,8 @@ class Adapter(model.Adapter):
         return b''
 
     @classmethod
-    def from_device(cls, d, pre):
-        return cls(d, "%s-%d" % (pre, d.address))
+    def from_device(cls, d):
+        return cls(d, "ch341-%d" % (d.address))
 
     def __init__(self, device, name):
         model.Adapter.__init__(self, name)
@@ -326,16 +328,3 @@ class I2cInterface(i2c.Interface):
                 for off in op.__ack_off:
                     if rsp[off] != 0x6f:
                         raise i2c.DataNack()
-
-@model.Enumerator.register
-class Enumerator(model.Enumerator):
-    adapter_class = Adapter
-    prefix = "CH341A"
-
-    def __init__(self):
-        model.Enumerator.__init__(self, self.prefix)
-
-    def start(self):
-        for dev in usb.core.find(idVendor = 0x1a86, idProduct = 0x5512, find_all = True):
-            self.child_add(self.adapter_class.from_device(dev, self.prefix))
-        model.Enumerator.start(self)

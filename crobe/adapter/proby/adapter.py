@@ -606,7 +606,7 @@ class ProbyAdapter(basic.Adapter):
 
             return CcInterface(self, mux)
         
-@model.Enumerator.register
+@model.HwRoot.register
 class Enumerator(basic.AdapterEnumerator):
     adapter_class = ProbyAdapter
 
