@@ -115,18 +115,18 @@ class MachXO2Config:
 
     @property
     def idcode(self):
-        return int.from_bytes(self.cmd(MachXO2.IR_IDCODE, None, 4), "big")
+        return int.from_bytes(self.cmd(opcodes.IDCODE, None, 4), "big")
 
     def start(self):
         idcode = self.idcode
-        parts = [p for p in parts.PARTS if int(idcode) == p.idcode]
-        if len(parts) > 1:
-            suffixes = [p.name.split("-", 1)[1] for p in parts]
-            prefix = parts[0].name.split("-", 1)[0]
+        possible_parts = [p for p in parts.PARTS if int(idcode) == p.idcode]
+        if len(possible_parts) > 1:
+            suffixes = [p.name.split("-", 1)[1] for p in possible_parts]
+            prefix = possible_parts[0].name.split("-", 1)[0]
             self.name = prefix + "-" + "/".join(suffixes)
-            self.info = parts[0]
+            self.info = possible_parts[0]
         else:
-            self.info = parts[0]
+            self.info = possible_parts[0]
             self.name = self.info.name
 
         self.config_memory_size = self.info.row_count * self.info.col_bit_count // 8
@@ -717,13 +717,15 @@ class MachXO2I2c(PortComponent, MachXO2Config):
         self.saddr = 0x40 if addr is None else addr
 
     def cmd(self, op, args, data = None):
-#        self.logger.info("CMD %02x", op)
+        self.logger.info("CMD %02x", op)
         if args is None:
             args = b'\x00\x00\x00'
+            if op in [0x74, 0xc6]:
+                args = b'\x08\x00'
         cmd = bytes([op]) + args
         for i in range(10, -1, -1):
             try:
-                if isinstance(data, int):
+                if isinstance(data, int) and data:
                     return self.port.write_read(self.saddr, cmd, data)
                 else:
                     return self.port.write(self.saddr, cmd + (data or b''))
