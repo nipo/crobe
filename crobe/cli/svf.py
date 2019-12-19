@@ -11,19 +11,19 @@ def svf():
 @click.argument("file", type = click.File("rb"))
 @click.option('-r', '--root', type = base.ROOT)
 def play(root, file):
-    from ..svf.player import ChainPlayer, TapPlayer
-    from ..svf.svf import SvfParser
+    from ..svf import player
+    from ..svf import svf
     from ..protocol.jtag import Interface, Chain, Tap
 
-    svf = SvfParser(file)
+    svf = svf.Parser(file)
 
     if isinstance(root, Interface):
         root = root.children[0]
 
     if isinstance(root, Chain):
-        player = ChainPlayer(root)
+        player = player.ChainPlayer(root)
     elif isinstance(root, Tap):
-        player = TapPlayer(root)
+        player = player.TapPlayer(root)
     else:
         click.echo("Root %s is not a JTAG chain nor a TAP" % root)
         return

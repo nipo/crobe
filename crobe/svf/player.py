@@ -5,6 +5,9 @@ import warnings
 import time
 from tqdm import tqdm
 
+class ExecutionError(Exception):
+    pass
+
 class Context:
     def __init__(self):
         self.end_state = "idle"
@@ -42,7 +45,11 @@ class Player:
     def run(self, svf):
         with tqdm(list(svf)) as ops:
             for op in ops:
-                self.handle(op)
+                try:
+                    self.handle(op)
+                except ExecutionError as e:
+                    print("%s: Error: %s" % (op.line_info(), str(e)))
+                    raise
         self.flush()
 
 class ChainPlayer(Player):
@@ -87,7 +94,7 @@ class ChainPlayer(Player):
         elif isinstance(op, svf.Frequency):
             self.freq(op.value)
         else:
-            raise NotImplementedError("Unknown operation", op)
+            raise ExecutionError("Unknown operation", op)
 
     def shift(self, ctx):
         assert ctx.tdi
@@ -111,7 +118,7 @@ class ChainPlayer(Player):
                 tdo &= int(ctx.mask)
                 ctdo &= int(ctx.mask)
             if tdo != ctdo:
-                raise ValueError("Expected TDO:%r/%r, had %r" % (ctx.tdo, ctx.mask, op.tdo))
+                raise ExecutionError("Expected TDO:%r/%r, had %r" % (ctx.tdo, ctx.mask, op.tdo))
 
         self.move_to(ctx.end_state)
 
@@ -208,7 +215,7 @@ class TapRegContext:
                 print()
                 print("Expected :", str(binascii.b2a_hex(bytes(self.tdo)), "ascii"))
                 print("Actual   :", str(binascii.b2a_hex(bytes(cmd.tdo)), "ascii"))
-                raise ValueError(self.__class__.__name__ + " Expected TDO:%r/%r, had %r" % (self.tdo, self.mask, cmd.tdo))
+                raise ExecutionError(self.__class__.__name__ + " Expected TDO:%r/%r, had %r" % (self.tdo, self.mask, cmd.tdo))
 
         self.tdi = BitString()
         self.tdo = BitString()
@@ -271,7 +278,7 @@ class TapPlayer(Player):
             self.flush()
             self.tap.port.port.freq_cap("svf", op.value)
         else:
-            raise NotImplementedError("Unknown operation", op)
+            raise ExecutionError("Unknown operation", op)
 
     def test_run(self, op):
         maxrun = int(self.tap.port.port.freq) // 2
