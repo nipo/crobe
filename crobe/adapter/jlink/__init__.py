@@ -456,11 +456,11 @@ class Enumerator(model.AutoEnumerator):
         self.ctx = libjaylink.Context()
 
     def start(self):
-        from .libjaylink import JaylinkError
+        from .libjaylink import JlinkError
         for index, d in enumerate(self.ctx.devices()):
             try:
                 self.child_add(Adapter.from_device(d))
-            except JaylinkError:
+            except JlinkError:
                 self.logger.error("USB Error while enumerating JLink with serial %d", d.serial_number)
 
         super().start()

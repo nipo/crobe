@@ -8,9 +8,9 @@ import sys
 import math
 import logging
 
-__all__ = ["JaylinkError", "Handle", "Device", "Context"]
+__all__ = ["JlinkError", "Handle", "Device", "Context"]
 
-class JaylinkError(Exception):
+class JlinkError(Exception):
     def __init__(self, message, code):
         Exception.__init__(self, message)
         self.message = message
@@ -19,7 +19,7 @@ class JaylinkError(Exception):
 def checked(err):
     if err != api.OK:
         msg = str(api.strerror(err), 'utf-8')
-        raise JaylinkError(msg, err)
+        raise JlinkError(msg, err)
 
 class Handle(model.Component):
     def __init__(self, handle, context):
