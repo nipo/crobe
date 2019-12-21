@@ -26,18 +26,20 @@ root path:
 J-Link
 ======
 
-J-Link adapters are supported through `libjaylink
-<http://repo.or.cz/r/libjaylink.git>`_. They support JTAG, SWD and SPI
-by using JTAG pins and commands internally.
+J-Link adapters are supported directly by implementing commands
+described in Segger's RM8001. They support JTAG, SWD and SPI.
 
-JTAG and SWD are implemented using raw I/O.  Probe offloading is unused
-as SEGGER wants to keep it for its own usage.
+All protocols are implemented using raw bitstream I/O.  Probe
+offloading is unused as SEGGER wants to keep it for its own usage.
 
 J-Link performance is decent.
 
 Some J-Link adapters support setting power (`power=on/off` option
 string). All J-Link adapters support setting frequency, maximal
 frequency is dependent on the model.
+
+J-Link enumerator retrieves probe nickname from its configuration
+area and uses it as adapter name.
 
 FTDI-based probes
 =================

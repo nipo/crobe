@@ -5,73 +5,30 @@ from ... import bitstring
 from ...util.pretty import metric
 from ...util.endian import bitswap8
 import struct
+from . import backend
 
 __all__ = []
 
-class Adapter(model.Adapter):
-    @classmethod
-    def from_device(cls, d):
-        handle = d.open()
-
-        address = d.usb_address
-        interfaces = handle.available_interfaces
-        firmware_version = handle.firmware_version
-        nickname = handle.config[80:80+32].split(b"\x00")[0]
-        if nickname.startswith(b"\xff"):
-            nickname = b""
-        nickname = str(nickname, 'utf-8', 'ignore')
-
-        del handle
-
-        return cls(d, address, d.serial_number, interfaces, firmware_version, nickname)
-
-    def __init__(self, device, address, serial_number, available_interfaces, firmware_version, nickname):
-        model.Adapter.__init__(self, nickname or ("jlink-%s" % serial_number))
-
-        self.device = device
-        self.address = address
-        self.nickname = nickname
-        self.serial_number = serial_number
-        self.supported_interfaces = [x.lower() for x in available_interfaces]
-        if 'jtag' in self.supported_interfaces and "spi" not in self.supported_interfaces:
-            self.supported_interfaces.append("spi")
-        self.__firmware_version = firmware_version
-
-    @property
-    def firmware_info(self):
-        return self.__firmware_version[0]
-
-    def open(self, interface_name):
-        if interface_name.lower() not in self.supported_interfaces:
-            return None
-
-        if interface_name.lower() == "jtag":
-            return JtagInterface(self)
-
-        if interface_name.lower() == "spi":
-            return SpiInterface(self)
-
-        if interface_name.lower() == "swd":
-            return SwdInterface(self)
-
 class JLinkInterface(object):
     def __init__(self, device, interface):
-        self.handle = device.device.open()
-        self.handle.interface = interface.upper()
+        self.handle = device.handle_get()
+        if interface == "spi":
+            interface = "jtag"
+        self.handle.interface = backend.Tif[interface.capitalize()]
 
     def max_speed_set(self):
         self.freq_cap("hardware", self.handle.speed_range[1])
 
     @property
     def freq(self):
-        return int(self.handle.speed * 1000.)
+        return int(self.handle.speed_khz * 1000.)
 
     @freq.setter
     def freq(self, freq):
         if freq is None:
-            self.handle.speed = None
+            self.handle.speed_khz = None
         else:
-            self.handle.speed = float(freq) / 1000.
+            self.handle.speed_khz = float(freq) / 1000.
 
     @property
     def reset(self):
@@ -246,8 +203,7 @@ class JtagInterface(JLinkInterface, jtag.Interface):
             #self.logger.debug("tms: %s", tms_buf)
             #self.logger.debug("tdi: %s", tdi_buf)
             
-            tdo_blob = self.handle.jtag_io(tms_buf.data, tdi_buf.data, len(tms_buf))
-            tdo_buf = bitstring.BitString(tdo_blob, len(tms_buf))
+            tdo_buf = self.handle.jtag_io(tms_buf, tdi_buf)
 
             #self.logger.debug("tdo: %s", tdo_buf)
 
@@ -381,7 +337,7 @@ class SwdInterface(JLinkInterface, swd.Interface):
             out = b''.join(out_list)
             oe = b''.join(oe_list)
 
-            in_blob = self.handle.swd_io(out, oe, used * 8)
+            in_blob = self.handle.jtag_io(oe, out)
 
             for idx, op in enumerate(pending):
                 if isinstance(op, (swd.Read, swd.Write)):
@@ -438,7 +394,7 @@ class SpiInterface(JLinkInterface, spi.Interface):
                 else:
                     raise base.ProtocolError("Unknown SPI operation %s" % type(op))
 
-            in_blob = self.handle.jtag_io(cs_pending, out_pending, len(out_pending) * 8)
+            in_blob = self.handle.jtag_io(cs_pending, out_pending)
 
             for op in pending:
                 if isinstance(op, spi.Shift) and op.read_miso:
@@ -447,20 +403,73 @@ class SpiInterface(JLinkInterface, spi.Interface):
                     else:
                         cl = len(op.mosi)
                     op.miso = bitswap8(in_blob[op.__offset : op.__offset + cl])
+    
+PIDS = [0x0101, 0x0102, 0x0103, 0x0104, 0x0105, 0x0107, 0x0108,
+	0x1010, 0x1011, 0x1012, 0x1013, 0x1014, 0x1015, 0x1016,
+	0x1017, 0x1018, 0x1020, 0x1055]
+@model.UsbEnumerator.db.register(*[model.UsbInfo(idVendor = 0x1366, idProduct = p) for p in PIDS])
+class JLink(model.Adapter):
+    @classmethod
+    def from_device(cls, dev):
+        from usb import util
+        serial = int(util.get_string(dev, dev.iSerialNumber))
+        return cls(dev, serial)
 
-@model.HwRoot.register
-class Enumerator(model.AutoEnumerator):
-    def __init__(self):
-        from . import libjaylink
-        super().__init__("JLink")
-        self.ctx = libjaylink.Context()
+    def __init__(self, device, serial):
+        self._device = device
+        self.serial = serial
+        self.nickname = "jlink-%d" % serial
+        super().__init__(self.nickname)
 
-    def start(self):
-        from .libjaylink import JlinkError
-        for index, d in enumerate(self.ctx.devices()):
-            try:
-                self.child_add(Adapter.from_device(d))
-            except JlinkError:
-                self.logger.error("USB Error while enumerating JLink with serial %d", d.serial_number)
+        self.interfaces = []
+        self.firmware_info = ""
 
-        super().start()
+        self.__info_get_oneshot()
+
+        self.supported_interfaces = [interface.name.lower()
+                                     for interface in self.interfaces]
+        if "jtag" in self.supported_interfaces:
+            self.supported_interfaces.append("spi")
+        self.name = self.nickname
+
+    def handle_get(self):
+        return backend.Handle(self._device)
+
+    def __info_get_oneshot(self):
+        try:
+            handle = self.handle_get()
+        except:
+            return
+
+        try:
+            cfg = backend.ReadConfig()
+            ifs = backend.GetAvailableIf()
+
+            self.nickname = handle.execute([cfg, ifs])
+            self.firmware_info = handle.firmware_version
+            self.interfaces = []
+
+            nickname = cfg.data[backend.Config.Nickname : backend.Config.Nickname + 0x20]
+            self.nickname = str(nickname.strip(b'\x00'), 'utf-8', 'ignore').strip()
+
+            for v in backend.Tif:
+                if ifs.data & (1 << v):
+                    self.interfaces.append(v)
+
+        except Exception as e:
+            self.logger.debug("Exception when enumerating JLink device: %s", str(e))
+        finally:
+            handle.close()
+
+    def open(self, interface_name):
+        if interface_name.lower() not in self.supported_interfaces:
+            return None
+
+        if interface_name.lower() == "jtag":
+            return JtagInterface(self)
+
+        if interface_name.lower() == "spi":
+            return SpiInterface(self)
+
+        if interface_name.lower() == "swd":
+            return SwdInterface(self)
