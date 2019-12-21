@@ -1,13 +1,13 @@
-from . import model
+from .. import model
 from collections import deque
-from ..protocol import swd, jtag, base, spi
-from .. import bitstring
-from ..util.pretty import metric
-from ..util.endian import bitswap8
+from ...protocol import swd, jtag, base, spi
+from ... import bitstring
+from ...util.pretty import metric
+from ...util.endian import bitswap8
 import struct
 
 __all__ = []
-            
+
 class Adapter(model.Adapter):
     @classmethod
     def from_device(cls, d):
@@ -456,7 +456,7 @@ class Enumerator(model.AutoEnumerator):
         self.ctx = libjaylink.Context()
 
     def start(self):
-        from .libjaylink.jaylink import JaylinkError
+        from .libjaylink import JaylinkError
         for index, d in enumerate(self.ctx.devices()):
             try:
                 self.child_add(Adapter.from_device(d))
