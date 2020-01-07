@@ -33,7 +33,7 @@ class MachUfm(MachMem):
     flags = set([memory.Flag.WRITABLE, memory.Flag.PARTIAL_READ, memory.Flag.MM_READ])
 
     def __init__(self, fpga):
-        MachMem.__init__(self, fpga, "ufm", 0 + fpga.info.flash_page_count * 16, fpga.info.ufm_page_count * 16)
+        MachMem.__init__(self, fpga, "ufm", 0x20000000, 512 * 16)
 
     def erase(self, offset, size):
         if offset == 0:
@@ -96,7 +96,7 @@ class MachXOFlasher(model.Target, memory.Loadable):
         self.force_blank()
 
     def reset(self):
-        self.component.reset()
+        self.component.refresh()
 
     def program_end(self, success, do_start):
         self.component._usercode_write(0)

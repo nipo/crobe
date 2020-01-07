@@ -208,6 +208,11 @@ class MachXO2Config:
         self._erase_all()
         self._isc_disable()
 
+    def refresh(self):
+        self._isc_enable(True)
+        self._refresh()
+        self._isc_disable()
+
     @property
     def status(self):
         return int.from_bytes(self.cmd(opcodes.LSC_READ_STATUS, None, 4), 'big')
@@ -270,7 +275,6 @@ class MachXO2Config:
         self.cmd(addr_init, bytes([offset_base >> 28, 0, 0]))
         self.wait_no_fail()
 
- 
 #        self.cmd(opcodes.LSC_READ_INCR_NV, b'\x00\x00\x01', 16),
 
         data = b''
@@ -430,7 +434,9 @@ class MachXO2Config:
         return tmp
 
     def _refresh(self):
-        self.cmd(opcodes.LSC_REFRESH, None)
+        for retry in range(5):
+            self.cmd(opcodes.LSC_REFRESH, None)
+            self._assert_done()
         self.wait_no_fail(5)
 
     def _assert_done(self):
