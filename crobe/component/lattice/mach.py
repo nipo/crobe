@@ -200,6 +200,10 @@ class MachXO2Config:
         self._stop()
         self._isc_disable()
 
+    def reset(self):
+        self.stop()
+        self.refresh()
+
     def _erase_all(self):
         self._erase(self.ERASE_SRAM | self.ERASE_UFM | self.ERASE_FLASH | self.ERASE_FEATURE)
 
