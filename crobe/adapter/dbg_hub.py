@@ -3,7 +3,7 @@ from .ftdi import basic
 
 __all__ = []
 
-class Adapter(basic.Adapter):
+class DbgV1(basic.Adapter):
     supported_interfaces = ["jtag", "swd", "i2c"]
 
     def open(self, interface_name):
@@ -25,8 +25,8 @@ class Adapter(basic.Adapter):
                                       channel = "B")
 
 @model.HwRoot.register
-class Enumerator(basic.AdapterEnumerator):
-    adapter_class = Adapter
+class EnumeratorV1(basic.AdapterEnumerator):
+    adapter_class = DbgV1
 
     def __init__(self):
         basic.AdapterEnumerator.__init__(self, "Hub Debug",
@@ -35,3 +35,36 @@ class Enumerator(basic.AdapterEnumerator):
 
     def filter(self, adapter):
         return adapter.device.vendor == "Nipo" and adapter.device.model == "Hub Debug"
+
+class DbgV2(basic.Adapter):
+    supported_interfaces = ["jtag", "swd", "i2c"]
+
+    def open(self, interface_name):
+        if interface_name == "jtag":
+            return basic.Adapter.open(self, interface_name,
+                                      gpio_output = 0x6b, gpio_value = 0x00,
+                                      channel = "A",
+                                      reset_od_pin = 4)
+        elif interface_name == "swd":
+            return basic.Adapter.open(self, interface_name,
+                                      gpio_output = 0x63, gpio_value = 0x20,
+                                      channel = "A",
+                                      oen_pin = 6,
+                                      reset_od_pin = 4)
+        elif interface_name == "i2c":
+            return basic.Adapter.open(self, interface_name,
+                                      has_scl_in = True,
+                                      gpio_output = 0, gpio_value = 0,
+                                      channel = "B")
+
+@model.HwRoot.register
+class EnumeratorV2(basic.AdapterEnumerator):
+    adapter_class = DbgV2
+
+    def __init__(self):
+        basic.AdapterEnumerator.__init__(self, "Hub Debug v2",
+                                         short_name = "hd2",
+                                         vid = 0x0403, pid = 0x6011)
+
+    def filter(self, adapter):
+        return adapter.device.vendor == "Nipo" and adapter.device.model == "Hub Debug v2"
