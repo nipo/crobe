@@ -4,11 +4,11 @@ from ..protocol import i2c
 import binascii
 import time
 
-__all__ = ["I2cEeprom"]
+__all__ = ["I2cMem"]
 
-class I2cEeprom(PortComponent, Bus):
+class I2cMem(PortComponent, Bus):
     def __init__(self, bus, saddr, addr_bytes = 2, size = None, page_size = None, saddr_bits = 0):
-        PortComponent.__init__(self, bus, "I2cEeprom")
+        PortComponent.__init__(self, bus, "I2cMem")
         Bus.__init__(self, self.name)
         self.saddr = saddr
         self.addr_bytes = addr_bytes
@@ -19,7 +19,7 @@ class I2cEeprom(PortComponent, Bus):
         self.page_size = page_size or self.size
 
         if self.size > max_size:
-            raise ValueError("EEPROM size is more than accessible addresses")
+            raise ValueError("Memory size is more than accessible addresses")
 
     def _addr(self, addr):
         baddr = (addr & ((1 << (self.addr_bytes * 8)) - 1)).to_bytes(self.addr_bytes, 'big')
@@ -59,19 +59,6 @@ class I2cEeprom(PortComponent, Bus):
         saddr, baddr = self._addr(addr)
 
         self.port.write(saddr, baddr + data)
-        
-        time.sleep(.05)
-        deadline = time.time() + .1
-        while time.time() < deadline:
-            try:
-                r = self.port.write_read(saddr, baddr, len(data))
-                if r == data:
-                    return
-            except i2c.AddressNack:
-                pass
-            time.sleep(.01)
-            continue
-        raise RuntimeError()
 
     def option_set(self, opt):
         k, v = opt.split('=', 1)
@@ -88,6 +75,32 @@ class I2cEeprom(PortComponent, Bus):
         else:
             return PortComponent.option_set(self, opt)
 
+class I2cEeprom(I2cMem):
+    def _write(self, addr, data):
+        assert 0 < len(data) <= self.page_size
+        assert addr // self.page_size == (addr + len(data) - 1) // self.page_size
+
+        saddr, baddr = self._addr(addr)
+
+        self.port.write(saddr, baddr + data)
+        
+        time.sleep(.05)
+        deadline = time.time() + .1
+        while time.time() < deadline:
+            try:
+                r = self.port.write_read(saddr, baddr, len(data))
+                if r == data:
+                    return
+            except i2c.AddressNack:
+                pass
+            time.sleep(.01)
+            continue
+        raise RuntimeError()
+
 @i2c.Interface.db.register("eeprom")
 def i2c_eeprom_gen(bus):
     return I2cEeprom(bus, 0)
+
+@i2c.Interface.db.register("memory")
+def i2c_mem_gen(bus):
+    return I2cMem(bus, 0)
