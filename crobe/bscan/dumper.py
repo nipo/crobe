@@ -77,7 +77,7 @@ class Dumper:
                 print()
                 print("Changes:")
                 for chip, pin, value in diffs:
-                    print(" %s/%s: %d" % (chip, pin, value))
+                    print(" %s/%s (%s): %d" % (chip, pin.label, pin.name, value))
             else:
                 no_change += 1
                 print("No change, %d ms interval, %d cycles so far..." % (((read - last_read) * 1000), no_change),
