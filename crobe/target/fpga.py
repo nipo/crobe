@@ -25,3 +25,7 @@ class FpgaVolatileConfig(model.Target, memory.Loadable):
             self.component.stop()
         if len(program):
             self.component.load(program)
+
+    def reset(self):
+        self.component.reset()
+
