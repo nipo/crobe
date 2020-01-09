@@ -179,7 +179,9 @@ class Parser:
             st = next(self.lex)
             if st.text == ";":
                 break
-            states.append(st.text)
+            s = st.text.lower()
+            assert s in self.STATES
+            states.append(s)
         return State(token, states)
 
     def handle_tir(self, token):
