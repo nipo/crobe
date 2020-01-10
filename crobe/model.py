@@ -45,7 +45,7 @@ class Component(object):
         return self.__children[:]
 
     def start(self):
-        self.__start()
+        return self.__start()
 
     def __str__(self):
         return self.__name
@@ -87,29 +87,49 @@ class Component(object):
 
     def child_add(self, obj):
         if obj.__parent is self:
+            assert obj in self.__children
             return
 
         assert obj.__parent is None, (obj, obj.__parent)
+        assert obj not in self.__children
+
         obj.__parent = self
         self.__children.append(obj)
+
+        self.logger.info("child_add %s %s %s", obj, self.__started, obj.__started)
+        self.children_changed()
         if self.__started:
             obj.__start()
 
     def __start(self):
         if self.__started:
-            return
+            return False
         self.__started = True
         self.start()
         for child in self.__children:
             child.__start()
+        return True
 
     def child_remove(self, obj):
-        assert obj.__parent is self
+        if obj.__parent is None:
+            raise RuntimeError("Object is already dandling")
+        assert obj.__parent is self, obj.__parent
         obj.__parent = None
         self.__children.remove(obj)
+        self.children_changed()
 
+    def children_changed(self):
+        pass
+        
     def option_set(self, opt):
         self.logger.warning("Option %r ignored", opt)
+
+    def __options_apply(self, options):
+        for opt in options:
+            try:
+                self.option_set(opt)
+            except Exception as e:
+                raise BadOption(opt) from e
 
     def child_summon(self, crit = None, *invocation):
         options = []
@@ -128,20 +148,18 @@ class Component(object):
             return self
         
         child = self.__child_lookup(crit)
-        if not child:
+        if child:
+            child.__options_apply(options)
+        else:
             child = self.child_spawn(crit)
-            if child:
-                self.child_add(child)
-        if not child:
-            raise BadInvocation(crit)
+            if not child:
+                raise BadInvocation(crit)
+
+            # Must apply options before adding to tree (i.e. starting)
+            child.__options_apply(options)
+            self.child_add(child)
 
         self.logger.info("Had %s", child)
-
-        for opt in options:
-            try:
-                child.option_set(opt)
-            except Exception as e:
-                raise BadOption(opt) from e
             
         return child.child_summon(*invocation)
 

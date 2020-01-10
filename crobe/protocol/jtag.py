@@ -74,9 +74,10 @@ class Interface(base.Interface):
         self.use_icepick = False
 
     def start(self):
+        self.logger.info("starting")
+
         chain = Chain(self)
         self.child_add(chain)
-        base.Interface.start(self)
 
     def _execute(self, operation_list):
         raise NotImplementedError()
@@ -207,6 +208,8 @@ class Chain(PortComponent):
         self.name = self.port.port.name + "-Chain"
         
     def start(self):
+        PortComponent.start(self)
+
         import time
 
         self.port.freq_cap("enumeration", 1e6)
@@ -221,11 +224,12 @@ class Chain(PortComponent):
 
         self.port.freq_cap("enumeration", None)
 
-        PortComponent.start(self)
-
     def child_add(self, child):
         PortComponent.child_add(self, child)
-        self.port.freq_cap(child, child.max_freq)
+
+    def children_changed(self):
+        for c in self.children:
+            self.port.freq_cap(c, c.max_freq)
         
     def reset(self):
         import time
