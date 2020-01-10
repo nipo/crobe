@@ -435,10 +435,12 @@ class I2cInterface(BaseInterface, i2c.Interface):
     def _cmd_write(self, data):
         cmd = lambda x: self.__sda_out + bytes([
             api.MPSSE_WRITE_NEG | api.MPSSE_WRITE | api.MPSSE_BITS,
-            7,
-            x]) + self.__sda_in + bytes([
-            api.MPSSE_READ | api.MPSSE_BITS,
+            7, x]) + self.__sda_in + bytes([
+            api.MPSSE_3_PHASE_DISABLE,
+            api.MPSSE_WRITE_NEG | api.MPSSE_READ | api.MPSSE_READ_NEG | api.MPSSE_WRITE | api.MPSSE_BITS,
             0,
+            0xff,
+            api.MPSSE_3_PHASE_ENABLE,
         ])
         return b''.join(cmd(d) for d in data)
 
@@ -512,6 +514,7 @@ class I2cInterface(BaseInterface, i2c.Interface):
 
         for op in ops:
             if op.__saddr_ack is not None:
+                self.logger.debug("Saddr ack at %d: %02x", op.__saddr_ack, rsp[op.__saddr_ack])
                 if rsp[op.__saddr_ack] & 1:
                     raise i2c.AddressNack(op.addr)
 
