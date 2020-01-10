@@ -11,9 +11,6 @@ import time
 import binascii
 
 class MachXO2Config:
-    ENABLE_ARG = b'\x08\x00\x00'
-    DISABLE_ARG = b'\x00\x00'
-
     ERASE_SRAM = 1
     ERASE_FEATURE = 2
     ERASE_FLASH = 4
@@ -152,19 +149,16 @@ class MachXO2Config:
         if background is None:
             background = self.__bg_enable
 
-#        self.cmd(opcodes.ISC_DISABLE, self.DISABLE_ARG)
-#        self.wait_no_fail()
-        self.cmd(opcodes.LSC_ENABLE_X if background else opcodes.ISC_ENABLE, self.ENABLE_ARG)
+        self.cmd(opcodes.LSC_ENABLE_X if background else opcodes.ISC_ENABLE, None)
         self.wait_no_fail()
         self.__bg_enable = background
 
         self.status_check(0, 0x0200)
 
     def _isc_disable(self):
-        self.cmd(opcodes.ISC_DISABLE, self.DISABLE_ARG)
-        self.run(10000)
-#        self.status_check(0x3200, 0)
-#        self.cmd(opcodes.BYPASS, None)
+        self.cmd(opcodes.ISC_DISABLE, b"\x00\x00")
+        self.wait_no_fail()
+        self.run(1)
         self.__bg_enable = None
 
     @property
@@ -172,7 +166,6 @@ class MachXO2Config:
         return self.ir_status & 0x84 == 0x04
 
     def _bypass(self):
-        self.cmd(opcodes.BYPASS, None)
         self.run(100)
 
     def _addr_set(self, addr = None):
@@ -201,20 +194,23 @@ class MachXO2Config:
         self._isc_disable()
 
     def reset(self):
-        self.stop()
         self.refresh()
+        
+    def refresh(self):
+        self._refresh()
 
+    def _refresh(self):
+        self._isc_disable()
+        self.cmd(opcodes.LSC_REFRESH, b'\x00\x00')
+        time.sleep(.01)
+        self.run()
+        
     def _erase_all(self):
         self._erase(self.ERASE_SRAM | self.ERASE_UFM | self.ERASE_FLASH | self.ERASE_FEATURE)
 
     def erase_all(self):
         self._isc_enable(False)
         self._erase_all()
-        self._isc_disable()
-
-    def refresh(self):
-        self._isc_enable(True)
-        self._refresh()
         self._isc_disable()
 
     @property
@@ -437,12 +433,6 @@ class MachXO2Config:
             tmp += bitswap8(data[offset : offset + 16])
         return tmp
 
-    def _refresh(self):
-        for retry in range(5):
-            self.cmd(opcodes.LSC_REFRESH, None)
-            self._assert_done()
-        self.wait_no_fail(5)
-
     def _assert_done(self):
         self.wait_idle(10)
         self.status_check(0x2000, 0x100)
@@ -457,7 +447,6 @@ class MachXO2Config:
 class MachXO2(jtag.Tap, MachXO2Config):
     irlen = 8
     max_freq = 25e6
-    ENABLE_ARG = 0x08
     
     def __init__(self, port, index):
         jtag.Tap.__init__(self, port, index)
@@ -489,7 +478,7 @@ class MachXO2(jtag.Tap, MachXO2Config):
             
         jtag.Tap.start(self)
 
-    def _isc_enable(self, background = None, arg = None):
+    def _isc_enable(self, background = None):
         if self.__bg_enable is None and background is None:
             raise ValueError("Cannot reenable with no previous enable")
         #if background is None:
@@ -498,16 +487,11 @@ class MachXO2(jtag.Tap, MachXO2Config):
         self.dr_shift(opcodes.ISC_DISABLE, None)
         self.wait_no_fail()
         self.dr_shift(opcodes.LSC_ENABLE_X if background else opcodes.ISC_ENABLE,
-                      arg if arg is not None else self.ENABLE_ARG, 8)
+                      bitstring.BitString(b"\x08\x00\x00", 24))
         self.wait_no_fail()
         self.__bg_enable = background
 
         self.status_check(0, 0x0200)
-
-    def _isc_disable(self):
-        self.dr_shift(opcodes.ISC_DISABLE, None)
-        self.wait_no_fail()
-        self.__bg_enable = None
 
     def _erase(self, what):
         assert self.__bg_enable is not None
@@ -674,7 +658,7 @@ class MachXO2(jtag.Tap, MachXO2Config):
 
     def ram_load(self, bs):
         assert self.idcode.is_same_part(PartId.from_idcode(bs.info.idcode))
-        self._isc_enable(False, 0)
+        self._isc_enable(False)
         self._erase(self.ERASE_SRAM)
 
         bs_cmds = [
@@ -710,9 +694,6 @@ class MachXO2(jtag.Tap, MachXO2Config):
         
 @i2c.Interface.db.register("machxo2")
 class MachXO2I2c(PortComponent, MachXO2Config):
-    ENABLE_ARG = b'\x08\x00'
-    DISABLE_ARG = b'\x00\x00'
-    
     def __init__(self, bus):
         PortComponent.__init__(self, bus, "MachXO2")
         MachXO2Config.__init__(self)
@@ -730,8 +711,10 @@ class MachXO2I2c(PortComponent, MachXO2Config):
         self.logger.info("CMD %02x", op)
         if args is None:
             args = b'\x00\x00\x00'
-            if op in [0x74, 0xc6]:
+            if op in [opcodes.ISC_ENABLE, opcodes.LSC_ENABLE_X]:
                 args = b'\x08\x00'
+            if op in [opcodes.ISC_DISABLE]:
+                args = b'\x00\x00'
         cmd = bytes([op]) + args
         for i in range(10, -1, -1):
             try:
@@ -751,8 +734,8 @@ class MachXO2I2c(PortComponent, MachXO2Config):
         else:
             return PortComponent.option_set(opt)
 
-    def run(self, cycles):
-        self.cmd(0xff, None)
+    def run(self, cycles = 1):
+        self.cmd(opcodes.BYPASS, None)
         if cycles > 1000:
             time.sleep(.5)
 
@@ -780,5 +763,4 @@ class MachXO2I2c(PortComponent, MachXO2Config):
 
 @spi.Target.db.register("machxo2")
 class MachXO2Spi(MachXO2Config):
-    ENABLE_ARG = b'\x08\x00\x00'
-    DISABLE_ARG = b'\x00\x00'
+    pass
