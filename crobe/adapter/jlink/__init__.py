@@ -416,6 +416,7 @@ class JLink(model.Adapter):
         return cls(dev, serial)
 
     def __init__(self, device, serial):
+        self.__weak_handle = lambda: None
         self._device = device
         self.serial = serial
         self.nickname = "jlink-%d" % serial
@@ -433,7 +434,19 @@ class JLink(model.Adapter):
         self.name = self.nickname
 
     def handle_get(self):
-        return backend.Handle(self._device)
+        import weakref
+
+        handle = self.__weak_handle()
+        if handle is None:
+            import gc
+            gc.collect()
+            self.logger.info("Getting handle, as new")
+            handle = backend.Handle(self._device)
+            self.__weak_handle = lambda: handle
+        else:
+            self.logger.info("Getting handle, got %x from ref", id(handle))
+            
+        return handle
 
     def __info_get_oneshot(self):
         try:
@@ -445,12 +458,14 @@ class JLink(model.Adapter):
             cfg = backend.ReadConfig()
             ifs = backend.GetAvailableIf()
 
-            self.nickname = handle.execute([cfg, ifs])
+            handle.execute([cfg, ifs])
             self.firmware_info = handle.firmware_version
             self.interfaces = []
 
             nickname = cfg.data[backend.Config.Nickname : backend.Config.Nickname + 0x20]
-            self.nickname = str(nickname.strip(b'\x00'), 'utf-8', 'ignore').strip()
+            nickname = str(nickname.strip(b'\x00'), 'utf-8', 'ignore').strip()
+            if nickname:
+                self.nickname = nickname
 
             for v in backend.Tif:
                 if ifs.data & (1 << v):

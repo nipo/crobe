@@ -115,6 +115,7 @@ class JlinkError(Exception):
 class Handle(Component):
     def __init__(self, device):
         super().__init__("j/%s/%s" % (device.bus, device.address))
+        device.set_configuration(0)
         device.set_configuration(1)
         cfg = device.get_active_configuration()
         self.intf = None
@@ -125,8 +126,12 @@ class Handle(Component):
                and intf.bInterfaceProtocol == 0xff:
                 self.intf = intf
                 break
+
         if self.intf is None:
             raise ValueError("Bad JLink device")
+
+        self.cfg = cfg
+
         self.out_ep = usb.util.find_descriptor(self.intf,
                                                custom_match =
                                                lambda e:
@@ -159,23 +164,33 @@ class Handle(Component):
         sp = GetSpeeds()
         self.execute([sp])
         self.__speeds = sp.base_freq, sp.min_div
-                
+        self.__register_handle = None
+
         if Capabilities.Register in self.capabilities:
-            register = Register(True)
-            self.execute([register])
-            self.__register_handle = register.handle
+            try:
+                self.__register()
+            except Exception as e:
+                import traceback
+                traceback.print_exc()
 
-            def unregister(out_ep, in_ep, handle):
-                reg = Register(False, handle)
-                out_ep.write(bytes([reg.cmd]) + reg.cmd_args)
-                in_ep.read(2048)
+    def __register(self):
+        register = Register(True)
+        self.execute([register])
+        self.__register_handle = register.handle
 
-            import weakref
-            weakref.finalize(self, unregister,
-                             self.out_ep, self.in_ep, self.__register_handle)
+        import weakref
+        weakref.finalize(self, self.__close,
+                         self.out_ep, self.in_ep,
+                         self.__register_handle)
+
+    @staticmethod
+    def __close(out_ep, in_ep, handle):
+        reg = Register(False, handle)
+        out_ep.write(bytes([reg.cmd]) + reg.cmd_args)
+        in_ep.read(2048)
 
     def close(self):
-        if Capabilities.Register in self.capabilities:
+        if Capabilities.Register in self.capabilities and self.__register_handle is not None:
             register = Register(False, self.__register_handle)
             self.execute([register])
             
