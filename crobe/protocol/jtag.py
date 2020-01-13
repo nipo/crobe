@@ -6,6 +6,7 @@ from ..util import pretty
 from ..part_id import PartId
 import math
 import time
+import re
 
 __all__ = ["Interface"]
 
@@ -72,13 +73,11 @@ class Interface(base.Interface):
     def __init__(self, port, name = None):
         base.Interface.__init__(self, port, (name or port.name) + "-ATE")
         self.use_icepick = False
+        self.child_add(Chain(self))
 
     def start(self):
         self.logger.info("starting")
-
-        chain = Chain(self)
-        self.child_add(chain)
-
+        
     def _execute(self, operation_list):
         raise NotImplementedError()
 
@@ -206,6 +205,7 @@ class Chain(PortComponent):
     def __init__(self, port):
         PortComponent.__init__(self, port, "JTAG Chain")
         self.name = self.port.port.name + "-Chain"
+        self.default_dr_override = []
         
     def start(self):
         PortComponent.start(self)
@@ -264,7 +264,7 @@ class Chain(PortComponent):
         self.port.freq_cap("icepick", None)
         self.discover([PartId(0, 0x17, 0x1ce)])
 
-    def discover(self, forced_idcodes = []):
+    def discover(self, forced_idcodes = None):
         """
         This does a blind discovery of the JTAG Chain.  This can
         reliably identify IDCodes of devices that reply their IDCodes
@@ -337,8 +337,17 @@ class Chain(PortComponent):
         out = self.port.shift(BitString(1, total_ir_length // 2 + 1))
         device_count = int(math.log(int(out), 2))
 
-        if device_count == len(forced_idcodes):
-            id_codes = forced_idcodes
+        self.logger.info("Default DR: %s", default_dr)
+
+        for left, right, idcode in self.default_dr_override:
+            default_dr = default_dr[:left] + BitString(idcode, 32) + default_dr[right:]
+
+        if forced_idcodes is not None:
+            if len(forced_idcodes) != device_count:
+                raise ValueError("Bad forced IDCODE length: %d, expected %d"
+                                 % (len(forced_idcodes), device_count))
+
+            id_codes = list(forced_idcodes)
         else:
             # Get device ID codes
             id_codes = []
@@ -351,6 +360,9 @@ class Chain(PortComponent):
                     id_codes.append(None)
                     point += 1
 
+        self.logger.info("IDCodes: %s", id_codes)
+
+                    
         # Determine possible IR lengths
         ir_length_possibilities = []
         cutoffs = [i for i in range(total_ir_length) if int(default_ir[i : i + 2]) == 1]
@@ -424,6 +436,16 @@ class Chain(PortComponent):
 
         return possibilities.pop()
 
+    _default_dr_opt = re.compile(r'default_dr\[(?P<left>\d+):(?P<right>\d+)\]=(?P<idcode>0x[0-9a-fA-F]+)')
+    
+    def option_set(self, opt):
+        m = self._default_dr_opt.match(opt)
+        if m:
+            self.default_dr_override.append((int(m.group("left")), int(m.group("right")), int(m.group("idcode"), 16)))
+            return
+
+        super().option_set(opt)
+    
     def idcode_at(self, index):
         return self.idcodes[index]
 

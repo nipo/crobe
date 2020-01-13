@@ -1,10 +1,7 @@
 from .adapter.model import HwRoot
 
 def roots(paths):
-    try:
-        HwRoot.start()
-    except:
-        pass
+    HwRoot.start_root()
 
     r = []
     for root in paths:

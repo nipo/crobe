@@ -3,7 +3,7 @@ import logging
 class BadInvocation(Exception):
     def __init__(self, message):
         self.__message = message
-        Exception.__init__(self, "Bad invocation")
+        Exception.__init__(self, "Bad invocation", message)
 
     def message_get(self):
         return self.__message
@@ -44,8 +44,11 @@ class Component(object):
     def children(self):
         return self.__children[:]
 
+    def start_root(self):
+        self.__start()
+
     def start(self):
-        return self.__start()
+        ...
 
     def __str__(self):
         return self.__name
@@ -98,17 +101,14 @@ class Component(object):
 
         self.logger.info("child_add %s %s %s", obj, self.__started, obj.__started)
         self.children_changed()
-        if self.__started:
-            obj.__start()
 
-    def __start(self):
-        if self.__started:
-            return False
-        self.__started = True
-        self.start()
-        for child in self.__children:
-            child.__start()
-        return True
+    def __start(self, recurse = True):
+        if not self.__started:
+            self.__started = True
+            self.start()
+        if recurse:
+            for child in self.__children:
+                child.__start()
 
     def child_remove(self, obj):
         if obj.__parent is None:
@@ -131,7 +131,13 @@ class Component(object):
             except Exception as e:
                 raise BadOption(opt) from e
 
-    def child_summon(self, crit = None, *invocation):
+    def child_summon(self, *invocation):
+        r = self.__child_summon(*invocation)
+        if self.__started:
+            r.__start(False)
+        return r
+
+    def __child_summon(self, crit = None, *invocation):
         options = []
 
         self.logger.info("Summon %s %s", crit, invocation)
@@ -160,7 +166,10 @@ class Component(object):
             self.child_add(child)
 
         self.logger.info("Had %s", child)
-            
+
+        if self.__started:
+            child.__start(False)
+        
         return child.child_summon(*invocation)
 
     def __child_lookup(self, crit):

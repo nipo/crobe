@@ -26,7 +26,7 @@ def info():
 
 @info.command(help = "Adapter list")
 def adapters():
-    HwRoot.start()
+    HwRoot.start_root()
     enumerator_dump(HwRoot)
 
 @info.command(help = "Component tree enumerator")
