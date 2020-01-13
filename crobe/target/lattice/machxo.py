@@ -99,22 +99,7 @@ class MachXOFlasher(model.Target, memory.Loadable):
         self.component.refresh()
 
     def program_end(self, success, do_start):
-        self.component._usercode_write(0)
-
-        memory.Loadable.program_end(self, success, do_start = False)
-        self.component._flash_done_set()
-        time.sleep(.5)
-
-        assert self.component.done
-
         self.component._isc_disable()
-        time.sleep(.1)
-        self.component._bypass()
-        time.sleep(.1)
 
         if do_start:
-            self.component._refresh()
-            time.sleep(.1)
-
-        if do_start:
-            self.component._assert_done()
+            self.component.refresh()
