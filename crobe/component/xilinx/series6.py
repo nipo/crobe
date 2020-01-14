@@ -138,7 +138,7 @@ class Series6(Series67):
         self.dr_shift(self.IR_ISC_DISABLE, None)
         self.run(20)
 
-        return self.send_op_wait(self.IR_BYPASS, self.IR_STATUS_DONE)
+        return self.send_op_wait(-1, self.IR_STATUS_DONE)
 
     ###
     ### Status

@@ -110,7 +110,7 @@ class Series7(Series67):
 
         ok = self.config_write(blob)
 
-        status = self.ir_status
+        status = self.ir_status_read()
         self.logger.info("IR Status: %04x", status)
 
         end = datetime.datetime.now()
@@ -151,7 +151,7 @@ class Series7(Series67):
 
         self.cfg_status_dump()
 
-        return self.send_op_wait(self.IR_BYPASS, self.IR_STATUS_DONE)
+        return self.send_op_wait(-1, self.IR_STATUS_DONE)
 
     ###
     ### Status
@@ -343,7 +343,7 @@ class Series7(Series67):
                self.cmd_dr_shift(self.IR_FUSE_CTS, cts, 64, read_tdo = False),
                self.cmd_dr_shift(self.IR_FUSE_CTS, 0, 64, read_tdo = True),
                self.cmd_run(1),
-               self.cmd_dr_shift(self.IR_BYPASS, None),
+               self.cmd_dr_shift(-1, None),
                ]
         self.execute(ops)
 
@@ -375,7 +375,7 @@ class Series7(Series67):
                 self.cmd_dr_shift(self.IR_FUSE_CTS, None, read_tdo = False),
                 self.cmd_run(int(self.port.port.freq * 12e-6) or 1),
                 self.cmd_dr_shift(self.IR_FUSE_CTS, 0, 64, read_tdo = False),
-                self.cmd_dr_shift(self.IR_BYPASS, None),
+                self.cmd_dr_shift(-1, None),
                 self.cmd_run(1),
                 ]
 

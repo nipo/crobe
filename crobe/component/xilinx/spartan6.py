@@ -42,7 +42,7 @@ class Spartan6(series6.Series6):
 
     def __init__(self, port, index):
         series6.Series6.__init__(self, port, index)
-        self.name = "Spartan6-" + parts[int(port.idcode_at(index).drop_revision())]
+        self.name = "Spartan6-" + parts[int(self.idcode.drop_revision())]
 
     def spi_interface(self):
         from ...loadable.object import Program

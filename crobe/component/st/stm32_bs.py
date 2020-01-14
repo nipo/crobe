@@ -9,5 +9,5 @@ class Stm32Bs(jtag.Tap):
 
     def __init__(self, port, index):
         jtag.Tap.__init__(self, port, index)
-        info = Info.from_id(port.idcode_at(index).part_no)
+        info = Info.from_id(self.idcode.part_no)
         self.name = info.name + " Boundary Scan"

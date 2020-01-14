@@ -24,6 +24,8 @@ class Field(model.Component):
         model.Component.__init__(self, "Targets")
 
     def discover(self, interface):
+        interface.start_root()
+
         types = set()
         for e in Target.registry:
             types |= set(e.component_types)

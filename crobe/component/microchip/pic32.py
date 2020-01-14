@@ -313,4 +313,4 @@ class Pic32Tap(EjtagTap):
 class Pic32MZTap(Pic32Tap):
     def __init__(self, port, index):
         Pic32Tap.__init__(self, port, index)
-        self.name = parts.get(self.port.idcode_at(index).part_no, "PIC32")
+        self.name = parts.get(self.idcode.part_no, "PIC32")

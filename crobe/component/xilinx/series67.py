@@ -10,7 +10,6 @@ class Series67(jtag.Tap):
     def __init__(self, port, index):
         jtag.Tap.__init__(self, port, index)
 
-    IR_BYPASS      = 0x3f
     IR_ISC_ENABLE  = 0x10
     IR_ISC_PROGRAM = 0x11
     IR_ISC_DISABLE = 0x16
@@ -42,7 +41,7 @@ class Series67(jtag.Tap):
 
         self._cfg_shift(self.IR_CFG_IN, self.CFG_PREFIX + nop + cmd + nop + nop)
         ret = self._cfg_shift(self.IR_CFG_OUT, [0] * count, True)
-        self.dr_shift(self.IR_BYPASS, None)
+        self.dr_shift(-1, None)
         return ret
 
     @property
@@ -50,7 +49,7 @@ class Series67(jtag.Tap):
         return self.cfg_read(self.CFG_STATUS, 1)[0]
 
     def start(self):
-        if not (self.ir_status & self.IR_STATUS_DONE):
+        if not (self.ir_status_read() & self.IR_STATUS_DONE):
             self.dna = self.dna_read()
             self.logger.info("Device DNA: %x", self.dna)
         else:
@@ -58,19 +57,15 @@ class Series67(jtag.Tap):
         jtag.Tap.start(self)
 
     @property
-    def ir_status(self):
-        return int(self.dr_shift(self.IR_BYPASS, None, read_ir = True))
-
-    @property
     def done(self):
-        return bool(self.ir_status & self.IR_STATUS_DONE)
+        return bool(self.ir_status_read() & self.IR_STATUS_DONE)
             
     def send_op_wait(self, ir, expected):
         self.dr_shift(ir, None, read_tdo = False)
 
         for i in range(50):
             self.run(40)
-            status = self.ir_status
+            status = self.ir_status_read()
             self.logger.info("IR status: 0x%02x", status)
             if status & expected:
                 return True

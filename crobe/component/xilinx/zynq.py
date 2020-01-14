@@ -23,6 +23,6 @@ class Zynq(series7.Series7, xadc.Xadc):
 
     def __init__(self, port, index):
         series7.Series7.__init__(self, port, index)
-        self.name = "Zynq-" + parts[int(port.idcode_at(index).drop_revision())]
+        self.name = "Zynq-" + parts[int(self.idcode.drop_revision())]
 
     IR_XADC_DRP    = 0x37

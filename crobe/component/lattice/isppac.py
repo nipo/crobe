@@ -37,4 +37,4 @@ class IspPac(jtag.Tap):
 
     def __init__(self, port, index):
         jtag.Tap.__init__(self, port, index)
-        self.name = parts.get(int(port.idcode_at(index).drop_revision()), "ispPAC")
+        self.name = parts.get(int(self.idcode.drop_revision()), "ispPAC")

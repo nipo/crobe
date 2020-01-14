@@ -3,19 +3,16 @@ from ...part_id import PartId
 from ...protocol import jtag, spi, i2c
 from ... import bitfield
 from ...util.endian import bitswap8
-import struct
 from ... import bitstring
-from . import bitstream, parts, opcodes
-import datetime
+from . import bitstream, parts
 import time
-import binascii
 
-class MachXO2Config:
+class MachXO2Config(jtag.InstructionRegistry):
     ERASE_SRAM = 1
     ERASE_FEATURE = 2
     ERASE_FLASH = 4
     ERASE_UFM = 8
-
+    
     class Status(bitfield.Register):
         name = "Status"
         fields = [
@@ -107,15 +104,93 @@ class MachXO2Config:
             bitfield.ValueField("Spare", (0, 4)),
             ]
 
-    def __init__(self):
-        pass
+    ISC_ADDRESS   = jtag.Dr(None)
+    ISC_SECTOR    = jtag.Dr(8)
+    ISC_DEFAULT   = jtag.Dr(1)
+    BUSY          = jtag.Dr(1)
+    ISC_DATA      = jtag.Dr(None)
+    ISC_CONFIG    = jtag.Dr(8)
+    ISC_PDATA     = jtag.Dr(None)
+    NV_DATA       = jtag.Dr(128)
+    BOUNDARY      = jtag.Dr(208)
+    MANUFACTURING = jtag.Dr(128)
+    PASSWORD      = jtag.Dr(64)
+    STATUS        = jtag.Dr(32)
+    CTRL0         = jtag.Dr(32)
+    FEATURE       = jtag.Dr(64)
+    FEABITS       = jtag.Dr(16)
+    BITSTREAM     = jtag.Dr(None)
+    DR_UNKNOWN    = jtag.Dr(None)
+    PAGE_ADDRESS  = jtag.Dr(32)
 
-    @property
-    def idcode(self):
-        return int.from_bytes(self.cmd(opcodes.IDCODE, None, 4), "big")
+    CLAMP                = jtag.Instruction(0x78, "TAP_BYPASS")
+    EXTEST               = jtag.Instruction(0x15, "BOUNDARY")
+    HIGHZ                = jtag.Instruction(0x18, "TAP_BYPASS")
+    IDCODE               = jtag.Instruction(0xe0, "DEVICE_ID")
+    IDCODE_PRIV          = jtag.Instruction(0x16, "DEVICE_ID")
+    ISC_ADDRESS_SHIFT    = jtag.Instruction(0x42, "ISC_ADDRESS")
+    ISC_DATA_SHIFT       = jtag.Instruction(0x0a, "ISC_DATA")
+    ISC_DISABLE          = jtag.Instruction(0x26, "ISC_DEFAULT")
+    ISC_DISCHARGE        = jtag.Instruction(0x14, "ISC_DEFAULT")
+    ISC_ENABLE           = jtag.Instruction(0xc6, "ISC_CONFIG")
+    ISC_ERASE            = jtag.Instruction(0x0e, "ISC_SECTOR")
+    ISC_ERASE_DONE       = jtag.Instruction(0x24, "ISC_DEFAULT")
+    ISC_NOOP             = jtag.Instruction(0x30, "ISC_DEFAULT")
+    ISC_PROGRAM          = jtag.Instruction(0x67, "ISC_PDATA")
+    ISC_PROGRAM_DONE     = jtag.Instruction(0x5e, "ISC_DEFAULT")
+    ISC_PROGRAM_SECURITY = jtag.Instruction(0xce, "ISC_DEFAULT")
+    ISC_PROGRAM_USERCODE = jtag.Instruction(0xc2, "DEVICE_ID")
+    ISC_READ             = jtag.Instruction(0x80, "ISC_PDATA")
+    LSC_ENABLE_X         = jtag.Instruction(0x74, "ISC_CONFIG")
+    LSC_PROGRAM_SECPLUS  = jtag.Instruction(0xcf, "ISC_DEFAULT")
+    PRELOAD              = jtag.Instruction(0x1c, "BOUNDARY")
+    SAMPLE               = jtag.Instruction(0x1c, "BOUNDARY")
+    USERCODE             = jtag.Instruction(0xc0, "DEVICE_ID")
+
+    LSC_RESET_CRC        = jtag.Instruction(0x3b, "DR_UNKNOWN")
+    LSC_PROG_SED_CRC     = jtag.Instruction(0xa2, "DR_UNKNOWN")
+    LSC_WRITE_BUS_ADDRESS= jtag.Instruction(0xf6, "DR_UNKNOWN")
+    LSC_EBR_WRITE        = jtag.Instruction(0xb2, "DR_UNKNOWN")
+    LSC_PCS_WRITE        = jtag.Instruction(0x72, "DR_UNKNOWN")
+    LSC_WRITE_ADDRESS    = jtag.Instruction(0xb4, "PAGE_ADDRESS")
+    VERIFY_ID            = jtag.Instruction(0xe2, "DR_UNKNOWN")
+    LSC_WRITE_COMP_DIC   = jtag.Instruction(0x02, "DR_UNKNOWN")
+    LSC_INIT_ADDRESS     = jtag.Instruction(0x46, None)
+    LSC_INIT_ADDRESS_UFM = jtag.Instruction(0x47, None)
+    LSC_PROG_INCR_RTI    = jtag.Instruction(0x82, "DR_UNKNOWN")
+    LSC_VERIFY_INCR_RTI  = jtag.Instruction(0x6a, "DR_UNKNOWN")
+
+    LSC_PROG_INCR_CMP    = jtag.Instruction(0xb8, "NV_DATA")
+    LSC_PROG_INCR_NV     = jtag.Instruction(0x70, "NV_DATA")
+
+    LSC_PROG_CTRL0       = jtag.Instruction(0x22, "CTRL0")
+    LSC_READ_CTRL0       = jtag.Instruction(0x20, "CTRL0")
+    LSC_PROG_FEATURE     = jtag.Instruction(0xe4, "FEATURE")
+    LSC_READ_FEATURE     = jtag.Instruction(0xe7, "FEATURE")
+    LSC_PROG_FEABITS     = jtag.Instruction(0xf8, "FEABITS")
+    LSC_READ_FEABITS     = jtag.Instruction(0xfb, "FEABITS")
+    LSC_READ_PASSWORD    = jtag.Instruction(0xf2, "PASSWORD")
+    LSC_READ_STATUS      = jtag.Instruction(0x3c, "STATUS")
+
+    LSC_READ_INCR_NV     = jtag.Instruction(0x73, "NV_DATA")
+    LSC_CHECK_BUSY       = jtag.Instruction(0xf0, "BUSY")
+    LSC_REFRESH          = jtag.Instruction(0x79, "ISC_DEFAULT")
+    LSC_BITSTREAM_BURST  = jtag.Instruction(0x7a, "BITSTREAM")
+    LSC_UIDCODE_PUB      = jtag.Instruction(0x19, "DEVICE_ID")
+    LSC_MANUFACTURING    = jtag.Instruction(0x90, "MANUFACTURING")
+    LSC_SHIFT_PASSWORD   = jtag.Instruction(0xbc, "PASSWORD")
+    
+    def __init__(self):
+        jtag.InstructionRegistry.__init__(self)
+        self.__bg_enable = None
 
     def start(self):
-        idcode = self.idcode
+
+        self._isc_enable(self.TARGET_FLASH, True)
+
+        idcode = self.IDCODE_PRIV.shift(0)
+        self.logger.info("IDCode priv: 0x%x", idcode)
+
         possible_parts = [p for p in parts.PARTS if int(idcode) == p.idcode]
         if len(possible_parts) > 1:
             suffixes = [p.name.split("-", 1)[1] for p in possible_parts]
@@ -126,70 +201,61 @@ class MachXO2Config:
             self.info = possible_parts[0]
             self.name = self.info.name
 
+        self.ISC_DATA.length = self.info.col_bit_count
+        self.ISC_PDATA.length = self.info.col_bit_count
+        self.ISC_ADDRESS.length = self.info.row_count
+            
         self.config_memory_size = self.info.row_count * self.info.col_bit_count // 8
         self.flash_size = (self.info.flash_page_count + self.info.ufm_page_count) * 16
-        self.__bg_enable = None
 
         self.logger.info("Found %s", self.info.name)
 
-        self.uid = int.from_bytes(self.cmd(opcodes.LSC_UIDCODE_PUB, None, 8), "big")
-        self.logger.info("UID: 0x%08x", self.uid)
+        self.uid = self.LSC_UIDCODE_PUB.shift(0)
+
         self.TraceId(self.uid).dump(self.logger.info)
 
         self._isc_enable(True)
-        self.Status(self.status).dump(self.logger.info)
-        self.Feature(self.feature).dump(self.logger.info)
+        self.Status(self.status_get()).dump(self.logger.info)
+        self.Feature(self.feature_get()).dump(self.logger.info)
         self._isc_disable()
-
-        #jtag.Tap.start(self)
-
-    def _isc_enable(self, background = None):
-        if self.__bg_enable is None and background is None:
-            raise ValueError("Cannot reenable with no previous enable")
+            
+    TARGET_SRAM    = 0
+    TARGET_EFUSE   = 2
+    TARGET_FEATURE = 4
+    TARGET_FLASH   = 8
+        
+    def _isc_enable(self, target = TARGET_FLASH, background = None):
         if background is None:
             background = self.__bg_enable
 
-        self.cmd(opcodes.LSC_ENABLE_X if background else opcodes.ISC_ENABLE, None)
+        cmd = self.LSC_ENABLE_X if background else self.ISC_ENABLE
+        self.execute([cmd.cmd(target), self.cmd_run(1)])
+
         self.wait_no_fail()
+        self.status_check(0, 0x0200)
         self.__bg_enable = background
 
-        self.status_check(0, 0x0200)
-
     def _isc_disable(self):
-        self.cmd(opcodes.ISC_DISABLE, b"\x00\x00")
-        self.wait_no_fail()
-        self.run(1)
+        if self.__bg_enable is None:
+            return
+        self.execute([self.ISC_DISABLE.cmd(), self.cmd_run(1)])
         self.__bg_enable = None
 
-    @property
-    def done(self):
-        return self.ir_status & 0x84 == 0x04
-
-    def _bypass(self):
-        self.run(100)
-
-    def _addr_set(self, addr = None):
-        pass
+    def done_get(self):
+        return self.ir_status_read() & 0x84 == 0x04
 
     def _erase(self, what):
         assert self.__bg_enable is not None
-        self.cmd(opcodes.ISC_ERASE, bytes([what, 0, 0]))
-        self._addr_set(None)
-        for retry in range(4):
-            try:
-                self._isc_enable()
-                self.wait_no_fail()
-            except:
-                time.sleep(.5)
-                if retry == 3:
-                    raise
+        bg = self.__bg_enable
+        self.execute([self.ISC_ERASE.cmd(what), self.cmd_run(100)])
+        self.wait_idle(20)
+        self._isc_enable(self.TARGET_FLASH, background = bg)
 
     def _stop(self):
         self._erase(self.ERASE_SRAM)
-        self.__bg_enable = None
 
     def stop(self):
-        self._isc_enable(False)
+        self._isc_enable(self.TARGET_FLASH, False)
         self._stop()
         self._isc_disable()
 
@@ -200,34 +266,35 @@ class MachXO2Config:
         self._refresh()
 
     def _refresh(self):
-        self._isc_disable()
-        self.cmd(opcodes.LSC_REFRESH, b'\x00\x00')
+        self.execute([
+            self.ISC_DISABLE.cmd(0),
+            self.cmd_run(1000),
+            self.LSC_REFRESH.cmd(0),
+            self.cmd_run(1000),
+            ])
         time.sleep(.01)
-        self.run()
+        self.__bg_enable = False
         
     def _erase_all(self):
         self._erase(self.ERASE_SRAM | self.ERASE_UFM | self.ERASE_FLASH | self.ERASE_FEATURE)
 
     def erase_all(self):
-        self._isc_enable(False)
+        self._isc_enable(self.TARGET_FLASH, False)
         self._erase_all()
         self._isc_disable()
 
-    @property
-    def status(self):
-        return int.from_bytes(self.cmd(opcodes.LSC_READ_STATUS, None, 4), 'big')
+    def status_get(self):
+        return self.LSC_READ_STATUS.shift(0)
 
-    @property
-    def feature(self):
-        return int.from_bytes(self.cmd(opcodes.LSC_READ_FEATURE, None, 8), 'big')
+    def feature_get(self):
+        return self.LSC_READ_FEATURE.shift(0)
 
-    @property
-    def busy(self):
-        return self.cmd(opcodes.LSC_CHECK_BUSY, None, 1)[0]
+    def busy_get(self):
+        return self.LSC_CHECK_BUSY.shift(0)
 
     def status_check(self, expect_clear, expect_set):
         mask = expect_set | expect_clear
-        status = self.status
+        status = self.status_get()
         if status & mask == expect_set:
             return
         self.Status(status).dump(self.logger.error)
@@ -239,7 +306,7 @@ class MachXO2Config:
 
         for i in range(max(int(timeout / step), 1)):
             self.run(1)
-            b = self.busy
+            b = self.busy_get()
             if b == 0:
                 return
             time.sleep(.01)
@@ -263,297 +330,29 @@ class MachXO2Config:
         self._erase(self.ERASE_FEATURE)
 
     def _flash_read(self, offset, size):
-        return self._mem_read(offset, size, opcodes.LSC_INIT_ADDRESS, 0)
+        return self._mem_read(offset, size, self.LSC_INIT_ADDRESS, 0)
 
     def _ufm_read(self, offset, size):
-        return self._mem_read(offset, size, opcodes.LSC_INIT_ADDRESS_UFM, 0x40000000)
+        return self._mem_read(offset, size, self.LSC_INIT_ADDRESS_UFM, 0x40000000)
 
-    def _mem_read(self, offset, size, addr_init, offset_base):
+    def _mem_read(self, offset, size, addr_init_op, offset_base):
         assert self.__bg_enable is not None
         self.status_check(0, 0xa00)
 
-        self.cmd(addr_init, bytes([offset_base >> 28, 0, 0]))
+        addr_init_op.shift(offset_base >> 28)
         self.wait_no_fail()
 
-#        self.cmd(opcodes.LSC_READ_INCR_NV, b'\x00\x00\x01', 16),
-
-        data = b''
-        for addr in range(offset & ~0xf, offset + size, 16):
-            self.cmd(opcodes.LSC_WRITE_ADDRESS, None,
-                     (offset_base + (addr + offset) // 16).to_bytes(4, "big"))
-            self.wait_no_fail()
-
-            r = self.cmd(opcodes.LSC_READ_INCR_NV, b'\x00\x00\x01', 16)[-16:]
-
-            row_count = ((offset & 0xf) + size + 0xf) // 16
-            data += r
-
-#        data = self.row_flip(data)
-
-        return data[offset & 0xf : (offset & 0xf) + size]
-
-    def _mem_write(self, offset, data, addr_init, offset_base):
-#        assert self.__bg_enable is not None
-        self.status_check(0, 0x600)
-
-        if offset % 16:
-            prelen = (-offset % 16)
-            self.logger.info("Pre len %d", prelen)
-            data = b'\x00' * prelen + data
-            offset = offset & ~0xf
-
-        if len(data) % 16:
-            postlen = (-len(data) % 16)
-            self.logger.info("Post len %d", postlen)
-            data += b'\x00' * postlen
-
-        self.cmd(addr_init, b"\x00\x00\x00")
-        self.run(1)
+        self.execute([
+            self.LSC_WRITE_ADDRESS.cmd(offset_base + offset // 16),
+            self.cmd_run(1),
+            ])
         self.wait_no_fail()
-
-        if offset:
-            self.cmd(opcodes.LSC_WRITE_ADDRESS, offset_base + offset // 16, 32)
-            self.run(1)
-            self.wait_no_fail()
-
-#        data = self.row_flip(data)
-
-        for off in range(0, len(data), 16):
-            self.cmd(opcodes.LSC_PROG_INCR_NV, None, bytes(data[off : off+16]))
-            assert not self.wait_no_fail()
-
-    def _flash_write(self, offset, data):
-        return self._mem_write(offset, data, opcodes.LSC_INIT_ADDRESS, 0x20000000)
-
-    def _ufm_write(self, offset, data):
-        return self._mem_write(offset, data, opcodes.LSC_INIT_ADDRESS_UFM, 0x40000000)
-
-    def lol(self):
-        assert self.__bg_enable is not None
-        self.status_check(0, 0x600)
-
-        #self.logger.info("Flash write 0x%08x %d", offset, len(data))
-        if offset:# % 16:
-            #prelen = (-offset % 16)
-            prelen = offset
-            self.logger.info("Pre len %d", prelen)
-            data = b'\x00' * prelen + data
-            #offset = offset & ~0xf
-            offset = 0
-
-        if len(data) % 16:
-            postlen = (-len(data) % 16)
-            self.logger.info("Post len %d", postlen)
-            data += b'\x00' * postlen
-
-        self.dr_shift(opcodes.LSC_INIT_ADDRESS, 4, 8)
-        self.wait_no_fail()
-
-        #self.dr_shift(opcodes.LSC_WRITE_ADDRESS, offset // 16, 32)
-        #self.wait_no_fail()
-
-        data = self.row_flip(data)
-
-        for off in range(0, len(data), 16):
-            self.dr_shift(opcodes.LSC_PROG_INCR_NV,
-                          bytes(data[off : off+16]),
-                          read_tdo = False)
-            assert not self.wait_no_fail()
-
-    def _flash_done_set(self):
-        self.cmd(opcodes.ISC_PROGRAM_DONE, None)
-        self.run(20000)
-
-    def flash_erase(self):
-        self._isc_enable(True)
-        self._flash_erase()
-        self._isc_disable()
-
-    def ufm_erase(self):
-        self._isc_enable(True)
-        self._ufm_erase()
-        self._isc_disable()
-
-    def flash_read(self, offset, size):
-        self._isc_enable(False)
-        ret = self._flash_read(offset, size)
-        self._isc_disable()
-        return ret
-
-    def ufm_read(self, offset, size):
-        self._isc_enable(False)
-        ret = self._ufm_read(offset, size)
-        self._isc_disable()
-        return ret
-
-    def flash_write(self, offset, data):
-        self._isc_enable(False)
-        self._flash_write(offset, data)
-        self._isc_disable()
-
-    def ufm_write(self, offset, data):
-        self._isc_enable(True)
-        self._ufm_write(offset, data)
-        self._isc_disable()
-
-    def _feature_read(self):
-        return bytes(self.cmd(opcodes.LSC_READ_FEATURE, None, 8))
-
-    def _feabits_read(self):
-        return bytes(self.cmd(opcodes.LSC_READ_FEABITS, None, 2))
-
-    def feature_read(self):
-        self._isc_enable(True)
-        ret = self._feature_read(self)
-        self._isc_disable()
-        return ret
-
-    def feabits_read(self):
-        self._isc_enable(True)
-        ret = self._feabits_read(self)
-        self._isc_disable()
-        return ret
-
-    def _feature_write(self, feature):
-        self.dr_shift(opcodes.LSC_INIT_ADDRESS, 0x02, 8)
-        self.run(1000)
-
-        self.dr_shift(opcodes.LSC_PROG_FEATURE, bytes(feature))
-        self.run(1000)
-
-    def _feabits_write(self, feabits):
-        self.dr_shift(opcodes.LSC_PROG_FEABITS, bytes(feabits))
-        self.run(1000)
-
-    @staticmethod
-    def row_flip(data):
-        assert len(data) % 16 == 0
-        tmp = b""
-        for offset in range(0, len(data), 16):
-            tmp += bitswap8(data[offset : offset + 16])
-        return tmp
-
-    def _assert_done(self):
-        self.wait_idle(10)
-        self.status_check(0x2000, 0x100)
-
-    def cmd(self, op, args, data = None):
-        raise NotImplementedError()
-
-    def _usercode_write(self, uc):
-        self.cmd(opcodes.ISC_PROGRAM_USERCODE, None, uc.to_bytes(4, "big"))
-
-@jtag.Tap.db.register(*set([PartId.from_idcode(p.idcode).drop_revision() for p in parts.PARTS]))
-class MachXO2(jtag.Tap, MachXO2Config):
-    irlen = 8
-    max_freq = 25e6
-    
-    def __init__(self, port, index):
-        jtag.Tap.__init__(self, port, index)
-        matches = [p for p in parts.PARTS if int(port.idcode_at(index).drop_revision()) == p.idcode]
-        if len(matches) > 1:
-            suffixes = [p.name.split("-", 1)[1] for p in matches]
-            prefix = matches[0].name.split("-", 1)[0]
-
-            self.name = prefix + "-" + "/".join(suffixes)
-        else:
-            self.name = self.info.name
-        self.info = matches[0]
-        self.config_memory_size = self.info.row_count * self.info.col_bit_count // 8
-        self.flash_size = (self.info.flash_page_count + self.info.ufm_page_count) * 16
-        self.__bg_enable = None
-
-    def start(self):
-        self.uid = int.from_bytes(self.cmd(opcodes.LSC_UIDCODE_PUB, None, 8), "big")
-        self.logger.info("UID: 0x%08x", self.uid)
-        self.TraceId(self.uid).dump(self.logger.info)
-
-        try:
-            self._isc_enable(True)
-            self.Status(self.status).dump(self.logger.info)
-            self.Feature(self.feature).dump(self.logger.info)
-            self._isc_disable()
-        except:
-            pass
-            
-        jtag.Tap.start(self)
-
-    def _isc_enable(self, background = None):
-        if self.__bg_enable is None and background is None:
-            raise ValueError("Cannot reenable with no previous enable")
-        #if background is None:
-        #    background = self.__bg_enable
-
-        self.dr_shift(opcodes.ISC_DISABLE, None)
-        self.wait_no_fail()
-        self.dr_shift(opcodes.LSC_ENABLE_X if background else opcodes.ISC_ENABLE,
-                      bitstring.BitString(b"\x08\x00\x00", 24))
-        self.wait_no_fail()
-        self.__bg_enable = background
-
-        self.status_check(0, 0x0200)
-
-    def _erase(self, what):
-        assert self.__bg_enable is not None
-        self.dr_shift(opcodes.ISC_ERASE, what, 8)
-        self.run(1)
-        self.wait_no_fail(10)
-
-    @property
-    def status(self):
-        return self.dr_shift(opcodes.LSC_READ_STATUS, 0, 32, read_tdo = True)
-
-    @property
-    def feature(self):
-        return self.dr_shift(opcodes.LSC_READ_FEATURE, 0, 64, read_tdo = True)
-
-    @property
-    def feabits(self):
-        return self.dr_shift(opcodes.LSC_READ_FEABITS, 0, 16, read_tdo = True)
-
-    def cmd(self, op, args, data = None):
-        self.logger.debug("CMD %02x", op)
-        if args and data:
-            raise NotImplementedError()
-        if args is None and isinstance(data, int):
-            return self.dr_shift(op, b'\x00' * data, read_tdo = True)
-        if args is None and isinstance(data, bytes):
-            self.dr_shift(op, data, read_tdo = False)
-            self.run()
-            return
-        if data is None:
-            self.dr_shift(op, args or None, read_tdo = False)
-            self.run()
-            return
-        raise NotImplementedError()
-
-    def _mem_read(self, offset, size, addr_init, offset_base):
-        assert self.__bg_enable is not None
-        self.status_check(0, 0xa00)
-
-        self.dr_shift(addr_init, offset_base >> 28, 8)
-        self.run(1)
-        self.wait_no_fail()
-
-        self.dr_shift(opcodes.LSC_WRITE_ADDRESS, offset_base + offset // 16, 32)
-        self.run(1)
-        self.wait_no_fail()
-
-        cmds = [
-            self.cmd_dr_shift(opcodes.LSC_READ_INCR_NV, None),
-            self.run(10),
-            self.cmd_dr_shift(None, None,
-                            16 * 8,
-                            read_tdo = True,
-                            return_type = bytes),
-            ]
-        self.execute(cmds)
 
         data = b''
         for addr in range(offset & ~0xf, offset + size, 16):
             cmds = [
-                self.cmd_dr_shift(opcodes.LSC_READ_INCR_NV, None),
-                self.run(10),
+                self.LSC_READ_INCR_NV.cmd(None),
+                self.cmd_run(10),
                 self.cmd_dr_shift(None, None,
                                 16 * 8,
                                 read_tdo = True,
@@ -561,15 +360,13 @@ class MachXO2(jtag.Tap, MachXO2Config):
                 ]
             self.execute(cmds)
 
-            row_count = ((offset & 0xf) + size + 0xf) // 16
             data += cmds[2].tdo
 
         data = self.row_flip(data)
 
         return data[offset & 0xf : (offset & 0xf) + size]
 
-    def _mem_write(self, offset, data, addr_init, offset_base):
-#        assert self.__bg_enable is not None
+    def _mem_write(self, offset, data, addr_init_op, offset_base):
         self.status_check(0, 0x600)
 
         if offset % 16:
@@ -583,70 +380,123 @@ class MachXO2(jtag.Tap, MachXO2Config):
             self.logger.info("Post len %d", postlen)
             data += b'\x00' * postlen
 
-        self.dr_shift(addr_init, 4, 8)
-        self.run(1)
+        self.execute([
+            addr_init_op.cmd(0),
+            self.cmd_run(1),
+            ])
         self.wait_no_fail()
 
         if offset:
-            self.dr_shift(opcodes.LSC_WRITE_ADDRESS, offset_base + offset // 16, 32)
+            self.LSC_WRITE_ADDRESS(offset_base + offset // 16)
             self.run(1)
             self.wait_no_fail()
 
         data = self.row_flip(data)
 
         for off in range(0, len(data), 16):
-            self.execute([
-                self.cmd_dr_shift(opcodes.LSC_PROG_INCR_NV, None),
-                self.cmd_dr_shift(None, bytes(data[off : off+16]), read_tdo = False),
-                ])
-            assert not self.wait_no_fail()
+            w = self.LSC_PROG_INCR_NV.cmd(bytes(data[off : off+16]))
+            cmds = [
+                w,
+                self.cmd_run(1000),
+                ]
+
+            self.execute(cmds)
+            self.wait_no_fail()
 
     def _flash_write(self, offset, data):
-        return self._mem_write(offset, data, opcodes.LSC_INIT_ADDRESS, 0)
+        return self._mem_write(offset, data, self.LSC_INIT_ADDRESS, 0x20000000)
 
-    def lol(self):
-        assert self.__bg_enable is not None
-        self.status_check(0, 0x600)
+    def _ufm_write(self, offset, data):
+        return self._mem_write(offset, data, self.LSC_INIT_ADDRESS_UFM, 0x40000000)
 
-        #self.logger.info("Flash write 0x%08x %d", offset, len(data))
-        if offset:# % 16:
-            #prelen = (-offset % 16)
-            prelen = offset
-            self.logger.info("Pre len %d", prelen)
-            data = b'\x00' * prelen + data
-            #offset = offset & ~0xf
-            offset = 0
+    def _flash_done_set(self):
+        self.execute([
+            self.ISC_PROGRAM_DONE.cmd(),
+            self.cmd_run(20000),
+            ])
 
-        if len(data) % 16:
-            postlen = (-len(data) % 16)
-            self.logger.info("Post len %d", postlen)
-            data += b'\x00' * postlen
+    def flash_erase(self):
+        self._isc_enable(self.TARGET_FLASH, True)
+        self._flash_erase()
+        self._isc_disable()
 
-        self.dr_shift(opcodes.LSC_INIT_ADDRESS, 4, 8)
-        self.wait_no_fail()
+    def ufm_erase(self):
+        self._isc_enable(self.TARGET_FLASH, True)
+        self._ufm_erase()
+        self._isc_disable()
 
-        #self.dr_shift(opcodes.LSC_WRITE_ADDRESS, offset // 16, 32)
-        #self.wait_no_fail()
+    def flash_read(self, offset, size):
+        self._isc_enable(self.TARGET_FLASH, False)
+        ret = self._flash_read(offset, size)
+        self._isc_disable()
+        return ret
 
-        data = self.row_flip(data)
+    def ufm_read(self, offset, size):
+        self._isc_enable(self.TARGET_FLASH, False)
+        ret = self._ufm_read(offset, size)
+        self._isc_disable()
+        return ret
 
-        for off in range(0, len(data), 16):
-            self.dr_shift(opcodes.LSC_PROG_INCR_NV,
-                          bytes(data[off : off+16]),
-                          read_tdo = False)
-            assert not self.wait_no_fail()
+    def flash_write(self, offset, data):
+        self._isc_enable(self.TARGET_FLASH, False)
+        self._flash_write(offset, data)
+        self._isc_disable()
+
+    def ufm_write(self, offset, data):
+        self._isc_enable(self.TARGET_FLASH, True)
+        self._ufm_write(offset, data)
+        self._isc_disable()
 
     def feature_read(self):
-        self._isc_enable(True)
-        ret = self.dr_shift(opcodes.LSC_READ_FEATURE, None, 64, read_tdo = True, return_type = bytes)
+        self._isc_enable(self.TARGET_FLASH, True)
+        ret = self._feature_read()
         self._isc_disable()
         return ret
 
     def feabits_read(self):
-        self._isc_enable(True)
-        ret = self.dr_shift(opcodes.LSC_READ_FEABITS, None, 16, read_tdo = True, return_type = bytes)
+        self._isc_enable(self.TARGET_FLASH, True)
+        ret = self._feabits_read()
         self._isc_disable()
         return ret
+
+    def _feature_read(self):
+        return self.LSC_READ_FEATURE.shift(0, return_type = bytes)
+
+    def _feabits_read(self):
+        return self.LSC_READ_FEABITS.shift(0, return_type = bytes)
+
+    def _feature_write(self, feature):
+        self._isc_enable(self.TARGET_FLASH, True)
+        self.execute([
+            self.LSC_INIT_ADDRESS.cmd(0x02),
+            self.cmd_run(1000),
+            self.LSC_PROG_FEATURE.cmd(bitstring.BitString(feature)),
+            self.cmd_run(1000),
+            ])
+
+    def _feabits_write(self, feabits):
+        self.execute([
+            self.LSC_PROG_FEABITS.cmd(bitstring.BitString(feabits)),
+            self.cmd_run(1000),
+            ])
+
+@jtag.Tap.db.register(*set([PartId.from_idcode(p.idcode).drop_revision() for p in parts.PARTS]))
+class MachXO2(jtag.Tap, MachXO2Config):
+    """JTAG-based specialization of Mach-XO2 controller
+
+    In addition to non-volatile commands, this also supports loading a
+    bitstream directly into SRAM.
+    """
+    irlen = 8
+    max_freq = 25e6
+    
+    def __init__(self, port, index):
+        jtag.Tap.__init__(self, port, index)
+        MachXO2Config.__init__(self)
+
+    def start(self):
+        print("hello")
+        MachXO2Config.start(self)
 
     def load(self, config):
         from ...loadable.object import Program
@@ -658,13 +508,13 @@ class MachXO2(jtag.Tap, MachXO2Config):
 
     def ram_load(self, bs):
         assert self.idcode.is_same_part(PartId.from_idcode(bs.info.idcode))
-        self._isc_enable(False)
+        self._isc_enable(self.TARGET_FLASH, False)
         self._erase(self.ERASE_SRAM)
 
         bs_cmds = [
-            self.cmd_dr_shift(opcodes.LSC_PROG_CTRL0, 0x40000000, 32),
+            self.LSC_PROG_CTRL0.cmd(0x40000000),
             self.cmd_run(10),
-            self.cmd_dr_shift(opcodes.LSC_INIT_ADDRESS, 0, 8),
+            self.LSC_INIT_ADDRESS.cmd(0),
             self.cmd_run(10),
         ]
 
@@ -672,60 +522,169 @@ class MachXO2(jtag.Tap, MachXO2Config):
             data = frame.data
             data = bitswap8(data)
             bs_cmds.extend([
-                self.cmd_dr_shift(opcodes.LSC_PROG_INCR_RTI, bytes(data)),
+                self.LSC_PROG_INCR_RTI.cmd(bytes(data)),
                 self.cmd_run(10),
             ])
 
         bs_cmds.extend([
-            self.cmd_dr_shift(opcodes.USERCODE, 0, 32),
-            self.cmd_dr_shift(opcodes.ISC_PROGRAM_USERCODE, None),
+            self.USERCODE.cmd(0),
+            self.ISC_PROGRAM_USERCODE.cmd(),
             self.cmd_run(100),
-            self.cmd_dr_shift(opcodes.ISC_PROGRAM_DONE, None),
+            self.ISC_PROGRAM_DONE.cmd(),
             self.cmd_run(100),
-            self.cmd_dr_shift(opcodes.BYPASS, None),
+            self.BYPASS.cmd(),
         ])
 
         self.execute(bs_cmds)
 
         self._isc_disable()
         
-        self.dr_shift(opcodes.BYPASS, None)
+        self.BYPASS.shift()
         self.run(1)
+
+    @staticmethod
+    def row_flip(data):
+        assert len(data) % 16 == 0
+        tmp = b""
+        for offset in range(0, len(data), 16):
+            tmp += bitswap8(data[offset : offset + 16])
+        return tmp
         
-@i2c.Interface.db.register("machxo2")
-class MachXO2I2c(PortComponent, MachXO2Config):
-    def __init__(self, bus):
-        PortComponent.__init__(self, bus, "MachXO2")
+class SerIrMap:
+    """Holds the definition betzeen a given JTAG commands and I2C/SPI
+    transport.
+
+    JTAG transport is simple: Instruction selects relevant DR.
+    For I2C/SPI, lattice has some kind of crazy wrapper where general
+    format is:
+    [Instruction (1 byte)] [Operand (1 to 3 bytes)] [Data (in or out, optional)]
+
+    - instruction is written first,
+    - depending on the instruction, operand is the data usually shifted to DR,
+    - if no operand and/or no data, there is still a need for some padding,
+    - data phase, if any, comes after operand and padding.
+
+    Then there are strange padding rules for non-byte-aligned DRs, but
+    the only actual example is busy bit, then we'll have a special
+    case for it.
+    """
+
+    def __init__(self,
+                 data_direction = None, operand_size = 0,
+                 operand = 0, align_count = 3, post_wait = 0):
+        """
+        data_direction: either
+        - None if tdi/tdo is usually not used for this instruction,
+        - "op" if data usually shifted to TDI should be mapped to perands,
+        - "read" if data is usually shifted out of device through TDO,
+        - "write" if data is usually shifted to device.
+
+        operand_size: operand field byte count. Operand value will be
+        mapped big-endian to it.
+
+        operand: Constant value ORed to operand data field (if any, i.e.
+        in "op" mode). Allows to inject a constant operand value for
+        some commands.
+
+        align_count: expected size of operand before data phase or end
+        of transaction.
+
+        post_wait: time to wait after completion of command.
+        """
+        self.operand_size = operand_size
+        self.operand = operand
+        self.align_count = align_count if align_count is not None else operand_size
+        self.data_direction = data_direction
+        self.post_wait = post_wait
+
+    def op_run(self, mach, op):
+        assert op.tdi is None or isinstance(op.tdi, bitstring.BitString)
+        operand = self.operand
+        if self.data_direction == "op":
+            if op.tdi is not None:
+                if len(op.tdi) > self.operand_size * 8:
+                    raise RuntimeError("TDI too big: %s, %d operand bytes" % (op.tdi, self.operand_size))
+                operand |= int(op.tdi)
+
+        out_data = bytes([op.ir & 0xff]) + operand.to_bytes(self.operand_size, "big").ljust(self.align_count, b"\x00")
+
+        if self.data_direction == "read":
+            io_len = len(op.tdi)
+            assert io_len == 1 or (io_len % 8 == 0)
+
+            in_data_byte_count = (io_len + 7) // 8
+
+            mach.logger.info("i2c < %s, %d", out_data.hex(), in_data_byte_count)
+            
+            r = mach.do_write_read(out_data, in_data_byte_count)
+
+            mach.logger.info("i2c > %s", r.hex())
+
+            if io_len == 1:
+                tdo = bitstring.BitString(r[0] >> 7, 1)
+            else:
+                tdo = bitstring.BitString(r[::-1])
+
+            op.tdo = op.postprocess(tdo)
+            return
+            
+        if self.data_direction == "write":
+            out_data += bytes(op.tdi)[::-1]
+        
+        mach.logger.info("i2c < %s", out_data.hex())
+        mach.do_write(out_data)
+
+        if self.post_wait:
+            time.sleep(self.post_wait)
+
+class MachXO2Serial(PortComponent, MachXO2Config):
+    """
+    Utility class that wraps the JTAG commands to serial (I2C/SPI) transport.
+    """
+
+    def __init__(self, bus, **kwargs):
+        PortComponent.__init__(self, bus, "MachXO2", **kwargs)
         MachXO2Config.__init__(self)
-        self.saddr = None
 
     def start(self):
-        assert self.saddr is not None
+        PortComponent.start(self)
         MachXO2Config.start(self)
 
-    def _addr_set(self, addr = None):
-        time.sleep(.5)
-        self.saddr = 0x40 if addr is None else addr
+    def busy_get(self):
+        return not not (self.LSC_READ_STATUS.shift(0) & 0x1000)
 
-    def cmd(self, op, args, data = None):
-        self.logger.info("CMD %02x", op)
-        if args is None:
-            args = b'\x00\x00\x00'
-            if op in [opcodes.ISC_ENABLE, opcodes.LSC_ENABLE_X]:
-                args = b'\x08\x00'
-            if op in [opcodes.ISC_DISABLE]:
-                args = b'\x00\x00'
-        cmd = bytes([op]) + args
-        for i in range(10, -1, -1):
-            try:
-                if isinstance(data, int) and data:
-                    return self.port.write_read(self.saddr, cmd, data)
-                else:
-                    return self.port.write(self.saddr, cmd + (data or b''))
-            except i2c.AddressNack:
-                if not i:
-                    raise
-            time.sleep(.001)
+    _reg_map = {
+        0xe0: SerIrMap("read"),
+        0x16: SerIrMap("read"),
+        0x74: SerIrMap("op", operand_size = 1, align_count = 2, post_wait = .1),
+        0xc6: SerIrMap("op", operand_size = 1, align_count = 2, post_wait = .1),
+        0xf0: SerIrMap("read"),
+        0x3c: SerIrMap("read"),
+        0x0e: SerIrMap("op", operand_size = 1),
+        0xcb: SerIrMap(),
+        0x46: SerIrMap(),
+        0xb4: SerIrMap("write"),
+        0x70: SerIrMap("write", operand_size = 3, operand = 1),
+        0x47: SerIrMap(),
+        0xc9: SerIrMap("write", operand_size = 3, operand = 1),
+        0xc2: SerIrMap("write"),
+        0xc0: SerIrMap("read"),
+        0xe4: SerIrMap("write"),
+        0xe7: SerIrMap("read"),
+        0xf8: SerIrMap("write"),
+        0xfb: SerIrMap("read"),
+        0x73: SerIrMap("read", operand_size = 3),
+        0xca: SerIrMap("read", operand_size = 3),
+        0x5e: SerIrMap(),
+        0xf9: SerIrMap("write"),
+        0xfa: SerIrMap("read"),
+        0xff: SerIrMap(operand = 0xffffff, operand_size = 3),
+        0x26: SerIrMap(align_count = 2, post_wait = .3),
+        0x79: SerIrMap(align_count = 2, post_wait = .3),
+        0xce: SerIrMap(),
+        0xcf: SerIrMap(),
+        0x19: SerIrMap("read"),
+    }
 
     def option_set(self, opt):
         k, v = opt.split('=', 1)
@@ -735,32 +694,137 @@ class MachXO2I2c(PortComponent, MachXO2Config):
             return PortComponent.option_set(opt)
 
     def run(self, cycles = 1):
-        self.cmd(opcodes.BYPASS, None)
-        if cycles > 1000:
-            time.sleep(.5)
+#        self.BYPASS.shift()
+        time.sleep(cycles / 1e5)
 
-    def _feature_write(self, feature):
-        self.status_check(0, 0x0200)
-        self.cmd(opcodes.LSC_PROG_FEATURE, None, bytes(feature)[::-1])
-        self._addr_set(bytes(feature)[5] * 4)
+    def cmd_dr_shift(self, ir, dr, length = None, read_tdo = True, read_ir = False, return_type = None):
+        return jtag.TapDrShift(ir, dr, length, read_tdo, read_ir, return_type)
+
+    def cmd_run(self, cycles):
+        return jtag.TapRun(cycles)
+    
+    def _flash_done_set(self):
+        pass
+
+    def _refresh(self):
+        self.execute([
+            self.ISC_ERASE.cmd(self.ERASE_SRAM),
+            self.LSC_REFRESH.cmd(0),
+            ])
+        time.sleep(.1)
+
+    def _mem_read(self, offset, size, addr_init_op, offset_base):
+        self.status_check(0, 0xa00)
+
+        addr_init_op.shift(offset_base >> 28)
         self.wait_no_fail()
 
-    def _feabits_write(self, feabits):
-        self.status_check(0, 0x0200)
-        self.cmd(opcodes.LSC_PROG_FEABITS, None, bytes(feabits)[::-1])
+        self.execute([
+            self.LSC_WRITE_ADDRESS.cmd(offset_base + offset // 16),
+            self.cmd_run(1),
+            ])
         self.wait_no_fail()
 
-    def _feature_read(self):
-        return bytes(self.cmd(opcodes.LSC_READ_FEATURE, None, 8))[::-1]
+        data = b''
+        for addr in range(offset & ~0xf, offset + size, 16):
+            cmds = [
+                self.LSC_READ_INCR_NV.cmd(0,
+                                          read_tdo = True,
+                                          return_type = bytes),
+                ]
+            self.execute(cmds)
 
-    def _feabits_read(self):
-        return bytes(self.cmd(opcodes.LSC_READ_FEABITS, None, 2))[::-1]
+            data += cmds[0].tdo
 
-    @property
-    def done(self):
-        s = self.status
-        return s & 0x2100 == 0x0100
+        data = self.row_flip(data)
 
+        return data[offset & 0xf : (offset & 0xf) + size]
+
+    @staticmethod
+    def row_flip(data):
+        assert len(data) % 16 == 0
+        tmp = b""
+        for offset in range(0, len(data), 16):
+            tmp += data[offset : offset + 16][::-1]
+        return tmp
+
+    def do_write_read(self, wdata, rdata_len):
+        """
+        Must be implemented in transport
+        """
+        ...
+
+    def do_write(self, wdata):
+        """
+        Must be implemented in transport
+        """
+        ...
+
+@i2c.Interface.db.register("machxo2")
+class MachXO2I2c(MachXO2Serial):
+    """
+    I2C-based specialization of Mach-XO2 controller
+    """
+
+    def __init__(self, port):
+        super().__init__(port)
+        self.saddr = None
+
+    def start(self):
+        assert self.saddr is not None
+        super().start()
+        
+    def execute(self, ops):
+        for op in ops:
+            if isinstance(op, jtag.TapDrShift):
+                ir = op.ir & 0xff
+                mapper = self._reg_map[ir]
+                for retry in range(10, -1, -1):
+                    try:
+                        mapper.op_run(self, op)
+                        break
+                    except i2c.AddressNack:
+                        if not retry:
+                            raise
+                        self.logger.debug("nack")
+                    time.sleep(.01)
+            elif isinstance(op, jtag.TapRun):
+                time.sleep(.001)
+            else:
+                raise RuntimeError("No mapping for %s"%op)
+
+    def do_write_read(self, wdata, rdata_len):
+        return self.port.write_read(self.saddr, wdata, rdata_len)
+
+    def do_write(self, wdata):
+        return self.port.write(self.saddr, wdata)
+            
 @spi.Target.db.register("machxo2")
-class MachXO2Spi(MachXO2Config):
-    pass
+class MachXO2Spi(MachXO2Serial):
+    """
+    SPI-based specialization of Mach-XO2 controller
+    """
+
+    def __init__(self, port, name, cs):
+        super().__init__(port, cs = cs)
+
+    def execute(self, ops):
+        for op in ops:
+            if isinstance(op, jtag.TapDrShift):
+                mapper = self._reg_map[op.ir & 0xff]
+                mapper.op_run(self, op)
+            elif isinstance(op, jtag.TapRun):
+                time.sleep(.001)
+            else:
+                raise RuntimeError("No mapping for %s"%op)
+
+    def do_write_read(self, wdata, rdata_len):
+        r = self.cmd_shift(rdata_len, read_miso = True)
+        self.port.execute([self.cmd_cs(True),
+                           self.cmd_shift(wdata),
+                           r,
+                           self.cmd_cs(False)])
+        return r.miso
+
+    def do_write(self, wdata):
+        return self.transaction(wdata, read_miso = False)

@@ -20,7 +20,7 @@ class MachFlash(MachMem):
     def erase(self, offset, size):
         if offset:
             raise NotImplementedError()
-        self.fpga.flash_erase()
+        self.fpga._flash_erase()
 
     def write(self, offset, data):
         self.fpga._flash_write(offset, data)
@@ -37,7 +37,7 @@ class MachUfm(MachMem):
 
     def erase(self, offset, size):
         if offset == 0:
-            self.fpga.ufm_erase()
+            self.fpga._ufm_erase()
 
     def write(self, offset, data):
         self.fpga._ufm_write(offset, data)
@@ -80,26 +80,24 @@ class MachXOFlasher(model.Target, memory.Loadable):
         self.component = comp
 
     def program_begin(self, do_erase = False, assume_clean = False):
-        if not do_erase:
-            raise NotImplementedError("Cannot program FPGA without erasing")
-        self.component._isc_enable(False)
-        memory.Loadable.program_begin(self, do_erase, assume_clean)
-        self.component._isc_enable(False)
-        self.component._stop()
-        self.component._isc_enable(False)
+        self.component._isc_enable(self.component.TARGET_FLASH, False)
+        super().program_begin(do_erase = do_erase, assume_clean = assume_clean)
 
     def attach(self):
-        self.component._isc_enable(False)
+        self.component._isc_enable(self.component.TARGET_FLASH, False)
 
     def erase_all(self):
-        self.component.erase_all()
+        self.component._erase_all()
         self.force_blank()
 
     def reset(self):
         self.component.refresh()
 
     def program_end(self, success, do_start):
-        self.component._isc_disable()
+        self.component._erase(self.component.ERASE_SRAM)
+        self.component._flash_done_set()
 
         if do_start:
             self.component.refresh()
+        else:
+            self.component._isc_disable()

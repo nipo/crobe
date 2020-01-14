@@ -481,8 +481,96 @@ class Chain(PortComponent):
             self.logger.info("- %s", t)
 
         #tap.start()
-            
-class Tap(PortComponent):
+
+
+        
+class Dr:
+    def __init__(self, length = None):
+        """
+        :param int,None length: Register length, if any (None for infinite/unknown registers)
+        """
+        self.length = length
+
+    def _spawn(self, name, tap):
+        return TapDr(tap, name, self.length)
+
+class Instruction:
+    def __init__(self, ir, dr):
+        self.ir = ir
+        self.dr = dr
+
+    def _spawn(self, name, tap):
+        if self.dr is None:
+            dr = None
+        else:
+            try:
+                dr = getattr(tap, self.dr)
+            except KeyError:
+                raise RuntimeError("No such DR: %s" % self.dr)
+            if not isinstance(dr, TapDr):
+                raise RuntimeError("Not a proper DR: %s" % self.dr)
+        return TapInstruction(tap, name, self.ir, dr)
+
+class InstructionRegistry:
+    DEVICE_ID = Dr(32)
+    TAP_BYPASS = Dr(1)
+
+    BYPASS = Instruction(-1, "TAP_BYPASS")
+    
+    def __init__(self):
+        import inspect
+
+        for name in dir(self):
+            obj = inspect.getattr_static(self, name)
+            if isinstance(obj, Dr):
+                setattr(self, name, obj._spawn(name, self))
+                
+        for name in dir(self):
+            obj = inspect.getattr_static(self, name)
+            if isinstance(obj, Instruction):
+                setattr(self, name, obj._spawn(name, self))
+        
+class TapDr:
+    def __init__(self, tap, name, length = None):
+        """
+        :param Tap tap: Owner TAP
+        :param str name: Data register name
+        :param int,None length: Register length, if any (None for infinite/unknown registers)
+        """
+        self.tap = tap
+        self.name = name
+        self.length = length
+
+class TapInstruction:
+    def __init__(self, tap, name, ir, dr):
+        self.tap = tap
+        self.name = name
+        self.ir = ir
+        self.dr = dr
+
+    def cmd(self, dr = None, read_tdo = True, read_ir = False, return_type = None):
+        if self.dr is None:
+            dr = None
+            read_tdo = False
+        else:
+            if isinstance(dr, BitString) and self.dr.length is not None:
+                if len(dr) != self.dr.length:
+                    raise ValueError("Bad DR length", len(dr))
+        return self.tap.cmd_dr_shift(self.ir, dr, None if dr is None else self.dr.length,
+                                     read_tdo = read_tdo,
+                                     read_ir = read_ir,
+                                     return_type = return_type)
+
+    def shift(self, dr = None, read_tdo = True, read_ir = False, return_type = None):
+        op = self.cmd(dr,
+                      read_tdo = read_tdo,
+                      read_ir = read_ir,
+                      return_type = return_type)
+        self.tap.execute([op])
+        if read_tdo or dr is not None or read_ir:
+            return op.tdo
+
+class Tap(PortComponent, InstructionRegistry):
     """
     A TAP model, i.e. a device in a JTAG chain.  This transparently
     handles shifting BYPASS instruction in other TAPs and inserting
@@ -513,22 +601,18 @@ class Tap(PortComponent):
     db = Db("TAP IDCODE")
 
     max_freq = None
-    
+
     def __init__(self, port, index):
-        PortComponent.__init__(self, port, "TAP[0x%08x]" % int(port.idcode_at(index)))
+        idcode = port.idcode_at(index)
+        self.idcode = idcode
+        PortComponent.__init__(self, port, "TAP[0x%08x]" % int(idcode))
+        InstructionRegistry.__init__(self)
+
         self.index = index
         if self.irlen:
             _, irlen, _ = self.ir_pre_post()
             assert irlen == self.irlen
         self.ir = None
-
-    @property
-    def IR_BYPASS(self):
-        return (1 << self.irlen) - 1
-
-    @property
-    def idcode(self):
-        return self.port.idcode_at(self.index)
 
     def __str__(self):
         _, irlen, _ = self.ir_pre_post()
@@ -600,8 +684,7 @@ class Tap(PortComponent):
         """
         self.execute([TapRun(cycles)])
 
-    @property
-    def ir_status(self):
+    def ir_status_read(self):
         """
         Shift BYPASS to IR and get back IR status.
         """
@@ -613,7 +696,7 @@ class Tap(PortComponent):
         """
         Shift BYPASS to IR and get back IR status.
         """
-        return TapDrShift(self.IR_BYPASS, None, read_ir = True, return_type = int)
+        return TapDrShift(-1, None, read_ir = True, return_type = int)
 
     def cmd_dr_shift(self, ir, dr, length = None, read_tdo = True, read_ir = False, return_type = None):
         """
