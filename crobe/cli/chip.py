@@ -31,23 +31,13 @@ def program(ctx, programs, assume_clean, erase, check, run):
 
     click.echo("Target: %s" % target)
 
-    program = Program.from_programs(programs)
+    program = Program.from_programs(programs) or Program()
 
-    if program:
-        target.write(program,
-                     do_erase = erase,
-                     do_verify = check,
-                     do_start = run,
-                     assume_clean = assume_clean)
-
-    else:
-        if erase:
-            target.erase_all()
-        if run:
-            try:
-                target.reset()
-            except AttributeError:
-                click.echo("WARNING: Target does not handle reset")
+    target.write(program,
+                 do_erase = erase,
+                 do_verify = check,
+                 do_start = run,
+                 assume_clean = assume_clean)
 
 @chip.command(help = "Check target")
 @click.argument("programs", type = base.PROGRAM, nargs = -1)
