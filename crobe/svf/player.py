@@ -45,6 +45,9 @@ class Player:
     def run(self, svf):
         with tqdm(list(svf)) as ops:
             for op in ops:
+                ops.set_description(op.line_info())
+                if len(self.pending) > 150:
+                    self.flush()
                 try:
                     self.handle(op)
                 except ExecutionError as e:
@@ -128,6 +131,7 @@ class ChainPlayer(Player):
 
     def test_run(self, op):
         self.move_to(op.run_state)
+        end_at = None
         if op.run_state == "idle" or not op.run_state:
             clocks = [0]
             if op.run_count:
@@ -135,9 +139,14 @@ class ChainPlayer(Player):
             if op.tck:
                 clocks.append(op.tck)
             if op.min_time:
-                clocks.append(self.freq * op.min_time)
+                end_at = time.time() + op.min_time
             self.pending.append(self.intf.cmd_run(max(clocks)))
         self.move_to(op.end_state)
+        if end_at is not None:
+            self.flush()
+            started_at = time.time()
+            while time.time() < end_at:
+                time.sleep(.05)
 
     def move_to(self, state):
         if state == self.state:
@@ -283,21 +292,24 @@ class TapPlayer(Player):
     def test_run(self, op):
         maxrun = int(self.tap.port.port.freq) // 2
         clocks = [0]
-        passed = 0
-        t = op.min_time or 0
+
         self.ir.run()
         self.dr.run()
+
         if op.run_count:
             clocks.append(op.run_count)
         if op.tck:
             clocks.append(op.tck)
+
         clocks = max(clocks)
         if clocks > maxrun:
             clocks = maxrun
-            t += self.tap.port.port.freq * (clocks - maxrun)
         if clocks:
             self.pending.append(self.tap.cmd_run(clocks))
-            t -= self.tap.port.port.freq * clocks
-        if t > 0:
+
+        if op.min_time:
+            started_at = time.time() + .1
             self.flush()
-            time.sleep(t)
+            end_at = started_at + op.min_time
+            while time.time() < end_at:
+                time.sleep(.05)
