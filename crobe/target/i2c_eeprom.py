@@ -16,6 +16,7 @@ class Bank(memory.Eeprom):
         return self.eeprom.read(offset, size)
 
 @model.Target.register(component_i2c_eeprom.I2cEeprom)
+@model.Target.register(component_i2c_eeprom.I2cMem)
 class I2cEeprom(model.Target, memory.Loadable):
     """
     An I2C eeprom
