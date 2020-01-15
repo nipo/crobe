@@ -12,11 +12,6 @@ for filename in [os.path.expanduser('~/.config/crobe/crobe.conf'), 'crobe.conf']
 def path_get(section, key):
     return os.path.expanduser(_conf[section][key])
 
-def plugins_get():
-    if "plugins" not in _conf:
-        return []
-    return [_conf["plugins"][x] for x in _conf.options("plugins")]
-
 def section_keys(section):
     return _conf.options(section)
 
