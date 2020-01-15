@@ -60,8 +60,8 @@ class TestPhase:
                     continue
                 self.rpattern[pa & pb] = a+"&"+b
                 self.rpattern[pa | pb] = a+"|"+b
-        self.rpattern[0] = "LOW"
-        self.rpattern[(1 << self.count) - 1] = "HIGH"
+        self.rpattern[0] = "GND"
+        self.rpattern[(1 << self.count) - 1] = "VCC"
 
     def enable(self):
         for driver, observers in self.equipots.items():
@@ -112,16 +112,17 @@ class TestPhase:
                     observed[observer] |= int(bool(value)) << (idx - 1)
 
         ret = {}
-        for observer, pattern in observed.items():
-            driver = self.driver_by_pattern(pattern)
+        for observer, observed_pattern in observed.items():
+            actual_driver = self.driver_by_pattern(observed_pattern)
             expected_driver = self.drivers[observer]
-            if driver != expected_driver:
-                ret[observer] = expected_driver, driver
+            expected_pattern = self.pattern[expected_driver]
+            if actual_driver != expected_driver:
+                ret[observer] = expected_driver, actual_driver, BitString(expected_pattern, self.count), BitString(observed_pattern, self.count)
 
         return ret
 
     def driver_by_pattern(self, pattern):
-        return self.rpattern.get(int(pattern), "?")
+        return self.rpattern.get(int(pattern), None)
             
 class BoardTester:
     def __init__(self, board, nets, constants):
@@ -145,13 +146,15 @@ class BoardTester:
         bad_observations = {}
         pb = tqdm(total = sum((p.count for p in self.phase), 0),
                   desc = "Boundary scan")
+
         for phase in self.phase:
             phase_bad_obs = phase.test(pb)
-            for observer, (driver, value) in phase_bad_obs.items():
+
+            for observer, data in phase_bad_obs.items():
                 try:
-                    bad_observations[observer].append(driver, value)
+                    bad_observations[observer].append(driver, data)
                 except:
-                    bad_observations[observer] = [(driver, value)]
+                    bad_observations[observer] = [data]
         return bad_observations
             
             
