@@ -223,7 +223,11 @@ class Parser:
                     break
                 data += n.text
 
-            fields[tok] = BitString(int("0x"+data, 16), length)
+            
+            if len(data) & 1:
+                data = '0' + data
+            blob = bytes.fromhex(data)[::-1]
+            fields[tok] = BitString(blob, length)
 
     def handle_pio(self, token):
         return self.unsupported(token)
