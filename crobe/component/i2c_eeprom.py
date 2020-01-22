@@ -82,19 +82,20 @@ class I2cEeprom(I2cMem):
 
         saddr, baddr = self._addr(addr)
 
-        self.port.write(saddr, baddr + data)
-        
-        time.sleep(.05)
-        deadline = time.time() + .1
-        while time.time() < deadline:
-            try:
-                r = self.port.write_read(saddr, baddr, len(data))
-                if r == data:
-                    return
-            except i2c.AddressNack:
-                pass
-            time.sleep(.01)
-            continue
+        for retry in range(3):
+            self.port.write(saddr, baddr + data)
+
+            time.sleep(.05)
+            deadline = time.time() + .1
+            while time.time() < deadline:
+                try:
+                    r = self.port.write_read(saddr, baddr, len(data))
+                    if r == data:
+                        return
+                except i2c.AddressNack:
+                    time.sleep(.01)
+                    continue
+                break
         raise RuntimeError()
 
 @i2c.Interface.db.register("eeprom")
