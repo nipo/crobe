@@ -16,10 +16,9 @@ def crc16(blob):
     return crc
 
 @i2c.Interface.db.register("atsha204a")
-class AtSha204A(PortComponent):
+class AtSha204A(i2c.Slave):
     def __init__(self, bus, saddr = None):
-        PortComponent.__init__(self, bus, "atsha204a")
-        self.saddr = saddr
+        i2c.Slave.__init__(self, bus, "atsha204a", saddr)
         
     def wake(self):
         for i in range(5):
@@ -37,18 +36,18 @@ class AtSha204A(PortComponent):
         self.i2c_write(b"\x01")
 
     def _read(self, rsize):
-        r = self.port.read(self.saddr, rsize)
+        r = self.read(rsize)
         self.logger.debug("< %d %s", rsize, r.hex())
         return r
 
     def _write_read(self, blob, rsize):
-        r = self.port.write_read(self.saddr, blob, rsize)
+        r = self.write_read(blob, rsize)
         self.logger.debug("<> %s %d %s", blob.hex(), rsize, r.hex())
         return r
 
     def _write(self, blob):
         self.logger.debug("> %s", blob.hex())
-        return self.port.write(self.saddr, blob)
+        return self.write(blob)
 
     def fifo_write(self, blob):
         self._write(b'\x00')
@@ -108,10 +107,3 @@ class AtSha204A(PortComponent):
 
     def otp_read(self):
         return self.read(1, 0, 64)
-
-    def option_set(self, opt):
-        k, v = opt.split('=', 1)
-        if k == 'saddr':
-            self.saddr = int(v, 16)
-        else:
-            return PortComponent.option_set(self, opt)

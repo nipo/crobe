@@ -6,20 +6,9 @@ import crcmod
 
 __all__ = ["MklBootloader"]
 
-class MklI2cTransport(PortComponent):
+class MklI2cTransport(i2c.Slave):
     def __init__(self, bus, saddr):
-        PortComponent.__init__(self, bus, "MklI2c")
-        self.saddr = saddr
-#        self.port.freq_cap("mkl", 100e3)
-
-    def write(self, data):
-        self.logger.debug("< %s", binascii.b2a_hex(data))
-        self.port.write(self.saddr, data)
-
-    def read(self, size):
-        data = self.port.read(self.saddr, size)
-        self.logger.debug("> %s", binascii.b2a_hex(data))
-        return data
+        PortComponent.__init__(self, bus, "MklI2c", saddr)
 
 class MklBootloader(PortComponent):
     max_packet_size = 0x10

@@ -23,7 +23,7 @@ class Interface(base.Interface):
     SMBus protocol interface.
     """
 
-    db = Db("I2C chip type")
+    db = Db("SMBUS chip type")
 
     def __init__(self, port, name = None):
         base.Interface.__init__(self, port, (name or port.name) + "/SMBus")
@@ -44,10 +44,7 @@ class Interface(base.Interface):
         return data
 
     def pec_write_read(self, addr, data, size):
-        read = self.port.cmd_read(addr, size + 1)
-        self.port.execute([self.port.cmd_write(addr, data), read])
-
-        rdata = read.data[:-1]
+        rdata = self.port.write_read(addr, data, size + 1)
         pc = pec(bytes([addr << 1]) + data)
         pc = pec(bytes([(addr << 1) | 1]) + read.data, pc)
         if pc != 0:
@@ -163,3 +160,55 @@ class Interface(base.Interface):
             return self.db.call(sub, self)
         except NoMatch:
             pass
+
+class Slave(i2c.Slave):
+    """
+    SMBus slave model.
+    """
+    def start(self):
+        self.port.freq_cap("smbus", 400e3)
+        
+    def pec_write(self, data):
+        self.port.pec_write(self.saddr, data)
+
+    def pec_read(self, size):
+        self.port.pec_read(self.saddr, size)
+
+    def pec_write_read(self, data, size):
+        self.port.pec_write_read(self.saddr, data, size)
+
+    def send_byte(self, data):
+        return self.pec_write(bytes([data]))
+
+    def receive_byte(self):
+        return self.pec_read(1)[0]
+
+    def write_byte(self, command, data):
+        return self.pec_write(bytes([command, data]))
+
+    def read_byte(self, command):
+        return self.pec_write_read(bytes([command]), 1)[0]
+
+    def write_word(self, command, data):
+        return self.pec_write(bytes([command]) + data.to_bytes(2, "little"))
+
+    def read_word(self, command):
+        r = self.pec_write_read(bytes([command]), 2)
+        return int.from_bytes(r, "little")
+
+    def process_call(self, command, data):
+        r = self.pec_write_read(bytes([command]) + data.to_bytes(2, "little"), 2)
+        return int.from_bytes(r, "little")
+
+    def block_write(self, command, data):
+        self.pec_write(bytes([command, len(data)]) + data)
+
+    def block_read(self, command):
+        return self.port.block_read(self.saddr, command)
+
+    def block_write_read(self, addr, command, data):
+        return self.port.block_write_read(self.saddr, command, data)
+
+@Interface.db.register("generic")
+def generic(bus):
+    return Slave(bus, "generic", None)

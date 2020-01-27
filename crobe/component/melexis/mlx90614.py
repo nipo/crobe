@@ -3,19 +3,9 @@ from ...protocol import smbus
 import struct
 
 @smbus.Interface.db.register("mlx90614")
-class Mlx90614(PortComponent):
+class Mlx90614(smbus.Slave):
     def __init__(self, bus, saddr = 0x5a):
-        PortComponent.__init__(self, bus, "MLX90614")
-        self.saddr = saddr
-
-    def option_set(self, opt):
-        k, v = opt.split('=', 1)
-
-        if k == 'saddr':
-            self.saddr = int(v, 16)
-            self.logger.debug("Slave addr now %02x", self.saddr)
-        else:
-            return PortComponent.option_set(opt)
+        PortComponent.__init__(self, bus, "MLX90614", saddr)
 
     def start(self):
         PortComponent.start(self)
@@ -40,7 +30,7 @@ class Mlx90614(PortComponent):
 
         values = {}
         for name, addr in regs.items():
-            values[name] = (self.port.read_word(self.saddr, addr) & 0x7fff) / 50.
+            values[name] = (self.read_word(addr) & 0x7fff) / 50.
         return values
 
     REG_TA             = 0x06

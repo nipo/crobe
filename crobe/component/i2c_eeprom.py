@@ -1,4 +1,3 @@
-from ..model import PortComponent
 from .model import Bus
 from ..protocol import i2c
 import binascii
@@ -6,11 +5,10 @@ import time
 
 __all__ = ["I2cMem"]
 
-class I2cMem(PortComponent, Bus):
+class I2cMem(i2c.Slave, Bus):
     def __init__(self, bus, saddr, addr_bytes = 2, size = None, page_size = None, saddr_bits = 0):
-        PortComponent.__init__(self, bus, "I2cMem")
+        i2c.Slave.__init__(self, bus, "I2cMem", saddr)
         Bus.__init__(self, self.name)
-        self.saddr = saddr
         self.addr_bytes = addr_bytes
         self.saddr_bits = saddr_bits
 
@@ -31,7 +29,7 @@ class I2cMem(PortComponent, Bus):
 
         saddr, baddr = self._addr(addr)
 
-        return self.port.write_read(saddr, baddr, size)
+        return i2c.Slave.write_read(self, baddr, size)
 
     def write(self, addr, data):
         assert addr + len(data) <= self.size
@@ -58,13 +56,11 @@ class I2cMem(PortComponent, Bus):
 
         saddr, baddr = self._addr(addr)
 
-        self.port.write(saddr, baddr + data)
+        i2c.Slave.write(self, baddr + data)
 
     def option_set(self, opt):
         k, v = opt.split('=', 1)
-        if k == 'saddr':
-            self.saddr = int(v, 16)
-        elif k == 'saddr_bits':
+        if k == 'saddr_bits':
             self.saddr_bits = int(v, 16)
         elif k == 'addr_bytes':
             self.addr_bytes = int(v)
@@ -73,7 +69,7 @@ class I2cMem(PortComponent, Bus):
         elif k == 'page_size':
             self.page_size = int(v)
         else:
-            return PortComponent.option_set(self, opt)
+            return i2c.Slave.option_set(self, opt)
 
 class I2cEeprom(I2cMem):
     def _write(self, addr, data):
@@ -83,13 +79,13 @@ class I2cEeprom(I2cMem):
         saddr, baddr = self._addr(addr)
 
         for retry in range(3):
-            self.port.write(saddr, baddr + data)
+            i2c.Slave.write(self, baddr + data)
 
             time.sleep(.05)
             deadline = time.time() + .1
             while time.time() < deadline:
                 try:
-                    r = self.port.write_read(saddr, baddr, len(data))
+                    r = i2c.Slave.write_read(self, baddr, len(data))
                     if r == data:
                         return
                 except i2c.AddressNack:
@@ -100,8 +96,8 @@ class I2cEeprom(I2cMem):
 
 @i2c.Interface.db.register("eeprom")
 def i2c_eeprom_gen(bus):
-    return I2cEeprom(bus, 0)
+    return I2cEeprom(bus, None)
 
 @i2c.Interface.db.register("memory")
 def i2c_mem_gen(bus):
-    return I2cMem(bus, 0)
+    return I2cMem(bus, None)

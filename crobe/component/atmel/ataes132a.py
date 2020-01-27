@@ -16,7 +16,7 @@ def crc16(blob, crc = 0):
     return crc
 
 @i2c.Interface.db.register("ataes132a")
-class AtAes132A(PortComponent):
+class AtAes132A(i2c.Slave):
     class Command(enum.IntEnum):
         Reset = 0
         Nonce = 1
@@ -64,8 +64,7 @@ class AtAes132A(PortComponent):
         EErr = 0x80
         
     def __init__(self, bus, saddr = 0x50):
-        PortComponent.__init__(self, bus, "ataes132a")
-        self.saddr = saddr
+        i2c.Slave.__init__(self, bus, "ataes132a", saddr)
 
     @classmethod
     def _ccm_mac(cls, key, nonce, maccount, auth_data, enc_data):
@@ -91,7 +90,7 @@ class AtAes132A(PortComponent):
         return auth_enc, data_enc
 
     def start(self):
-        PortComponent.start(self)
+        i2c.Slave.start(self)
         self.__nonce = None
         self.logger.info("%s", self.command(2, 2))
         self.logger.info("%04x %04x %04x %04x",
@@ -134,13 +133,6 @@ class AtAes132A(PortComponent):
         else:
             self.__nonce = None
         return n, i
-        
-    def option_set(self, opt):
-        k, v = opt.split('=', 1)
-        if k == 'saddr':
-            self.saddr = int(v, 16)
-        else:
-            return PortComponent.option_set(self, opt)
         
     def wake(self):
         for i in range(5):
@@ -187,14 +179,14 @@ class AtAes132A(PortComponent):
 
     def _read(self, addr, rsize):
         a = addr.to_bytes(2, "big")
-        r = self.port.write_read(self.saddr, a, rsize)
+        r = self.write_read(a, rsize)
         self.logger.debug("> %04x %d %s", addr, rsize, r.hex())
         return r
 
     def _write(self, addr, blob):
         a = addr.to_bytes(2, "big")
         self.logger.debug("< %04x %s", addr, blob.hex())
-        return self.port.write(self.saddr, a + blob)
+        return self.write(a + blob)
 
     def block_send(self, data):
         header = bytes([len(data) + 3])

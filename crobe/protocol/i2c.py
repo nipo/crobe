@@ -2,6 +2,7 @@ from . import base
 from .. import bitstring
 from enum import IntEnum
 from ..db import Db, NoMatch
+from ..model import PortComponent
 
 __all__ = ["Interface"]
 
@@ -10,11 +11,11 @@ class ProtocolError(base.ProtocolError):
 
 class AddressNack(ProtocolError):
     def __init__(self, addr):
-        self.__message = addr
-        base.ProtocolError.__init__(self, "I2C Slave error", addr)
+        self.__addr = addr
+        base.ProtocolError.__init__(self, "I2C Slave error at 0x%02x" % addr)
 
     def message_get(self):
-        return "I2C Address NACK at 0x%02x" % self.args[1]
+        return "I2C Address NACK at 0x%02x" % self.__addr
 
 class DataNack(ProtocolError):
     pass
@@ -47,12 +48,14 @@ class Interface(base.Interface):
         """
         op = self.cmd_read(addr, size)
         self.execute([op])
+        self.logger.debug("> @%02x %s", addr, op.data.hex())
         return op.data
 
     def write(self, addr, data):
         """
         See cmd_write()
         """
+        self.logger.debug("< @%02x %s", addr, data.hex())
         self.execute([self.cmd_write(addr, data)])
 
     def write_read(self, addr, data, size):
@@ -60,7 +63,9 @@ class Interface(base.Interface):
         See cmd_write() and cmd_read()
         """
         op = self.cmd_read(addr, size)
+        self.logger.debug("< @%02x %s", addr, data.hex())
         self.execute([self.cmd_write(addr, data), op])
+        self.logger.debug(">     %s", op.data.hex())
         return op.data
 
     def cmd_read(self, addr, size):
@@ -89,7 +94,32 @@ class Interface(base.Interface):
             return self.db.call(sub, self)
         except NoMatch:
             return
-    
+
+class Slave(PortComponent):
+    def __init__(self, port, name, saddr = None):
+        PortComponent.__init__(self, port, name)
+        self.saddr = saddr
+
+    def option_set(self, opt):
+        k, v = opt.split('=', 1)
+        if k == 'saddr':
+            self.saddr = int(v, 16)
+            return
+        PortComponent.option_set(self, opt)
+
+    def read(self, size):
+        op = self.port.cmd_read(self.saddr, size)
+        self.port.execute([op])
+        return op.data
+
+    def write(self, data):
+        self.port.execute([self.port.cmd_write(self.saddr, data)])
+
+    def write_read(self, data, size):
+        op = self.port.cmd_read(self.saddr, size)
+        self.execute([self.port.cmd_write(self.saddr, data), op])
+        return op.data
+
 class Operation(object):
     def __repr__(self):
         return str(self)

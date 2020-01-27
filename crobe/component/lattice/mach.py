@@ -761,18 +761,19 @@ class MachXO2Serial(PortComponent, MachXO2Config):
         ...
 
 @i2c.Interface.db.register("machxo2")
-class MachXO2I2c(MachXO2Serial):
+class MachXO2I2c(i2c.Slave, MachXO2Serial):
     """
     I2C-based specialization of Mach-XO2 controller
     """
 
     def __init__(self, port):
-        super().__init__(port)
-        self.saddr = None
+        i2c.Slave.__init__(self, port, "Mach-XO2", saddr = None)
+        MachXO2Serial.__init__(self, port)
 
     def start(self):
         assert self.saddr is not None
-        super().start()
+        i2c.Slave.start(self)
+        MachXO2Serial.start(self)
         
     def execute(self, ops):
         for op in ops:
@@ -794,10 +795,10 @@ class MachXO2I2c(MachXO2Serial):
                 raise RuntimeError("No mapping for %s"%op)
 
     def do_write_read(self, wdata, rdata_len):
-        return self.port.write_read(self.saddr, wdata, rdata_len)
+        return i2c.Slave.write_read(self, wdata, rdata_len)
 
     def do_write(self, wdata):
-        return self.port.write(self.saddr, wdata)
+        return i2c.Slave.write(self, wdata)
             
 @spi.Target.db.register("machxo2")
 class MachXO2Spi(MachXO2Serial):
