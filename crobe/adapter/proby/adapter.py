@@ -544,9 +544,9 @@ class ProbyAdapter(basic.Adapter):
                                        gpio_output = 0, gpio_value = 0)
         jtag_intf.logger.setLevel(logging.WARNING)
         jtag_intf.start()
-        fpgas = jtag_intf.children_of_class(Spartan6)
-#        print(fpgas)
-        fpga, = fpgas
+        chain = jtag_intf.child_summon("chain")
+        chain.start()
+        fpga = chain.child_summon("0")
 
         self.logger.info("Got FPGA in chain: %s", fpga)
 
