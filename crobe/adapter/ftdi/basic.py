@@ -135,7 +135,6 @@ class BaseInterface(object):
             val |= (1 << activityn_pin)
 
         self.handle = adapter.device.open(interface = channel, gpio_oe = oe, gpio_val = val)
-        self.freq_cap("hardware", adapter.freq_max)
 
     @property
     def reset(self):
@@ -229,9 +228,10 @@ class BaseInterface(object):
 
 class JtagInterface(BaseInterface, jtag.Interface):
     def __init__(self, adapter, oe_pin = None, oen_pin = None, name = None, **args):
-        jtag.Interface.__init__(self, adapter, name)
         args["gpio_output"] = (args.get("gpio_output", 0) & 0xfff0) | 0xb
         BaseInterface.__init__(self, adapter, **args)
+        jtag.Interface.__init__(self, adapter, name)
+        self.freq_cap("hardware", adapter.freq_max)
 
         self.__state = None
         self.__cmd_rti_capture_dr = self.handle.cmd_tms_shift(BitString(0x1, 2))
@@ -383,10 +383,11 @@ class I2cInterface(BaseInterface, i2c.Interface):
         """
         use_open_collector is only available for FT232HL (not FT4232H, not FT2232H)
         """
-        i2c.Interface.__init__(self, adapter, name)
         args["gpio_output"] &= ~0x3
         args["gpio_value"] |= 0x3
         BaseInterface.__init__(self, adapter, **args)
+        i2c.Interface.__init__(self, adapter, name)
+        self.freq_cap("hardware", adapter.freq_max)
 
         self.handle.cycle_div = 3
         scl = 1
@@ -527,9 +528,10 @@ class I2cInterface(BaseInterface, i2c.Interface):
 
 class SwdInterface(BaseInterface, swd.Interface):
     def __init__(self, adapter, oen_pin = None, oe_pin = None, name = None, **args):
-        swd.Interface.__init__(self, adapter, name)
         args["gpio_output"] = (args["gpio_output"] & 0xfff0) | 0x3
         BaseInterface.__init__(self, adapter, **args)
+        swd.Interface.__init__(self, adapter, name)
+        self.freq_cap("hardware", adapter.freq_max)
         if oen_pin is None and oe_pin is not None:
             self.oe_pin = (oe_pin, True)
         elif oe_pin is None and oen_pin is not None:
@@ -675,9 +677,10 @@ class SwdInterface(BaseInterface, swd.Interface):
 
 class ChipconInterface(BaseInterface, chipcon.Interface):
     def __init__(self, adapter, oen_pin = None, oe_pin = None, name = None, **args):
-        chipcon.Interface.__init__(self, adapter, name)
         args["gpio_output"] = (args["gpio_output"] & 0xfff0) | 0x3
         BaseInterface.__init__(self, adapter, **args)
+        chipcon.Interface.__init__(self, adapter, name)
+        self.freq_cap("hardware", adapter.freq_max)
         if oen_pin is None and oe_pin is not None:
             self.oe_pin = (oe_pin, True)
         elif oe_pin is None and oen_pin is not None:
@@ -732,9 +735,10 @@ class SpiInterface(BaseInterface, spi.Interface):
     MAX_PACKET_SIZE = 2048
 
     def __init__(self, adapter, csn_pin = None, name = None, **args):
-        spi.Interface.__init__(self, adapter, name)
         args["gpio_output"] = (args["gpio_output"] & 0xfff0) | 0x3
         BaseInterface.__init__(self, adapter, **args)
+        spi.Interface.__init__(self, adapter, name)
+        self.freq_cap("hardware", adapter.freq_max)
 
         self.__cmd_cs_on = self.handle.cmd_gpio_mask_set(
             1 << csn_pin, 1 << csn_pin, 0 << csn_pin)
