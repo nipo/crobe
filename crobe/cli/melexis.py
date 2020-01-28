@@ -20,3 +20,10 @@ def temp_poll(root):
         except:
             pass
         time.sleep(.5)
+
+@melexis.command(help = "Persistently change i2c address of MLX90614")
+@click.option('-r', '--root', type = base.ROOT)
+@click.argument("address", type = base.HEX)
+def mlx90614_addr_change(root, address):
+    root.address_change(address)
+    print("Done, please power cycle")

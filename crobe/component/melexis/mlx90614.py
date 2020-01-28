@@ -1,6 +1,7 @@
 from crobe.model import PortComponent
 from ...protocol import smbus
 import struct
+import time
 
 @smbus.Interface.db.register("mlx90614")
 class Mlx90614(smbus.Slave):
@@ -20,6 +21,12 @@ class Mlx90614(smbus.Slave):
         self.config = self.port.read_word(self.saddr, self.REG_CONFIG1)
         self.dual = bool(self.config & self.CONFIG1_IR_DUAL)
 
+    def address_change(self, next_addr):
+        self.write_word(self.REG_SMBUS_ADDRESS, 0)
+        time.sleep(.1)
+        self.write_word(self.REG_SMBUS_ADDRESS, next_addr)
+        time.sleep(.1)
+        
     def sensors_read(self):
         regs = {
             "Ta": self.REG_TA,
