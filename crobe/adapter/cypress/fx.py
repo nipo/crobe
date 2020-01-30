@@ -15,8 +15,11 @@ class Adapter(model.Adapter):
         return cls(d, "%s-%d" % (pre, d.address))
 
     @classmethod
-    def phys_path(cls, bus, address):
-        return os.path.realpath(os.path.join(cls.sys_path(bus, address), "port"))
+    def persistent_id(cls, dev):
+        try:
+            return os.path.realpath(os.path.join(cls.sys_path(dev.bus, dev.address), "port"))
+        except:
+            return "d:%04x:%04x" % (dev.idVendor, dev.idProduct)
 
     @classmethod
     def sys_path(cls, bus, address):
@@ -37,7 +40,7 @@ class Adapter(model.Adapter):
     def __init__(self, device, name):
         model.Adapter.__init__(self, name)
         self.device = device
-        self.original_phys_path = self.phys_path(self.device.bus, self.device.address)
+        self.original_persistent_id = self.persistent_id(self.device)
 
     def set_configuration(self, config):
         try:
@@ -105,13 +108,14 @@ class Adapter(model.Adapter):
         return self.ctrl_in(self.CMD_RW_INTERNAL, addr & 0xffff, addr >> 16, size)
 
     def reopen(self):
-        self.logger.info("Reopening %s", self.original_phys_path)
+        self.logger.info("Reopening %s", self.original_persistent_id)
         del self.device
 
         for retry in range(3):
             devices = usb.core.find(find_all = True)
             for d in devices:
-                if self.original_phys_path == self.phys_path(d.bus, d.address):
+                if self.original_persistent_id is not None \
+                   and self.original_persistent_id == self.persistent_id(d):
                     self.device = d
                     self.logger.info("Got %d/%d" % (d.bus, d.address))
                     return
