@@ -46,10 +46,10 @@ class Interface(base.Interface):
     def pec_write_read(self, addr, data, size):
         rdata = self.port.write_read(addr, data, size + 1)
         pc = pec(bytes([addr << 1]) + data)
-        pc = pec(bytes([(addr << 1) | 1]) + read.data, pc)
+        pc = pec(bytes([(addr << 1) | 1]) + rdata, pc)
         if pc != 0:
             raise PecError("")
-        return rdata
+        return rdata[:-1]
 
     def send_byte(self, addr, data):
         return self.pec_write(addr, bytes([data]))
@@ -175,7 +175,7 @@ class Slave(i2c.Slave):
         self.port.pec_read(self.saddr, size)
 
     def pec_write_read(self, data, size):
-        self.port.pec_write_read(self.saddr, data, size)
+        return self.port.pec_write_read(self.saddr, data, size)
 
     def send_byte(self, data):
         return self.pec_write(bytes([data]))
