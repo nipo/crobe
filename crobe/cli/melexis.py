@@ -12,13 +12,10 @@ def melexis():
 @click.option('-r', '--root', type = base.ROOT)
 def temp_poll(root):
     while True:
-        try:
-            values = root.sensors_read()
-            for name, k in values.items():
-                print("%s: %3.5f C" % (name, k - 273.15), end = ", ")
-            print()
-        except:
-            pass
+        values = root.sensors_read()
+        for name, k in values.items():
+            print("%s: %3.5f C" % (name, k - 273.15), end = ", ")
+        print()
         time.sleep(.5)
 
 @melexis.command(help = "Persistently change i2c address of MLX90614")
