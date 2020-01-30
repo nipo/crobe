@@ -40,5 +40,17 @@ def to_c_header(program, header, variable_name, msb_first):
     header.write("\n")
     header.write("#endif\n")
 
+@cli.command(help = "Save bitstream as raw data")
+@click.argument("program", type = click.Path(dir_okay = False), nargs = -1)
+@click.argument("data_file", type = click.File("wb"))
+@click.option("--msb-first", is_flag = True)
+def to_raw_blob(program, data_file, msb_first):
+    bs = Bitstream(PARTS, Program.from_file(program[0]))
+    for rn, frame in enumerate(bs.rti):
+        fd = frame.data
+        if not msb_first:
+            fd = bitswap8(fd)
+        data_file.write(fd)
+
 if __name__ == "__main__":
     cli.main()
