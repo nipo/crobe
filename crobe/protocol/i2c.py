@@ -117,7 +117,7 @@ class Slave(PortComponent):
 
     def write_read(self, data, size):
         op = self.port.cmd_read(self.saddr, size)
-        self.execute([self.port.cmd_write(self.saddr, data), op])
+        self.port.execute([self.port.cmd_write(self.saddr, data), op])
         return op.data
 
 class Operation(object):
