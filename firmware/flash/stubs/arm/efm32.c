@@ -60,8 +60,8 @@ void flash_erase(uintptr_t addr, size_t size, size_t page_size)
     uintptr_t end = addr + size;
     struct msc_s *msc = MSC;
     
-    addr = addr & (page_size - 1);
 
+    addr = addr & ~(page_size - 1);
     do {
         msc->lock = LOCK_KEY;
     } while (msc->lock);
