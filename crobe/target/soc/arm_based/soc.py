@@ -103,7 +103,7 @@ class StubFlash(BusFlash):
 
     def puppet_erase(self, puppet, address, size):
         code = puppet.stub(self.RANGE_ERASE)
-        code.call(address, size, size)
+        code.call(address, size, self.page_size)
 
     def puppet_write(self, puppet, pages):
         try:
