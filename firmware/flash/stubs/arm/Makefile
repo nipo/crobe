@@ -38,9 +38,7 @@ lpc11-arch = arm
 
 target = ../../../../crobe/target/soc/arm_based/puppet_code.py
 
-all: code.py
-
-copy: $(target)
+all: $(target)
 
 $(target): code.py
 	cp $< $@
