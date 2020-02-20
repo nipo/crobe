@@ -8,7 +8,6 @@ from ....component.arm.cortex import Cortex
 from ....component.arm.sw_dp import SwDp
 from ....component.arm.jtag_dp import JtagDp
 from ....component.arm.mem_ap import MemAp
-from ....component.nordic.ctrl_ap import CtrlAp
 from ... import memory
 from ....puppet import Puppet
 from ....db import Db
