@@ -107,7 +107,7 @@ class Interface(base.Interface):
     def cypress_line_reset(self):
         for delay in range(int(self.freq * 1.2e-3),
                            int(self.freq * 5e-3),
-                           int(self.freq / 20e3)):
+                           int(self.freq / 20e3) or 1):
             self.reset = True
             time.sleep(0.01)
             self.reset = False
@@ -139,6 +139,8 @@ class Interface(base.Interface):
         partid = None
         for i in range(4):
             idcode = self.line_reset()
+            if idcode is None:
+                continue
             try:
                 partid = PartId.from_idcode(idcode)
             except ValueError:
