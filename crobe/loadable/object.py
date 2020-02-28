@@ -150,6 +150,12 @@ class Program:
                 if s.address == addr + len(data):
                     data += s.data
                     continue
+                if s.address < addr + len(data):
+                    if s.address + len(s) < addr + len(data):
+                        data = data[: s.address - addr] + s.data + data[s.address - addr + len(s) :]
+                    else:
+                        data = data[: s.address - addr] + s.data
+                    continue
                 ret.append(Segment(addr, data, s.source))
                 addr = data = None
             addr = s.address
