@@ -184,22 +184,33 @@ class MachXO2Config(jtag.InstructionRegistry):
         jtag.InstructionRegistry.__init__(self)
         self.__bg_enable = None
 
-    def start(self):
-
-        self._isc_enable(self.TARGET_FLASH, True)
-
-        idcode = self.IDCODE_PRIV.shift(0)
-        self.logger.info("IDCode priv: 0x%x", idcode)
-
+    @classmethod
+    def chip_info(cls, idcode):
         possible_parts = [p for p in parts.PARTS if int(idcode) == p.idcode]
+        if not possible_parts:
+            return None
+
         if len(possible_parts) > 1:
             suffixes = [p.name.split("-", 1)[1] for p in possible_parts]
             prefix = possible_parts[0].name.split("-", 1)[0]
-            self.name = prefix + "-" + "/".join(suffixes)
-            self.info = possible_parts[0]
+            name = prefix + "-" + "/".join(suffixes)
+            info = possible_parts[0]
         else:
-            self.info = possible_parts[0]
-            self.name = self.info.name
+            info = possible_parts[0]
+            name = info.name
+        return name, info
+
+    def start(self):
+        ni = self.chip_info(self.idcode)
+        if not ni:
+            self._isc_enable(self.TARGET_FLASH, True)
+            idcode = self.IDCODE_PRIV.shift(0)
+            ni = self.chip_info(idcode)
+            self.logger.info("IDCode priv: 0x%x", idcode)
+
+        assert ni
+
+        self.name, self.info = ni
 
         self.ISC_DATA.length = self.info.col_bit_count
         self.ISC_PDATA.length = self.info.col_bit_count
@@ -214,11 +225,16 @@ class MachXO2Config(jtag.InstructionRegistry):
 
         self.TraceId(self.uid).dump(self.logger.info)
 
-        self._isc_enable(True)
         self.Status(self.status_get()).dump(self.logger.info)
-        self.Feature(self.feature_get()).dump(self.logger.info)
-        self._isc_disable()
-            
+
+        try:
+            self._isc_enable(True)
+            self.Feature(self.feature_get()).dump(self.logger.info)
+            self._isc_disable()
+        except RuntimeError:
+            self.logger.info("Unable to background enable")
+            pass
+
     TARGET_SRAM    = 0
     TARGET_EFUSE   = 2
     TARGET_FEATURE = 4
@@ -495,7 +511,6 @@ class MachXO2(jtag.Tap, MachXO2Config):
         MachXO2Config.__init__(self)
 
     def start(self):
-        print("hello")
         MachXO2Config.start(self)
 
     def load(self, config):
@@ -549,7 +564,7 @@ class MachXO2(jtag.Tap, MachXO2Config):
         for offset in range(0, len(data), 16):
             tmp += bitswap8(data[offset : offset + 16])
         return tmp
-        
+
 class SerIrMap:
     """Holds the definition betzeen a given JTAG commands and I2C/SPI
     transport.
