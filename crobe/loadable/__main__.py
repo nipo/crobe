@@ -33,8 +33,12 @@ def to_bin(programs, bin, within):
 @click.argument("programs", type = base.PROGRAM, nargs = -1)
 @click.argument("hex", type = click.File("w"))
 @click.option("--within", type = base.ADDRESS_RANGE, multiple = True)
-def to_hex(programs, hex, within):
-    program_get(programs, within).save_hex(hex.name)
+@click.option("--paged", type = int, default = 0)
+def to_hex(programs, hex, within, paged):
+    p = program_get(programs, within)
+    if paged:
+        p = p.paged(paged)
+    p.save_hex(hex.name)
 
 @cli.command(help = "Convert to FX2 eeprom image")
 @click.argument("programs", type = base.PROGRAM, nargs = -1)
