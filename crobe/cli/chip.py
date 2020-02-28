@@ -33,6 +33,8 @@ def program(ctx, programs, assume_clean, erase, check, run):
 
     program = Program.from_programs(programs) or Program()
 
+    program = program.simplified()
+    
     target.write(program,
                  do_erase = erase,
                  do_verify = check,
