@@ -427,8 +427,8 @@ class JLink(model.Adapter):
 
         self.__info_get_oneshot()
 
-        self.supported_interfaces = [interface.name.lower()
-                                     for interface in self.interfaces]
+        intfs = [interface.name.lower() for interface in self.interfaces]
+        self.supported_interfaces = intfs or ["jtag", "swd"]
         if "jtag" in self.supported_interfaces:
             self.supported_interfaces.append("spi")
         self.name = self.nickname
