@@ -197,9 +197,12 @@ class SpiFlash(PortComponent, Bus):
         self.write_enable(True)
         self.command(self.CMD_WRITE_STATUS, arg = bytes(values), rsize = 0)
 
-    def erase_all(self):
+    def unprotect(self):
         if self.CMD_WRITE_STATUS:
             self.status_write(0)
+        
+    def erase_all(self):
+        self.unprotect()
         self.write_enable(True)
         self.logger.debug("Chip erase (%02x)", self.CMD_CHIP_ERASE[0])
         self.command(self.CMD_CHIP_ERASE)
