@@ -3,7 +3,9 @@ from ....puppet import Puppet, Zone
 from ....util.allocator import Allocator
 from ....component.arm.cortex import Cortex
 from ....component.arm.dp import DpAccessFailure
-from ... import memory
+from ....component.cypress.cybl import CyBl
+from ....model import PortComponent
+from ... import memory, model
 from .soc import SoC, BusRam
 import time
 import binascii
@@ -66,7 +68,7 @@ class SromError(Exception):
         self.message = self.CODES.get(code)
         Exception.__init__(self, self.code, self.message)
 
-class PSoC4Srom:
+class PSoC4Srom(PortComponent):
     # http://dmitry.gr/index.php?r=05.Projects&proj=24.%20PSoC4%20confidential
     Get_Silicon_ID               = 0x00
     Write_NVL_byte               = 0x01
@@ -102,6 +104,7 @@ class PSoC4Srom:
     CPUSS_ST_OK       = 0xa
 
     def __init__(self, soc):
+        PortComponent.__init__(self, soc, "srom")
         ram = soc.children_of_class(memory.Ram)[0]
         self.soc = soc
         self.bus = soc.bus
@@ -167,6 +170,7 @@ class PSoC4Srom:
         return arg, req
 
     def keyed_call(self, no, args = 0):
+        self.logger.info("Keyed Call to %02x", no)
         if isinstance(args, list):
             args = args[:]
             args[0] = (args[0] << 16) | (self.CPUSS_SROM_KEY + (no << 8))
@@ -225,11 +229,26 @@ class PSoC4Srom:
         self.keyed_call(self.Config_Flash_Clock)
 
     def reset(self):
-        try:
-            self.keyed_call(self.Chip_Reset)
-        except DpAccessFailure:
-            pass
+        no = self.Chip_Reset
+        args = 0
+        arg = (self.CPUSS_SROM_KEY + (no << 8)) | (args << 16)
 
+        self.state_dump("State before")
+
+        self.cpu.reg_write({self.pc: self.trampoline.address | 1})
+        self.bus.u32_write(self.trampoline.address, 0xe7fee7fe)
+        self.cpu.resume()
+
+        self.state_dump("State once resumed")
+
+        self.soc.logger.info("SROM call req 0x%02x arg %08x",
+                             no, arg)
+        cmds = [
+            self.bus.cmd_u32_write(self.soc.CPUSS_SYSARG, arg),
+            self.bus.cmd_u32_write(self.soc.CPUSS_SYSREQ, 0x80000000 | no),
+            ]
+        self.bus.execute(cmds)
+        
 class PSoC4(SoC):
     def __init__(self, name, port):
         SoC.__init__(self, name, port)
@@ -343,3 +362,52 @@ class CyPD2xxx(PSoC4):
 
     def __init__(self, port):
         PSoC4.__init__(self, "CyPD2xxx", port)
+
+class BootloaderFlash(memory.Region):
+    type = memory.Type.FLASH
+    flags = set([memory.Flag.WRITABLE, memory.Flag.ERASE_ONE])
+
+    def __init__(self, bl, array_id = 0, offset = 0):
+        self.bl = bl
+        self.array_id = array_id
+        first, last = self.bl.get_flash_size(array_id = 0)
+        memory.Flash.__init__(self, "flash_%d"%array_id, offset, bl.row_size * (last+1), bl.row_size)
+
+    def erase(self, offset, size):
+        start = offset & ~(self.bl.row_size - 1)
+        print(hex(start), hex(offset + size))
+        for addr in range(start, offset + size, self.bl.row_size):
+            self.bl.erase_row(array_id = self.array_id,
+                              row_number = addr // self.bl.row_size)
+
+    def write(self, offset, data):
+        assert (offset % self.bl.row_size) == 0
+        assert (len(data) % self.bl.row_size) == 0
+
+        rows = [data[x*self.bl.row_size:(x+1)*self.bl.row_size] for x in range(len(data) // self.bl.row_size)]
+        for i, row in enumerate(rows):
+            self.bl.row_program(array_id = self.array_id,
+                                row_number = offset // self.bl.row_size + i,
+                                data = row)
+            
+@model.Target.register(CyBl)
+class CyBlTarget(model.Target, memory.Loadable):
+    """
+    Cypress Analog Coprocessor I2C Bootloader target
+
+    See Cypress Document No. 001-86526
+    """
+
+    def __init__(self, comp):
+        model.Target.__init__(self, comp.name)
+        memory.Loadable.__init__(self)
+        self.flash = BootloaderFlash(comp)
+        self.child_add(self.flash)
+        self.bl = comp
+        self.bl.enter_bootloader()
+
+    def program_begin(self, do_erase, assume_clean):
+        pass
+
+    def reset(self):
+        self.bl.exit_bootloader()
