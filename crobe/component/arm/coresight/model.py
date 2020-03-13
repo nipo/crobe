@@ -5,7 +5,7 @@ from ....db import Db, NoMatch
 
 __all__ = ["MemoryMappedComponent"]
 
-class MemoryMappedComponent(model.BusComponent):
+class MemoryMappedComponent(model.Bus32Component):
     DEVID = 0xfc0
     PID1 = 0xfd0
     PID0 = 0xfe0
@@ -15,8 +15,8 @@ class MemoryMappedComponent(model.BusComponent):
     db = Db("Coresight part")
 
     def __init__(self, bus, base, name = None):
-        model.BusComponent.__init__(self, bus, name or "Memory Component")
-        self.base = base & ~0x3ff
+        model.Bus32Component.__init__(self, bus, base & ~0x3ff,
+                                      name or "Memory Component")
 
         blob = bus.mem_read(self.base | self.DEVID, 16 * 4)
         self.devid, pid0, pid1, self.cid = struct.unpack("<LLLL", blob[::4])
@@ -69,21 +69,6 @@ class MemoryMappedComponent(model.BusComponent):
 
     def enable(self, enable = True):
         pass
-
-    def reg_read(self, offset):
-        op = self.cmd_reg_read(offset)
-        self.bus.execute([op])
-        return op.data
-
-    def reg_write(self, offset, data):
-        op = self.cmd_reg_write(offset, data)
-        self.bus.execute([op])
-
-    def cmd_reg_read(self, offset):
-        return self.bus.cmd_u32_read(self.base + offset)
-
-    def cmd_reg_write(self, offset, data, interval = 0):
-        return self.bus.cmd_u32_write(self.base + offset, data, interval)
 
     class9_names = {
         0x00: "Other",

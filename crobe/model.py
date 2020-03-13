@@ -208,3 +208,23 @@ class PortComponent(Component):
     def __init__(self, port, name):
         Component.__init__(self, name)
         self.port = port
+
+class Bus32Component(BusComponent):
+    def __init__(self, bus, base, name = "Memory Component"):
+        super().__init__(bus, name)
+        self.base = base
+
+    def reg_read(self, offset):
+        op = self.cmd_reg_read(offset)
+        self.bus.execute([op])
+        return op.data
+
+    def reg_write(self, offset, data):
+        op = self.cmd_reg_write(offset, data)
+        self.bus.execute([op])
+
+    def cmd_reg_read(self, offset):
+        return self.bus.cmd_u32_read(self.base + offset)
+
+    def cmd_reg_write(self, offset, data, interval = 0):
+        return self.bus.cmd_u32_write(self.base + offset, data, interval)
