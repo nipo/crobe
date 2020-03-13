@@ -22,13 +22,17 @@ class MemoryMappedComponent(model.Bus32Component):
         self.devid, pid0, pid1, self.cid = struct.unpack("<LLLL", blob[::4])
         self.pid = (pid0 << 32) | pid1
 
+        self.use_jep106 = bool(self.pid & 0x80000)
+
         self.partid = PartId(jep106_bank = (self.pid >> 32) & 0xf,
                              jep106_id = (self.pid >> 12) & 0x7f,
                              part_no = self.pid & 0xfff,
                              revision = (self.pid >> 20) & 0xf)
 
-        self.logger.info("ID: %08x %16x %08x (%s)",
-                          self.devid, self.pid, self.cid, self.partid)
+        self.logger.info("@0x%08x, ID: %08x %16x %08x (%s) jep106: %s",
+                         self.base,
+                         self.devid, self.pid, self.cid, self.partid,
+                         self.use_jep106)
 
         self.component_class = (self.cid >> 12) & 0xf
         self.dev_type = self.devid >> 24
@@ -51,6 +55,12 @@ class MemoryMappedComponent(model.Bus32Component):
             self.name = "<0x%08x: %s (0x%08x/0x%08x)>" % (self.base, self.name, self.pid, self.cid)
 
     def cast(self):
+        if self.use_jep106:
+            try:
+                return self.db.call(self.partid, self.bus, self.base)
+            except NoMatch:
+                pass
+
         try:
             return self.class_db.call(self.component_class, self.bus, self.base)
         except NoMatch:
@@ -62,8 +72,10 @@ class MemoryMappedComponent(model.Bus32Component):
             except NoMatch:
                 pass
 
-        if self.component_class == 0x0e:
-            return self.db.call(self.partid, self.bus, self.base)
+        self.logger.info("No specific handler for %s class 0x%02x type 0x%02x %s",
+                         self.partid,
+                         self.component_class, self.dev_type,
+                         self.name)
 
         return self
 
