@@ -104,7 +104,7 @@ class nRF5(SoC, pin_control.Controller):
         0x86: (0x51422, "QF", "ACA10", 31),
         0x87: (0x51822, "CF", "ACA00", 31),
         0x88: (0x51422, "CF", "ACA00", 31),
-        0xeb: (0x52840, "QI", "AAA00", 32),
+        0xeb: (0x52840, "QI", "AAA00", 48),
     }
 
     def part_probe(self):
