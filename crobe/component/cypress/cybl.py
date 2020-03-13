@@ -126,6 +126,7 @@ class CyBl(i2c.Slave):
             time.sleep(.03)
             try:
                 rsp, data = self.frame_receive(expected_size)
+                rsp = self.Error(rsp)
             except ValueError:
                 continue
             if rsp != self.Error.SUCCESS:
@@ -194,6 +195,7 @@ class CyBl(i2c.Slave):
         data = self.transact(self.Cmd.SEND_DATA, data, expected_size = 0)
 
     def enter_bootloader(self):
+        self.frame_send(self.Cmd.SYNC_BOOTLOADER)
         data = self.transact(self.Cmd.ENTER_BOOTLOADER, expected_size = 8)
         silicon_id = int.from_bytes(data[:4], "little")
         silicon_rev = data[4]
