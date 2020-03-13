@@ -115,9 +115,10 @@ class JlinkError(Exception):
 class Handle(Component):
     def __init__(self, device):
         super().__init__("j/%s/%s" % (device.bus, device.address))
-        device.set_configuration(0)
-        device.set_configuration(1)
         cfg = device.get_active_configuration()
+        if cfg.bConfigurationValue == 0:
+            device.set_configuration(1)
+            cfg = device.get_active_configuration()
         self.intf = None
         self.__speed_khz = 1000
         for intf in cfg:
