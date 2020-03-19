@@ -4,23 +4,43 @@ from .ftdi import basic, ftdi
 __all__ = []
 
 class Adapter(basic.Adapter):
+    """ CPLD mapping:
+    KtLink     JtagKey         Ftdi
+    TCK        TCK             AD0
+    TDI        TDI             AD1
+    TDO        TDO             AD2
+    TMS        TMS             AD3
+    ---        JTAG_NOE        AD4
+    SWD_JTAG   TARGET_PRESENT  AD5
+    nSRST_IN   nSRST_IN        AD6
+    RTCK       RTCK            AD7
+
+    nTRST      nTRST           AC0
+    nSRST_OUT  nSRST_OUT       AC1
+    nTRST_NOE  nTRST_NOE       AC2
+    nSRST_NOE  nSRST_NOE       AC3
+    TMS_NOE    DBGRQ           AC4
+    TDI_NOE    DBGACK          AC5
+    TCK_NOE    ---             AC6
+    LED        LED             AC7
+    """
     supported_interfaces = ["jtag", "swd", "jtag-int"]
 
     def open(self, interface_name):
         if interface_name == "jtag":
             return basic.Adapter.open(self, interface_name,
-                                      gpio_output = 0x7c2d, gpio_value = 0x0c20,
+                                      gpio_output = 0x7f3d, gpio_value = 0x0320,
                                        channel = "A",
-                                       resetn_pin = 11,
+                                       resetn_pin = 9,
                                        activity_pin = 15)
         elif interface_name == "jtag-int":
             return basic.Adapter.open(self, "jtag", channel = "B")
         elif interface_name == "swd":
             return basic.Adapter.open(self, interface_name,
                                       oen_pin = 12,
-                                      gpio_output = 0x7c25, gpio_value = 0x0c00,
+                                      gpio_output = 0x7f25, gpio_value = 0x0300,
                                        channel = "A",
-                                       resetn_pin = 11,
+                                       resetn_pin = 9,
                                        activity_pin = 15)
 
 @model.HwRoot.register
