@@ -111,16 +111,18 @@ class Efm1GFlash(EfmFlash):
             self.is_blank = True
 
 class Part:
-    def __init__(self, name, msc, flash_class):
+    def __init__(self, name, msc, flash_class, flash_page_size = -1):
         self.name = name
         self.msc = msc
         self.flash_class = flash_class
+        self.flash_page_size = flash_page_size
 
 PARTS = {
      71: Part("EFM32G",      0x400C0000, EfmFlash),
      72: Part("EFM32GG",     0x400C0000, Efm1GFlash),
      73: Part("EFM32TG",     0x400C0000, EfmFlash),
-     74: Part("EFM32LG",     0x400C0000, EfmFlash),
+     74: Part("EFM32LG",     0x400C0000, EfmFlash,
+              flash_page_size = 2048), # errata DI_E101
      75: Part("EFM32WG",     0x400C0000, EfmFlash),
      76: Part("EFM32ZG",     0x400C0000, EfmFlash),
      77: Part("EFM32HG",     0x400C0000, EfmFlash),
@@ -178,9 +180,13 @@ class Gecko(SoC):
         tempgrade, pkgtype, pincount, flash_page_size = \
             struct.unpack("<BBBB", self.di_data[self.DI_MEMINFO:self.DI_MEMINFO+4])
         pkgtype = chr(pkgtype)
-        flash_page_size = 2 ** ((flash_page_size + 10) & 0xff)
 
         self.info = PARTS.get(family, DEFAULT_PART)
+
+        flash_page_size = 2 ** ((flash_page_size + 10) & 0xff)
+        if self.info.flash_page_size >= 0 and flash_page_size != self.info.flash_page_size:
+            self.logger.info("Part advertises wrong flash page size %d", flash_page_size)
+            flash_page_size = self.info.flash_page_size
 
         name = self.info.name \
                + str(dev_number) + "F" + str(flash_size)
