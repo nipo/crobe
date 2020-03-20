@@ -109,11 +109,12 @@ class Puppet(Component):
             regs = self.cpu.reg_read(self.cpu.registers)
             for r, v in sorted(regs.items()):
                 self.logger.info("After stop %s: 0x%08x", r.name, v)
-            
+
+        r0 = self.arg_regs[0]
+        return self.cpu.reg_read([r0])[r0]
+
     def call(self, pc, *args, timeout = None):
         self.prepare(pc, *args)
         self.run()
-        self.wait(timeout = timeout)
-        r0 = self.arg_regs[0]
-        return self.cpu.reg_read([r0])[r0]
+        return self.wait(timeout = timeout)
 
