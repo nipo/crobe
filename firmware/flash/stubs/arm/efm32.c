@@ -57,29 +57,23 @@ struct msc_s {
 #define STATUS_BUSY   0x1
 #define STATUS_LOCKED 0x2
 #define STATUS_INVADDR 0x4
-#define STATUS_WDATAREADY 0x8
 
 void flash_erase(uintptr_t addr, size_t size, size_t page_size)
 {
     uintptr_t end = addr + size;
     struct msc_s *msc = MSC;
-    
 
     addr = addr & ~(page_size - 1);
-    do {
-        msc->lock = LOCK_KEY;
-    } while (msc->lock);
 
     while (msc->status & STATUS_BUSY)
         ;
 
+    msc->lock = LOCK_KEY;
     msc->writectrl = WRITECTRL_WREN;
 
     while (addr < end) {
         msc->addrb = addr;
         msc->writecmd = WRITECMD_LADDRIM;
-        while (msc->status & STATUS_BUSY)
-            ;
 
         msc->writecmd = WRITECMD_ERASEPAGE;
         addr += page_size;
@@ -87,9 +81,6 @@ void flash_erase(uintptr_t addr, size_t size, size_t page_size)
         while (msc->status & STATUS_BUSY)
             ;
     }
-
-    while (msc->status & STATUS_BUSY)
-        ;
 
     msc->writectrl = 0;
     msc->lock = 0;
@@ -101,6 +92,9 @@ void flash_write(uintptr_t dst, const void *src_, size_t bytes)
     size_t words = bytes / 4;
     size_t i;
     struct msc_s *msc = MSC;
+
+    while (msc->status & STATUS_BUSY)
+        ;
 
     msc->lock = LOCK_KEY;
     msc->writectrl = WRITECTRL_WREN;
@@ -115,9 +109,6 @@ void flash_write(uintptr_t dst, const void *src_, size_t bytes)
         msc->addrb = dst + i * 4;
         msc->writecmd = WRITECMD_LADDRIM;
 #endif
-
-        while (!(msc->status & STATUS_WDATAREADY))
-            ;
 
         msc->wdata = src[i];
         msc->writecmd = WRITECMD_WRITEONCE;
