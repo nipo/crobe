@@ -1,20 +1,25 @@
-targets = efm32 efm32g efm32gg11 nrf51 lpc11 stm32f01 mkl
+targets = efm32series0g efm32series0 efm32series1 efm32series1gg nrf51 lpc11 stm32f01 mkl
 arm-prefix = arm-mutekh-eabi-
 
-efm32-src = efm32.c
-efm32-sections = flash_erase flash_write
-efm32-cflags = -mcpu=cortex-m0 -mthumb -Os -fPIC
-efm32-arch = arm
+efm32series0g-src = efm32.c
+efm32series0g-sections = flash_erase flash_write
+efm32series0g-cflags = -mcpu=cortex-m3 -mthumb -Os -fPIC -DEFM32S0G
+efm32series0g-arch = arm
 
-efm32g-src = efm32.c
-efm32g-sections = flash_erase flash_write
-efm32g-cflags = -mcpu=cortex-m0 -mthumb -Os -fPIC -DGECKO
-efm32g-arch = arm
+efm32series0-src = efm32.c
+efm32series0-sections = flash_erase flash_write
+efm32series0-cflags = -mcpu=cortex-m0 -mthumb -Os -fPIC -DEFM32S0
+efm32series0-arch = arm
 
-efm32gg11-src = efm32.c
-efm32gg11-sections = flash_erase flash_write
-efm32gg11-cflags = -mcpu=cortex-m3 -mthumb -Os -fPIC -DGG11
-efm32gg11-arch = arm
+efm32series1-src = efm32.c
+efm32series1-sections = flash_erase flash_write
+efm32series1-cflags = -mcpu=cortex-m0 -mthumb -Os -fPIC -DEFM32S1
+efm32series1-arch = arm
+
+efm32series1gg-src = efm32.c
+efm32series1gg-sections = flash_erase flash_write
+efm32series1gg-cflags = -mcpu=cortex-m0 -mthumb -Os -fPIC -DEFM32S1GG
+efm32series1gg-arch = arm
 
 stm32f01-src = stm32f01.c
 stm32f01-sections = flash_erase flash_write opt_erase opt_write

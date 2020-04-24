@@ -1,9 +1,13 @@
 #include "common.h"
 
-#ifdef GG11
+#if defined(EFM32S0) || defined(EFM32S0G)
+#define MSC (struct msc_s*)0x400c0000
+#elif defined(EFM32S1)
+#define MSC (struct msc_s*)0x400e0000
+#elif defined(EFM32S1GG)
 #define MSC (struct msc_s*)0x40000000
 #else
-#define MSC (struct msc_s*)0x400c0000
+# error
 #endif
 
 struct msc_s {
@@ -15,7 +19,7 @@ struct msc_s {
     volatile uint32_t pad0;
     volatile uint32_t wdata;
     volatile uint32_t status;
-#ifdef GG11
+#if defined(EFM32S1) || defined(EFM32S1GG)
     volatile uint32_t pad1[4];
 #else
     volatile uint32_t pad1[3];
@@ -27,7 +31,7 @@ struct msc_s {
     volatile uint32_t cachemisses;
     volatile uint32_t pad2;
     volatile uint32_t masslock;
-#ifdef GG11
+#if 0 // defined(EFM32S1) || defined(EFM32S1GG)
     volatile uint32_t pad3;
     volatile uint32_t startup;
     volatile uint32_t pad4[4];
@@ -101,13 +105,13 @@ void flash_write(uintptr_t dst, const void *src_, size_t bytes)
     msc->lock = LOCK_KEY;
     msc->writectrl = WRITECTRL_WREN;
 
-#ifndef GECKO
+#ifndef EFM32S0G
     msc->addrb = dst;
     msc->writecmd = WRITECMD_LADDRIM;
 #endif
     
     for (i = 0; i < words; ++i) {
-#ifdef GECKO
+#ifdef EFM32S0G
         msc->addrb = dst + i * 4;
         msc->writecmd = WRITECMD_LADDRIM;
 #endif
