@@ -87,8 +87,17 @@ class Series6(Series67):
                 raise ValueError("Bitstream is for a %s, device is a %s (%s)" % (target, part_name, self.name))
 
         if expected_userid:
+            # For no good reason, reading usercode at max speed does not work.
+            # Whether this is because of crappy TCK/TDO routing or actual FPGA
+            # thing, it still works when loading bitstream at full speed, so
+            # we only want to reduce speed here, not when sending bitstream.
+            intf = self.port.port
+            intf.freq_cap("usercode", 15e6)
+
             userid = self.dr_shift(self.IR_USERCODE, 0, 32)
             self.logger.info("Current UserID=0x%08x", userid)
+            intf.freq_cap("test", None)
+
             if userid == expected_userid and not force_reload:
                 self.logger.info("UserID matches, doing nothing")
                 return
