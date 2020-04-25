@@ -247,8 +247,9 @@ class Chain(PortComponent):
         self.port.run(0)
 
     def swd_to_jtag(self):
+        self.port.tap_reset(50)
         self.port.swd_to_jtag()
-        self.port.tap_reset()
+        self.port.tap_reset(50)
         self.port.run(50)
         
     def icepick_enable(self):
