@@ -101,7 +101,7 @@ class EfmFlashSeries1GG(EfmFlash):
     MSC = 0x40000000
 
 class Part:
-    def __init__(self, name, flash_class, flash_page_size = -1):
+    def __init__(self, name, flash_class, flash_page_size = None):
         self.name = name
         self.flash_class = flash_class
         self.flash_page_size = flash_page_size
@@ -205,7 +205,8 @@ class Gecko(SoC):
         self.info = PARTS.get(family, DEFAULT_PART)
 
         flash_page_size = 2 ** ((flash_page_size + 10) & 0xff)
-        if self.info.flash_page_size >= 0 and flash_page_size != self.info.flash_page_size:
+        if self.info.flash_page_size is not None \
+           and flash_page_size != self.info.flash_page_size:
             self.logger.info("Part advertises wrong flash page size %d", flash_page_size)
             flash_page_size = self.info.flash_page_size
 
