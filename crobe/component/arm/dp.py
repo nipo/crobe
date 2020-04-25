@@ -67,7 +67,13 @@ class Dp(PortComponent):
         if ap.idr == 0:
             return
 
-        self.child_add(ap.cast())
+        r = ap.cast()
+        self.child_add(r)
+        return r
+
+    def child_spawn(self, crit):
+        if crit.startswith("ap#"):
+            return self.__ap_discover(int(crit[3:]))
         
     def __str__(self):
         try:
