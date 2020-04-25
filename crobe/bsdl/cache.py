@@ -20,6 +20,7 @@ class Cache:
             self.load()
         except Exception:
             self.create()
+        self.check()
 
     def cache_filename(self, filename):
         h = blake2b(digest_size=20)
@@ -33,6 +34,12 @@ class Cache:
         os.makedirs(self.path, exist_ok = True)
         self.save()
 
+    def check(self):
+        for k in list(self.by_idcode_package.keys()):
+            cache_filename = self.by_idcode_package[k]
+            if not os.path.exists(cache_filename):
+                del self.by_idcode_package[k]
+        
     def rebuild(self):
         self.clear()
         self.add(self.path)
