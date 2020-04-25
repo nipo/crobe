@@ -40,6 +40,18 @@ def program(ctx, programs, assume_clean, erase, check, run):
                  do_verify = check,
                  do_start = run,
                  assume_clean = assume_clean)
+    try:
+        target.detach()
+    except:
+        pass
+
+@chip.command(help = "Reset target")
+@click.pass_context
+def reset(ctx):
+    target = ctx.obj["target"]
+    target.attach()
+    target.reset()
+    target.detach()
 
 @chip.command(help = "Check target")
 @click.argument("programs", type = base.PROGRAM, nargs = -1)
