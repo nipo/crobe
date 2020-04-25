@@ -403,13 +403,15 @@ class Mpsse(Handle):
         cycles = float(freq * self.cycle_div)
         div5 = self.can_div5 and cycles < self.base_freq / 5
         if div5:
-            div = self.base_freq / cycles / 5 - 1
+            div = math.ceil(self.base_freq / cycles / 5) - 1
         else:
-            div = self.base_freq / cycles - 1
-        self.logger.info("freq %s base %s half %s div5 %s div %s",
-                         freq, self.base_freq, self.cycle_div, div5, div)
+            div = math.ceil(self.base_freq / cycles) - 1
 
         self.__divisor = div5, min(max(int(div), 0), 0xffff)
+
+        self.logger.info("freq %s base %s half %s div5 %s div %s -> %s",
+                         freq, self.base_freq, self.cycle_div, div5, div, self.freq)
+
         self.execute(self.cmd_divisor())
 
     def cmd_divisor(self, divisor = None):
