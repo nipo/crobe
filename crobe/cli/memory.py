@@ -37,6 +37,16 @@ def poke(ctx, raw, reg32):
         click.echo("0x%08x: %s" % (address, binascii.b2a_hex(data)))
         bus.mem_write(address, data)
 
+@memory.command(help = "Arbitrary setter from blob")
+@click.argument('address', metavar = 'ADDRESS', type = str)
+@click.argument('file', type = click.File('rb'))
+@click.pass_context
+def write(ctx, address, file):
+    bus = ctx.obj["bus"]
+    address = int(address, 16)
+    data = file.read()
+    bus.mem_write(address, data)
+
 @memory.command(help = "Arbitrary getter")
 @click.argument('address', metavar = 'ADDRESS', type = str)
 @click.argument('size', metavar = 'size', type = str, default = "4")
