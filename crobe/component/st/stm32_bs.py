@@ -7,7 +7,9 @@ from .stm32 import Info
 class Stm32Bs(jtag.Tap):
     irlen = 5
 
+    max_freq = 20e6
+    
     def __init__(self, port, index):
         jtag.Tap.__init__(self, port, index)
-        info = Info.from_id(self.idcode.part_no)
+        info = Info.from_id(None, self.idcode.part_no)
         self.name = info.name + " Boundary Scan"

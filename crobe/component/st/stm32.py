@@ -44,7 +44,7 @@ class Info:
     @classmethod
     def from_id(cls, soc, part):
         part &= 0xfff
-        if part == 0x411:
+        if part == 0x411 and soc is not None:
             scs, = soc.buses[0].children_of_class(Scs)
             if "M4" in scs.cpu_name:
                 part = 0x433
