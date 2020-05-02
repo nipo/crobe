@@ -90,15 +90,11 @@ class I2cInterface(i2c.Interface):
     I2C_BIT_PERIOD = 2.5e-6
     I2C_DELAY_PERIOD = 4.4e-6
         
-    @property
-    def freq(self):
-        return 1 / (self.I2C_BIT_PERIOD + self.I2C_DELAY_PERIOD * self.__delay)
-
-    @freq.setter
-    def freq(self, freq):
+    def freq_update(self, freq):
         delay = int(math.ceil((1 / float(freq) - self.I2C_BIT_PERIOD) / self.I2C_DELAY_PERIOD))
         self.__delay = delay
         self.port.i2c_delay_set(delay)
+        return 1 / (self.I2C_BIT_PERIOD + self.I2C_DELAY_PERIOD * self.__delay)
 
     def _execute(self, operation_list):
         ops = list(operation_list)

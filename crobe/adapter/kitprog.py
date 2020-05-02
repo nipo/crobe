@@ -375,13 +375,9 @@ class I2cInterface(i2c.Interface):
         self.port.mgmt_interface_set(self.port.MGMT_INTERFACE_I2C)
         self.port.i2usb_freq_set(50e3)
 
-    @property
-    def freq(self):
-        return self.__freq
-
-    @freq.setter
-    def freq(self, freq):
+    def freq_update(self, freq):
         self.__freq = self.port.i2usb_freq_set(freq)
+        return self.__freq
 
     def _execute(self, operation_list):
         ops = list(operation_list)

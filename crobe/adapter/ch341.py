@@ -130,22 +130,16 @@ class SpiInterface(spi.Interface):
 
         self.port.buffer_clear()
 
-    # Bitrate logic disabled, it does not work.
-    @property
-    def freq(self):
+    def freq_update(self, freq):
+        # Bitrate logic disabled, it does not work.
         return 1.5e6
-
-        return 1e6 if self.__fast else 500e3
-
-    @freq.setter
-    def freq(self, freq):
-        return
 
         fast = freq > 1e6
         if self.__fast == fast:
             return
         self.__fast = fast
         self.__fast_dirty = True
+        return 1e6 if self.__fast else 500e3
 
     def _do_spi_shift(self, mosi):
         miso = b''
@@ -202,12 +196,7 @@ class I2cInterface(i2c.Interface):
 
         self.port.buffer_clear()
 
-    @property
-    def freq(self):
-        return self.port.RATE[self.__freq_index]
-
-    @freq.setter
-    def freq(self, freq):
+    def freq_update(self, freq):
         fi = 0
         for i, f in enumerate(self.port.RATE):
             if freq >= f:
@@ -215,6 +204,8 @@ class I2cInterface(i2c.Interface):
         if self.__freq_index != fi:
             self.__freq_index = fi
             self.__freq_dirty = True
+
+        return self.port.RATE[self.__freq_index]
 
     def i2c_reset(self):
         self.__i2c_req = bytes([self.port.CMD_I2C_BEGIN])

@@ -13,15 +13,12 @@ class JtagSpiBridge(spi.Interface):
 
         self.child_add(spi.Target(self, "cs0", 0))
 
-    @property
-    def freq(self):
-        return self.base_freq / (self.__div + 1)
-
-    @freq.setter
-    def freq(self, freq):
+    def freq_update(self, target):
         if not freq:
             self.__div = 0
-        self.__div = max(0, min(0x1f, int(self.base_freq / freq + .5)))
+        else:
+            self.__div = max(0, min(0x1f, int(self.base_freq / freq + .5)))
+        return self.base_freq / (self.__div + 1)
 
     CMD_SELECT = 0x00
     CMD_SHIFT_OUT = 0x80

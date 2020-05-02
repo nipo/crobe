@@ -49,6 +49,8 @@ class MemAp(ap.Ap, model.Bus):
     CFG_LARGE_DATA    = 0x00000004
     BASE              = 0xf8
 
+    max_freq = 8e6
+
     def __init__(self, dp, index = 0):
         ap.Ap.__init__(self, dp, index)
 

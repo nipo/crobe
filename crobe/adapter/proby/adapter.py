@@ -11,8 +11,10 @@ from ...model import PortComponent
 from ...component.arm import dp
 from ...protocol import base as pbase
 from ...protocol import swd, i2c, chipcon
+from ...bitstring import BitString
 import threading
 import struct
+import math
 
 __all__ = ['Proby', 'Enumerator']
 
@@ -120,6 +122,7 @@ class SwdInterface(swd.Interface):
     CONFIG_REG_TRST = 2
     
     def __init__(self, adapter, mux):
+        self.base_freq = None
         self.__turnaround_cycles = 1
         self.__turnaround_dirty = True
         swd.Interface.__init__(self, adapter, adapter.name)
@@ -148,17 +151,16 @@ class SwdInterface(swd.Interface):
         self.logger.info("%s reset pin", "holding" if value else "releasing")
         self.__reset = bool(value)
         self.mux.execute(self.CONFIG_CID, struct.pack("<BL", self.CONFIG_REG_SRST, int(self.__reset)), 1)
-        
-    @property
-    def freq(self):
-        return self.__rate / 2
 
-    @freq.setter
-    def freq(self, freq):
+
+    def freq_update(self, freq):
+        if self.base_freq is None:
+            return 0
         if not freq:
             freq = 15e6
         self.__rate = min((1 << 26) - 1, max(1, int(float(freq) * 2)))
         self.__rate_dirty = True
+        return self.__rate / 2
         
     @property
     def turnaround_cycles(self):
@@ -285,6 +287,7 @@ class I2cInterface(i2c.Interface):
     REG_BASE_FREQ = 1
 
     def __init__(self, adapter, mux):
+        self.base_freq = None
         i2c.Interface.__init__(self, adapter, adapter.name)
         self.mux = RoutedPath(mux, 0xf)
         self.base_freq = int.from_bytes(
@@ -310,16 +313,14 @@ class I2cInterface(i2c.Interface):
         self.logger.info("%s reset pin", "holding" if value else "releasing")
         self.__reset = bool(value)
         self.mux.execute(self.CONFIG_CID, struct.pack("<BL", self.REG_SRST, int(self.__reset)), 1)
-        
-    @property
-    def freq(self):
-        return self.base_freq / self.__div / 4
 
-    @freq.setter
-    def freq(self, freq):
+    def freq_update(self, freq):
+        if self.base_freq is None:
+            return 0
         if not freq:
             freq = 1e6
         self.__div = min(0x1f, max(2, int(self.base_freq / float(freq * 4))))
+        return self.base_freq / self.__div / 4
 
     def _execute(self, operation_list):
         ops = list(operation_list)
@@ -421,6 +422,7 @@ class CcInterface(chipcon.Interface):
     REG_BASE_FREQ = 1
 
     def __init__(self, adapter, mux):
+        self.base_freq = None
         chipcon.Interface.__init__(self, adapter, adapter.name)
         self.mux = RoutedPath(mux, 0xf)
         self.base_freq = int.from_bytes(
@@ -447,16 +449,15 @@ class CcInterface(chipcon.Interface):
 
         self.__reset = bool(value)
         
-    @property
-    def freq(self):
-        return self.base_freq / self.__div / 2
-
-    @freq.setter
-    def freq(self, freq):
+    def freq_update(self, freq):
+        if self.base_freq is None:
+            return 0
         if not freq:
             freq = self.base_freq
         self.__div = min(0x40, max(1, int(self.base_freq / float(freq) / 2)))
         self.logger.info("Divisor now %d", self.__div)
+
+        return self.base_freq / self.__div / 2
 
     def _execute(self, operation_list):
         ops = list(operation_list)
@@ -536,7 +537,7 @@ class ProbyAdapter(basic.Adapter):
         fw_name = "fw/" + mode + ".bit.gz"
         fd = resource_filename(__name__, fw_name)
 
-        obj = Program.from_file(fd)
+        obj = Program.from_xilinx_bit(fd)
                  
         self.logger.info("Using internal chain of Proby, starting discovery")
 

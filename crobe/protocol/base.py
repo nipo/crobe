@@ -1,41 +1,10 @@
 from .. import model
 from ..util.pretty import metric, sci_parse
+from ..freq_capper import FreqCapper
 import threading
 import time
 
 __all__ = ["Interface", "ProtocolError", "CommunicationError"]
-
-class FreqCapper:
-    def __init__(self):
-        self.__freq_constraints = {}
-        self.__freq = None
-
-    def freq_cap(self, key, freq = None):
-        if freq is None:
-            self.__freq_constraints.pop(key, None)
-        else:
-            self.__freq_constraints[key] = freq
-        caps = [(f, k) for (k, f) in self.__freq_constraints.items() if f]
-        caps.sort(key = lambda x:x[0])
-        if not caps:
-            self.__freq_set()
-        else:
-            self.__freq_set(caps[0][0], caps[0][1])
-
-    def __freq_set(self, freq = None, reason = ""):
-        if freq == self.__freq:
-            return
-        self.__freq = freq
-        self.freq = freq
-
-        if not freq:
-            self.logger.debug("Frequency now uncapped, had %s", metric(self.freq, "Hz"))
-        else:
-            self.logger.debug("Frequency now capped to %s because of %s, had %s",
-                             metric(freq, "Hz"), reason, metric(self.freq, "Hz"))
-
-    # property, writable, Hz
-    freq = None
 
 class Interface(model.PortComponent, FreqCapper):
     """

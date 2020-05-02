@@ -208,15 +208,11 @@ class BaseInterface(object):
         self.handle.gpio_mask_set(1 << pin, 1 << pin,
                                   (1 << pin) if bool(reset) == polarity else 0)
 
-    @property
-    def freq(self):
-        return int(self.handle.freq)
-
-    @freq.setter
-    def freq(self, freq):
+    def freq_update(self, freq):
         if not freq:
             freq = 60e6
         self.handle.freq = min(freq, 60e6)
+        return int(self.handle.freq)
 
     def cmd_activity(self, value):
         if self.__activity_pin:

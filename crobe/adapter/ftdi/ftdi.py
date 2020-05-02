@@ -409,8 +409,8 @@ class Mpsse(Handle):
 
         self.__divisor = div5, min(max(int(div), 0), 0xffff)
 
-        self.logger.info("freq %s base %s half %s div5 %s div %s -> %s",
-                         freq, self.base_freq, self.cycle_div, div5, div, self.freq)
+        self.logger.debug("freq %s base %s half %s div5 %s div %s -> %s",
+                          freq, self.base_freq, self.cycle_div, div5, div, self.freq)
 
         self.execute(self.cmd_divisor())
 

@@ -5,6 +5,7 @@ from ..db import Db, NoMatch
 from ..part_id import PartId
 import time
 from enum import IntEnum
+from ..freq_capper import FreqCapper
 
 __all__ = ["Interface", "Target"]
 
@@ -82,15 +83,18 @@ class Interface(base.Interface):
             return
         super().option_set(opt)
 
-class Target(PortComponent, base.FreqCapper):
+class Target(PortComponent, FreqCapper):
     db = Db("SPI chip type")
 
     def __init__(self, port, name, cs):
         PortComponent.__init__(self, port, name)
-        base.FreqCapper.__init__(self)
+        FreqCapper.__init__(self)
         self.cs = cs
         self.port.freq_cap("target", self.freq)
 
+    def freq_update(self, freq):
+        return self.port.freq_cap(self, freq)
+        
     def execute(self, ops):
         r = self.port.execute(ops)
         return r

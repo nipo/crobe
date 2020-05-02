@@ -1,5 +1,6 @@
 from ...model import Component, PortComponent
 from ...part_id import PartId
+from ...freq_capper import FreqCapper
 import time
 
 __all__ = ["Dp", "Run", "ApRead", "ApWrite", "DpAccessFailure"]
@@ -7,7 +8,7 @@ __all__ = ["Dp", "Run", "ApRead", "ApWrite", "DpAccessFailure"]
 class DpAccessFailure(Exception):
     pass
 
-class Dp(PortComponent):
+class Dp(PortComponent, FreqCapper):
     CTRLSTAT  = 0x01 # RW (DPBank = 0)
     DLCR      = 0x05 # RW (DPBank = 1)
     TARGETID  = 0x09 # R  (DPBank = 2)
@@ -20,9 +21,20 @@ class Dp(PortComponent):
 
     def __init__(self, name, port):
         PortComponent.__init__(self, port, name)
+        FreqCapper.__init__(self, 100e6)
+        self.freq_cap("discovery", 1e6)
+
+    def freq_update(self, freq):
+        ...
+        
+    def children_changed(self):
+        self.freq_cap_min(self.children)
+        self.freq_cap("discovery", None if self.children else 1e6)
 
     def start(self):
         from ...part_id import PartId
+
+        self.freq_cap("starting", 1e6)
 
         idr = self.idr
         self.logger.info("Got IDR: %08x", idr)
@@ -57,6 +69,8 @@ class Dp(PortComponent):
             self.__ap_discover(i)
 
         PortComponent.start(self)
+
+        self.freq_cap("starting", None)
 
     def __ap_discover(self, no):
         from .ap import Ap

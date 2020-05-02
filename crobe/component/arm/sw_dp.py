@@ -1,4 +1,5 @@
 from ...protocol import swd
+from ...util.pretty import metric
 from ...part_id import PartId
 from . import dp
 from collections import deque
@@ -20,10 +21,15 @@ class SwDp(dp.Dp):
 
     def __init__(self, port):
         dp.Dp.__init__(self, "SW-DP", port)
+        self.freq_cap("default", 30e6)
 
     def start(self):
-        self.port.freq_cap(self, self.max_freq)
         dp.Dp.start(self)
+
+    def freq_update(self, freq):
+        self.logger.info("Max AP freq changed to %s", metric(freq, "Hz"))
+        self.port.freq_cap("APs", freq)
+        return freq
         
     def debug_enable(self, enable):
         self.abort(0x1f)
@@ -80,7 +86,7 @@ class SwDp(dp.Dp):
 
     def abort(self, what = 0x1f):
         op = self.port.cmd_write(False, self.ABORT, what)
-        self.port.execute([op])
+        self.port.execute([self.port.cmd_run(48), op])
         if op.ack != swd.Ack.OK:
             raise dp.DpAccessFailure(op.ack)
 
@@ -93,7 +99,6 @@ class SwDp(dp.Dp):
             ops = self.lower(operations, insert_run)
             self.port.execute(ops)
 
-            #self.logger.debug("Done:")
             for i, o in enumerate(operations):
                 if not isinstance(o, (dp.ApRead, dp.ApWrite)):
                     continue

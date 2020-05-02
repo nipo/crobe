@@ -19,16 +19,13 @@ class JLinkInterface(object):
     def max_speed_set(self):
         self.freq_cap("hardware", self.handle.speed_range[1])
 
-    @property
-    def freq(self):
-        return int(self.handle.speed_khz * 1000.)
-
-    @freq.setter
-    def freq(self, freq):
+    def freq_update(self, freq):
         if freq is None:
             self.handle.speed_khz = None
+            return self.handle.speed_range[1]
         else:
             self.handle.speed_khz = float(freq) / 1000.
+            return int(self.handle.speed_khz * 1000.)
 
     @property
     def reset(self):

@@ -239,12 +239,7 @@ class JtagInterface(jtag.Interface):
 
     MPS = 512
 
-    @property
-    def freq(self):
-        return 771e9 / 2 ** self.__div
-
-    @freq.setter
-    def freq(self, freq):
+    def freq_update(self, freq):
         div = 771e9 / float(freq)
         div = math.ceil(math.log2(div))
         div = max(4, min(255, div))
@@ -255,6 +250,8 @@ class JtagInterface(jtag.Interface):
         self.port.output_enable(0)
         self.port.div_set(div)
         self.port.output_enable(1)
+
+        return 771e9 / 2 ** self.__div
 
     @classmethod
     def cmd_jtag_io(cls, tdi, tms, tdo_mask):

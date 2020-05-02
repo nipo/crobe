@@ -228,8 +228,7 @@ class Chain(PortComponent):
         PortComponent.child_add(self, child)
 
     def children_changed(self):
-        for c in self.children:
-            self.port.freq_cap(c, c.max_freq)
+        self.port.freq_cap_min(self.children)
         
     def reset(self):
         import time

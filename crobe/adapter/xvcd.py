@@ -78,16 +78,12 @@ class JtagInterface(jtag.Interface):
             rsp += d
         return rsp
 
-    @property
-    def freq(self):
-        return 1 / self.__tck_period
-
-    @freq.setter
-    def freq(self, freq):
+    def freq_update(self, freq):
         tck_period = 1. / freq
         rsp = self.send_command(4, b"settck:", struct.pack("<L", int(1e9 * tck_period)))
         tck_period_ns, = struct.unpack("<L", rsp)
         self.__tck_period = tck_period_ns * 1e-9
+        return 1 / self.__tck_period
 
     @property
     def reset(self):

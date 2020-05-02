@@ -80,16 +80,10 @@ CMD_RESET = b'\x80'
 class I2cInterface(i2c.Interface):
     def __init__(self, adapter):
         i2c.Interface.__init__(self, adapter, adapter.name)
-
         self.freq_cap("hardware", 1e5)
         
-    @property
-    def freq(self):
+    def freq_update(self, freq):
         return 1e5
-
-    @freq.setter
-    def freq(self, freq):
-        pass
 
     def _execute(self, operation_list):
         ops = list(operation_list)

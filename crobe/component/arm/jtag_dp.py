@@ -1,4 +1,5 @@
 from ...protocol import jtag
+from ...util.pretty import metric
 from ...part_id import PartId
 from . import dp
 from enum import IntEnum
@@ -9,6 +10,12 @@ class JtagDp(dp.Dp):
     """
     def __init__(self, port):
         dp.Dp.__init__(self, "JTAG-DP", port)
+
+    def freq_update(self, freq):
+        self.logger.info("Max AP freq changed to %s", metric(freq, "Hz"))
+        self.port.max_freq = freq
+        self.port.port.children_changed()
+        return freq
 
     @property
     def idcode(self):
@@ -190,7 +197,7 @@ class JtagDpTap(jtag.Tap):
 
     """
     irlen = 4
-    max_freq = 30e6
+    max_freq = 20e6
 
     DP_REG = jtag.Dr(35)
     AP_REG = jtag.Dr(35)
