@@ -101,10 +101,11 @@ class EfmFlashSeries1GG(EfmFlash):
     MSC = 0x40000000
 
 class Part:
-    def __init__(self, name, flash_class, flash_page_size = None):
+    def __init__(self, name, flash_class, flash_page_size = None, bootloader = False):
         self.name = name
         self.flash_class = flash_class
         self.flash_page_size = flash_page_size
+        self.bootloader = bootloader
 
 PARTS = {
      16: Part("EFR32MG1P",   EfmFlashSeries1),
@@ -116,35 +117,35 @@ PARTS = {
      25: Part("EFR32FG1P",   EfmFlashSeries1),
      26: Part("EFR32FG1B",   EfmFlashSeries1),
      27: Part("EFR32FG1V",   EfmFlashSeries1),
-     28: Part("EFR32MG12P",  EfmFlashSeries1),
-     29: Part("EFR32MG12B",  EfmFlashSeries1),
-     30: Part("EFR32MG12V",  EfmFlashSeries1),
-     31: Part("EFR32BG12P",  EfmFlashSeries1),
-     32: Part("EFR32BG12B",  EfmFlashSeries1),
-     33: Part("EFR32BG12V",  EfmFlashSeries1),
-     37: Part("EFR32FG12P",  EfmFlashSeries1),
-     38: Part("EFR32FG12B",  EfmFlashSeries1),
-     39: Part("EFR32FG12V",  EfmFlashSeries1),
-     40: Part("EFR32MG13P",  EfmFlashSeries1),
-     41: Part("EFR32MG13B",  EfmFlashSeries1),
-     42: Part("EFR32MG13V",  EfmFlashSeries1),
-     43: Part("EFR32BG13P",  EfmFlashSeries1),
-     44: Part("EFR32BG13B",  EfmFlashSeries1),
-     45: Part("EFR32BG13V",  EfmFlashSeries1),
-     46: Part("EFR32ZG13P",  EfmFlashSeries1),
-     49: Part("EFR32FG13P",  EfmFlashSeries1),
-     50: Part("EFR32FG13B",  EfmFlashSeries1),
-     51: Part("EFR32FG13V",  EfmFlashSeries1),
-     52: Part("EFR32MG14P",  EfmFlashSeries1),
-     53: Part("EFR32MG14B",  EfmFlashSeries1),
-     54: Part("EFR32MG14V",  EfmFlashSeries1),
-     55: Part("EFR32BG14P",  EfmFlashSeries1),
-     56: Part("EFR32BG14B",  EfmFlashSeries1),
-     57: Part("EFR32BG14V",  EfmFlashSeries1),
-     58: Part("EFR32ZG14P",  EfmFlashSeries1),
-     61: Part("EFR32FG14P",  EfmFlashSeries1),
-     62: Part("EFR32FG14B",  EfmFlashSeries1),
-     63: Part("EFR32FG14V",  EfmFlashSeries1),
+     28: Part("EFR32MG12P",  EfmFlashSeries1, bootloader = True),
+     29: Part("EFR32MG12B",  EfmFlashSeries1, bootloader = True),
+     30: Part("EFR32MG12V",  EfmFlashSeries1, bootloader = True),
+     31: Part("EFR32BG12P",  EfmFlashSeries1, bootloader = True),
+     32: Part("EFR32BG12B",  EfmFlashSeries1, bootloader = True),
+     33: Part("EFR32BG12V",  EfmFlashSeries1, bootloader = True),
+     37: Part("EFR32FG12P",  EfmFlashSeries1, bootloader = True),
+     38: Part("EFR32FG12B",  EfmFlashSeries1, bootloader = True),
+     39: Part("EFR32FG12V",  EfmFlashSeries1, bootloader = True),
+     40: Part("EFR32MG13P",  EfmFlashSeries1, bootloader = True),
+     41: Part("EFR32MG13B",  EfmFlashSeries1, bootloader = True),
+     42: Part("EFR32MG13V",  EfmFlashSeries1, bootloader = True),
+     43: Part("EFR32BG13P",  EfmFlashSeries1, bootloader = True),
+     44: Part("EFR32BG13B",  EfmFlashSeries1, bootloader = True),
+     45: Part("EFR32BG13V",  EfmFlashSeries1, bootloader = True),
+     46: Part("EFR32ZG13P",  EfmFlashSeries1, bootloader = True),
+     49: Part("EFR32FG13P",  EfmFlashSeries1, bootloader = True),
+     50: Part("EFR32FG13B",  EfmFlashSeries1, bootloader = True),
+     51: Part("EFR32FG13V",  EfmFlashSeries1, bootloader = True),
+     52: Part("EFR32MG14P",  EfmFlashSeries1, bootloader = True),
+     53: Part("EFR32MG14B",  EfmFlashSeries1, bootloader = True),
+     54: Part("EFR32MG14V",  EfmFlashSeries1, bootloader = True),
+     55: Part("EFR32BG14P",  EfmFlashSeries1, bootloader = True),
+     56: Part("EFR32BG14B",  EfmFlashSeries1, bootloader = True),
+     57: Part("EFR32BG14V",  EfmFlashSeries1, bootloader = True),
+     58: Part("EFR32ZG14P",  EfmFlashSeries1, bootloader = True),
+     61: Part("EFR32FG14P",  EfmFlashSeries1, bootloader = True),
+     62: Part("EFR32FG14B",  EfmFlashSeries1, bootloader = True),
+     63: Part("EFR32FG14V",  EfmFlashSeries1, bootloader = True),
      71: Part("EFM32G",      EfmFlashSeries0G),
      72: Part("EFM32GG",     EfmFlashSeries0),
      73: Part("EFM32TG",     EfmFlashSeries0),
@@ -230,6 +231,8 @@ class Gecko(SoC):
 
         if self.info.flash_class:
             self.child_add(self.info.flash_class("code", 0, flash_size * 1024, flash_page_size, self))
+            if self.info.bootloader:
+                self.child_add(self.info.flash_class("boot", 0x0fe10000, 16384, flash_page_size, self))
         self.child_add(BusRam("ram", 0x20000000, ram_size * 1024, self.buses[0]))
 
     PACKAGE_NAMES = {
