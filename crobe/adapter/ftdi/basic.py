@@ -30,7 +30,7 @@ class Adapter(model.Adapter):
         d.update(self.enumerator.defaults)
         d.update(defaults)
 
-        self.device.reset()
+        # self.device.reset()
 
         if interface_name.lower() == "jtag":
             return JtagInterface(self, **d)
