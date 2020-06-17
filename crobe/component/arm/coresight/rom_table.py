@@ -1,4 +1,9 @@
+from .... import model
 from .model import MemoryMappedComponent
+
+class FailedComponent(model.Bus32Component):
+    def __init__(self, bus, base):
+        super().__init__(bus, base & ~0x3ff, "<0x%08x: Failed component>" % base)
 
 @MemoryMappedComponent.class_db.register(0x1)
 class RomTable(MemoryMappedComponent):
@@ -21,7 +26,10 @@ class RomTable(MemoryMappedComponent):
                 continue
 
             address_offset = e & ~0x3ff
-            c = MemoryMappedComponent(self.bus, (self.base + address_offset) & 0xffffffff).cast()
+            try:
+                c = MemoryMappedComponent(self.bus, (self.base + address_offset) & 0xffffffff).cast()
+            except:
+                c = FailedComponent(self.bus, (self.base + address_offset) & 0xffffffff)
             self.logger.info("- %d: %s", i, c)
             self.child_add(c)
 
