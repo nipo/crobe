@@ -6,3 +6,4 @@ from . import spartan3
 from . import artix7
 from . import spartan7
 from . import kintex7
+from . import zup
