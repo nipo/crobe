@@ -32,7 +32,7 @@ class I2cMem(i2c.Slave, Bus):
             saddr, baddr = self._addr(off)
 
             r += i2c.Slave.write_read(self, baddr, self.page_size)
-        return r
+        return r[:size]
 
     def write(self, addr, data):
         assert addr + len(data) <= self.size
