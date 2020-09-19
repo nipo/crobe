@@ -410,7 +410,8 @@ class Chain(PortComponent):
         self.ir_lengths = ir_length_possibilities[0]
 
         for index, idcode in enumerate(id_codes):
-            tap = Tap.db.call(idcode or PartId.from_idcode(1), self, index)
+            idcode = idcode or PartId.from_idcode(1)
+            tap = Tap.db.call(idcode, self, index, idcode)
             self.child_add(tap)
 
         self.logger.info("Discovered chain:")
@@ -602,8 +603,7 @@ class Tap(PortComponent, InstructionRegistry):
 
     max_freq = None
 
-    def __init__(self, port, index):
-        idcode = port.idcode_at(index)
+    def __init__(self, port, index, idcode):
         self.idcode = idcode
         PortComponent.__init__(self, port, "TAP[0x%08x]" % int(idcode))
         InstructionRegistry.__init__(self)
@@ -654,12 +654,14 @@ class Tap(PortComponent, InstructionRegistry):
                     ops += [CaptureDr()]
                     if len(c.tdi):
                         c.__op = Shift(c.tdi, read_tdo = c.read_tdo)
-                        ops += [Shift(BitString(0, dr_pre)),
+                        ops += [Shift(BitString(0, dr_pre), read_tdo = False),
                                 c.__op,
-                                Shift(BitString(0, dr_post))]
+                                Shift(BitString(0, dr_post), read_tdo = False)]
 
             elif isinstance(c, TapRun):
                 ops += [Run(c.cycles)]
+
+#        ops += [Run(1)]
 
         self.port.execute(ops)
 

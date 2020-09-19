@@ -21,8 +21,8 @@ class Zynq(series7.Series7, xadc.Xadc):
     max_freq = 66e6
     config_memory_size = 4045564
 
-    def __init__(self, port, index):
-        series7.Series7.__init__(self, port, index)
+    def __init__(self, port, index, idcode):
+        series7.Series7.__init__(self, port, index, idcode)
         self.name = "Zynq-" + parts[int(self.idcode.drop_revision())]
 
     IR_XADC_DRP    = 0x37

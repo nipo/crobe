@@ -9,7 +9,7 @@ class Stm32Bs(jtag.Tap):
 
     max_freq = 20e6
     
-    def __init__(self, port, index):
-        jtag.Tap.__init__(self, port, index)
+    def __init__(self, port, index, idcode):
+        jtag.Tap.__init__(self, port, index, idcode)
         info = Info.from_id(None, self.idcode.part_no)
         self.name = info.name + " Boundary Scan"

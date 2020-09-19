@@ -208,7 +208,7 @@ class JtagDpTap(jtag.Tap):
     APACC                = jtag.Instruction(0xb, "AP_REG")
     ABORT                = jtag.Instruction(0x8, "ABORT_REG")
 
-    def __init__(self, port, index):
-        jtag.Tap.__init__(self, port, index)
+    def __init__(self, port, index, idcode):
+        jtag.Tap.__init__(self, port, index, idcode)
         self.name = "JTAG-DP Tap"
         self.child_add(JtagDp(self))

@@ -506,8 +506,8 @@ class MachXO2(jtag.Tap, MachXO2Config):
     irlen = 8
     max_freq = 25e6
     
-    def __init__(self, port, index):
-        jtag.Tap.__init__(self, port, index)
+    def __init__(self, port, index, idcode):
+        jtag.Tap.__init__(self, port, index, idcode)
         MachXO2Config.__init__(self)
 
     def start(self):

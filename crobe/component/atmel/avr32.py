@@ -5,14 +5,10 @@ parts = {
     0x1edc: "AVR32",
 }
 
+@jtag.Tap.db.register(*[PartId(0, 0x1f, p) for p in parts.keys()])
 class Avr32(jtag.Tap):
     irlen = 5
 
-    def __init__(self, port, index):
-        jtag.Tap.__init__(self, port, index)
-
-@jtag.Tap.db.register(*[PartId(0, 0x1f, p) for p in parts.keys()])
-class Avr32Tap(Avr32):
-    def __init__(self, port, index):
-        Avr32.__init__(self, port, index)
+    def __init__(self, port, index, idcode):
+        jtag.Tap.__init__(self, port, index, idcode)
         self.name = parts.get(self.idcode.part_no, "AVR32")

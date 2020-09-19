@@ -5,8 +5,8 @@ from ...protocol import jtag
 class IcePick(jtag.Tap):
     irlen = 6
 
-    def __init__(self, port, index):
-        jtag.Tap.__init__(self, port, index)
+    def __init__(self, port, index, idcode):
+        jtag.Tap.__init__(self, port, index, idcode)
         self.name = "Ti ICE-Pick"
 
     def start(self):

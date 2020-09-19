@@ -9,8 +9,8 @@ class Series7(Series67):
     irlen = 6
     max_freq = 50e6
 
-    def __init__(self, port, index):
-        Series67.__init__(self, port, index)
+    def __init__(self, port, index, idcode):
+        Series67.__init__(self, port, index, idcode)
 
     ###
     ### Config port

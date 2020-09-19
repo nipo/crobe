@@ -7,8 +7,8 @@ class Series67(jtag.Tap):
     irlen = 6
     max_freq = 50e6
 
-    def __init__(self, port, index):
-        jtag.Tap.__init__(self, port, index)
+    def __init__(self, port, index, idcode):
+        jtag.Tap.__init__(self, port, index, idcode)
 
     IR_ISC_ENABLE  = 0x10
     IR_ISC_PROGRAM = 0x11

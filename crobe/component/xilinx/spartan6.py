@@ -40,8 +40,8 @@ class Spartan6(series6.Series6):
         "Spartan6-LX150T": "6slx150t",
     }
 
-    def __init__(self, port, index):
-        series6.Series6.__init__(self, port, index)
+    def __init__(self, port, index, idcode):
+        series6.Series6.__init__(self, port, index, idcode)
         self.name = "Spartan6-" + parts[int(self.idcode.drop_revision())]
 
     def spi_interface(self):
