@@ -270,7 +270,7 @@ class SwdInterface(JLinkInterface, swd.Interface):
             used = 0
             pending = deque()
 
-            while ops and used < 2048 - 16:
+            while ops and used < 512 - 16:
                 op = ops.popleft()
                 pending.append(op)
 
