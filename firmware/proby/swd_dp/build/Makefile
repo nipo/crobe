@@ -1,6 +1,6 @@
-top = work.topcell.swd_dp
+top = main.topcell.swd_dp
 target = swd_dp
-work-srcdir = $(SRC_DIR)/../src
+main-srcdir = $(SRC_DIR)/../src
 constraints += $(SRC_DIR)/../../pinout/ftdi_fifo.ucf
 constraints += $(SRC_DIR)/../../pinout/io0_dbg.ucf
 constraints += $(SRC_DIR)/../../pinout/user.ucf

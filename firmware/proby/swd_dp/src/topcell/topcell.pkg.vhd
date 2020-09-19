@@ -3,6 +3,18 @@ use ieee.std_logic_1164.all;
 
 package topcell is
 
+  component clk_gen is
+    generic(
+      sys_clk_hz : natural
+      );
+    port(
+      p_clk_12        : in  std_ulogic;
+      p_resetn        : in  std_ulogic;
+      p_sys_clk       : out std_ulogic;
+      p_sys_clk_ready : out std_ulogic
+      );
+  end component;
+
   component swd_dp
     port (
       clk: in std_ulogic;

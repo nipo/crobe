@@ -24,3 +24,14 @@ isim.log
 *.wcfg
 fuse.log
 fuseRelaunch.cmd
+ghdl-build
+*.log
+*.twr
+*.twx
+*.cf
+swd_dp/build/
+vhdl_ls.toml
+*.pcf
+icd40*
+/swd_dp/ice40_proj
+/swd_dp/ice40
