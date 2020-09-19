@@ -75,7 +75,13 @@ class Interface(base.Interface):
         Toggles CS to value
         """
         return Cs(value)
-        
+
+    def option_set(self, opt):
+        if opt == "reset=keep":
+            self.reset = True
+            return
+        super().option_set(opt)
+
 class Target(PortComponent, base.FreqCapper):
     db = Db("SPI chip type")
 
