@@ -37,10 +37,10 @@ class InstructionRegistry(jtag.InstructionRegistry):
     RESTART              = jtag.Instruction(0x4, "TAP_BYPASS")
 
 class Tap(jtag.Tap, InstructionRegistry):
-    def __init__(self, port, index, name):
+    def __init__(self, port, index, idcode, name):
         from . import debug
 
-        super().__init__(port, index)
+        super().__init__(port, index, idcode)
         self.name = name
 
         self.dbg = debug.Debug(self)
