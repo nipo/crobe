@@ -112,12 +112,16 @@ class SpiFlash(PortComponent, Bus):
         sfdp = sfdp.miso
         id_cfi = idr.miso[0x10:0x13]
         idr = int.from_bytes(idr.miso[:3], "big")
+        port.logger.info("SFDP: %s", sfdp)
 
         if idr in [0, 0xffffff]:
             raise InitializationFailure("Bad SPI IDR: 0x%06x" % idr)
-        
-        self = cls.db.call(idr, port, idr)
 
+        try:
+            self = cls.db.call(idr, port, idr)
+        except NoMatch:
+            self = None
+        
         if self is None and sfdp == b'SFDP':
             self = SfdpFlash(port, idr)
 
@@ -125,7 +129,7 @@ class SpiFlash(PortComponent, Bus):
             self = IdCfiFlash(port, idr)
 
         if self is None:
-            raise NoMatch(idr)
+            raise NoMatch("SPI flashes", idr)
         
         self.info()
 
