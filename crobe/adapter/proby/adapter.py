@@ -97,7 +97,7 @@ class RoutedPath(PortComponent):
     def execute(self, peer, blob, rsp_size, tag = None):
         if tag is None:
             tag = (self.last_tag + 1) & 0xff
-            self.last_tag = tag
+        self.last_tag = tag
         self.put(peer, tag, blob)
         return self.get(peer, tag)
 
