@@ -57,6 +57,24 @@ class MemAp(ap.Ap, model.Bus):
         name = {1: "AHB-AP", 2: "APB-AP", 4: "AXI-AP"}.get(self.idr & 0xf, "Mem-AP")
 
         model.Bus.__init__(self, name)
+
+    def enable(self, enable = True):
+        if enable:
+            while not self.csw & self.CSW_DEVICEEN:
+                self.csw = self.csw | self.CSW_SPIDEN
+        else:
+            self.csw = self.csw & ~self.CSW_SPIDEN & ~self.CSW_DBGSWEN
+
+    def option_set(self, opt):
+        if opt.startswith("base="):
+            addr = int(opt[5:], 16)
+            self.base = addr
+            return
+
+        ap.Ap.option_set(self, opt)
+        
+    def start(self):
+        from .coresight.model import MemoryMappedComponent
         self.width = 0
         self.increment = 0
         cfg = self.reg_read(self.CFG)
@@ -95,24 +113,19 @@ class MemAp(ap.Ap, model.Bus):
 
         self.wrap_mask = 0x3ff
 
-    def enable(self, enable = True):
-        if enable:
-            while not self.csw & self.CSW_DEVICEEN:
-                self.csw = self.csw | self.CSW_SPIDEN
-        else:
-            self.csw = self.csw & ~self.CSW_SPIDEN & ~self.CSW_DBGSWEN
+        # Try 16-bit and 8-bit accesses
+        csw_get_8 = self.cmd_read(MemAp.CSW)
+        csw_get_16 = self.cmd_read(MemAp.CSW)
+        self.port.execute([
+            self.cmd_write(MemAp.CSW, self.csw_base | 0),
+            csw_get_8,
+            self.cmd_write(MemAp.CSW, self.csw_base | 1),
+            csw_get_16,
+        ])
 
-    def option_set(self, opt):
-        if opt.startswith("base="):
-            addr = int(opt[5:], 16)
-            self.base = addr
-            return
-
-        ap.Ap.option_set(self, opt)
+        if csw_get_8.data & 3 == 2 or csw_get_16.data & 3 == 2:
+            self.logger.info("This Mem-AP does not support single/dual byte accesses")
         
-    def start(self):
-        from .coresight.model import MemoryMappedComponent
-
         self.logger.info("starting")
         while self.base is not None:
             try:
