@@ -88,6 +88,15 @@ class Component(object):
         """
         return self.children_find(lambda x: isinstance(x, klass), include_self)
 
+    def parent_of_class(self, klass):
+        """
+        Retrieve children in the parents
+        """
+        if isinstance(self.__parent, klass):
+            return self.__parent
+        print(self.__parent)
+        return self.__parent.parent_of_class(klass)
+
     def child_add(self, obj):
         if obj.__parent is self:
             assert obj in self.__children
