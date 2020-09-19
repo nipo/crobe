@@ -531,7 +531,10 @@ class Mpsse(Handle):
 
     @classmethod
     def cmd_shift_out(cls, tdi):
-        if not len(tdi):
+        if isinstance(tdi, int):
+            if tdi == 0:
+                return b''
+        elif not len(tdi):
             return b''
 
         tms_cmd = api.MPSSE_WRITE_NEG | api.MPSSE_LSB | api.MPSSE_TMS | api.MPSSE_BITS
@@ -539,25 +542,42 @@ class Mpsse(Handle):
 
         ret = bytearray()
         
-        bits = len(tdi) - 1
-        last = int(tdi[-1])
-        data = tdi[:-1].data
 
-        ret += bytes([tms_cmd, 1, (int(tdi[0]) << 7) | 0b01])
-        
-        if bits:
-            if bits >= 8:
-                bytestring = data
+        if isinstance(tdi, int):
+            by8 = tdi // 8
+            by1 = tdi % 8
+
+            ret += bytes([tms_cmd, 1, 0b01])
+            while by8 > 0:
+                cnt = min((by8, 65536))
+                by8 -= cnt
+                cnt -= 1
+                ret += bytes([api.MPSSE_CLK_BYTES, cnt & 0xff, cnt >> 8])
+
+            if by1:
+                ret += bytes([api.MPSSE_CLK_BITS, by1 - 1])
+
+            last = 0
+        else:
+            ret += bytes([tms_cmd, 1, (int(tdi[0]) << 7) | 0b01])
+
+            bits = len(tdi) - 1
+            last = int(tdi[-1])
+            data = tdi[:-1].data
+
+            if bits:
+                if bits >= 8:
+                    bytestring = data
+                    if bits % 8:
+                        bytestring = bytestring[:-1]
+
+                    for i in range(0, len(bytestring), 1024):
+                        chunk = bytestring[i : i+1024]
+                        ret += struct.pack("<BH", cmd, len(chunk) - 1)
+                        ret += chunk
+
                 if bits % 8:
-                    bytestring = bytestring[:-1]
-                    
-                for i in range(0, len(bytestring), 1024):
-                    chunk = bytestring[i : i+1024]
-                    ret += struct.pack("<BH", cmd, len(chunk) - 1)
-                    ret += chunk
-                    
-            if bits % 8:
-                ret += bytes([cmd | api.MPSSE_BITS, (bits % 8) - 1, data[-1]])
+                    ret += bytes([cmd | api.MPSSE_BITS, (bits % 8) - 1, data[-1]])
 
         ret += bytes([tms_cmd, 2, 0b01 | (last << 7)])
         

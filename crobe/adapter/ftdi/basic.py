@@ -246,12 +246,15 @@ class JtagInterface(BaseInterface, jtag.Interface):
 
         for o in operation_list:
             if isinstance(o, jtag.Shift):
-                if not len(o.tdi):
+                tdi = o.tdi
+                if isinstance(tdi, int):
+                    tdi = BitString(0, tdi)
+                if not len(tdi):
                     continue
-                if o.tdi and len(o.tdi) > max_shift_bits:
+                if tdi and len(tdi) > max_shift_bits:
                     parts = []
-                    for i in range(0, len(o.tdi), max_shift_bits):
-                        parts.append(jtag.Shift(o.tdi[i : i + max_shift_bits], read_tdo = o.read_tdo))
+                    for i in range(0, len(tdi), max_shift_bits):
+                        parts.append(jtag.Shift(tdi[i : i + max_shift_bits], read_tdo = o.read_tdo))
                     o.__parts = parts
                     ops += parts
                     if o.read_tdo:
