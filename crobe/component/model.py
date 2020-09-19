@@ -42,7 +42,7 @@ class Bus(object):
             data = data[1:]
             address += 1
 
-        if data and address & 0x2:
+        if len(data) >= 2 and address & 0x2:
             commands.append(self.cmd_u16_write(address, struct.unpack("<H", data[:2])[0], interval))
             data = data[2:]
             address += 2
