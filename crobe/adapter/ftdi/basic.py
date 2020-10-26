@@ -345,6 +345,7 @@ class JtagInterface(BaseInterface, jtag.Interface):
                     raise base.ProtocolError("Unknown JTAG operation %s" % type(op))
 
             cmd.append(self.cmd_activity(False))
+            cmd.append(bytes([api.MPSSE_SEND_IMMEDIATE]))
 
             tdo_blob = self.handle.execute(b''.join(cmd), tdo_length)
 
@@ -509,6 +510,7 @@ class I2cInterface(BaseInterface, i2c.Interface):
 
             first = False
         cmd += self._cmd_stop()
+        cmd += bytes([api.MPSSE_SEND_IMMEDIATE])
 
         rsp = self.handle.execute(bytes(cmd), rsp_size)
 
@@ -632,6 +634,7 @@ class SwdInterface(BaseInterface, swd.Interface):
                     raise base.ProtocolError("Unknown SWD operation %s" % type(op))
 
             cmd.append(self.cmd_activity(False))
+            cmd.append(bytes([api.MPSSE_SEND_IMMEDIATE]))
 
             rsp = self.handle.execute(b''.join(cmd), rsp_length)
 
@@ -789,6 +792,8 @@ class SpiInterface(BaseInterface, spi.Interface):
 
                 else:
                     raise base.ProtocolError("Unknown SPI operation %s" % type(op))
+
+            cmd += bytes([api.MPSSE_SEND_IMMEDIATE])
 
             rsp = self.handle.execute(cmd, rsp_length)
 
