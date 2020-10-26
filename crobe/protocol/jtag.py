@@ -473,14 +473,16 @@ class Chain(PortComponent):
 
         
 class Dr:
-    def __init__(self, length = None):
+    def __init__(self, length = None, type = None):
         """
         :param int,None length: Register length, if any (None for infinite/unknown registers)
+        :param type type: A type for IO
         """
         self.length = length
+        self.type = type
 
     def _spawn(self, name, tap):
-        return TapDr(tap, name, self.length)
+        return TapDr(tap, name, length = self.length, type = self.type)
 
 class Instruction:
     def __init__(self, ir, dr):
@@ -519,15 +521,17 @@ class InstructionRegistry:
                 setattr(self, name, obj._spawn(name, self))
         
 class TapDr:
-    def __init__(self, tap, name, length = None):
+    def __init__(self, tap, name, length = None, type = int):
         """
         :param Tap tap: Owner TAP
         :param str name: Data register name
         :param int,None length: Register length, if any (None for infinite/unknown registers)
+        :param type type: A type for IO
         """
         self.tap = tap
         self.name = name
         self.length = length
+        self.type = type
 
 class TapInstruction:
     def __init__(self, tap, name, ir, dr):
@@ -541,6 +545,13 @@ class TapInstruction:
             dr = None
             read_tdo = False
         else:
+            if return_type is None:
+                return_type = self.dr.type
+            if self.dr.type is not None \
+               and isinstance(dr, self.dr.type) \
+               and self.dr.length is not None:
+                dr = int(dr)
+
             if isinstance(dr, BitString) and self.dr.length is not None:
                 if len(dr) != self.dr.length:
                     raise ValueError("Bad DR length", len(dr))
