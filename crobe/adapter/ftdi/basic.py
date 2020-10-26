@@ -320,7 +320,7 @@ class JtagInterface(BaseInterface, jtag.Interface):
                     if self.__state == self.STATE_RTI:
                         if op.cycles:
                             # TODO anything shorter ?
-                            cmd.append(self.handle.cmd_tms_shift(BitString(0, op.cycles)))
+                            cmd.append(self.handle.cmd_tms_shift(BitString(0, op.cycles-1)))
                     else:
                         raise model.ProtocolError("Bad state sequence")
 

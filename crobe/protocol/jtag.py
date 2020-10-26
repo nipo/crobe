@@ -243,7 +243,7 @@ class Chain(PortComponent):
         self.port.tap_reset()
         self.port.trst = False
         self.port.tap_reset()
-        self.port.run(0)
+        self.port.run(1)
 
     def swd_to_jtag(self):
         self.port.tap_reset(50)
@@ -716,7 +716,7 @@ class Tap(PortComponent, InstructionRegistry):
         """
         return TapDrShift(ir, dr, length, read_tdo, read_ir, return_type)
 
-    def cmd_run(self, cycles):
+    def cmd_run(self, cycles = 1):
         """
         Runs the TAP for at least cycles cycles.
         """
