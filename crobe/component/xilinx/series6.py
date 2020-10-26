@@ -153,39 +153,33 @@ class Series6(Series67):
     ### Status
     ###
 
-    class Status(bitfield.Register):
-        name = "Status"
-        fields = [
-            bitfield.BinaryField("SSWD", 15, "No", "Yes"),
-            bitfield.BinaryField("Suspend", 14, "No", "Yes"),
-            bitfield.BinaryField("Internal Done", 13, "No", "Yes"),
-            bitfield.ValueField("Init B", 12),
-            bitfield.ValueField("Mode", (9, 11)),
-            bitfield.ValueField("Hswapen", 8),
-            bitfield.BinaryField("Part", 7, "unsecure", "secured"),
-            bitfield.BinaryField("Dec error", 6, "No", "Yes"),
-            bitfield.BinaryField("I/Os", 5, "High-Z", "As per config"),
-            bitfield.ValueField("GWE", 4),
-            bitfield.ValueField("Global Tri-state", 3),
-            bitfield.BinaryField("DCM", 2, "not locked", "locked"),
-            bitfield.BinaryField("ID", 1, "OK", "error"),
-            bitfield.BinaryField("CRC", 0, "OK", "error"),
-            ]
+    class Status(bitfield.Bitfield):
+        SSWD           = bitfield.BooleanField(15)
+        Suspend        = bitfield.BooleanField(14)
+        InternalDone   = bitfield.BooleanField(13)
+        InitB          = bitfield.BooleanField(12)
+        Mode           = bitfield.Field(9, 3)
+        Hswapen        = bitfield.BooleanField(8)
+        PartSecured    = bitfield.BooleanField(7)
+        Decerror       = bitfield.BooleanField(6)
+        IOs            = bitfield.BinaryField(5, "High-Z", "As per config")
+        GWE            = bitfield.BooleanField(4)
+        GlobalTriState = bitfield.BooleanField(3)
+        DCM            = bitfield.BooleanField(2)
+        IDErr          = bitfield.BooleanField(1)
+        CRCErr         = bitfield.BooleanField(0)
 
-    class BootStatus(bitfield.Register):
-        name = "Boot Status"
-        fields = [
-            bitfield.ValueField("Strike cnt", (12, 15)),
-            bitfield.BinaryField("1/CRC", 11, "OK", "error"),
-            bitfield.BinaryField("1/ID", 10, "OK", "error"),
-            bitfield.BinaryField("1/WTO", 9, "OK", "error"),
-            bitfield.BinaryField("1/Res", 8, "OK", "error"),
-            bitfield.BinaryField("1/Fallback", 7, "OK", "error"),
-            bitfield.BinaryField("1/Valid", 6, "OK", "error"),
-            bitfield.BinaryField("0/CRC", 5, "OK", "error"),
-            bitfield.BinaryField("0/ID", 4, "OK", "error"),
-            bitfield.BinaryField("0/WTO", 3, "OK", "error"),
-            bitfield.BinaryField("0/Res", 2, "OK", "error"),
-            bitfield.BinaryField("0/Fallback", 1, "OK", "error"),
-            bitfield.BinaryField("0/Valid", 0, "OK", "error"),
-            ]
+    class BootStatus(bitfield.Bitfield):
+        StrikeCnt    = bitfield.Field(12, 4)
+        CRC1Err      = bitfield.BooleanField(11)
+        ID1Err       = bitfield.BooleanField(10)
+        WTO1Err      = bitfield.BooleanField(9)
+        Res1Err      = bitfield.BooleanField(8)
+        Fallback1Err = bitfield.BooleanField(7)
+        Valid1Err    = bitfield.BooleanField(6)
+        CRC0Err      = bitfield.BooleanField(5)
+        ID0Err       = bitfield.BooleanField(4)
+        WTO0Err      = bitfield.BooleanField(3)
+        Res0Err      = bitfield.BooleanField(2)
+        Fallback0Err = bitfield.BooleanField(1)
+        Valid0Err    = bitfield.BooleanField(0)

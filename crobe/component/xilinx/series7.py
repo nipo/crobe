@@ -157,50 +157,44 @@ class Series7(Series67):
     ### Status
     ###
 
-    class Status(bitfield.Register):
-        name = "Status"
-        fields = [
-            bitfield.ValueField("Res", (27, 31)),
-            bitfield.Field("Bus width", (25, 26), {0:"1",1:"8",2:"16",3:"32"}),
-            bitfield.ValueField("Startup Phase", (18, 20)),
-            bitfield.BinaryField("Decrypt error", 16, "No", "Yes"),
-            bitfield.BinaryField("ID error", 15, "No", "Yes"),
-            bitfield.BinaryField("Done", 14, "No", "Yes"),
-            bitfield.BinaryField("Internal Done", 13, "No", "Yes"),
-            bitfield.ValueField("Init B", 12),
-            bitfield.BinaryField("Init complete", 11, "No", "Yes"),
-            bitfield.ValueField("Mode", (8, 10)),
-            bitfield.ValueField("GHIGH B", 7),
-            bitfield.EnableField("FF/RAM Write", 6),
-            bitfield.BinaryField("I/Os", 5, "High-Z", "As per config"),
-            bitfield.BinaryField("End of startup", 4, "pending", "reached"),
-            bitfield.BinaryField("DCI", 3, "not matched", "matched"),
-            bitfield.BinaryField("MMCM", 2, "not locked", "locked"),
-            bitfield.BinaryField("Part", 1, "unsecure", "secured"),
-            bitfield.BinaryField("CRC", 0, "OK", "error"),
-            ]
+    class Status(bitfield.Bitfield):
+        Res          = bitfield.Field(27, 5)
+        BusWidth     = bitfield.MappingField(25, 2, {0:"1",1:"8",2:"16",3:"32"})
+        StartupPhase = bitfield.Field(18, 3)
+        DecryptError = bitfield.BooleanField(16)
+        IDError      = bitfield.BooleanField(15)
+        Done         = bitfield.BooleanField(14)
+        InternalDone = bitfield.BooleanField(13)
+        InitB        = bitfield.BooleanField(12)
+        InitComplete = bitfield.BooleanField(11)
+        Mode         = bitfield.Field(8, 3)
+        GHIGH_B      = bitfield.BooleanField(7)
+        FF_RAM_Write = bitfield.BooleanField(6)
+        IOs          = bitfield.BinaryField(5, "High-Z", "As per config")
+        EndOfStartup = bitfield.BinaryField(4, "pending", "reached")
+        DCI          = bitfield.BinaryField(3, "not matched", "matched")
+        MMCM         = bitfield.BinaryField(2, "not locked", "locked")
+        Part         = bitfield.BinaryField(1, "unsecure", "secured")
+        CRC          = bitfield.BinaryField(0, "OK", "error")
 
-    class BootStatus(bitfield.Register):
-        name = "Boot Status"
-        fields = [
-            bitfield.ValueField("Res", (16, 31)),
-            bitfield.BinaryField("1/HMAC", 15, "OK", "error"),
-            bitfield.BinaryField("1/Wrap", 14, "OK", "error"),
-            bitfield.BinaryField("1/CRC", 13, "OK", "error"),
-            bitfield.BinaryField("1/ID", 12, "OK", "error"),
-            bitfield.BinaryField("1/WTO", 11, "OK", "error"),
-            bitfield.BinaryField("1/IProg", 10, "OK", "error"),
-            bitfield.BinaryField("1/Fallback", 9, "OK", "error"),
-            bitfield.BinaryField("1/Valid", 8, "OK", "error"),
-            bitfield.BinaryField("0/HMAC", 7, "OK", "error"),
-            bitfield.BinaryField("0/Wrap", 6, "OK", "error"),
-            bitfield.BinaryField("0/CRC", 5, "OK", "error"),
-            bitfield.BinaryField("0/ID", 4, "OK", "error"),
-            bitfield.BinaryField("0/WTO", 3, "OK", "error"),
-            bitfield.BinaryField("0/IProg", 2, "OK", "error"),
-            bitfield.BinaryField("0/Fallback", 1, "OK", "error"),
-            bitfield.BinaryField("0/Valid", 0, "OK", "error"),
-            ]
+    class BootStatus(bitfield.Bitfield):
+        Res          = bitfield.BooleanField(16)
+        HMAC1Err     = bitfield.BinaryField(15, "OK", "error")
+        Wrap1Err     = bitfield.BinaryField(14, "OK", "error")
+        CRC1Err      = bitfield.BinaryField(13, "OK", "error")
+        ID1Err       = bitfield.BinaryField(12, "OK", "error")
+        WTO1Err      = bitfield.BinaryField(11, "OK", "error")
+        IProg1Err    = bitfield.BinaryField(10, "OK", "error")
+        Fallback1Err = bitfield.BinaryField(9, "OK", "error")
+        Valid1Err    = bitfield.BinaryField(8, "OK", "error")
+        HMAC0Err     = bitfield.BinaryField(7, "OK", "error")
+        Wrap0Err     = bitfield.BinaryField(6, "OK", "error")
+        CRC0Err      = bitfield.BinaryField(5, "OK", "error")
+        ID0Err       = bitfield.BinaryField(4, "OK", "error")
+        WTO0Err      = bitfield.BinaryField(3, "OK", "error")
+        IProg0Err    = bitfield.BinaryField(2, "OK", "error")
+        Fallback0Err = bitfield.BinaryField(1, "OK", "error")
+        Valid0Err    = bitfield.BinaryField(0, "OK", "error")
 
     ###
     ### EFUSE
@@ -210,51 +204,39 @@ class Series7(Series67):
     FUSE_CFG_KEY_PROTECT_READ = 3
     FUSE_CFG_USER_PROTECT_READ = 4
 
-    class Efuse0(bitfield.Register):
-        name = "Efuse0"
-        fields = [
-            bitfield.EnableField("Force PowerCycle Reconfig", 1),
-            bitfield.DisableField("AES/User W", 2),
-            bitfield.DisableField("AES/User W, AES R", 3),
-            bitfield.DisableField("AES/User W, User R", 4),
-            bitfield.DisableField("FUSE Control W", 5),
-            bitfield.DisableField("Unsup 0", 6),
-            bitfield.DisableField("Unsup 1", 7),
-            bitfield.EnableField("AES Only", 8),
-            bitfield.DisableField("ARM JTAG", 9),
-            bitfield.DisableField("BBRAM Key", 10),
-            bitfield.EnableField("Force PowerCycle Reconfig (r)", 14+1),
-            bitfield.DisableField("AES/User W (r)", 14+2),
-            bitfield.DisableField("AES/User W, AES R (r)", 14+3),
-            bitfield.DisableField("AES/User W, User R (r)", 14+4),
-            bitfield.DisableField("FUSE Control W (r)", 14+5),
-            bitfield.DisableField("Unsup 0 (r)", 14+6),
-            bitfield.DisableField("Unsup 1 (r)", 14+7),
-            bitfield.EnableField("AES Only (r)", 14+8),
-            bitfield.DisableField("ARM JTAG (r)", 14+9),
-            bitfield.DisableField("BBRAM Key (r)", 14+10),
-            ]
+    class Efuse0(bitfield.Bitfield):
+        ForcePowerCycleReconfig        = bitfield.BooleanField(1)
+        AESUserW                       = bitfield.BooleanField(2, inverted = True)
+        AESUserWAESR                   = bitfield.BooleanField(3, inverted = True)
+        AESUserWUserR                  = bitfield.BooleanField(4, inverted = True)
+        FUSEControlW                   = bitfield.BooleanField(5, inverted = True)
+        Unsup0                         = bitfield.BooleanField(6, inverted = True)
+        Unsup1                         = bitfield.BooleanField(7, inverted = True)
+        AESOnly                        = bitfield.BooleanField(8)
+        ARMJTAG                        = bitfield.BooleanField(9, inverted = True)
+        BBRAMKey                       = bitfield.BooleanField(10, inverted = True)
+        Repeat_ForcePowerCycleReconfig = bitfield.BooleanField(14+1)
+        Repeat_AESUserW                = bitfield.BooleanField(14+2, inverted = True)
+        Repeat_AESUserWAESR            = bitfield.BooleanField(14+3, inverted = True)
+        Repeat_AESUserWUserR           = bitfield.BooleanField(14+4, inverted = True)
+        Repeat_FUSEControlW            = bitfield.BooleanField(14+5, inverted = True)
+        Repeat_Unsup0                  = bitfield.BooleanField(14+6, inverted = True)
+        Repeat_Unsup1                  = bitfield.BooleanField(14+7, inverted = True)
+        Repeat_AESOnly                 = bitfield.BooleanField(14+8)
+        Repeat_ARMJTAG                 = bitfield.BooleanField(14+9, inverted = True)
+        Repeat_BBRAMKey                = bitfield.BooleanField(14+10, inverted = True)
 
-    class Efuse5(bitfield.Register):
-        name = "Efuse5"
-        fields = [
-            bitfield.ValueField("DNA0", (8, 23)),
-            bitfield.ValueField("DNA0 Ecc", (24, 29)),
-            ]
+    class Efuse5(bitfield.Bitfield):
+        DNA = bitfield.Field(8, 16)
+        Ecc = bitfield.Field(24, 6)
 
-    class Efuse6(bitfield.Register):
-        name = "Efuse6"
-        fields = [
-            bitfield.ValueField("DNA1", (0, 23)),
-            bitfield.ValueField("DNA1 Ecc", (24, 29)),
-            ]
+    class Efuse6(bitfield.Bitfield):
+        DNA = bitfield.Field(0, 24)
+        Ecc = bitfield.Field(24, 6)
         
-    class Efuse7(bitfield.Register):
-        name = "Efuse7"
-        fields = [
-            bitfield.ValueField("DNA2", (0, 23)),
-            bitfield.ValueField("DNA2 Ecc", (24, 29)),
-            ]
+    class Efuse7(bitfield.Bitfield):
+        DNA = bitfield.Field(0, 24)
+        Ecc = bitfield.Field(24, 6)
 
     # Efuse 20-29: AES key (24 bit each + ECC)
     # Efuse 30:    USER[0] || AES key (8 + 16 bit + ECC)

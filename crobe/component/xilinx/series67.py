@@ -120,6 +120,6 @@ class Series67(jtag.Tap):
         return self.cfg_read(self.CFG_BOOTSTS, 1)[0]
 
     def cfg_status_dump(self):
-        self.Status(self.cfg_status).dump(self.logger.info)
-        self.BootStatus(self.cfg_boot_status).dump(self.logger.info)
+        self.logger.info(repr(self.Status(self.cfg_status)))
+        self.logger.info(repr(self.BootStatus(self.cfg_boot_status)))
 

@@ -12,97 +12,85 @@ class MachXO2Config(jtag.InstructionRegistry):
     ERASE_FEATURE = 2
     ERASE_FLASH = 4
     ERASE_UFM = 8
-    
-    class Status(bitfield.Register):
-        name = "Status"
-        fields = [
-            bitfield.BinaryField("Transparent mode", 0, "No", "Yes"),
-            bitfield.Field("Target", (1, 3), {0: "SRAM", 1: "EFUSE", 2: "Feature", 4:"Flash"}),
-            bitfield.EnableField("JTAG", 4),
-            bitfield.BinaryField("Logic is pw prot.", 5, "No", "Yes"),
-            bitfield.EnableField("SRAM OTP", 6),
-            bitfield.EnableField("Decrypt", 7),
-            bitfield.BinaryField("Done", 8, "No", "Yes"),
-            bitfield.EnableField("ISC", 9),
-            bitfield.EnableField("Write", 10),
-            bitfield.EnableField("Read", 11),
-            bitfield.BinaryField("Busy", 12, "No", "Yes"),
-            bitfield.BinaryField("Fail", 13, "No", "Yes"),
-            bitfield.BinaryField("Feature OTP", 14, "No", "Yes"),
-            bitfield.BinaryField("Decrypt only", 15, "No", "Yes"),
-            bitfield.EnableField("Passw prot.", 16),
-            bitfield.EnableField("UFM OTP", 17),
-            bitfield.EnableField("Assp", 18),
-            bitfield.EnableField("Sdmen", 19),
-            bitfield.BinaryField("Enc. preamble", 20, "none", "detected"),
-            bitfield.BinaryField("Std. Pream", 21, "none", "detected"),
-            bitfield.BinaryField("SPI", 22, "OK", "Fail"),
-            bitfield.Field("Error", (23, 25), ["OK", "ID", "Bad command", "CRC", "Preamble", "Abort", "Overflow", "SRAM ovr."]),
-            bitfield.BinaryField("Execution error", 26, "No", "Yes"),
-            bitfield.BinaryField("ID Mismatch", 27, "No", "Yes"),
-            bitfield.BinaryField("Invalid Command", 28, "No", "Yes"),
-            bitfield.BinaryField("SED Error", 29, "No", "Yes"),
-            bitfield.BinaryField("Bypass", 30, "No", "Yes"),
-            bitfield.BinaryField("Flow through mode", 31, "No", "Yes"),
-            ]
 
-    class Ctrl0(bitfield.Register):
-        name = "Control 0"
-        fields = [
-            bitfield.ValueField("Master clock Freq", (0, 5)),
-            bitfield.ValueField("SPI Mode", (6, 7)),
-            bitfield.BinaryField("SPI bit order", 8, "MSB First", "LSB First"),
-            bitfield.ValueField("MCLKB", 9),
-            bitfield.ValueField("STX DUM", (10, 11)),
-            bitfield.ValueField("DONE", (12, 14)),
-            bitfield.ValueField("INIT", (15, 17)),
-            bitfield.ValueField("P_DONE", (18, 19)),
-            bitfield.EnableField("SPI Master", 20),
-            bitfield.EnableField("SPI Slave Slow Respond Mode", 21),
-            bitfield.BinaryField("CPU Mon", 22, "No", "Yes"),
-            bitfield.BinaryField("SSPI Auto", 23, "No", "Yes"),
-            bitfield.BinaryField("HFC", 24, "No", "Yes"),
-            bitfield.BinaryField("TranEdit", 25, "No", "Yes"),
-            bitfield.DisableField("CDM", 26),
-            bitfield.DisableField("BKE", 27),
-            bitfield.BinaryField("NDR", 28, "No", "Yes"),
-            bitfield.BinaryField("Wake Up", 29, "No", "Yes"),
-            bitfield.ValueField("Core clock sel", (30, 31)),
-            ]
+    class Status(bitfield.Bitfield):
+        TransparentMode = bitfield.BooleanField(0)
+        Target          = bitfield.MappingField(1, 3, {0: "SRAM", 1: "EFUSE", 2: "Feature", 4:"Flash"}),
+        JTAG            = bitfield.BooleanField(4)
+        LogicPwProt     = bitfield.BooleanField(5)
+        SRAM_OTP        = bitfield.BooleanField(6)
+        Decrypt         = bitfield.BooleanField(7)
+        Done            = bitfield.BooleanField(8)
+        ISC             = bitfield.BooleanField(9)
+        Write           = bitfield.BooleanField(10)
+        Read            = bitfield.BooleanField(11)
+        Busy            = bitfield.BooleanField(12)
+        Fail            = bitfield.BooleanField(13)
+        FeatureOTP      = bitfield.BooleanField(14)
+        DecryptOnly     = bitfield.BooleanField(15)
+        PasswProt       = bitfield.BooleanField(16)
+        UFM_OTP         = bitfield.BooleanField(17)
+        Assp            = bitfield.BooleanField(18)
+        Sdmen           = bitfield.BooleanField(19)
+        EncPreamble     = bitfield.BinaryField(20, "none", "detected")
+        StdPream        = bitfield.BinaryField(21, "none", "detected")
+        SPI             = bitfield.BinaryField(22, "OK", "Fail")
+        Error           = bitfield.MappingField(23, 3, ["OK", "ID", "Bad command", "CRC", "Preamble", "Abort", "Overflow", "SRAM ovr."]),
+        ExecutionError  = bitfield.BooleanField(26)
+        IDMismatch      = bitfield.BooleanField(27)
+        InvalidCommand  = bitfield.BooleanField(28)
+        SEDError        = bitfield.BooleanField(29)
+        Bypass          = bitfield.BooleanField(30)
+        FlowThroughMode = bitfield.BooleanField(31)
 
-    class Feature(bitfield.Register):
-        name = "Feature"
-        fields = [
-            bitfield.ValueField("IDCODE", (0, 31)),
-            bitfield.ValueField("TRACEID", (32, 39)),
-            bitfield.ValueField("I2C Addr", (40, 47)),
-            bitfield.EnableField("Secpwd",  48),
-            bitfield.EnableField("Deconly",  49),
-            bitfield.EnableField("Pwdflash",  50),
-            bitfield.EnableField("Pwdall",  51),
-            bitfield.EnableField("Myassp",  52),
-            bitfield.EnableField("Program",  53),
-            bitfield.EnableField("Init",  54),
-            bitfield.EnableField("Done",  55),
-            bitfield.EnableField("Jtag",  56),
-            bitfield.EnableField("Sspi",  57),
-            bitfield.EnableField("I2c",  58),
-            bitfield.EnableField("Mspi",  59),
-            bitfield.EnableField("Boots1",  60),
-            bitfield.EnableField("Boots2",  61),
-            bitfield.EnableField("Rsvd",  62),
-            ]
+    class Ctrl0(bitfield.Bitfield):
+        MasterClockFreq         = bitfield.Field(0, 6)
+        SPIMode                 = bitfield.Field(6, 2)
+        SPILsbFirst             = bitfield.BooleanField(8)
+        MCLKB                   = bitfield.Field(9, 1)
+        STX_DUM                 = bitfield.Field(10, 2)
+        DONE                    = bitfield.Field(12, 3)
+        INIT                    = bitfield.Field(15, 3)
+        P_DONE                  = bitfield.Field(18, 2)
+        SPIMaster               = bitfield.BooleanField(20)
+        SPISlaveSlowRespondMode = bitfield.BooleanField(21)
+        CPUMon                  = bitfield.BooleanField(22)
+        SSPIAuto                = bitfield.BooleanField(23)
+        HFC                     = bitfield.BooleanField(24)
+        TranEdit                = bitfield.BooleanField(25)
+        CDM                     = bitfield.BooleanField(26, inverted = True)
+        BKE                     = bitfield.BooleanField(27, inverted = True)
+        NDR                     = bitfield.BooleanField(28)
+        WakeUp                  = bitfield.BooleanField(29)
+        CoreClockSel            = bitfield.Field(30, 2)
 
-    class TraceId(bitfield.Register):
-        name = "TraceId"
-        fields = [
-            bitfield.ValueField("User", (56, 63)),
-            bitfield.ValueField("Lot", (24, 55)),
-            bitfield.ValueField("Wafer", (19, 23)),
-            bitfield.ValueField("X", (12, 18)),
-            bitfield.ValueField("Y", (5, 11)),
-            bitfield.ValueField("Spare", (0, 4)),
-            ]
+    class Feature(bitfield.Bitfield):
+        IDCODE   = bitfield.Field(0, 32)
+        TRACEID  = bitfield.Field(32, 8)
+        I2CAddr  = bitfield.Field(40, 8)
+        Secpwd   = bitfield.BooleanField(48)
+        Deconly  = bitfield.BooleanField(49)
+        Pwdflash = bitfield.BooleanField(50)
+        Pwdall   = bitfield.BooleanField(51)
+        Myassp   = bitfield.BooleanField(52)
+        Program  = bitfield.BooleanField(53)
+        Init     = bitfield.BooleanField(54)
+        Done     = bitfield.BooleanField(55)
+        Jtag     = bitfield.BooleanField(56)
+        Sspi     = bitfield.BooleanField(57)
+        I2c      = bitfield.BooleanField(58)
+        Mspi     = bitfield.BooleanField(59)
+        Boots1   = bitfield.BooleanField(60)
+        Boots2   = bitfield.BooleanField(61)
+        Rsvd     = bitfield.Field(62, 2)
+
+    class TraceId(bitfield.Bitfield):
+        User  = bitfield.Field(56, 8)
+        Lot   = bitfield.Field(24, 32)
+        Wafer = bitfield.Field(19, 5)
+        X     = bitfield.Field(12, 7)
+        Y     = bitfield.Field(5, 7)
+        Spare = bitfield.Field(0, 5)
 
     ISC_ADDRESS   = jtag.Dr(None)
     ISC_SECTOR    = jtag.Dr(8)
@@ -223,13 +211,12 @@ class MachXO2Config(jtag.InstructionRegistry):
 
         self.uid = self.LSC_UIDCODE_PUB.shift(0)
 
-        self.TraceId(self.uid).dump(self.logger.info)
-
-        self.Status(self.status_get()).dump(self.logger.info)
+        self.logger.info(repr(self.TraceId(self.uid)))
+        self.logger.info(repr(self.Status(self.status_get())))
 
         try:
             self._isc_enable(True)
-            self.Feature(self.feature_get()).dump(self.logger.info)
+            self.logger.info(repr(self.Feature(self.feature_get())))
             self._isc_disable()
         except RuntimeError:
             self.logger.info("Unable to background enable")
@@ -313,7 +300,7 @@ class MachXO2Config(jtag.InstructionRegistry):
         status = self.status_get()
         if status & mask == expect_set:
             return
-        self.Status(status).dump(self.logger.error)
+        self.logger.info(repr(self.Status(status)))
         raise ValueError("Expected status with 0x%08x set, 0x%08x clear, got 0x%08x" %
                          (expect_set, expect_clear, status))
 

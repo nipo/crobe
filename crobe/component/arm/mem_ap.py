@@ -7,23 +7,21 @@ import struct
 
 __all__ = ["MemAp"]
 
-class Csw(bitfield.Register):
-    name = "CSW"
-    fields = [
-        bitfield.EnableField("Debug software access", 31),
-        bitfield.EnableField("Secure", 30),
-        bitfield.BinaryField("MasterType", 29, "Core", "Debug"),
-        bitfield.EnableField("Allocable", 28),
-        bitfield.EnableField("Cached", 27),
-        bitfield.EnableField("Bufferable", 26),
-        bitfield.EnableField("Privileged", 25),
-        bitfield.BinaryField("Port", 24, "instruction", "data"),
-        bitfield.EnableField("Secure privileged debug", 23),
-        bitfield.BinaryField("Transaction", 7, "idle", "in progress"),
-        bitfield.EnableField("MEM-AP accesses", 6),
-        bitfield.Field("AddrInc", (4, 5), {0: "Off", 1: "Single", 2: "Packed"}),
-        bitfield.Log2ValueField("Size", (0, 2), 3),
-        ]
+class Csw(bitfield.Bitfield):
+    DebugSoftwareAccess = bitfield.BooleanField(31)
+    SProt               = bitfield.BooleanField(30)
+    MasterType          = bitfield.MappingField(29, 1, {0: "Core", 1: "Debug"})
+    Allocable           = bitfield.BooleanField(28)
+    Cached              = bitfield.BooleanField(27)
+    Bufferable          = bitfield.BooleanField(26)
+    Privileged          = bitfield.BooleanField(25)
+    Port                = bitfield.MappingField(24, 1, {0: "instruction", 1: "data"})
+    Prot                = bitfield.Field(24, 5)
+    SPIStatus           = bitfield.BooleanField(23)
+    TrInProg            = bitfield.BooleanField(7)
+    DbgStatus           = bitfield.BooleanField(6)
+    AddrInc             = bitfield.MappingField(4, 2, {0: "Off", 1: "Single", 2: "Packed"})
+    Size                = bitfield.Log2Field(0, 2, log_offset = 3)
 
 @ap.Ap.db.register(0x04770001,# AHB-AP
                    0x04770002,# APB-AP
