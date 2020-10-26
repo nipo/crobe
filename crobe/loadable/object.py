@@ -116,7 +116,10 @@ class Program:
     def pprint(self, out = print):
         out("Program:")
         for k, v in sorted(self.info.items()):
-            out(" + %s: %s" % (k, v))
+            if isinstance(v, int):
+                out(" + %s: 0x%x (%d)" % (k, v, v))
+            else:
+                out(" + %s: %s" % (k, v))
         for s in self.segments:
             out(" - %s" % s)
 
