@@ -11,7 +11,9 @@ class Dumper:
         self.logger = logging.getLogger("bsdl")
 
         assert isinstance(interface, jtag.Interface)
-        chain = interface.children[0]
+        interface.start()
+        chain = interface.child_summon("chain")
+        chain.child_summon("0")
         taps = chain.children[:]
 
         cache = Cache.open()
