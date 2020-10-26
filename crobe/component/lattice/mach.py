@@ -504,9 +504,13 @@ class MachXO2(jtag.Tap, MachXO2Config):
         from ...loadable.object import Program
 
         assert isinstance(config, Program)
-        bs = bitstream.Bitstream(parts.PARTS, config)
-        
-        self.ram_load(bs)
+        #bs = bitstream.Bitstream(parts.PARTS, config)
+        #self.ram_load(bs)
+
+        data = config.segment_at(0).data
+        if data.startswith(bitstream.Bitstream.HEADER):
+            data = bitswap8(data)
+        self.ram_load2(data)
 
     def ram_load(self, bs):
         assert self.idcode.is_same_part(PartId.from_idcode(bs.info.idcode))
@@ -541,6 +545,21 @@ class MachXO2(jtag.Tap, MachXO2Config):
 
         self._isc_disable()
         
+        self.BYPASS.shift()
+        self.run(1)
+
+    def ram_load2(self, bs):
+        self._isc_enable(self.TARGET_SRAM, False)
+
+        bs_cmds = [
+            self.LSC_INIT_ADDRESS.cmd(1),
+            self.cmd_run(10),
+            self.LSC_BITSTREAM_BURST.cmd(b'\xff' * 48 + bytes(bs)),
+            self.cmd_run(10),
+        ]
+        self.execute(bs_cmds)
+
+        self._isc_disable()
         self.BYPASS.shift()
         self.run(1)
 
