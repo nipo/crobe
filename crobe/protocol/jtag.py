@@ -258,12 +258,39 @@ class Chain(PortComponent):
         for lengths in [(0, 0, 1), (2, 9)]:
             for l in lengths:
                 ops += [Shift(BitString(0, l)), Run(1), CaptureDr(), Pause()]
-        ops += [CaptureIr(), Shift(BitString(-1, 16)), Run(0)]
+        ops += [CaptureIr(), Shift(BitString(-1, 16)), Run(1)]
         ops += [Run(5), CaptureIr(), Shift(BitString(0x4, 6)), Run(3)]
         self.port.execute(ops)
         self.port.freq_cap("icepick", None)
         self.discover([PartId(0, 0x17, 0x1ce)])
 
+    def chain_shift_discover(self, max_length = 512, shift_back = False, shift_in = None):
+        marker = 0xdecafbad
+        tdo = self.port.shift(BitString(marker, max_length + 32))
+
+        if not int(tdo):
+            raise OpenChain("TDO stuck low. Bad TDO connection ?")
+
+        if tdo == BitString(-1, len(tdo)):
+            raise OpenChain("TDO stuck high. Bad TDO connection ?")
+
+        length = int(math.log(int(tdo), 2) + 1)
+        self.logger.debug("After %d bit shift, tdo = %s, %d useful", len(tdo), tdo, length)
+        if int(tdo[length - 32 : length]) != marker:
+            raise OpenChain("TDO changed, but never got TDI back. Bad TDI/TDO connection ?")
+
+        register = tdo[:length - 32]
+        if shift_back:
+            self.logger.debug("Shifting back captured value")
+            self.port.shift(register)
+        elif shift_in is not None:
+            back = BitString(-1 if bool(shift_in) else 0, len(register))
+            self.logger.debug("Shifting back %s", back)
+            self.port.shift(back)
+
+        return register
+
+            
     def discover(self, forced_idcodes = None):
         """
         This does a blind discovery of the JTAG Chain.  This can
@@ -281,66 +308,26 @@ class Chain(PortComponent):
         self.port.run(1)
 
         self.port.capture_dr()
-        default_dr = self.port.shift(BitString(3, 32))
-        dr = True
-        all_z = True
-        all_o = True
-        while dr:
-            dr = self.port.shift(BitString(0, 32))
-            default_dr += dr
-            dr = int(dr)
-            if dr:
-                all_z = False
-            if dr != 0xffffffff:
-                all_o = False
-
-            if len(default_dr) > 500:
-                if all_z:
-                    raise OpenChain("TDO stuck low. Bad TDO connection ?")
-                if all_o:
-                    raise OpenChain("TDO stuck high. Bad TDO connection ?")
-                raise OpenChain("TDO changed, but never got TDI back. Bad TDI/TDO connection ?")
-        if int(default_dr) == 0:
-            raise OpenChain("TDO stuck low, bad TDO connection ?")
-        
-        total_dr_length = int(math.log(int(default_dr), 2)) - 1
+        reset_dr = self.chain_shift_discover()
             
-        if total_dr_length == 0:
+        if len(reset_dr) == 0:
             raise ClosedChain()
 
-        # Get default IR
+        # Get default IR, load bypass
         self.port.capture_ir()
-
-        # Clear IR, wait for all zeroes to flow out
-        default_ir = BitString()
-        ir = True
-        while ir:
-            ir = self.port.shift(BitString(0, 32))
-            default_ir += ir
-            ir = int(ir)
-            if len(default_ir) >= 500:
-                raise OpenChain("IR detection failed. Bad TMS ?")
-
-        # Discover IR length
-        ir = self.port.shift(BitString(1, 32))
-        while not int(ir):
-            ir += self.port.shift(BitString(0, 32))
-            if len(ir) >= 500:
-                raise OpenChain("IR scan never exposed TDI back on TDO. Bad TDI connection ?")
-        total_ir_length = int(math.log(int(ir), 2))
-
-        # Load bypass
-        self.port.shift(BitString(-1, total_ir_length), read_tdo = False)
+        captured_ir = self.chain_shift_discover(max_length = len(reset_dr) * 2,
+                                               shift_in = 1)
+        captured_ir_length = len(captured_ir)
 
         # Discover device count
         self.port.capture_dr()
-        out = self.port.shift(BitString(1, total_ir_length // 2 + 1))
-        device_count = int(math.log(int(out), 2))
+        bypass_dr = self.chain_shift_discover(max_length = len(captured_ir) // 2)
+        device_count = len(bypass_dr)
 
-        self.logger.info("Default DR: %s", default_dr)
+        self.logger.info("DR at TAP reset: %s", reset_dr)
 
         for left, right, idcode in self.default_dr_override:
-            default_dr = default_dr[:left] + BitString(idcode, 32) + default_dr[right:]
+            reset_dr = reset_dr[:left] + BitString(idcode, 32) + reset_dr[right:]
 
         if forced_idcodes is not None:
             if len(forced_idcodes) != device_count:
@@ -353,8 +340,8 @@ class Chain(PortComponent):
             id_codes = []
             point = 0
             for i in range(device_count):
-                if default_dr[point]:
-                    id_codes.append(PartId.from_idcode(int(default_dr[point : point + 32])))
+                if reset_dr[point]:
+                    id_codes.append(PartId.from_idcode(int(reset_dr[point : point + 32])))
                     point += 32
                 else:
                     id_codes.append(None)
@@ -365,8 +352,8 @@ class Chain(PortComponent):
                     
         # Determine possible IR lengths
         ir_length_possibilities = []
-        cutoffs = [i for i in range(total_ir_length) if int(default_ir[i : i + 2]) == 1]
-        cutoffs.append(total_ir_length)
+        cutoffs = [i for i in range(captured_ir_length) if int(captured_ir[i : i + 2]) == 1]
+        cutoffs.append(captured_ir_length)
         def ir_merge(prefix, part, count_left):
             poss = []
 
@@ -612,6 +599,9 @@ class Tap(PortComponent, InstructionRegistry):
         if self.irlen:
             _, irlen, _ = self.ir_pre_post()
             assert irlen == self.irlen
+        else:
+            _, irlen, _ = self.ir_pre_post()
+            self.irlen = irlen
         self.ir = None
 
     def __str__(self):
@@ -631,6 +621,30 @@ class Tap(PortComponent, InstructionRegistry):
     def dr_pre_post(self):
         return self.port.dr_pre_post(self.index)
                 
+    def dr_discover(self, ir, max_length = 512, **kwargs):
+        """
+        """
+        dr_pre, dr_post = self.dr_pre_post()
+        self.dr_shift(ir, None)
+        self.port.port.capture_dr()
+        max_length += dr_pre + dr_post
+        try:
+            register = self.port.chain_shift_discover(max_length = max_length,
+                                                      **kwargs)
+        finally:
+            self.dr_shift(-1, None)
+        return register[dr_pre : -dr_post]
+
+    def dr_discover_all(self):
+        ir_pre, ir_len, ir_post = self.ir_pre_post()
+        ir_lengths = {}
+        for i in range(0, 2 ** ir_len):
+            try:
+                ir_lengths[i] = len(self.dr_discover(i))
+            except OpenChain:
+                pass
+        return ir_lengths
+    
     def execute(self, cmds):
         """
         """
