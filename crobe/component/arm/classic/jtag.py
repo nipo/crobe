@@ -10,6 +10,7 @@ class InstructionRegistry(jtag.InstructionRegistry):
         Debug = 1
         Ice = 2
         Ext = 3
+        Cp15 = 3
     SCAN_PATH_SELECT = jtag.Dr(5, type = PathSelect)
 
     class Debug(bitfield.Bitfield):
@@ -26,6 +27,17 @@ class InstructionRegistry(jtag.InstructionRegistry):
         addr       = bitfield.Field(32, 5)
         data       = bitfield.Field(0, 32)
     ICE = jtag.Dr(Ice._width, type = Ice)
+
+    class Cp15(bitfield.Bitfield):
+        all        = bitfield.Field(0, 48)
+        write      = bitfield.BooleanField(47)
+        op1        = bitfield.Field(44, 3)
+        op2        = bitfield.Field(41, 3)
+        crn        = bitfield.Field(37, 4)
+        crm        = bitfield.Field(33, 4)
+        access     = bitfield.BooleanField(32)
+        data       = bitfield.Field(0, 32)
+    CP15 = jtag.Dr(Ice._width, type = Cp15)
     
     IDCODE               = jtag.Instruction(0xe, "DEVICE_ID")
     EXTEST               = jtag.Instruction(0x0, "TAP_BYPASS")
@@ -34,6 +46,7 @@ class InstructionRegistry(jtag.InstructionRegistry):
     PRELOAD_DEBUG        = jtag.Instruction(0x3, "DEBUG")
     INTEST_ICE           = jtag.Instruction(0xc, "ICE")
     INTEST_DEBUG         = jtag.Instruction(0xc, "DEBUG")
+    INTEST_CP15          = jtag.Instruction(0xc, "CP15")
     RESTART              = jtag.Instruction(0x4, "TAP_BYPASS")
 
 class Tap(jtag.Tap, InstructionRegistry):

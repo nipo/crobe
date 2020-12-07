@@ -32,8 +32,8 @@ class DebugControl(bitfield.Bitfield):
 class CommControl(bitfield.Bitfield):
     all      = bitfield.Field(0, 32)
     version  = bitfield.Field(28, 4)
-    read     = bitfield.BooleanField(0)
-    write    = bitfield.BooleanField(1)
+    cpu_to_debug = bitfield.BooleanField(1)
+    debug_to_cpu = bitfield.BooleanField(0)
 
 class Moe(enum.IntEnum):
     No        = 0

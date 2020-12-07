@@ -9,8 +9,3 @@ class FX3(Tap):
 
     def __init__(self, port, index, idcode):
         super().__init__(port, index, idcode, "FX3")
-        
-    def start(self):
-        self.dbg.debug_enable()
-        self.dbg.halt()
-        print(self.dbg.regs_read(range(15)))
