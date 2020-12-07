@@ -44,6 +44,8 @@ def cli():
         base.cli.invoke(ctx)
 
     except click.exceptions.Exit as e:
+        if ctx.obj.get("raw_error", True):
+            raise
         sys.exit(e.exit_code)
         
     except Exception as e:
