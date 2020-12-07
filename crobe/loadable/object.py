@@ -245,28 +245,7 @@ class Program:
             if seg["p_type"] != "PT_LOAD":
                 continue
 
-            lma = seg["p_paddr"]
-            vma = seg["p_vaddr"]
-
-            for secno in range(elf.num_sections()):
-                section = elf.get_section(secno)
-
-                if section["sh_type"] != 'SHT_PROGBITS':
-                    continue
-
-                if not seg.section_in_segment(section):
-                    continue
-
-                if not section["sh_size"]:
-                    continue
-
-                data = section.data()
-                if not data:
-                    continue
-
-                addr = section["sh_addr"]
-
-                self.append(Segment(addr - vma + lma + offset, data, filename))
+            self.append(Segment(seg["p_paddr"], seg.data(), filename))
 
         self.info["device"] = elf.get_machine_arch()
         self.info["entry"] = elf.header["e_entry"]
