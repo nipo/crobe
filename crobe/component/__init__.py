@@ -16,3 +16,4 @@ from . import winbond
 from . import adesto
 from . import ltc
 from . import melexis
+from . import analog_devices
