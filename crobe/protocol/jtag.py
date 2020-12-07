@@ -73,6 +73,7 @@ class Interface(base.Interface):
     def __init__(self, port, name = None):
         base.Interface.__init__(self, port, (name or port.name) + "-ATE")
         self.use_icepick = False
+        self.tap7_tap1_switch = False
         self.child_add(Chain(self))
 
     def start(self):
@@ -84,6 +85,10 @@ class Interface(base.Interface):
     def option_set(self, opt):
         if opt == "icepick":
             self.use_icepick = True
+            self.tap7_tap1_switch = True
+            return
+        if opt == "tap7":
+            self.tap7_tap1_switch = True
             return
 
         base.Interface.option_set(self, opt)
@@ -216,6 +221,8 @@ class Chain(PortComponent):
         
         self.reset()
 
+        if self.port.tap7_tap1_switch:
+            self.tap7_tap1_en()
         if self.port.use_icepick:
             self.icepick_enable()
         else:
@@ -250,17 +257,25 @@ class Chain(PortComponent):
         self.port.swd_to_jtag()
         self.port.tap_reset(50)
         self.port.run(50)
+
+    def tap7_cmd(self, lengths_array):
+        self.port.freq_cap("tap7", 1e5)
+        time.sleep(.001)
+        ops = [CaptureIr(), Shift(BitString(-1, 6)), Run(1), CaptureDr()]
+        for lengths in [(0, 0, 1)] + lengths_array:
+            for l in lengths:
+                ops += [Shift(BitString(0, l)), Run(1), CaptureDr()]
+        ops += [CaptureIr(), Shift(BitString(-1, 16)), Run(1)]
+        self.port.execute(ops)
+        self.port.freq_cap("tap7", None)
+
+    def tap7_tap1_en(self):
+        self.tap7_cmd([(2, 9)])
         
     def icepick_enable(self):
         self.port.freq_cap("icepick", 1e5)
         time.sleep(.001)
-        ops = [CaptureIr(), Shift(BitString(-1, 6)), Run(1), CaptureDr()]
-        for lengths in [(0, 0, 1), (2, 9)]:
-            for l in lengths:
-                ops += [Shift(BitString(0, l)), Run(1), CaptureDr(), Pause()]
-        ops += [CaptureIr(), Shift(BitString(-1, 16)), Run(1)]
-        ops += [Run(5), CaptureIr(), Shift(BitString(0x4, 6)), Run(3)]
-        self.port.execute(ops)
+        self.port.execute([Run(5), CaptureIr(), Shift(BitString(0x4, 6)), Run(3)])
         self.port.freq_cap("icepick", None)
         self.discover([PartId(0, 0x17, 0x1ce)])
 
