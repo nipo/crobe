@@ -762,7 +762,7 @@ class ProbyAdapter(basic.Adapter):
             return basic.Adapter.open(self, interface_name, channel = "A",
                                 resetn_pin = 8,
                                 csn_pin = 3,
-                                gpio_output = 0x071b, gpio_value = 0x0210)
+                                gpio_output = 0x061b, gpio_value = 0x0210)
 
         elif interface_name == "spi-inv":
             self.reprogram("jtag_swapped")
