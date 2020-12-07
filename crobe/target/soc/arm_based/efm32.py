@@ -170,6 +170,7 @@ DEFAULT_PART = Part("EFx32xG", None)
 @SoC.db.register(PartId(6, 0x73, 0x1),
                  PartId(6, 0x73, 0x81),
                  PartId(6, 0x73, 0x82),      # ezr32lg
+                 PartId(6, 0x73, 0x41),      # efm32tg
                  PartId(6, 0x73, 0xc1),
                  PartId(6, 0x73, 0xc9),
                  PartId(6, 0x73, 0x101),
