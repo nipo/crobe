@@ -13,7 +13,7 @@ class Interface(base.Interface):
     """
     SPI protocol interface.
 
-    SPI protocol model uses 3 basic operations:
+    SPI protocol model uses 2 basic operations:
 
     - CS select/deselect,
     - Shift
@@ -47,11 +47,11 @@ class Interface(base.Interface):
         """
         raise NotImplementedError()
 
-    def cs(self, val):
+    def cs(self, val, mode = 0):
         """
         See cmd_cs()
         """
-        op = self.cmd_cs(val)
+        op = self.cmd_cs(val, mode)
         self.execute([op])
 
     def shift(self, mosi, read_miso = True):
@@ -71,11 +71,11 @@ class Interface(base.Interface):
         """
         return Shift(mosi, read_miso)
 
-    def cmd_cs(self, value):
+    def cmd_cs(self, value, mode = 0):
         """
         Toggles CS to value
         """
-        return Cs(value)
+        return Cs(value, mode)
 
     def option_set(self, opt):
         if opt == "reset=keep":
@@ -86,10 +86,11 @@ class Interface(base.Interface):
 class Target(PortComponent, FreqCapper):
     db = Db("SPI chip type")
 
-    def __init__(self, port, name, cs):
+    def __init__(self, port, name, cs, mode = 0):
         PortComponent.__init__(self, port, name)
         FreqCapper.__init__(self)
         self.cs = cs
+        self.mode = mode
         self.port.freq_cap("target", self.freq)
 
     def freq_update(self, freq):
@@ -101,7 +102,7 @@ class Target(PortComponent, FreqCapper):
 
     def transaction(self, mosi, read_miso = True):
         op = self.cmd_shift(mosi, read_miso)
-        self.port.execute([self.cmd_cs(True), op, self.cmd_cs(False)])
+        self.execute([self.cmd_cs(True), op, self.cmd_cs(False)])
         if read_miso:
             return op.miso
 
@@ -119,7 +120,7 @@ class Target(PortComponent, FreqCapper):
         Toggles CS to value
         """
         if value:
-            return Cs(self.cs)
+            return Cs(self.cs, self.mode)
         return Cs(None)
 
     def child_spawn(self, sub):
@@ -141,8 +142,11 @@ class Shift(Operation):
         return "<Shift %s>" % (self.mosi)
 
 class Cs(Operation):
-    def __init__(self, value):
+    def __init__(self, value, mode = 0):
         self.value = value
+        self.mode = mode
 
     def __str__(self):
-        return "<CS %d>" % self.value
+        if self.value is not None:
+            return "<CS %d,%d>" % (self.value, self.mode)
+        return "<CS None>"
