@@ -6,15 +6,22 @@ import logging
 
 class Dumper:
     def __init__(self, interface, packages):
-        self.interface = interface
         self.packages = packages
         self.logger = logging.getLogger("bsdl")
 
-        assert isinstance(interface, jtag.Interface)
-        interface.start()
-        chain = interface.child_summon("chain")
-        chain.child_summon("0")
+        assert isinstance(interface, (jtag.Interface, jtag.Tap))
+        only = None
+        if isinstance(interface, jtag.Tap):
+            tap = interface
+            chain = tap.port
+            interface = chain.port
+            only = tap
+        else:
+            interface.start()
+            chain = interface.child_summon("chain")
+            chain.child_summon("0")
         taps = chain.children[:]
+        self.interface = interface
 
         cache = Cache.open()
 
@@ -31,7 +38,7 @@ class Dumper:
             if not d:
                 self.logger.warn("No BSDL entry for %s", tap.idcode)
 
-            if not d or pkg == "ign":
+            if not d or pkg == "ign" or (only is not None and only is not tap):
                 self.definitions.append((None, tap))
                 continue
 
