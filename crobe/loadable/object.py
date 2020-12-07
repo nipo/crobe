@@ -256,7 +256,11 @@ class Program:
     def from_bin(cls, filename, offset = 0):
         """Load a Program from an Binary file"""
         self = cls(filename)
-        fd = open(filename, 'rb')
+        if filename.endswith(".bin.gz"):
+            import gzip
+            fd = gzip.open(filename, 'rb')
+        else:
+            fd = open(filename, 'rb')
         self.append(Segment(offset, fd.read(), filename))
         return self
 
@@ -403,6 +407,7 @@ class Program:
     EXT_MAP = {
         ".jed": "jed",
         ".bin": "bin",
+        ".bin.gz": "bin",
         ".bit": "bit",
         ".bit.gz": "bit",
         ".img": "img",
