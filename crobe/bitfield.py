@@ -143,16 +143,23 @@ class _register_meta(type):
         fields = {}
 
         attrs = dict(attrs)
-        
+
+        for b in bases:
+            try:
+                fs = b._fields
+            except AttributeError:
+                continue
+            fields.update(fs)
+
         if "fields" in attrs:
-            fields = fields.update(attrs.pop("fields"))
+            fields.update(attrs.pop("fields"))
 
         for item_name, item in attrs.items():
             if isinstance(item, Field):
                 fields[item_name] = item
             else:
                 new_attrs[item_name] = item
-
+                
         lsb = min((field.lsb for field in fields.values()), default = 0)
         msbp1 = max((field.lsb+field.width for field in fields.values()), default = 0)
         width = msbp1 - lsb
