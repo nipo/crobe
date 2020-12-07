@@ -318,7 +318,7 @@ class JtagInterface(BaseInterface, jtag.Interface):
                         self.__state = self.STATE_RTI
 
                     if self.__state == self.STATE_RTI:
-                        if op.cycles:
+                        if op.cycles >= 2:
                             # TODO anything shorter ?
                             cmd.append(self.handle.cmd_tms_shift(BitString(0, op.cycles-1)))
                     else:
