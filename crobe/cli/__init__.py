@@ -16,3 +16,4 @@ from . import smbus
 from . import digilent
 from . import repl
 from . import run
+from . import wiznet
