@@ -79,6 +79,12 @@ class SpiFlash(PortComponent, Bus):
         time.sleep(.01)
         port.execute([
             port.cmd_cs(True),
+            port.cmd_shift(b'\xab', read_miso = False),
+            port.cmd_cs(False),
+            ])
+        time.sleep(.01)
+        port.execute([
+            port.cmd_cs(True),
             port.cmd_shift(cls.CMD_RESET_ENABLE, read_miso = False),
             port.cmd_cs(False),
             port.cmd_shift(b'\x00', read_miso = False),
@@ -475,7 +481,7 @@ class SfdpFlash(SelfDescriptiveFlash):
         else:
             self.total_size = (density + 1) / 8
 
-        self.write_buffer_size = 2**(data[36]>>4)
+        self.write_buffer_size = 2**(data[0x2a]>>4)
             
         self.SECTOR_INFO = []
 
