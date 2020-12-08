@@ -282,6 +282,7 @@ class Chain(PortComponent):
     def chain_shift_discover(self, max_length = 512, shift_back = False, shift_in = None):
         marker = 0xdecafbad
         tdo = self.port.shift(BitString(marker, max_length + 32))
+        tdo = tdo[:max_length+32]
 
         if not int(tdo):
             raise OpenChain("TDO stuck low. Bad TDO connection ?")
@@ -290,11 +291,13 @@ class Chain(PortComponent):
             raise OpenChain("TDO stuck high. Bad TDO connection ?")
 
         length = int(math.log(int(tdo), 2) + 1)
-        self.logger.debug("After %d bit shift, tdo = %s, %d useful", len(tdo), tdo, length)
+        register = tdo[:length - 32]
+        rx_marker = tdo[length - 32 : length]
+
+        self.logger.debug("After %d bit shift, tdo = %s, probable length = %d, register = %s, rx_marker = %x (expected %x)", len(tdo), tdo, len(register), register, int(rx_marker), marker)
         if int(tdo[length - 32 : length]) != marker:
             raise OpenChain("TDO changed, but never got TDI back. Bad TDI/TDO connection ?")
 
-        register = tdo[:length - 32]
         if shift_back:
             self.logger.debug("Shifting back captured value")
             self.port.shift(register)
@@ -323,6 +326,7 @@ class Chain(PortComponent):
         self.port.run(1)
 
         self.port.capture_dr()
+        self.logger.debug("Discovering DR after reset")
         reset_dr = self.chain_shift_discover()
             
         if len(reset_dr) == 0:
@@ -330,12 +334,14 @@ class Chain(PortComponent):
 
         # Get default IR, load bypass
         self.port.capture_ir()
+        self.logger.debug("Discovering IR")
         captured_ir = self.chain_shift_discover(max_length = len(reset_dr) * 2,
                                                shift_in = 1)
         captured_ir_length = len(captured_ir)
 
         # Discover device count
         self.port.capture_dr()
+        self.logger.debug("Discovering Bypass DR")
         bypass_dr = self.chain_shift_discover(max_length = len(captured_ir) // 2)
         device_count = len(bypass_dr)
 
