@@ -36,7 +36,7 @@ class SpiTransactor(PortComponent):
         pending = []
         rsp_size = 0
 
-        self.logger.info("Running %s", operation_list)
+        self.logger.debug("Running %s", operation_list)
         
         for op in operation_list:
             if self.__rate_dirty:
