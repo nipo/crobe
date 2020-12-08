@@ -1,5 +1,8 @@
 from ....model import PortComponent
 from ....protocol import base, swd
+from ....util.pretty import metric
+import math
+from collections import deque
 
 class SwdTransactor(PortComponent):
     CMD_TURNAROUND   = 0xd0
@@ -94,7 +97,7 @@ class SwdTransactor(PortComponent):
                     ap = int(bool(op.ap))
 
                     cmd[cmd_size] = self.CMD_WRITE | (ap << 5) | addr
-                    cmd[cmd_size + 1 : cmd_size + 5] = struct.pack("<L", op.data)
+                    cmd[cmd_size + 1 : cmd_size + 5] = int(op.data).to_bytes(4, "little")
                     op.__offset = rsp_size
                     cmd_size += 5
                     rsp_size += 1
@@ -147,4 +150,4 @@ class SwdTransactor(PortComponent):
                     op.ack = ack
 
                     if isinstance(op, swd.Read):
-                        op.data, = struct.unpack("<L", in_blob[op.__offset + 1 : op.__offset + 5])
+                        op.data = int.from_bytes(in_blob[op.__offset + 1 : op.__offset + 5], "little")
