@@ -5,8 +5,8 @@ class ControlStatus(PortComponent):
     CMD_WRITE        = 0
     CMD_READ         = 0x80
 
-    def __init__(self, route):
-        super().__init__(route, "cs")
+    def __init__(self, route, name = "cs"):
+        super().__init__(route, name)
 
     def reg_read(self, no):
         rsp = self.port.execute(bytes([self.CMD_READ | no]), 5)
