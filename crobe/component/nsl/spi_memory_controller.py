@@ -22,4 +22,5 @@ class SpiMemoryController(PortComponent):
         addr = int(addr).to_bytes(self.addr_size, "big")
         read_command = bytes([self.write_opcode]) + addr
         cmd = self.port.cmd_shift(read_command + data, read_miso = False)
-        self.port.execute([self.port.cmd_cs(True), cmd, self.port.cmd_cs(False)])
+        padding = self.port.cmd_shift(b'\x00', read_miso = False)
+        self.port.execute([self.port.cmd_cs(True), cmd, self.port.cmd_cs(False), padding])
