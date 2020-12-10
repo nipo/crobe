@@ -91,6 +91,10 @@ class FramedEndpoint(PortComponent):
         data = rsp[1:]
         assert tag == self.last_tag
         if rsp_size is not None:
-            assert len(data) == rsp_size, (len(data), rsp_size)
+            if len(data) != rsp_size:
+                self.logger.error("Received frame is %d bytes, expected %d", len(data), rsp_size)
+                self.logger.error("> %s", data.hex())
+                if len(data) < rsp_size:
+                    raise ValueError("Short frame")
         return data
 
