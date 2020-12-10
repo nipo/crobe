@@ -16,6 +16,7 @@ class Series7(Series67):
     ### Config port
     ###
 
+    IR_USERCODE    = 0x08
     IR_ISC_READ    = 0x15
     IR_ISC_NOP     = 0x14
     IR_JSTART      = 0x0c
@@ -132,8 +133,6 @@ class Series7(Series67):
 
         self.dr_shift(self.IR_ISC_NOP, None)
         self.run(20)
-
-        self._cfg_shift(self.IR_CFG_IN, prog_data)
 
         self.logger.info("CFG IDCODE: %08x", self.cfg_idcode)
 

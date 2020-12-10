@@ -4,3 +4,4 @@ from . import artix7
 from . import coolrunner2
 from . import spartan3
 from . import artix7
+from . import spartan7
