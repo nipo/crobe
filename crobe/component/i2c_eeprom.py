@@ -25,13 +25,14 @@ class I2cMem(i2c.Slave, Bus):
         return saddr, baddr
 
     def read(self, addr, size):
+        read_by = min(self.page_size, size, 32)
         assert addr + size <= self.size, (addr, size, self.size)
 
         r = b''
-        for off in range(addr, addr + size, self.page_size):
+        for off in range(addr, addr + size, read_by):
             saddr, baddr = self._addr(off)
 
-            r += i2c.Slave.write_read(self, baddr, self.page_size)
+            r += i2c.Slave.write_read(self, baddr, read_by)
         return r[:size]
 
     def write(self, addr, data):
