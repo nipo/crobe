@@ -69,6 +69,7 @@ class nRF5(SoC, pin_control.Controller):
         0x2001: ("CA", "WLCSP33", 15),
         0x2003: ("QC", "QFN32", 17),
         0x2004: ("QI", "aQFN73", 48),
+        0x2007: ("QD", "QFN32", 18),
         }
 
     CONFIGID_HW = {
@@ -344,3 +345,10 @@ class nRF52840(nRF52):
 
     def __init__(self, dp):
         nRF52.__init__(self, "nRF52840", dp)
+
+@SoC.db.register(PartId(2, 0x44, 0x10))
+class nRF52820(nRF52):
+    GPIO_COUNT = 18
+
+    def __init__(self, dp):
+        nRF52.__init__(self, "nRF52820", dp)
