@@ -1,3 +1,5 @@
+import math
+
 class _Field(object):
     def __init__(self, lsb, width):
         if lsb < 0:
@@ -98,17 +100,13 @@ class MappingField(Field):
     def __init__(self, lsb, width, mapping):
         super().__init__(lsb, width)
         if isinstance(mapping, dict):
-            self.raw2display = mapping
+            self.raw2display = {i: v for (i, v) in mapping.items()}
         else:
             self.raw2display = {i: v for (i, v) in enumerate(mapping)}
         self.display2raw = {v : k for (k, v) in self.raw2display.items()}
 
     def parse(self, value):
-        try:
-            return self.display2raw[value]
-        except KeyError:
-            pass
-        return int(value)
+        return self.display2raw.get(value, value)
 
     def represent(self, value):
         return self.raw2display.get(value, value)
