@@ -18,14 +18,16 @@ def metric(value, unit = "", ascii = False):
         while value * Decimal((0, (1,), exp)) < 1:
             exp += 3
     else:
-        while value * Decimal((0, (1,), exp)) >= 1000:
+        while value * Decimal((0, (1,), exp)) >= 10000:
             exp -= 3
     m = value * Decimal((0, (1,), exp))
     scale = "TGMk munpf" if ascii else u"TGMk mµnpf"
     suffix = scale[4 + exp // 3]
     if suffix == ' ':
         suffix = ''
-    return s + ('%f' % (int(float(m * 1000) + .5) // 1000.)).rstrip('0').rstrip('.') + suffix + unit
+    rm = int(float(m * 1000) + .5) / 1000.
+    sm = ('%f' % rm).rstrip('0').rstrip('.')
+    return s + sm + suffix + unit
 
 def base2(value, unit = ""):
     if value <= 1:
