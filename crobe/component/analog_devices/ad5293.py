@@ -28,7 +28,7 @@ class Ad5293(PortComponent):
         value = 0
         if calibration:
             value |= 0x4
-        if rdac_protect:
+        if not rdac_protect:
             value |= 0x2
         self.opcode_send(Opcode.ControlWrite, value)
 
