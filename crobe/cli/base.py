@@ -4,16 +4,26 @@ import logging
 import click
 import os
 from functools import update_wrapper
+import re
 
 class DomainFilter(logging.Filter):
     silent = set()
 
-    def __init__(self, off):
+    def __init__(self, off, only_re = None):
         logging.Filter.__init__(self)
         self.silent = set(off)
+        self.only_re = None
+        if only_re is not None:
+            self.only_re = re.compile(only_re)
 
     def filter(self, record):
-        return record.name not in self.silent
+        if record.name in self.silent:
+            return False
+        if self.only_re is not None:
+            if self.only_re.match(record.name) or record.name == "cli":
+                return True
+            return False
+        return True
 
 class RelativeFormatter(logging.Formatter):
     def __init__(self):
@@ -31,10 +41,11 @@ class RelativeFormatter(logging.Formatter):
 @click.option('-e', '--raw-error', is_flag = True, help = "Do not mangle exceptions")
 @click.option('-q', '--quiet', count = True, help = "Less verbosity")
 @click.option('--silent', multiple = True, type = str, help = "Silent one component by name")
+@click.option('--only-re', type = str, help = "Only components by regex", default = None)
 @click.pass_context
-def cli(ctx, verbose, raw_error, quiet, silent):
+def cli(ctx, verbose, raw_error, quiet, silent, only_re):
     formatter = RelativeFormatter()
-    f = DomainFilter(silent)
+    f = DomainFilter(silent, only_re)
     ctx.obj["log_filter"] = f
     ctx.obj["raw_error"] = raw_error
 
