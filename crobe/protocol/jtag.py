@@ -665,7 +665,10 @@ class Tap(PortComponent, InstructionRegistry):
                                                       **kwargs)
         finally:
             self.dr_shift(-1, None)
-        return register[dr_pre : -dr_post]
+        register = register[dr_pre : (-dr_post) or None]
+        self.logger.info("IR %#x: %d bits, capture value: %s",
+                         ir, len(register), register)
+        return register
 
     def dr_discover_all(self):
         ir_pre, ir_len, ir_post = self.ir_pre_post()
