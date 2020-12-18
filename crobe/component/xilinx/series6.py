@@ -100,7 +100,7 @@ class Series6(Series67):
 
             if userid == expected_userid and not force_reload:
                 self.logger.info("UserID matches, doing nothing")
-                return
+                return self.send_op_wait(-1, self.IR_STATUS_DONE)
             
         blob = program[0].data
         if len(blob) % 1:
@@ -118,6 +118,11 @@ class Series6(Series67):
             raise RuntimeError("Unable to start FPGA")
         else:
             self.logger.info("Done OK, time taken: %s", end - begin)
+
+        # This is important, it enables internal CCLK
+        self.run(1000)
+
+        return self.send_op_wait(-1, self.IR_STATUS_DONE)
 
     def config_write(self, blob):
         prog_data = struct.unpack(">" + "H" * (len(blob) // 2), blob)
