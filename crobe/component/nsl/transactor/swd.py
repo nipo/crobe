@@ -16,7 +16,7 @@ class SwdTransactor(PortComponent):
     RSP_OP_MASK          = 0xf0
     RSP_ACK_MASK         = 0x07
     RSP_PAR_ERROR        = 0x08
-    
+
     def __init__(self, route, base_freq):
         self.base_freq = base_freq
         self.__turnaround_cycles = 1
@@ -38,6 +38,10 @@ class SwdTransactor(PortComponent):
         self.__rate_dirty = True
         return self.base_freq / ((self.__divisor + 1) * 2)
         
+    def context_force_refresh(self):
+        self.__turnaround_dirty = True
+        self.__rate_dirty = True
+    
     @property
     def turnaround_cycles(self):
         return self.__turnaround_cycles
@@ -53,6 +57,8 @@ class SwdTransactor(PortComponent):
         ops = deque(operation_list)
         max_size = 512
         
+        self.logger.debug("Running %s", operation_list)
+
         while ops:
             cmd = bytearray([0] * max_size)
             cmd_size = 0
@@ -91,6 +97,12 @@ class SwdTransactor(PortComponent):
                         cmd[cmd_size] = self.CMD_RUN | 10
                         cmd_size += 1
                         rsp_size += 1
+                    
+#                elif isinstance(op, swd.Write) and op.addr == 0 and not op.ap and op.data == 0x1f:
+#                    # Abort
+#                    cmd[cmd_size] = self.CMD_ABORT
+#                    cmd_size += 1
+#                    rsp_size += 1
                     
                 elif isinstance(op, swd.Write):
                     addr = op.addr & 0x3
@@ -136,6 +148,9 @@ class SwdTransactor(PortComponent):
             in_blob = self.port.execute(cmd[:cmd_size], rsp_size)
 
             for idx, op in enumerate(pending):
+#                if isinstance(op, swd.Write) and op.addr == 0 and not op.ap and op.data == 0x1f:
+#                    op.ack = swd.Ack.OK
+#                    
                 if isinstance(op, (swd.Read, swd.Write)):
                     rsp = in_blob[op.__offset]
                     

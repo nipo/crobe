@@ -1,26 +1,28 @@
-import threading
+import time
+from ....model import PortComponent
 
 class Sized(PortComponent):
     def __init__(self, port):
         super().__init__(port, "sized_io")
+        import threading
         self.lock = threading.Lock()
-        self.reader = None
         self.rx_buf = b''
 
     def reset(self):
         self.port.write(b"\xff" * 1023 + b"\x00")
         time.sleep(.01)
-        self.port.read()
+        self.port._read()
 
         self.rx_buf = b''
 
     def frame_send(self, frame):
-        self.port.write(struct.pack("<H", len(frame) - 1) + frame)
+        assert len(frame) < 0xffff
+        self.port.write((len(frame) - 1).to_bytes(2, "little") + frame)
 
     def frame_recv(self):
         with self.lock:
             while True:
-                data = self.port.read()
+                data = self.port._read()
                 self.rx_buf += data
 
                 if len(self.rx_buf) < 2:

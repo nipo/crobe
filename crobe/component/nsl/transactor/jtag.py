@@ -153,7 +153,14 @@ class JtagTransactor(PortComponent):
                 rsp_size += op_rsp_size
 
             assert cmd_size
-            in_blob = self.port.execute(cmd[:cmd_size], rsp_size)
+            try:
+                in_blob = self.port.execute(cmd[:cmd_size], rsp_size)
+            except:
+                print(ops)
+                print(pending)
+                print(cmd[:cmd_size])
+                print(rsp_size)
+                raise
 
             for op, offset, bit_count in tdo_gather:
                 op.tdo += BitString(in_blob[offset : offset + ((bit_count + 7) // 8)], bit_count)
