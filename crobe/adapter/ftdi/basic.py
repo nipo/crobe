@@ -479,7 +479,7 @@ class I2cInterface(BaseInterface, i2c.Interface):
         for idx, op in enumerate(ops):
             as_prev = bool(prev) and isinstance(prev, i2c.Read) == isinstance(op, i2c.Read)
 
-            self.logger.info("op: %s", op)
+            self.logger.debug("op: %s", op)
 
             if isinstance(op, i2c.Read):
                 is_last = idx == len(ops)-1 or not isinstance(ops[idx], i2c.Read)
