@@ -26,8 +26,6 @@ package topcell is
       scl: inout std_logic;
       sda: inout std_logic;
 
-      debug : inout std_logic_vector(5 downto 0);
-
       fifo_data: inout std_logic_vector(7 downto 0);
       fifo_rxfn: in std_ulogic;
       fifo_txen: in std_ulogic;
@@ -63,8 +61,6 @@ package topcell is
 
       i2c_o : out nsl_i2c.i2c.i2c_o;
       i2c_i : in  nsl_i2c.i2c.i2c_i;
-
-      debug : out std_ulogic_vector(5 downto 0);
 
       ft245_i : in nsl_ftdi.ft245.ft245_sync_fifo_master_i;
       ft245_o : out nsl_ftdi.ft245.ft245_sync_fifo_master_o

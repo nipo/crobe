@@ -26,8 +26,6 @@ entity wrapper is
     scl: inout std_logic;
     sda: inout std_logic;
 
-    debug: inout std_logic_vector(5 downto 0);
-
     fifo_data: inout std_logic_vector(7 downto 0);
     fifo_rxfn: in std_ulogic;
     fifo_txen: in std_ulogic;
@@ -106,8 +104,6 @@ begin
       dbg_trst_o => dbg_trst_o,
       dbg_trst_i => dbg_trst_i,
 
-      std_logic_vector(debug) => debug,
-      
       i2c_o  => i2c_o,
       i2c_i  => i2c_i,
 

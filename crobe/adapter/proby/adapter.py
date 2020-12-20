@@ -6,7 +6,7 @@ import logging
 __all__ = ['Proby', 'Enumerator']
         
 class ProbyAdapter(basic.Adapter):
-    supported_interfaces = ["swd", "swd-pt", "jtag", "jtag-raw", "jtag-int", "spi", "spi-inv", "cc", "i2c"]
+    supported_interfaces = ["swd", "swd-pt", "jtag", "jtag-raw", "jtag-int", "spi", "spi-inv", "cc", "i2c", "spi-raw", "spi-inv-raw"]
     
     def reprogram(self, mode):
         """
@@ -41,14 +41,22 @@ class ProbyAdapter(basic.Adapter):
         fpga.load(obj)
 
     def open(self, interface_name):
-        if interface_name == "spi":
+        if interface_name in ["jtag", "swd", "i2c", "cc", "spi", "spi-inv"]:
+            from .transactors import Meta
+            meta = Meta(self, interface_name)
+            return meta.interface
+
+        elif interface_name == "jtag-int":
+            return basic.Adapter.open(self, "jtag", channel = "B", resetn_pin = 9)
+
+        elif interface_name == "spi-raw":
             self.reprogram("jtag_swd_raw")
             return basic.Adapter.open(self, interface_name, channel = "A",
                                 resetn_pin = 8,
                                 csn_pin = 3,
                                 gpio_output = 0x061b, gpio_value = 0x0210)
 
-        elif interface_name == "spi-inv":
+        elif interface_name == "spi-inv-raw":
             self.reprogram("jtag_swapped")
             return basic.Adapter.open(self, "spi", channel = "A",
                                 resetn_pin = 8,
@@ -61,20 +69,12 @@ class ProbyAdapter(basic.Adapter):
                                 resetn_pin = 8,
                                 gpio_output = 0x061b, gpio_value = 0x0210)
 
-        elif interface_name == "jtag-int":
-            return basic.Adapter.open(self, "jtag", channel = "B", resetn_pin = 9)
-
         elif interface_name == "swd-pt":
             self.reprogram("jtag_swd_raw")
             return basic.Adapter.open(self, "swd", channel = "A",
                                 resetn_pin = 8,
                                 oe_pin = 5,
                                 gpio_output = 0x063b, gpio_value = 0x0610)
-
-        elif interface_name in ["jtag", "swd", "i2c", "cc"]:
-            from .transactors import Meta
-            meta = Meta(self, interface_name)
-            return meta.interface
 
         else:
             raise ValueError("Unknown interface name: %s" % interface_name)

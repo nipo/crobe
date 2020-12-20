@@ -4,7 +4,8 @@ use ieee.numeric_std.all;
 
 library nsl_coresight, nsl_i2c, nsl_bnoc,
   nsl_ftdi, nsl_clocking, nsl_io,
-  nsl_ti, nsl_indication, nsl_jtag;
+  nsl_ti, nsl_indication, nsl_jtag,
+  nsl_spi;
 
 entity main is
   generic(
@@ -32,8 +33,6 @@ entity main is
     i2c_o : out nsl_i2c.i2c.i2c_o;
     i2c_i : in  nsl_i2c.i2c.i2c_i;
 
-    debug : out std_ulogic_vector(5 downto 0);
-
     ft245_i : in nsl_ftdi.ft245.ft245_sync_fifo_master_i;
     ft245_o : out nsl_ftdi.ft245.ft245_sync_fifo_master_o
     );
@@ -57,18 +56,22 @@ architecture arch of main is
     framed_cmd, framed_rsp : nsl_bnoc.framed.framed_bus;
   end record;
 
-  signal comm_swd, comm_i2c, comm_cs, comm_jtag, comm_cc : endpoint_comm;
+  signal comm_swd, comm_i2c, comm_cs, comm_spi, comm_jtag, comm_cc : endpoint_comm;
   signal cc_o : nsl_ti.cc.cc_m_o;
   signal cc_i : nsl_ti.cc.cc_m_i;
   signal swd_o : nsl_coresight.swd.swd_master_o;
   signal swd_i : nsl_coresight.swd.swd_master_i;
   signal jtag_o : nsl_jtag.jtag.jtag_ate_o;
   signal jtag_i : nsl_jtag.jtag.jtag_ate_i;
-  
-  signal mode: std_ulogic_vector(1 downto 0);
-  constant mode_swd : std_ulogic_vector(1 downto 0) := "00";
-  constant mode_jtag : std_ulogic_vector(1 downto 0) := "01";
-  constant mode_cc : std_ulogic_vector(1 downto 0) := "10";
+  signal spi : nsl_spi.spi.spi_bus;
+
+  subtype mode_t is std_ulogic_vector(2 downto 0);
+  signal mode: mode_t;
+  constant mode_swd      : mode_t := "000";
+  constant mode_jtag     : mode_t := "001";
+  constant mode_cc       : mode_t := "010";
+  constant mode_spi      : mode_t := "011";
+  constant mode_spi_inv  : mode_t := "100";
   
   signal s_cs_config, s_cs_status: nsl_bnoc.control_status.control_status_reg_array(0 to cs_reg_count-1);
 
@@ -177,9 +180,9 @@ begin
   cmd_router: nsl_bnoc.routed.routed_router
     generic map(
       in_port_count => 1,
-      out_port_count => 5,
+      out_port_count => 6,
       routing_table => (0, 1, 2, 3,
-                        4, 0, 0, 0,
+                        4, 5, 0, 0,
                         0, 0, 0, 0,
                         0, 0, 0, 0)
       )
@@ -193,16 +196,18 @@ begin
       p_out_val(2) => comm_i2c.routed_cmd.req,
       p_out_val(3) => comm_cs.routed_cmd.req,
       p_out_val(4) => comm_cc.routed_cmd.req,
+      p_out_val(5) => comm_spi.routed_cmd.req,
       p_out_ack(0) => comm_swd.routed_cmd.ack,
       p_out_ack(1) => comm_jtag.routed_cmd.ack,
       p_out_ack(2) => comm_i2c.routed_cmd.ack,
       p_out_ack(3) => comm_cs.routed_cmd.ack,
-      p_out_ack(4) => comm_cc.routed_cmd.ack
+      p_out_ack(4) => comm_cc.routed_cmd.ack,
+      p_out_ack(5) => comm_spi.routed_cmd.ack
       );
 
   rsp_router: nsl_bnoc.routed.routed_router
     generic map(
-      in_port_count => 5,
+      in_port_count => 6,
       out_port_count => 1,
       routing_table => (0, 0, 0, 0,
                         0, 0, 0, 0,
@@ -219,11 +224,13 @@ begin
       p_in_val(2) => comm_i2c.routed_rsp.req,
       p_in_val(3) => comm_cs.routed_rsp.req,
       p_in_val(4) => comm_cc.routed_rsp.req,
+      p_in_val(5) => comm_spi.routed_rsp.req,
       p_in_ack(0) => comm_swd.routed_rsp.ack,
       p_in_ack(1) => comm_jtag.routed_rsp.ack,
       p_in_ack(2) => comm_i2c.routed_rsp.ack,
       p_in_ack(3) => comm_cs.routed_rsp.ack,
-      p_in_ack(4) => comm_cc.routed_rsp.ack
+      p_in_ack(4) => comm_cc.routed_rsp.ack,
+      p_in_ack(5) => comm_spi.routed_rsp.ack
       );
 
   swd_endpoint: nsl_bnoc.routed.routed_endpoint
@@ -305,6 +312,22 @@ begin
       p_rsp_in_val => comm_cc.framed_rsp.req,
       p_rsp_in_ack => comm_cc.framed_rsp.ack
       );
+
+  spi_endpoint: nsl_bnoc.routed.routed_endpoint
+    port map(
+      p_resetn => user_resetn,
+      p_clk => sys_clk,
+
+      p_cmd_in_val  => comm_spi.routed_cmd.req,
+      p_cmd_in_ack  => comm_spi.routed_cmd.ack,
+      p_rsp_out_val => comm_spi.routed_rsp.req,
+      p_rsp_out_ack => comm_spi.routed_rsp.ack,
+
+      p_cmd_out_val  => comm_spi.framed_cmd.req,
+      p_cmd_out_ack  => comm_spi.framed_cmd.ack,
+      p_rsp_in_val => comm_spi.framed_rsp.req,
+      p_rsp_in_ack => comm_spi.framed_rsp.ack
+      );
   
   dp: nsl_coresight.transactor.dp_framed_transactor
     port map(
@@ -385,14 +408,33 @@ begin
       cc_o => cc_o
       );
 
+  spi_trn: nsl_spi.transactor.spi_framed_transactor
+    generic map(
+      slave_count_c => 1
+      )
+    port map(
+      clock_i  => sys_clk,
+      reset_n_i => user_resetn,
+      
+      cmd_i => comm_spi.framed_cmd.req,
+      cmd_o => comm_spi.framed_cmd.ack,
+      rsp_o => comm_spi.framed_rsp.req,
+      rsp_i => comm_spi.framed_rsp.ack,
+
+      sck_o => spi.sck,
+      cs_n_o(0) => spi.cs_n,
+      mosi_o => spi.mosi,
+      miso_i => spi.miso
+      );
+
   mode <= s_cs_config(3)(mode'range);
 
   s_cs_status(0) <= std_ulogic_vector(to_unsigned(sys_clk_hz, s_cs_status(0)'length));
-  s_cs_status(1)(0) <= dbg_srst_i;
+  s_cs_status(1)(0) <= not dbg_srst_i;
   s_cs_status(2)(0) <= dbg_trst_i;
   s_cs_status(3)(mode'range) <= mode;
 
-  ios: process(mode, jtag_o, swd_o, cc_o, s_cs_config(1))
+  ios: process(mode, jtag_o, swd_o, cc_o, s_cs_config(1), spi, dbg_tdo_i, dbg_tdi_i)
   begin
     dbg_tck_o <= '0';
     dbg_srst_o.drain_n <= not s_cs_config(1)(0);
@@ -404,6 +446,7 @@ begin
     dbg_tdo_o.v <= '-';
     dbg_trst_o.output <= '0';
     dbg_trst_o.v <= '-';
+    spi.miso <= '-';
 
     if mode = mode_swd then
       dbg_tms_o <= swd_o.dio;
@@ -419,9 +462,24 @@ begin
       dbg_tck_o <= cc_o.dc;
       dbg_srst_o.drain_n <= not cc_o.reset_n;
       dbg_tms_o <= cc_o.dd;
+    elsif mode = mode_spi then
+      dbg_tck_o <= spi.sck;
+      dbg_tms_o.v <= '0';
+      dbg_tms_o.output <= not spi.cs_n;
+      dbg_tdi_o.output <= '1';
+      dbg_tdi_o.v <= spi.mosi;
+      spi.miso <= dbg_tdo_i;
+    elsif mode = mode_spi_inv then
+      dbg_tck_o <= spi.sck;
+      dbg_tms_o.v <= '0';
+      dbg_tms_o.output <= not spi.cs_n;
+      dbg_tdo_o.output <= '1';
+      dbg_tdo_o.v <= spi.mosi;
+      spi.miso <= dbg_tdi_i;
     end if;
   end process;
   
+  cc_i.dd <= dbg_tms_i;
   swd_i.dio <= dbg_tms_i;
   jtag_i.tdo <= dbg_tdo_i;
 
@@ -435,12 +493,5 @@ begin
       togglable_i => ft245_resetn_async,
       activity_o => user_led
       );
-
-  debug(0) <= comm_jtag.framed_cmd.req.valid;
-  debug(1) <= comm_jtag.framed_cmd.ack.ready;
-  debug(2) <= comm_jtag.framed_rsp.req.valid;
-  debug(3) <= comm_jtag.framed_rsp.ack.ready;
-  debug(5 downto 4) <= "00";
-  
   
 end arch;

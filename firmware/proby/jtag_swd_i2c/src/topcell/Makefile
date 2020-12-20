@@ -17,6 +17,8 @@ deps += nsl_bnoc.control_status
 
 deps += nsl_ti.cc
 
+deps += nsl_spi.transactor
+
 deps += nsl_i2c.i2c
 deps += nsl_i2c.transactor
 

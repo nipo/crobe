@@ -12,4 +12,4 @@ all: ../../../crobe/adapter/proby/fw/$(target).bit.gz
 ../../../crobe/adapter/proby/fw/$(target).bit.gz: $(target)-compressed.bit
 	gzip -c9 < $< > $@
 
-include ../../../nsl/build/build.mk
+include $(NSL)/build/build.mk

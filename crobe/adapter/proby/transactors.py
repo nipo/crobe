@@ -1,5 +1,5 @@
 from ...model import PortComponent
-from ...protocol import swd, i2c, chipcon, jtag
+from ...protocol import swd, i2c, chipcon, jtag, spi
 from ...component.nsl.bnoc import sized, routed
 from ...component.nsl.transactor.cs import ControlStatus
 
@@ -17,7 +17,7 @@ class ProbyRegs(ControlStatus):
         return self.reg_write(1, asserted)
 
     def mode_get(self):
-        return self.reg_read(3) & 3
+        return self.reg_read(3) & 7
 
     def mode_set(self, mode):
         return self.reg_write(3, mode)
@@ -99,6 +99,21 @@ class I2cInterface(i2c.Interface):
     def execute(self, op_list):
         self.i2c.execute(op_list)
 
+class SpiInterface(spi.Interface):
+    def __init__(self, meta, framed_spi, base_freq):
+        from ...component.nsl.transactor.spi import SpiTransactor
+
+        self.spi = SpiTransactor(framed_spi, base_freq)
+
+        super().__init__(meta, "spi")
+        self.child_add(spi.Target(self, "cs0", 0))
+
+    def freq_update(self, freq):
+        return self.spi.freq_update(freq)
+
+    def execute(self, op_list):
+        self.spi.execute(op_list)
+
 class CcInterface(chipcon.Interface):
     def __init__(self, meta, framed_cc, base_freq):
         from ...component.nsl.transactor.cc import CcTransactor
@@ -158,5 +173,19 @@ class Meta(PortComponent):
             self.interface = CcInterface(
                 self,
                 routed.FramedEndpoint(routed.Route(self.router, 0xf, 0x4)),
+                self.base_freq)
+
+        elif mode == "spi":
+            self.cs.mode_set(3)
+            self.interface = SpiInterface(
+                self,
+                routed.FramedEndpoint(routed.Route(self.router, 0xf, 0x5)),
+                self.base_freq)
+
+        elif mode == "spi-inv":
+            self.cs.mode_set(4)
+            self.interface = SpiInterface(
+                self,
+                routed.FramedEndpoint(routed.Route(self.router, 0xf, 0x5)),
                 self.base_freq)
 
