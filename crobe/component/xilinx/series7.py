@@ -2,8 +2,10 @@ import struct
 from ... import bitstring
 from ... import bitfield
 from ...util.endian import swib_u32
+from ...model import PortComponent
 import datetime
 from .series67 import Series67
+from ...protocol import spi
 
 class Series7(Series67):
     irlen = 6
@@ -455,3 +457,34 @@ class Series7(Series67):
     def bbram_close(self):
         self.dr_shift(self.IR_ISC_DISABLE, None)
         self.run(12)
+
+@spi.Target.db.register("series7_slave")
+def series7_slave_probe(target, *args):
+    return Series7SlaveSerial(target)
+
+class Series7SlaveSerial(PortComponent):
+    def __init__(self, port):
+        PortComponent.__init__(self, port, "Slave Series7")
+
+    def start(self):
+        self.port.freq_cap("series7", 50e6)
+        super().start()
+
+    def stop(self):
+        pass
+
+    def reset(self):
+        pass
+
+    def load(self, program):
+        self.port.port.reset = True
+        self.port.port.reset = False
+
+        blob = program[0].data
+        self.logger.info("Loading %d bytes bitstream", len(blob))
+        self.port.execute([self.port.cmd_cs(True)])
+        for off in range(0, len(blob), 1024):
+            chunk = blob[off : off + 1024]
+            self.port.execute([self.port.cmd_shift(chunk, read_miso = False)])
+        self.port.execute([self.port.cmd_shift(b'\x00'*32, read_miso = False)])
+        self.port.execute([self.port.cmd_cs(False)])
