@@ -28,7 +28,7 @@ class Ad5293(PortComponent):
 
     def rdac_get(self):
         self.opcode_send(Opcode.Read, 0)
-        return self.opcode_send(Opcode.Nop, 0)
+        return self.opcode_send(Opcode.Nop, 0, read_miso = True)
 
     def control_set(self, calibration = False, rdac_protect = False):
         value = 0
