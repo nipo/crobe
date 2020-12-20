@@ -126,6 +126,12 @@ class Target(PortComponent, FreqCapper):
     def child_spawn(self, sub):
         return self.db.call(sub, self)
 
+    def option_set(self, opt):
+        if opt.startswith("mode="):
+            self.mode = int(opt[5:])
+            return
+        super().option_set(opt)
+
 class Operation(object):
     def __repr__(self):
         return str(self)
