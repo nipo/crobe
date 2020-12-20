@@ -8,8 +8,8 @@ class SpiTransactor(PortComponent):
     CMD_SHIFT_OUT      = 0x80 # | 6 bits byte count -1
     CMD_SHIFT_IN       = 0x40 # | 6 bits byte count -1
     CMD_SHIFT_INOUT    = 0xc0 # | 6 bits byte count -1
-    CMD_SELECT         = 0x00 # | cpol(bit 4) | 4 bits slave id
-    CMD_UNSELECT       = 0x0f # i.e. select(-1)
+    CMD_SELECT         = 0x00 # | cpol(bit 4) | cpha(bit 3) | 3 bits slave id
+    CMD_UNSELECT       = 0x07 # i.e. select(-1)
     CMD_DIVISOR        = 0x20 # | 5 bits divisor
     
     def __init__(self, route, base_freq):
@@ -35,6 +35,7 @@ class SpiTransactor(PortComponent):
     def execute(self, operation_list):
         pending = []
         rsp_size = 0
+        mode = 0
 
         self.logger.debug("Running %s", operation_list)
         
@@ -74,11 +75,11 @@ class SpiTransactor(PortComponent):
                 raise NotImplementedError(op)
 
             elif isinstance(op, spi.Cs):
-                opcode = (self.CMD_SELECT | op.value) if op.value is not None else self.CMD_UNSELECT
-                if op.mode & 2:
-                    pending.append(bytes([self.CMD_SELECT | 0x1f]))
-                    rsp_size += 1
-                    opcode |= 0x10
+                if op.value is not None:
+                    mode = op.mode
+                    opcode = self.CMD_SELECT | (op.mode << 3) | op.value
+                else:
+                    opcode = self.CMD_UNSELECT | (mode << 3)
                 pending.append(bytes([opcode]))
                 rsp_size += 1
 
