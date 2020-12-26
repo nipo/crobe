@@ -8,6 +8,7 @@ class Router(PortComponent):
         self.rx_queue_cond = threading.Condition(threading.Lock())
         self.waiting = {}
         self.reader = None
+        port.child_add(self)
         
     def reset(self):
         self.waiting = {}
@@ -65,6 +66,7 @@ class Route(PortComponent):
         self.local_id = local_id
         self.remote_id = remote_id
         self.waiting = []
+        port.child_add(self)
 
     def flush(self):
         self.waiting = []
