@@ -480,8 +480,6 @@ class SfdpFlash(SelfDescriptiveFlash):
             self.total_size = 1 << ((density & 0x7fffffff) - 3)
         else:
             self.total_size = (density + 1) / 8
-
-        self.write_buffer_size = 2**(data[0x2a]>>4)
             
         self.SECTOR_INFO = []
 
@@ -493,9 +491,8 @@ class SfdpFlash(SelfDescriptiveFlash):
             self.SECTOR_INFO.append({"size": 1 << s, "erase_cmd": op, "type": i+1})
 
     def _sfdp_1_6_parse(self, data):
-        self.logger.warning("    Parsing SFDP 1.6 as of 1.5")
-        return self._sfdp_1_5_parse(data)
-#        raise ValueError("Unsupported SFDP version: 1.6")
+        self._sfdp_1_5_parse(data)
+        self.write_buffer_size = 2**(data[0x2a]>>4)
         
     def sfdp_read(self, offset, size):
         return self.command(self.CMD_SFDP_READ,
