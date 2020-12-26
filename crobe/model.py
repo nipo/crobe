@@ -57,10 +57,19 @@ class Component(object):
     def name(self):
         return self.__name
 
+    @property
+    def fqdn(self):
+        if self.__parent:
+            return f'{self.__parent.fqdn}.{self.__name}'
+        return self.__name
+
     @name.setter
     def name(self, name):
         self.__name = name
-        self.logger = logging.getLogger(name[:10])
+
+    @property
+    def logger(self):
+        return logging.getLogger(self.fqdn)
     
     def children_find(self, predicate, include_self = False):
         """
