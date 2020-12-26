@@ -22,7 +22,7 @@ class Framed(PortComponent):
         while True:
             more_data = self.port.read()
 
-            self.logger.debug("read %s", more_data)
+            self.logger.debug("read %d %s", retries, more_data)
 
             self.rx_buf += more_data
 
@@ -38,7 +38,8 @@ class Framed(PortComponent):
                 retries = 3
                 continue
 
+            time.sleep(.05)
+
             retries -= 1
             if retries <= 0:
-                time.sleep(.05)
-            
+                return None
