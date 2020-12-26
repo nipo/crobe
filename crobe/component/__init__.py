@@ -19,3 +19,4 @@ from . import melexis
 from . import wiznet
 from . import analog_devices
 from . import silabs
+from . import ethernet_phy
