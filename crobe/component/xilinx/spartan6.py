@@ -53,10 +53,11 @@ class Spartan6(series6.Series6):
 def spi_slave(s6):
     from ...loadable.object import Program
 
-    fw_name = "fw/" + self.name.lower() + "_jtag_spi.bit.gz"
+    fw_name = "fw/" + s6.name.lower() + "_jtag_spi.bit.gz"
     fd = pkg_resources.resource_filename(__name__, fw_name)
-    self.load(Program.from_file(fd))
+    s6.load(Program.from_file(fd))
 
     from ..jtag_spi_bridge import JtagSpiBridge
 
-    return JtagSpiBridge(self, self.IR_USER1, self.IR_USER2, 50e6)
+    bridge = JtagSpiBridge(s6, s6.IR_USER1, s6.IR_USER2, 50e6)
+    return bridge

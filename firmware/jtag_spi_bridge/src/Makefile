@@ -1,5 +1,7 @@
 vhdl-sources += jtag_spi.vhd
-deps += hwdep.jtag
-deps += hwdep.clock
-deps += nsl.fifo
-deps += nsl.spi
+constraint-sources += ../$(target_part)/pinout.ucf
+deps += nsl_hwdep.clock
+deps += nsl_hwdep.reset
+deps += nsl_spi.transactor
+deps += nsl_bnoc.framed
+deps += nsl_jtag.fifo_transport

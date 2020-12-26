@@ -2,138 +2,120 @@ library ieee;
 use ieee.std_logic_1164.all;
 use ieee.numeric_std.all;
 
-library hwdep;
-use hwdep.jtag.all;
-use hwdep.clock.all;
-
-library nsl;
-use nsl.fifo.all;
-
-library util;
-use util.sync.all;
+library nsl_hwdep, nsl_bnoc, nsl_spi, nsl_jtag;
 
 entity jtag_spi is
   port (
-    p_flash_cs: out std_ulogic;
-    p_flash_mosi: out std_ulogic;
-    p_flash_miso: in std_ulogic;
-    p_flash_sck: out std_ulogic
+    spi_cs_n_o: out std_ulogic;
+    spi_mosi_o: out std_ulogic;
+    spi_miso_i: in std_ulogic;
+    spi_sck_o: out std_ulogic
   );
 end jtag_spi;
 
 architecture arch of jtag_spi is
 
-  signal s_clk_in, s_clk_out, s_resetn_in, s_resetn_out: std_ulogic;
-  signal s_cmd_data, s_rsp_data: std_ulogic_vector(7 downto 0);
-  signal s_cmd_ack, s_cmd_val, s_rsp_val, s_rsp_ack: std_ulogic;
+  type framed_io is
+  record
+    cmd, rsp : nsl_bnoc.framed.framed_bus;
+  end record;
+  
+  type slave_conns is
+  record
+    post_fifo : framed_io;
+    pre_fifo : framed_io;
+  end record;
 
-  signal s_mosi_data, s_miso_data: std_ulogic_vector(7 downto 0);
-  signal s_mosi_ack, s_mosi_val, s_miso_val, s_miso_ack: std_ulogic;
+  signal comm_spi : slave_conns;
 
-  signal s_clk_int, s_resetn_int: std_ulogic;
-
+  signal reset_internal_n, reset_jtag_n, clock : std_ulogic;
+  
 begin
 
-  reset_int: util.sync.sync_rising_edge
+  internal_clock_gen: nsl_hwdep.clock.clock_internal
     port map(
-      p_in => s_resetn_in,
-      p_out => s_resetn_int,
-      p_clk => s_clk_int
+      clock_o => clock
+      );
+
+  internal_reset_gen: nsl_hwdep.reset.reset_at_startup
+    port map(
+      clock_i => clock,
+      reset_n_o => reset_internal_n
       );
   
-  clk: hwdep.clock.clock_internal
-    port map(
-      p_clk => s_clk_int
-      );
-
-  data_in: hwdep.jtag.jtag_inbound_fifo
+  jtag_io: nsl_jtag.fifo_transport.jtag_fifo_transport_slave
     generic map(
-      width => s_cmd_data'length,
-      id => 1,
-      sync_word_width => 16
+      data_reg_no_c => 1,
+      status_reg_no_c => 2,
+      rx_fifo_depth_c => 2048,
+      tx_fifo_depth_c => 2048,
+      width_c => 9
       )
     port map(
-      p_clk => s_clk_in,
-      p_resetn => s_resetn_in,
-      sync_word => X"AD5C",
+      clock_i => clock,
+      reset_n_i => reset_internal_n,
+      reset_n_o => reset_jtag_n,
 
-      p_data => s_cmd_data,
-      p_val => s_cmd_val
+      tx_data_i(8) => comm_spi.pre_fifo.rsp.req.last,
+      tx_data_i(7 downto 0) => comm_spi.pre_fifo.rsp.req.data,
+      tx_valid_i => comm_spi.pre_fifo.rsp.req.valid,
+      tx_ready_o => comm_spi.pre_fifo.rsp.ack.ready,
+
+      rx_data_o(8) => comm_spi.pre_fifo.cmd.req.last,
+      rx_data_o(7 downto 0) => comm_spi.pre_fifo.cmd.req.data,
+      rx_valid_o => comm_spi.pre_fifo.cmd.req.valid,
+      rx_ready_i => comm_spi.pre_fifo.cmd.ack.ready
       );
 
-  data_out: hwdep.jtag.jtag_outbound_fifo
+  inbound_fifo: nsl_bnoc.framed.framed_fifo
     generic map(
-      width => s_rsp_data'length,
-      id => 2
+      depth => 4096,
+      clk_count => 1
       )
     port map(
-      p_clk => s_clk_out,
-      p_resetn => s_resetn_out,
+      p_resetn => reset_jtag_n,
+      p_clk(0) => clock,
 
-      p_data => s_rsp_data,
-      p_ack => s_rsp_ack
+      p_in_val => comm_spi.pre_fifo.cmd.req,
+      p_in_ack => comm_spi.pre_fifo.cmd.ack,
+
+      p_out_val => comm_spi.post_fifo.cmd.req,
+      p_out_ack => comm_spi.post_fifo.cmd.ack
       );
 
-  data_in_fifo: nsl.fifo.fifo_async
+  outbound_fifo: nsl_bnoc.framed.framed_fifo
     generic map(
-      data_width => s_cmd_data'length,
-      depth => 2048
+      depth => 4096,
+      clk_count => 1
       )
     port map(
-      p_resetn => s_resetn_in,
+      p_resetn => reset_jtag_n,
+      p_clk(0) => clock,
 
-      p_in_clk => s_clk_in,
-      p_in_data => s_cmd_data,
-      p_in_write => s_cmd_val,
-      p_in_full_n => s_cmd_ack,
+      p_out_val => comm_spi.pre_fifo.rsp.req,
+      p_out_ack => comm_spi.pre_fifo.rsp.ack,
 
-      p_out_clk => s_clk_int,
-      p_out_data => s_mosi_data,
-      p_out_read => s_mosi_ack,
-      p_out_empty_n => s_mosi_val
+      p_in_val => comm_spi.post_fifo.rsp.req,
+      p_in_ack => comm_spi.post_fifo.rsp.ack
       );
 
-  data_out_fifo: nsl.fifo.fifo_async
+  spi_inst: nsl_spi.transactor.spi_framed_transactor
     generic map(
-      data_width => s_rsp_data'length,
-      depth => 2048
+      slave_count_c => 1
       )
     port map(
-      p_resetn => s_resetn_out,
+      clock_i  => clock,
+      reset_n_i => reset_jtag_n,
       
-      p_in_clk => s_clk_int,
-      p_in_data => s_miso_data,
-      p_in_write => s_miso_val,
-      p_in_full_n => s_miso_ack,
+      sck_o => spi_sck_o,
+      cs_n_o(0) => spi_cs_n_o,
+      mosi_o => spi_mosi_o,
+      miso_i => spi_miso_i,
 
-      p_out_clk => s_clk_out,
-      p_out_data => s_rsp_data,
-      p_out_read => s_rsp_ack,
-      p_out_empty_n => s_rsp_val
-      );
-
-  spi: nsl.spi.spi_master
-    generic map(
-      slave_count => 1
-      )
-    port map(
-      p_clk => s_clk_int,
-      p_resetn => s_resetn_int,
-
-      p_sck => p_flash_sck,
-      p_mosi => p_flash_mosi,
-      p_miso => p_flash_miso,
-      p_csn(0) => p_flash_cs,
-
-      p_cmd_val.data => s_mosi_data,
-      p_cmd_val.val => s_mosi_val,
-      p_cmd_val.more => '-',
-      p_cmd_ack.ack => s_mosi_ack,
-
-      p_rsp_val.data => s_miso_data,
-      p_rsp_val.val => s_miso_val,
-      p_rsp_val.more => open,
-      p_rsp_ack.ack => s_miso_ack
+      cmd_i => comm_spi.post_fifo.cmd.req,
+      cmd_o => comm_spi.post_fifo.cmd.ack,
+      rsp_o => comm_spi.post_fifo.rsp.req,
+      rsp_i => comm_spi.post_fifo.rsp.ack
       );
 
 end arch;
