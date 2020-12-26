@@ -133,13 +133,15 @@ class CcInterface(chipcon.Interface):
 
 class Meta(PortComponent):
     def __init__(self, port, mode):
-
         super().__init__(port, "jtag_swd_i2c")
         port.reprogram("jtag_swd_i2c")
+
+        port.child_add(self)
 
         self.fifo = port.device.open(interface = "A", mode = "ft245_sync_fifo")
         self.pipe = sized.Sized(self.fifo)
         self.pipe.reset()
+        self.child_add(self.pipe)
 
         self.router = routed.Router(self.pipe)
         self.cs = ProbyRegs(routed.FramedEndpoint(routed.Route(self.router, 0xf, 0x3)))
