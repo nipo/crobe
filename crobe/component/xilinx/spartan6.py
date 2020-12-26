@@ -1,5 +1,6 @@
 from ...part_id import PartId
 from ...protocol import jtag
+from ...db import Db
 import os, os.path
 from . import series6
 import pkg_resources
@@ -22,6 +23,7 @@ parts = {
 
 @jtag.Tap.db.register(*[PartId.from_idcode(c).drop_revision() for c in parts.keys()])
 class Spartan6(series6.Series6):
+    db = Db("S6 applicative firmware")
     config_memory_size = 500*1024
 
     PART_NAMES = {
@@ -44,17 +46,17 @@ class Spartan6(series6.Series6):
         series6.Series6.__init__(self, port, index, idcode)
         self.name = "Spartan6-" + parts[int(self.idcode.drop_revision())]
 
-    def spi_interface(self):
-        from ...loadable.object import Program
+    def child_spawn(self, sub):
+        return self.db.call(sub, self)
 
-        fw_name = "fw/" + self.name.lower() + "_jtag_spi.bit.gz"
-        fd = pkg_resources.resource_filename(__name__, fw_name)
-        self.load(Program.from_file(fd))
+@Spartan6.db.register("spi")
+def spi_slave(s6):
+    from ...loadable.object import Program
 
-        from ..jtag_spi_bridge import JtagSpiBridge
+    fw_name = "fw/" + self.name.lower() + "_jtag_spi.bit.gz"
+    fd = pkg_resources.resource_filename(__name__, fw_name)
+    self.load(Program.from_file(fd))
 
-        return JtagSpiBridge(self, self.IR_USER1, self.IR_USER2, 50e6)
+    from ..jtag_spi_bridge import JtagSpiBridge
 
-    def child_spawn(self, mode = None):
-        if mode == "spi":
-            return self.spi_interface()
+    return JtagSpiBridge(self, self.IR_USER1, self.IR_USER2, 50e6)

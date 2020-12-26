@@ -1,5 +1,6 @@
 from ...part_id import PartId
 from ...protocol import jtag
+from ...db import Db
 from . import series7, xadc
 
 parts = {
@@ -13,6 +14,7 @@ parts = {
 
 @jtag.Tap.db.register(*[PartId.from_idcode(c).drop_revision() for c in parts.keys()])
 class Spartan7(series7.Series7, xadc.Xadc):
+    db = Db("S6 applicative firmware")
     config_memory_size = 500*1024
 
     PART_NAMES = {
@@ -27,3 +29,6 @@ class Spartan7(series7.Series7, xadc.Xadc):
     def __init__(self, port, index, idcode):
         series7.Series7.__init__(self, port, index, idcode)
         self.name = "Spartan7-" + parts[int(self.idcode.drop_revision())]
+
+    def child_spawn(self, sub):
+        return self.db.call(sub, self)
