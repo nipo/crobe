@@ -1,6 +1,9 @@
 from .. import ethernet_phy
 from ...protocol import smi
 from ...bitfield import *
+from ...util.pretty import metric
+from ...util.bit import *
+from ...util.timeout import *
 import enum
 
 class Register(enum.IntEnum):
@@ -72,10 +75,17 @@ class Register(enum.IntEnum):
     TenMegSgmiiConfig = 0x16f
     IoMuxConfig = 0x170
     GpioMuxControl = 0x172
+    # See DP83869 datasheet for complete info
     TdrGeneralConfig1 = 0x180
+    TdrGeneralConfig2 = 0x181
+    TdrSegDuration1 = 0x182
+    TdrSegDuration2 = 0x183
+    TdrGeneralConfig3 = 0x184
+    TdrGeneralConfig4 = 0x185
     TdrPeakLoc1 = 0x190 # 10 times to 0x199
     TdrPeakAmp1 = 0x19a # 10 times to 0x1a3
     TdrGeneralStatus = 0x1a4
+    TdrPeakSign = 0x1a5 # 2 times to 0x1a6
     ProgGain = 0x1d5
 
 @smi.Interface.db.register("dp83867")
@@ -95,3 +105,117 @@ class Dp83867(ethernet_phy.Clause22EthernetPhy):
         else:
             return self.ext_read(0x1f, reg)
 
+    def __tdr_stats_gather(self):
+        loc = []
+        amp = []
+        sign = []
+
+        for i in range(10):
+            loc.append(self.reg_get(Register.TdrPeakLoc1 + i))
+            amp.append(self.reg_get(Register.TdrPeakAmp1 + i))
+        for i in range(2):
+            sign.append(self.reg_get(Register.TdrPeakSign + i))
+        status = self.reg_get(Register.TdrGeneralStatus)
+
+        loc = b''.join(x.to_bytes(2, "little") for x in loc)
+        amp = b''.join(x.to_bytes(2, "little") for x in amp)
+        sign = b''.join(x.to_bytes(2, "little") for x in sign)
+        
+        peaks = []
+        for c, name in enumerate("ABCD"):
+            high = bool(bit_get(status, c))
+            more = bool(bit_get(status, 4 + c))
+            cross = bool(bit_get(status, 8 + c))
+
+            for p in range(5):
+                l = loc[c * 5 + p]
+                a = amp[c * 5 + p] & 0x7f
+                if bit_get(sign[c//2], (c & 1) * 5 + p):
+                    a = -a
+
+                if l == 0:
+                    continue
+
+                m = self.__tdr_loc_m(l)
+                peak = Peak(channel = name,
+                            location = l,
+                            amplitude = a)
+                peak.__maybe_cross = cross
+                peaks.append(peak)
+        return peaks
+
+    def __tdr_start(self, cross = True):
+        self.reg_set(Register.Reset, 0x8000)
+        self.reg_set(Register.Control, 0x0140)
+        self.reg_set(Register.MasterSlaveControl, 0x1000);
+        self.reg_set(Register.PhyControl, 0xa24d);
+        self.reg_set(Register.TestModeChannel, 0x0480);
+        self.reg_set(Register.Config4, 0x0010);
+        self.reg_set(Register.Reset, 0x4000)
+        self.reg_set(Register.TdrGeneralConfig1, 0x075f if cross else 0x0f5f);
+        self.reg_set(Register.TdrGeneralConfig2, 0xf050);
+        self.reg_set(Register.TdrGeneralConfig3, 0xe976);
+        self.reg_set(Register.TdrGeneralConfig4, 0x19cf);
+        self.reg_set(Register.Config3, 1);
+
+    def __tdr_is_done(self):
+        return bit_get(self.reg_get(Register.Config3), 1)
+
+    def __tdr_loc_m(self, loc):
+        if True:
+            il = loc * 0.8621 - 8
+            fl = il + (.7 - il) / 100
+            return fl
+        else:
+            fl = loc * 0.822 - 12.55
+            return fl
+
+    def tdr_execute(self):
+        self.__tdr_start(False)
+        while retry_for(3):
+            if self.__tdr_is_done():
+                break
+        no_cross = self.__tdr_stats_gather()
+
+        self.__tdr_start(True)
+        while retry_for(3):
+            if self.__tdr_is_done():
+                break
+        with_cross = self.__tdr_stats_gather()
+
+        print(no_cross)
+        print(with_cross)
+
+        for i in range(len(with_cross) - 1, -1, -1):
+            x = with_cross[i]
+            if not x.__maybe_cross:
+                continue
+            found = False
+            for y in no_cross:
+                if y.channel != x.channel:
+                    continue
+                if abs(y.amplitude - x.amplitude) > 16:
+                    continue
+                if abs(y.location - x.location) > 2:
+                    continue
+                found = True
+                break
+            if found:
+                del with_cross[i]
+        for x in with_cross:
+            x.cross = x.__maybe_cross
+        cross = [x for x in with_cross if x.cross]
+        return no_cross + cross
+
+class Peak:
+    def __init__(self, channel, location, amplitude, cross = False):
+        self.channel = channel
+        self.location = location
+        self.amplitude = amplitude
+        self.cross = cross
+
+    def __str__(self):
+        return f"Chan {self.channel}: {self.amplitude} @ {metric(self.location, 'm')} {'cross' if self.cross else ''}"
+
+    def __repr__(self):
+        return str(self)
