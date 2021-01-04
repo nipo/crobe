@@ -51,7 +51,7 @@ class Component(object):
         ...
 
     def __str__(self):
-        return self.__name
+        return str(self.__name)
     
     @property
     def name(self):
