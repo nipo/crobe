@@ -60,6 +60,9 @@ class Router(PortComponent):
                     self.reader = None
                     self.rx_queue_cond.notify_all()
 
+    def route(self, local_id, remote_id):
+        return Route(self, local_id, remote_id)
+                    
 class Route(PortComponent):
     def __init__(self, port, local_id, remote_id):
         PortComponent.__init__(self, port, "%d>%d" % (local_id, remote_id))
@@ -103,6 +106,9 @@ class Route(PortComponent):
             self.logger.debug("> %s", r.hex())
         return r
             
+    def framed_endpoint(self):
+        return FramedEndpoint(self)
+                    
 class FramedEndpoint(PortComponent):
     def __init__(self, port):
         PortComponent.__init__(self, port, "endpoint")
