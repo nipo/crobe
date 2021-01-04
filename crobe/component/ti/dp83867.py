@@ -50,13 +50,28 @@ class Register(enum.IntEnum):
     SkewFifoStatus = 0x55
     StrapStatus1 = 0x6e
     StrapStatus2 = 0x6f
+
+    # Total number of received bytes
     BistControl1 = 0x71
+    # 10: Pkt Count overflow
+    # 9: Byte Count overflow
+    # 7-0: Error count
     BistControl2 = 0x72
+    # BIST Packet length
     BistControl3 = 0x7b
+    # BIST IPG
     BistControl4 = 0x7c
+
+    # [xxTR]
     RgmiiDelay = 0x86
     PllControl = 0xc6
     SgmiiControl1 = 0xd3
+
+    # This one is mostly undocumented. It is defined as
+    # default = 0x9f22, with no explaination. Nonetheless, SNLA242
+    # says this should be set to 0xdf22 to get SFD detection.
+    # Simple guess: Bit 14 is SFD Detect enable, but may also be some
+    # precondition to SFD detection
     SyncFifoControl = 0xe9
     LoopbackConfig = 0xfe
     DspFeedforwardEqualizerConfig = 0x12c
