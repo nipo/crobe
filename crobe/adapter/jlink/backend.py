@@ -398,7 +398,21 @@ class Handle(Component):
     def power(self, enabled):
         self.execute([SetKsPower(int(bool(enabled)))])
         self.__target_power = enabled
-                
+
+    def firmware_read(self, addr, size, k = None):
+        key = k or 0x4f455701
+
+        key_set = SetKey(key)
+        self.execute([key_set])
+        assert key_set.retval == 0
+
+        dumpers = []
+        for off in range(addr, addr + size, 0x100):
+            dumpers.append(ReadFirmware(off, 0x100, key))
+        self.execute(dumpers)
+
+        return b''.join(x.data for x in dumpers)
+        
 class Command:
     cmd = 0
     cmd_args = b''
@@ -534,6 +548,60 @@ class SelectIf(If):
     @property
     def cmd_args(self):
         return bytes([self.interface])
+
+class SetEmuOpts(Command):
+    rsp_size = False, True
+    cmd = 0x0e
+
+    def __init__(self, addr, length, param2 = 0, param3 = 0, args = b''):
+        self.addr = addr
+        self.length = length
+        self.param2 = param2
+        self.param3 = param3
+        self.args = args
+
+    @property
+    def cmd_args(self):
+        return struct.pack("<LLLL", self.addr, self.length, self.param2, self.param3) \
+            + self.args
+
+    def response_handle(self, blob):
+        rs = blob[0]
+        self.response = blob[1:rs+1]
+
+class SetKey(SetEmuOpts):
+    rsp_size = False, True
+
+    def __init__(self, key):
+        super().__init__(addr = 0x182, length = key)
+
+    def response_handle(self, blob):
+        super().response_handle(blob)
+        self.retval = int.from_bytes(self.response, "little")
+
+class ReadFirmware(Command):
+    cmd = 0xfe
+    rsp_size = False, 256
+
+    def __init__(self, addr, size, key):
+        self.addr = addr
+        self.size = size
+        self.rsp_size = False, self.size + 1
+        self.key = key
+
+    @property
+    def cmd_args(self):
+        return struct.pack("<LL", self.addr, self.size)
+
+    def response_handle(self, blob):
+        k = self.key
+        data = []
+        for i in range(0, len(blob), 4):
+            w = int.from_bytes(blob[i:i+4], "little")
+            x = w ^ k
+            data.append(x.to_bytes(4, 'little'))
+            k = x ^ 0xa5a5a5a5
+        self.data = b''.join(data)
 
 class Register(Command):
     cmd = 0x09
@@ -686,6 +754,19 @@ class HwReset0(Command):
 class HwReset1(Command):
     cmd = 0xDD
 
+class GetLicenses(CommandIntRsp):
+    cmd = 0xE6
+    rsp_size = False, 256
+
+    def response_handle(self, data):
+        self.serial = int.from_bytes(data[:4], "little")
+        self.licenses = []
+        for off in range(0x20, 0x100, 0x10):
+            l = data[off : off + 0x10].strip(b'\xff')
+            if not l:
+                break
+            self.licenses.append(str(l, "ascii"))
+
 class GetCpuCaps(CommandIntRsp):
     cmd = 0xE9
     rsp_size = False, 4
@@ -716,6 +797,9 @@ class GetCpuCaps(CommandIntRsp):
 class ReadConfig(Command):
     cmd = 0xF2
     rsp_size = False, 256
+
+    def response_handle(self, data):
+        self.data = data
 
 class WriteConfig(Command):
     cmd = 0xF3
