@@ -230,16 +230,16 @@ class Handle(Component):
 
     @property
     def config(self):
-        if Capabilities.ReadConfig not in self.caps:
+        if Capabilities.ReadConfig not in self.capabilities:
             raise NotImplementedError("Incapable hardware")
 
         cfg = ReadConfig()
-        self.execute([ver])
+        self.execute([cfg])
         return cfg.data
 
     @config.setter
     def config(self, value):
-        if Capabilities.WriteConfig not in self.caps:
+        if Capabilities.WriteConfig not in self.capabilities:
             raise NotImplementedError("Incapable hardware")
 
         value = bytes(value)
@@ -267,7 +267,7 @@ class Handle(Component):
             tmp = nickname.encode("utf-8")[:31] + b'\x00'
         else:
             tmp = b''
-        tmp = tmp.lpad(32, b'\xff')
+        tmp = tmp.ljust(32, b'\xff')
         c = bytearray(self.config)
         c[Config.Nickname : Config.Nickname + 32] = tmp
         self.config = c
@@ -810,7 +810,7 @@ class WriteConfig(Command):
 
     @property
     def cmd_args(self):
-        return bytes(config)
+        return bytes(self.config)
 
 def main():
     from ... import root
