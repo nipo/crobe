@@ -313,7 +313,7 @@ class Loadable:
                 for off in range(0, len(segment), 4096):
                     ssize = min(len(segment) - off, 4096)
 
-                    self.logger.info("Reading 0x%x +0x%x", segment.address + off, ssize)
+                    self.logger.debug("Reading 0x%x +0x%x", segment.address + off, ssize)
                     actual = region.read(segment.address - region.address + off, ssize)
                     spb.update(ssize)
                     if actual != segment.data[off : off + ssize]:
