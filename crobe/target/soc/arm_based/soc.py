@@ -12,7 +12,9 @@ from ... import memory
 from ....puppet import Puppet
 from ....db import Db
 from ....util.info import TimedLogger
+from .puppet_code import crc32_cm0
 from tqdm import tqdm
+import zlib
 
 __all__ = ["SoC", 'ArmMPuppet', 'StubFlash']
 
@@ -21,6 +23,7 @@ class PuppetStub:
         self.puppet = puppet
         self.code = code
         self.zone = self.puppet.allocate(len(code))
+        self.cleaned = False
 
     def call(self, *args, timeout = None):
         self.zone.write(self.code)
@@ -38,10 +41,18 @@ class PuppetStub:
         r0 = self.puppet.arg_regs[0]
         return self.puppet.cpu.reg_read([r0])[r0]
 
-    def __del__(self):
+    def cleanup(self):
+        if self.cleaned:
+            return
+        self.cleaned = True
         self.puppet.unallocate(self.zone)
+
+    def __del__(self):
+        self.cleanup()
     
 class ArmMPuppet(Puppet):
+    CRC32 = crc32_cm0["memory_crc32"]
+
     def __init__(self, soc):
         cpu = soc.children_of_class(Cortex)[0]
         ram = soc.children_of_class(memory.Ram)[0]
@@ -106,6 +117,12 @@ class StubFlash(BusFlash):
                   timeout = 0.2 + 0.1 * size / self.page_size)
 
     def puppet_write(self, puppet, pages):
+        if not pages:
+            return
+
+        write_buffer = None
+        other_buffer = None
+        code = None
         try:
             code = puppet.stub(self.PAGE_WRITE)
             write_buffer = puppet.allocate(self.page_size, self.page_size)
@@ -135,9 +152,31 @@ class StubFlash(BusFlash):
             if running:
                 code.wait(1)
         finally:
-            puppet.unallocate(write_buffer)
+            if write_buffer:
+                puppet.unallocate(write_buffer)
             if other_buffer:
                 puppet.unallocate(other_buffer)
+            if code:
+                code.cleanup()
+
+    def puppet_update(self, puppet, pages):
+        write_buffer = puppet.allocate(self.page_size, self.page_size)
+        valid = set()
+
+        code = puppet.stub(puppet.CRC32)
+        for i, (address, data) in enumerate(tqdm(sorted(pages.items()), desc = "Scanning")):
+            from_mem = code.call(address, self.page_size)
+            crc = zlib.crc32(data)
+            self.logger.info("Page at 0x%08x, CRC32=%08x, in mem=%08x",
+                             address, crc, from_mem)
+            if from_mem == crc:
+                valid.add(address)
+        code.cleanup()
+
+        for a in valid:
+            pages.pop(a)
+
+        return self.puppet_write(puppet, pages)
 
 class SoC(model.SoC):
     db = Db("SoC model")
@@ -247,6 +286,7 @@ class SoC(model.SoC):
               do_erase = False,
               do_verify = False,
               do_start = False,
+              update = True,
               assume_clean = False):
         flashs = list(self.children_of_class(StubFlash))
         if not flashs:
@@ -261,21 +301,33 @@ class SoC(model.SoC):
 
         puppet = self.puppet()
 
-        for f in tqdm(flashs, desc = "Flashing"):
-            blank = f.is_blank
+        if not do_erase and update:
+            for f in tqdm(flashs, desc = "Updating"):
+                mp = program\
+                     .within(f.address, f.address + f.size)\
+                     .paged(f.page_size, fill = b'\xff')
 
-            mp = program\
-                 .within(f.address, f.address + f.size)\
-                 .paged(f.page_size, fill = b'\xff')
+                pages = {}
+                for p in mp:
+                    pages[p.address] = p.data
 
-            if not blank:
-                f.erase(mp.address - f.address, mp.end - mp.address)
+                f.puppet_update(puppet, pages)
+        else:
+            for f in tqdm(flashs, desc = "Flashing"):
+                blank = f.is_blank
 
-            pages = {}
-            for p in mp:
-                pages[p.address] = p.data
+                mp = program\
+                     .within(f.address, f.address + f.size)\
+                     .paged(f.page_size, fill = b'\xff')
 
-            f.puppet_write(puppet, pages)
+                if not blank:
+                    f.erase(mp.address - f.address, mp.end - mp.address)
+
+                pages = {}
+                for p in mp:
+                    pages[p.address] = p.data
+
+                f.puppet_write(puppet, pages)
 
         for r in tqdm(others, desc = "Writing"):
             if isinstance(r, memory.Ram):

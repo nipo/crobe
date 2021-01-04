@@ -1,10 +1,20 @@
-targets = efm32series0g efm32series0 efm32series1 efm32series1gg nrf51 lpc11 stm32f01 mkl arm79
+targets = efm32series0g efm32series0 efm32series1 efm32series1gg nrf51 lpc11 stm32f01 mkl arm79 crc32_cm3 crc32_cm0
 arm-prefix = arm-mutekh-eabi-
 
 arm79-src = arm79.c
 arm79-sections = dcc_cnc
 arm79-cflags = -march=armv5te -Os -fPIC
 arm79-arch = arm
+
+crc32_cm3-src = crc32.c
+crc32_cm3-sections = memory_crc32
+crc32_cm3-cflags = -mcpu=cortex-m3 -mthumb -Os -fPIC
+crc32_cm3-arch = arm
+
+crc32_cm0-src = crc32.c
+crc32_cm0-sections = memory_crc32
+crc32_cm0-cflags = -mcpu=cortex-m0 -mthumb -Os -fPIC
+crc32_cm0-arch = arm
 
 efm32series0g-src = efm32.c
 efm32series0g-sections = flash_erase flash_write
