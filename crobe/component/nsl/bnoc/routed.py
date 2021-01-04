@@ -130,10 +130,12 @@ class FramedEndpoint(PortComponent):
                     raise ValueError("Short frame")
         return data
     
-    def execute(self, cmd, rsp_size):
+    def execute(self, cmd, rsp_size, timeout = None):
         tx_tag = self.frame_send(cmd)
 
         if rsp_size == 0:
             return
 
-        return self.frame_recv(rsp_size, tx_tag)
+        return self.frame_recv(size = rsp_size,
+                               tag = tx_tag,
+                               timeout = timeout)
