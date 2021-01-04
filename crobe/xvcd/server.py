@@ -142,9 +142,9 @@ class XvcdSession(SocketSession):
         ns, = struct.unpack("<L", self.read(4))
         period = 1e-9 * ns
         self.buffer = b""
-        self.jtag.interface.freq = 1 / period
-        logging.info("Setting freq to %s, had %s", metric(1/period, "Hz"), metric(self.jtag.interface.freq, "Hz"))
-        self.write(struct.pack("<L", int(1e9 / self.jtag.interface.freq)))
+        freq = self.jtag.interface.freq_cap("vcd", 1 / period)
+        logging.info("Setting freq to %s, had %s", metric(1/period, "Hz"), metric(freq, "Hz"))
+        self.write(struct.pack("<L", int(1e9 / freq)))
 
 class XvcdServer(SocketServer):
     def __init__(self, port, interface):
