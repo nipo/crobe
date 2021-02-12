@@ -7,5 +7,8 @@ from ...protocol import jtag
 class FX3(Tap):
     max_freq = 25e6
 
+    EXTEST_REG = jtag.Dr(5)
+    EXTEST = jtag.Instruction(0x0, "EXTEST_REG")
+
     def __init__(self, port, index, idcode):
         super().__init__(port, index, idcode, "FX3")

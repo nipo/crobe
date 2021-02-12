@@ -136,8 +136,11 @@ class Adapter(model.Adapter):
                 chunk = segment.data[off : off + s]
 
                 self.logger.debug("Loading 0x%x/0x%x bytes at 0x%08x", len(chunk), len(segment), addr)
-
+                
                 self.mem_write(addr, chunk)
+                off += len(chunk)
+                continue
+
                 readback = self.mem_read(addr, len(chunk))
 
                 if readback == chunk:
