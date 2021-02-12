@@ -279,7 +279,9 @@ class Handle(Context):
     def rx_flush(self):
         self.check(api.usb_purge_rx_buffer(self.context))
     
-    def _read(self, size = 4096):
+    def _read(self, size = None):
+        if size is None:
+            size = self.max_packet_size
         blob = (ctypes.c_ubyte * size)()
         size = self.check(api.read_data(self.context, blob, size))
         return bytes(blob[:size])
@@ -299,7 +301,7 @@ class Handle(Context):
         self.logger.debug(">> %s", binascii.b2a_hex(ret))
         return ret
     
-    def execute(self, blob, rsize = 0):
+    def execute(self, blob, rsize = None):
         try:
             self.write(blob)
         except FtdiError:

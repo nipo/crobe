@@ -1,10 +1,24 @@
 from .. import model
 from ..ftdi import basic
 from ...loadable.object import Program
+from ...protocol import base
 import logging
 
 __all__ = ['Proby', 'Enumerator']
+
+class FifoInterface(base.Interface):
+    def __init__(self, port, name):
+        super().__init__(port, name)
+
+    def freq_update(self, freq):
+        return 60e6
         
+    def read(self, size = None):
+        return self.port._read(size)
+
+    def write(self, data):
+        return self.port.write(data)
+
 class ProbyAdapter(basic.Adapter):
     supported_interfaces = ["swd", "swd-pt", "jtag", "jtag-raw", "jtag-int", "spi", "spi-inv", "cc", "i2c", "spi-raw", "spi-inv-raw"]
     
@@ -48,6 +62,11 @@ class ProbyAdapter(basic.Adapter):
 
         elif interface_name == "jtag-int":
             return basic.Adapter.open(self, "jtag", channel = "B", resetn_pin = 9)
+
+        elif interface_name == "fifo":
+            return FifoInterface(
+                self.device.open(interface = "A", mode = "ft245_sync_fifo"),
+                "fifo")
 
         elif interface_name == "spi-raw":
             self.reprogram("jtag_swd_raw")
