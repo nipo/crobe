@@ -28,13 +28,13 @@ class Arm926Context(CpuContext):
         self.regs["cpsr"] = cmds[0].value
         self.regs["spsr"] = cmds[1].value
         for no, value in cmds[2].values.items():
-            self.regs[f"r{no}"] = value
+            self.regs[f"r{no:02d}"] = value
 
     def restore(self, debug):
         cmds = [
             XpsrWrite(False, self.regs["cpsr"]),
             XpsrWrite(True, self.regs["spsr"]),
-            RegsWrite({i:self.regs[f"r{i}"] for i in range(15)}),
+            RegsWrite({i:self.regs[f"r{i:02d}"] for i in range(15)}),
             ]
         debug.execute(cmds)
 
@@ -49,6 +49,10 @@ class Arm926Context(CpuContext):
             r12 = 0, r13 = 0, r14 = 0, r15 = 0,
         )
 
+    def dump(self):
+        for k, v in sorted(self.regs.items()):
+            print(f"{k}: {v:#010x}")
+    
 class Debug(PortComponent):
     """
     Passed port must be a ARM classic TAP.
@@ -121,6 +125,9 @@ class Debug(PortComponent):
         if int(control) != old:
             self.ice(Register.DebugCtrl, control)
         return control
+
+    def vector_catch_control(self, field):
+        self.ice(Register.VectorCatchCtrl, field)
     
     def debug_enable(self):
         self.debug_control(disable = False, intdis = False, dbgack = False, dbgrq = False, monitor = False)
@@ -207,6 +214,8 @@ class Debug(PortComponent):
         self.execute([RegsWrite(reg_map)])
 
     def asm_run(self, opcodes, *, sysspeed = False):
+        for i, o in enumerate(opcodes):
+            print(f"asm run {i:d}: {o:08x}")
         commands = [
             self.cmd_watch(0, address = 0, address_mask = 0, instruction = 0, instruction_mask = 0),
         ]
@@ -308,10 +317,16 @@ class Debug(PortComponent):
             ], sysspeed = True)
         self.debug_control(dbgack = True)
             
-    def resume(self, pc, intdis = False):
+    def resume(self, pc,
+               intdis = False,
+               dbgack = False,
+               disable = False,
+               monitor = False):
         self.logger.info("Resuming execution at %#10x", pc)
-        self.debug_control(dbgack = False,
-                           intdis = intdis)
+        self.debug_control(dbgack = dbgack,
+                           intdis = intdis,
+                           monitor = monitor,
+                           disable = disable)
         commands = [
             self.cmd_watch(0),
             self.cmd_watch(1),
@@ -649,6 +664,13 @@ class XpsrRead(Op):
         for o in ops:
             ret += o.ops(tap)
         ret[-2].postprocess = self.tdo_handle
+
+        for i in ret:
+            if isinstance(i, jtag.TapRun):
+                print("run")
+            elif isinstance(i, jtag.TapDrShift):
+                print("shift %x" % (int(i.tdi) >> 35))
+
         return ret
 
     def tdo_handle(self, tdo):

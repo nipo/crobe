@@ -175,7 +175,7 @@ def mrs(reg, spsr):
     ).all
 
 class MsrImm(Instr):
-    c2 = bitfield.Field(23, 5)
+    c2 = bitfield.Field(23, 2)
     c22 = bitfield.Field(20, 2)
     r = bitfield.BooleanField(22)
     sbo = bitfield.Field(12, 4)
@@ -221,7 +221,7 @@ class Ldstr(Instr):
     w = bitfield.Field(21, 1)
     l = bitfield.Field(20, 1)
     rn = bitfield.Field(16, 4)
-    rd = bitfield.Field(16, 4)
+    rd = bitfield.Field(12, 4)
     addr = bitfield.Field(0, 12)
 
 def str(rd, rn):
