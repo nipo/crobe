@@ -79,3 +79,24 @@ class EnumeratorV2(basic.AdapterEnumerator):
 
     def filter(self, adapter):
         return adapter.device.vendor == "Nipo" and adapter.device.model == "Hub Debug v2"
+
+class HubJtagAdapter(basic.Adapter):
+    supported_interfaces = ["jtag"]
+
+    def open(self, interface_name):
+        if interface_name == "jtag":
+            return basic.Adapter.open(self, interface_name,
+                                      gpio_output = 0x0b, gpio_value = 0x0,
+                                      channel = "A")
+
+@model.HwRoot.register
+class HubJtagEnumerator(basic.AdapterEnumerator):
+    adapter_class = HubJtagAdapter
+
+    def __init__(self):
+        basic.AdapterEnumerator.__init__(self, "HubDbg JTAG Adapter",
+                                         short_name = "hdj",
+                                         vid = 0x0403, pid = 0x6014)
+
+    def filter(self, adapter):
+        return adapter.device.vendor == "Nipo" and adapter.device.model == "Hub Debug Jtag"
