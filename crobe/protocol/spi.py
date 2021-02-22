@@ -1,5 +1,6 @@
 from . import base
 from ..model import PortComponent
+from ..util.pretty import sci_parse
 from .. import bitstring
 from ..db import Db, NoMatch
 from ..part_id import PartId
@@ -129,6 +130,9 @@ class Target(PortComponent, FreqCapper):
     def option_set(self, opt):
         if opt.startswith("mode="):
             self.mode = int(opt[5:])
+            return
+        if opt.startswith("fmax="):
+            self.freq_cap("user", sci_parse(opt[5:]))
             return
         super().option_set(opt)
 
