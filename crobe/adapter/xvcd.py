@@ -79,7 +79,9 @@ class JtagInterface(jtag.Interface):
         return rsp
 
     def freq_update(self, freq):
-        tck_period = 1. / freq
+        if not getattr(self, "socket", None):
+            return 1e6
+        tck_period = 1. / (freq or 1e6)
         rsp = self.send_command(4, b"settck:", struct.pack("<L", int(1e9 * tck_period)))
         tck_period_ns, = struct.unpack("<L", rsp)
         self.__tck_period = tck_period_ns * 1e-9
