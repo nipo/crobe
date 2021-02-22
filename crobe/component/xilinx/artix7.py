@@ -1,8 +1,10 @@
 from ...part_id import PartId
 from ...protocol import jtag
 from . import series7, xadc
+import pkg_resources
 
 parts = {
+    0x0362e093: "XC7A15T",
     0x0362d093: "XC7A35T",
 }
 
@@ -17,3 +19,18 @@ class Artix7(series7.Series7, xadc.Xadc):
         self.name = parts[int(self.idcode.drop_revision())]
 
     IR_XADC_DRP    = 0x37
+
+    def spi_interface(self):
+        from ...loadable.object import Program
+
+        fw_name = "fw/" + self.name.lower() + "_jtag_spi.bit.gz"
+        fd = pkg_resources.resource_filename(__name__, fw_name)
+        self.load(Program.from_file(fd))
+
+        from ..jtag_spi_bridge import JtagSpiBridge
+
+        return JtagSpiBridge(self, self.IR_USER1, self.IR_USER2, 60e6)
+
+    def child_spawn(self, mode = None):
+        if mode == "spi":
+            return self.spi_interface()

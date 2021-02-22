@@ -18,6 +18,7 @@ class Series7(Series67):
     ### Config port
     ###
 
+    IR_BYPASS      = 0x3f
     IR_USERCODE    = 0x08
     IR_ISC_READ    = 0x15
     IR_ISC_NOP     = 0x14
@@ -115,7 +116,7 @@ class Series7(Series67):
 
         status = self.ir_status_read()
         self.logger.info("IR Status: %04x", status)
-
+        
         end = datetime.datetime.now()
 
         if not ok:
@@ -153,7 +154,9 @@ class Series7(Series67):
         self.logger.info("Starting...")
 
         self.dr_shift(self.IR_JSTART, None)
-        self.run(100)
+        self.run(10000)
+        self.dr_shift(self.IR_BYPASS, None)
+        self.run(10000)
 
         self.cfg_status_dump()
 
