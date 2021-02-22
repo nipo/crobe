@@ -318,7 +318,13 @@ class SelfDescriptiveFlash(SpiFlash):
 
         si = []
         self.total_size = 1 << data[0x27]
-        self.write_buffer_size = 1 << int.from_bytes(data[0x2a:0x2c], "little")
+        wbs_l2 = int.from_bytes(data[0x2a:0x2c], "little")
+        self.logger.info("WBS l2: %d", wbs_l2)
+        if wbs_l2 == 0:
+            self.write_buffer_size = 256
+        else:
+            self.write_buffer_size = 1 << wbs_l2
+            
         for i in range(data[0x2c]):
             y, z = struct.unpack("<HH", data[0x2d + 4 * i: 0x2d + 4 * i + 4])
             block_size = z * 256
@@ -492,7 +498,8 @@ class SfdpFlash(SelfDescriptiveFlash):
 
     def _sfdp_1_6_parse(self, data):
         self._sfdp_1_5_parse(data)
-        self.write_buffer_size = 2**(data[0x2a]>>4)
+        self.logger.info("SFDP1.6 WBS: 0x%02x", data[0x28])
+        self.write_buffer_size = 2**(data[0x28]>>4)
         
     def sfdp_read(self, offset, size):
         return self.command(self.CMD_SFDP_READ,
