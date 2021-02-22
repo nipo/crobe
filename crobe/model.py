@@ -35,6 +35,7 @@ class Component(object):
     other.
     """
     def __init__(self, name):
+        assert isinstance(name, str)
         self.name = name
         self.__parent = None
         self.__children = []
