@@ -2,11 +2,11 @@ library ieee;
 use ieee.std_logic_1164.all;
 use ieee.numeric_std.all;
 
-library nsl_hwdep, nsl_bnoc, nsl_spi, nsl_jtag, nsl_indication, unisim;
+library nsl_hwdep, nsl_bnoc, nsl_spi, nsl_jtag, nsl_indication, unisim, nsl_io;
 
 entity jtag_spi is
   port (
-    spi_cs_n_o: out std_ulogic;
+    spi_cs_n_o: inout std_logic;
     spi_mosi_o: out std_ulogic;
     spi_miso_i: in std_ulogic
   );
@@ -26,7 +26,8 @@ architecture arch of jtag_spi is
   end record;
 
   signal comm_spi : slave_conns;
-  signal spi_sck, spi_cs_n : std_ulogic;
+  signal spi_sck: std_ulogic;
+  signal spi_cs_n: nsl_io.io.opendrain;
 
   signal reset_internal_n, reset_jtag_n, clock : std_ulogic;
 
@@ -57,7 +58,7 @@ begin
     port map(
       reset_n_i => reset_internal_n,
       clock_i => clock,
-      togglable_i => spi_cs_n,
+      togglable_i => spi_cs_n.drain_n,
       activity_o => done_led_n
       );
   
@@ -136,6 +137,10 @@ begin
       rsp_i => comm_spi.post_fifo.rsp.ack
       );
 
-  spi_cs_n_o <= spi_cs_n;
+  cs_driver: nsl_io.io.opendrain_io_driver
+    port map(
+      io_io => spi_cs_n_o,
+      v_i => spi_cs_n
+      );
 
 end arch;
