@@ -76,6 +76,7 @@ class SpiInterface(spi.Interface):
         self.transactor = SpiTransactor(port, 60e6)
 
         self.child_add(spi.Target(self, "cs0", 0))
+        self.child_add(spi.Target(self, "cs1", 1))
 
     def freq_update(self, freq):
         print("freq_update", freq, self.transactor)
