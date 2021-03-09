@@ -270,21 +270,10 @@ class SpiFlash(PortComponent, Bus):
 
             unrecoverable = [x & ~y for (x, y) in zip(data, readback)]
             if any(unrecoverable):
-                print(data.hex())
-                print(readback.hex())
-                print(bytes(unrecoverable).hex())
                 raise RuntimeError("Unrecoverable bitflips !")
-
-            #matching = [x == y for (x, y) in zip(data, readback)]
-            #off = matching.index(False)
-            #addr += off
-            #data = data[off:]
-            #
-            #if not data:
-            #    break
         raise RuntimeError("Unrecoverable bad write !")
 
-    def write(self, base, data):
+    def _write(self, base, data):
         write_chunk_size = self.write_buffer_size
         offset = 0
 
@@ -298,6 +287,21 @@ class SpiFlash(PortComponent, Bus):
             offset += size
 
         self.write_enable(False)
+
+    def write(self, base, data):
+        s = len(data)
+        si = [si for si in self.SECTOR_INFO if si["size"] == s]
+        if si:
+            si, = si
+            for retry in range(3, -1, -1):
+                try:
+                    return self._write(base, data)
+                except:
+                    if retry == 0:
+                        raise
+                self.erase_sector(base, si)
+        else:
+            return self._write(base, data)
 
     def verify(self, program):
         si = self.SECTOR_INFO[0]
