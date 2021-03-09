@@ -7,7 +7,7 @@ import ctypes
 import struct
 import logging
 import binascii
-import threading
+import threading, queue
 import queue
 import math
 
@@ -109,11 +109,16 @@ class Device(object):
             return Ft245SyncFifo(self, interface, **defaults)
         elif mode == "reset":
             return Handle(self.connection_id, interface, "RESET")
-        
+            
 class Handle(Context):
     def __init__(self, connection_id, interface, mode):
         self.opened = False
         Context.__init__(self)
+
+        self.write_queue = queue.Queue()
+        self.background_writer = threading.Thread(target = self.writer_worker, daemon = True)
+        self.background_writer.start()
+
         self.logger = logging.getLogger(str(connection_id, 'ascii'))
 
         self.check(api.set_interface(self.context, api.INTERFACE[interface]))
@@ -140,7 +145,8 @@ class Handle(Context):
         self.check(api.set_bitmode(self.context, 0, api.BITMODE[mode]))
 
         self.max_packet_size = self.context.contents.max_packet_size
-
+        self.type = api.CHIP_TYPE_NAME.get(self.context.contents.type, "?")
+        
     def close(self):
         if self.opened:
             self.check(api.usb_close(self.context))
@@ -267,9 +273,17 @@ class Handle(Context):
         self.check(api.set_eeprom_value(self.context, id, value))
 
     def write(self, blob):
-        self.logger.debug("<< %s", binascii.b2a_hex(blob))
-        raw = (ctypes.c_ubyte * len(blob)).from_buffer_copy(blob)
-        self.check(api.write_data(self.context, raw, len(blob)))
+        self.write_queue.put(blob)
+
+    def writer_worker(self):
+        while True:
+            blob = self.write_queue.get()
+            if blob is None:
+                break
+            self.logger.debug("<< %s", binascii.b2a_hex(blob))
+            raw = (ctypes.c_ubyte * len(blob)).from_buffer_copy(blob)
+            self.check(api.write_data(self.context, raw, len(blob)))
+            self.write_queue.task_done()
 
     def status(self):
         status = ctypes.c_ushort()
@@ -302,15 +316,19 @@ class Handle(Context):
         return ret
     
     def execute(self, blob, rsize = None):
-        try:
-            self.write(blob)
-        except FtdiError:
-            raise FtdiError("Write of %d bytes failed" % len(blob))
-        if rsize:
-            rsp = self.read(rsize)
-            return rsp
-        else:
-            self.status()
+        padded = False
+        if not rsize:
+            blob += bytes([api.MPSSE_GET_BITS_LOW])
+            rsize = 1
+            padded = True
+
+        self.write(blob)
+        rsp = b''
+        while len(rsp) < rsize:
+            rsp += self.read(rsize - len(rsp))
+        if padded:
+            rsp = rsp[:-1]
+        return rsp
 
 @api.stream_callback_fn
 def _callback(buf, size, progress_info, owner):
@@ -368,16 +386,23 @@ class Mpsse(Handle):
         self.__gpio_oe = gpio_oe
         self.__gpio_val = gpio_val
         self.__freq = 1e6
-        
-        self.execute(bytes([api.MPSSE_3_PHASE_DISABLE,
+
+        if "H" in self.type:
+            h_commands = bytes([api.MPSSE_3_PHASE_DISABLE,
                             api.MPSSE_ADAPTIVE_DISABLE,
                             api.MPSSE_LOOPBACK_DISABLE])
+        else:
+            h_commands = b''
+
+        self.logger.info("Using MPSSE with a %s device, MPS: %d", self.type,
+                         self.max_packet_size)
+        self.execute(h_commands
                      + self.cmd_gpio_mask_set(0xffff, gpio_oe, gpio_val))
 
-        t = api.CHIP_TYPE_NAME.get(self.context.contents.type, "?")
-        self.base_freq = 12e6 if t == "2232C" else 60e6
-        self.can_div5 = t != "2232C"
-        self.can_opendrain = t == "232H"
+        self.base_freq = 12e6 if self.type == "2232C" else 60e6
+        self.can_div5 = self.type != "2232C"
+        self.can_opendrain = self.type == "232H"
+        self.can_adaptive = "H" in self.type
         self.cycle_div = 2
         
         self.__divisor = (self.can_div5, 0)

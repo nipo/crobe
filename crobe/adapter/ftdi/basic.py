@@ -242,7 +242,7 @@ class JtagInterface(BaseInterface, jtag.Interface):
         to_join = []
         ops = []
 
-        max_shift_bits = 512*8
+        max_shift_bits = 65535*8
 
         for o in operation_list:
             if isinstance(o, jtag.Shift):
@@ -273,9 +273,10 @@ class JtagInterface(BaseInterface, jtag.Interface):
             cmd = [self.cmd_activity(True)]
             tdo_length = 0
 
-            while ops \
-                      and sum(len(x) for x in cmd) < self.handle.max_packet_size - 48 \
-                      and tdo_length < self.handle.max_packet_size - 48:
+            #while ops \
+            #          and sum(len(x) for x in cmd) < self.handle.max_packet_size - 48 \
+            #          and tdo_length < self.handle.max_packet_size - 48:
+            while ops:
                 op = ops.pop(0)
                 pending.append(op)
 
@@ -404,8 +405,8 @@ class I2cInterface(BaseInterface, i2c.Interface):
         self.__sda_out = bytes([api.MPSSE_SET_BITS_LOW, out_base, oe_base | scl | sda])
         self.__sda_in = bytes([api.MPSSE_SET_BITS_LOW, out_base, oe_base | scl])
         
-        self.__adaptive_on = bytes([api.MPSSE_ADAPTIVE_ENABLE]) if has_scl_in else b''
-        self.__adaptive_off = bytes([api.MPSSE_ADAPTIVE_DISABLE]) if has_scl_in else b''
+        self.__adaptive_on = bytes([api.MPSSE_ADAPTIVE_ENABLE]) if has_scl_in and self.adapter.can_adaptive else b''
+        self.__adaptive_off = bytes([api.MPSSE_ADAPTIVE_DISABLE]) if has_scl_in and self.adapter.can_adaptive else b''
 
         cmd_init = bytes([api.MPSSE_3_PHASE_ENABLE])
         if use_open_collector and self.handle.can_opendrain:
@@ -569,7 +570,8 @@ class SwdInterface(BaseInterface, swd.Interface):
             rsp_length = 0
             with_rsp = []
 
-            while ops and sum(len(x) for x in cmd) < self.handle.max_packet_size - 48 and rsp_length < self.handle.max_packet_size - 48:
+            #while ops and sum(len(x) for x in cmd) < self.handle.max_packet_size - 48 and rsp_length < self.handle.max_packet_size - 48:
+            while ops:
                 op = ops.pop(0)
                 pending.append(op)
 
@@ -759,7 +761,8 @@ class SpiInterface(BaseInterface, spi.Interface):
             cmd = b''
             rsp_length = 0
 
-            while ops and len(cmd) < self.MAX_PACKET_SIZE - 48 and rsp_length < self.MAX_PACKET_SIZE - 48:
+            #while ops and len(cmd) < self.MAX_PACKET_SIZE - 48 and rsp_length < self.MAX_PACKET_SIZE - 48:
+            while ops:
                 op = ops.popleft()
                 pending.append(op)
 
