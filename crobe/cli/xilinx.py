@@ -1,6 +1,6 @@
 from . import base
 import click
-from ..component.xilinx import zynq, series67
+from ..component.xilinx import zynq, series67, series7, xadc
 import binascii
 import time
 
@@ -90,11 +90,38 @@ def efuse_dump(root):
 @click.option('-r', '--root', type = base.ROOT)
 def xadc_temp(root):
     z = root
-    assert isinstance(z, zynq.Zynq)
+    assert isinstance(z, xadc.Xadc)
 
     z.xadc_init_defaults()
     while True:
         print("Temperature: %3.2f°C" % z.xadc_temperature_read(), end = "\r")
+        time.sleep(.1)
+
+@xilinx.command(help = "XADC Poller")
+@click.option("--enable", is_flag = True)
+@click.option('-r', '--root', type = base.ROOT)
+@click.option('-c', '--channel', type = int)
+@click.option('-o', '--offset', type = float, default = 0.)
+@click.option('-s', '--scale', type = float, default = 1.)
+def xadc_poll(root, channel, offset, scale, enable):
+    z = root
+    assert isinstance(z, xadc.Xadc)
+
+    z.xadc_init_defaults()
+    if enable:
+        z.xadc_write(2, 1)
+        if channel <= 15:
+            z.xadc_write(0x48, 1 << channel)
+#            z.xadc_write(0x4c, 1 << channel)
+            z.xadc_write(0x4c, 0)
+        else:
+            z.xadc_write(0x49, 1 << (channel - 16))
+#            z.xadc_write(0x4d, 1 << (channel - 16))
+            z.xadc_write(0x4d, 0)
+        z.xadc_write(z.XADC_REG_CONFIG(1), z.XADC_CFG1_SEQ(z.XADC_SEQ_CONTINUOUS))
+    while True:
+        v = z.xadc_value_read(channel) * scale + offset
+        print("Value: %1.5f" % v, end = "\r")
         time.sleep(.1)
 
 @xilinx.command(help = "Xilinx Virtual Cable server")
