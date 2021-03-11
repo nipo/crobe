@@ -116,6 +116,7 @@ void dcc_cnc(void)
     
     for (;;) {
         const uint32_t cmd = dcc_data_pop();
+        dcc_data_push(cmd);
 
         if (cmd == 0)
             break;
