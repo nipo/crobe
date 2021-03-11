@@ -30,21 +30,8 @@ class SwdInterface(swd.Interface):
         self.cs = cs
         self.__turnaround_cycles = 1
         self.__turnaround_dirty = True
-        self.__reset = False
 
         super().__init__(meta, "swd")
-
-    @property
-    def reset(self):
-        return self.__reset
-
-    @reset.setter
-    def reset(self, value):
-        if self.__reset == bool(value):
-            return
-
-        self.logger.info("%s reset pin", "holding" if value else "releasing")
-        self.cs.srst_set(value)
         
     def freq_update(self, freq):
         return self.swd.freq_update(freq)
@@ -72,18 +59,6 @@ class JtagInterface(jtag.Interface):
 
     def freq_update(self, freq):
         return self.jtag.freq_update(freq)
-
-    @property
-    def reset(self):
-        return self.__reset
-
-    @reset.setter
-    def reset(self, value):
-        if self.__reset == bool(value):
-            return
-
-        self.logger.info("%s reset pin", "holding" if value else "releasing")
-        self.cs.srst_set(value)
 
 class I2cInterface(i2c.Interface):
     def __init__(self, meta, framed_i2c, base_freq):
@@ -122,14 +97,6 @@ class CcInterface(chipcon.Interface):
 
     def freq_update(self, freq):
         return self.cc.freq_update(freq)
-
-    @property
-    def reset(self):
-        return self.cc.reset
-
-    @reset.setter
-    def reset(self, value):
-        self.cc.reset = value
 
 class Meta(PortComponent):
     def __init__(self, port, mode):

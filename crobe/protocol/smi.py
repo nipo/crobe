@@ -167,9 +167,8 @@ class C22Slave(PortComponent):
     def __str__(self):
         return f"{self.name}@{self.phyad:x}"
         
-class Operation(object):
-    def __repr__(self):
-        return str(self)
+class Operation(base.Operation):
+    pass
 
 class C22Read(Operation):
     def __init__(self, phyad, addr):

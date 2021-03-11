@@ -245,7 +245,7 @@ class Program:
             if seg["p_type"] != "PT_LOAD":
                 continue
 
-            self.append(Segment(seg["p_paddr"], seg.data(), filename))
+            self.append(Segment(seg["p_paddr"], seg.data().ljust(seg['p_memsz'], b'\x00'), filename))
 
         self.info["device"] = elf.get_machine_arch()
         self.info["entry"] = elf.header["e_entry"]

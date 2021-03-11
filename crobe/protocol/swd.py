@@ -50,6 +50,7 @@ class Interface(base.Interface):
 
     - the synchronous interface:
 
+
       * read(),
       * write(),
       * run(),
@@ -87,9 +88,9 @@ class Interface(base.Interface):
             return self.cypress_line_reset()
 
         if self.do_reset:
-            self.reset = True
+            self.reset(True)
             time.sleep(.1)
-            self.reset = False
+            self.reset(False)
 
         idcode_read = self.cmd_read(False, self.IDCODE)
         ops = [self.cmd_wakeup(), self.cmd_wakeup(),
@@ -108,9 +109,9 @@ class Interface(base.Interface):
         for delay in range(int(self.freq * 1.2e-3),
                            int(self.freq * 5e-3),
                            int(self.freq / 20e3) or 1):
-            self.reset = True
+            self.reset(True)
             time.sleep(0.01)
-            self.reset = False
+            self.reset(False)
             op = self.cmd_read(False, self.IDCODE)
             ops = [self.cmd_wakeup(delay)] + [
                    op,
@@ -244,9 +245,8 @@ class Interface(base.Interface):
         """
         return Wakeup(cycles)
     
-class Operation(object):
-    def __repr__(self):
-        return str(self)
+class Operation(base.Operation):
+    pass
 
 class Read(Operation):
     def __init__(self, ap, addr):

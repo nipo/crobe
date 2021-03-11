@@ -26,15 +26,6 @@ class JLinkInterface(object):
         else:
             self.handle.speed_khz = float(freq) / 1000.
             return int(self.handle.speed_khz * 1000.)
-
-    @property
-    def reset(self):
-        return not self.handle.resetn
-
-    @reset.setter
-    def reset(self, reset):
-        self.logger.info("%s target reset", ["releasing", "holding"][int(reset)])
-        self.handle.resetn = not reset
         
     @property
     def power(self):
@@ -94,8 +85,9 @@ class JtagInterface(JLinkInterface, jtag.Interface):
         #self.logger.debug("running %s", operation_list)
 
         assert self.__state in (self.STATE_RESET, self.STATE_PAUSE, self.STATE_RTI, None)
-        
+
         while ops:
+            reset_op = None
             tdi_buf = bitstring.BitString()
             tms_buf = bitstring.BitString()
             pending = deque()
@@ -192,6 +184,10 @@ class JtagInterface(JLinkInterface, jtag.Interface):
                 elif isinstance(op, jtag.Pause):
                     pass
 
+                elif isinstance(op, base.Reset):
+                    reset_op = op
+                    break
+
                 else:
                     raise base.ProtocolError("Unknown JTAG operation %s" % type(op))
 
@@ -207,6 +203,10 @@ class JtagInterface(JLinkInterface, jtag.Interface):
             for idx, op in enumerate(pending):
                 if isinstance(op, jtag.Shift) and op.read_tdo:
                     op.tdo = tdo_buf[op.__offset : op.__offset + len(op.tdi)]
+
+            if reset_op:
+                self.logger.info("%s", op)
+                self.handle.resetn = not op.asserted
 
         assert self.__state in (self.STATE_RTI, self.STATE_RESET, self.STATE_PAUSE), self.__state
 
@@ -265,6 +265,7 @@ class SwdInterface(JLinkInterface, swd.Interface):
         #self.logger.debug("running %s", ops)
         
         while ops:
+            reset_op = None
             oe_list = deque()
             out_list = deque()
             used = 0
@@ -328,6 +329,10 @@ class SwdInterface(JLinkInterface, swd.Interface):
                     oe_list.append(b'\xff' * len(d))
                     used += len(d)
 
+                elif isinstance(op, base.Reset):
+                    reset_op = op
+                    break
+
                 else:
                     raise base.ProtocolError("Unknown SWD operation %s" % type(op))
 
@@ -348,6 +353,10 @@ class SwdInterface(JLinkInterface, swd.Interface):
                     if isinstance(op, swd.Read):
                         op.data, = struct.unpack("<L", in_blob[byte + 1 : byte + 5])
 
+            if reset_op:
+                self.logger.info("%s", op)
+                self.handle.resetn = not op.asserted
+
 class SpiInterface(JLinkInterface, spi.Interface):
     def __init__(self, port):
         JLinkInterface.__init__(self, port, "JTAG")
@@ -361,6 +370,7 @@ class SpiInterface(JLinkInterface, spi.Interface):
         ops = deque(operation_list)
         
         while ops:
+            reset_op = None
             cs_pending = bytearray()
             out_pending = bytearray()
             used = 0
@@ -388,6 +398,10 @@ class SpiInterface(JLinkInterface, spi.Interface):
                         cs_pending += b"\xff"
                         out_pending += b'\x00'
 
+                elif isinstance(op, base.Reset):
+                    reset_op = op
+                    break
+
                 else:
                     raise base.ProtocolError("Unknown SPI operation %s" % type(op))
 
@@ -400,6 +414,10 @@ class SpiInterface(JLinkInterface, spi.Interface):
                     else:
                         cl = len(op.mosi)
                     op.miso = bitswap8(in_blob[op.__offset : op.__offset + cl])
+
+            if reset_op:
+                self.logger.info("%s", op)
+                self.handle.resetn = not op.asserted
     
 PIDS = [0x0101, 0x0102, 0x0103, 0x0104, 0x0105, 0x0107, 0x0108,
 	0x1010, 0x1011, 0x1012, 0x1013, 0x1014, 0x1015, 0x1016,

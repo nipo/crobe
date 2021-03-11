@@ -20,10 +20,13 @@ class Sized(PortComponent):
         self.port.write((len(frame) - 1).to_bytes(2, "little") + frame)
 
     def frame_recv(self):
+        first = True
         with self.lock:
             while True:
-                data = self.port._read()
-                self.rx_buf += data
+                if not first or not self.rx_buf:
+                    data = self.port._read()
+                    self.rx_buf += data
+                first = False
 
                 if len(self.rx_buf) < 2:
                     continue

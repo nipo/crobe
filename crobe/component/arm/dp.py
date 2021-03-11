@@ -22,7 +22,6 @@ class Dp(PortComponent, FreqCapper):
     def __init__(self, name, port):
         PortComponent.__init__(self, port, name)
         FreqCapper.__init__(self, 100e6)
-        self.freq_cap("discovery", 1e6)
 
     def freq_update(self, freq):
         ...
@@ -34,7 +33,7 @@ class Dp(PortComponent, FreqCapper):
     def start(self):
         from ...part_id import PartId
 
-        self.freq_cap("starting", 1e6)
+        self.freq_cap("discovery", 1e6)
 
         idr = self.idr
         self.logger.info("Got IDR: %08x", idr)
@@ -70,7 +69,7 @@ class Dp(PortComponent, FreqCapper):
 
         PortComponent.start(self)
 
-        self.freq_cap("starting", None)
+        self.freq_cap("discovery", None)
 
     def __ap_discover(self, no):
         from .ap import Ap

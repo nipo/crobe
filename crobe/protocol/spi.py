@@ -27,14 +27,6 @@ class Interface(base.Interface):
         base.Interface.__init__(self, port, (name or port.name) + "/SPI")
 
     @property
-    def reset(self):
-        return False
-
-    @reset.setter
-    def reset(self, reset):
-        raise NotImplementedError("Incapable hardware")
-
-    @property
     def power(self):
         return True
 
@@ -80,7 +72,7 @@ class Interface(base.Interface):
 
     def option_set(self, opt):
         if opt == "reset=keep":
-            self.reset = True
+            self.reset(True)
             return
         super().option_set(opt)
 
@@ -136,9 +128,8 @@ class Target(PortComponent, FreqCapper):
             return
         super().option_set(opt)
 
-class Operation(object):
-    def __repr__(self):
-        return str(self)
+class Operation(base.Operation):
+    pass
 
 class Shift(Operation):
     def __init__(self, mosi, read_miso = True):

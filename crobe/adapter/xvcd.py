@@ -86,14 +86,6 @@ class JtagInterface(jtag.Interface):
         tck_period_ns, = struct.unpack("<L", rsp)
         self.__tck_period = tck_period_ns * 1e-9
         return 1 / self.__tck_period
-
-    @property
-    def reset(self):
-        return False
-
-    @reset.setter
-    def reset(self, reset):
-        self.logger.warning("Reset %s ignored", "holding" if reset else "releasing")
         
     @property
     def power(self):

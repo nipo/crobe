@@ -45,13 +45,6 @@ class Adapter(model.Component):
     """
     supported_interfaces = []
 
-    """
-    Read-write property controlling target reset. This is active
-    high. If actual reset line is #resetn (active low), setting this
-    property to True drives the line low.
-    """
-    reset = False
-
     def open(self, interface_name):
         """
         Opens the adapter for a given Interface protocol. Queried

@@ -31,7 +31,7 @@ class SpiTransactor(PortComponent):
         self.__divisor = max(0, min(divisor, 0x1f))
         self.__rate_dirty = True
         return self.base_freq / ((self.__divisor + 1) * 2)
-        
+    
     def execute(self, operation_list):
         pending = []
         rsp_size = 0

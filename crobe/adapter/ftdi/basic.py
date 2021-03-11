@@ -136,24 +136,6 @@ class BaseInterface(object):
 
         self.handle = adapter.device.open(interface = channel, gpio_oe = oe, gpio_val = val)
 
-    @property
-    def reset(self):
-        if self.__reset_pin is None:
-            return False
-
-        pin, polarity = self.__reset_pin
-        return self.handle.gpio_get(pin) == polarity
-
-    @reset.setter
-    def reset(self, reset):
-        cmd = self.cmd_reset(reset)
-        if not cmd:
-            self.logger.warning("Reset %s ignored", "holding" if reset else "releasing")
-            return
-
-        self.logger.info("%s reset pin", "holding" if reset else "releasing")
-        self.handle.execute(cmd)
-
     def cmd_reset(self, reset):
         if self.__reset_pin and self.__reset_oe_pin:
             pin, polarity = self.__reset_pin
@@ -328,6 +310,9 @@ class JtagInterface(BaseInterface, jtag.Interface):
                 elif isinstance(op, jtag.GenericOperation):
                     cmd.append(self.handle.cmd_tms_shift(op.tms))
                     self.__state = self.STATE_RESET
+
+                elif isinstance(op, base.Reset):
+                    cmd.append(self.handle.cmd_reset(op.asserted))
 
                 elif isinstance(op, jtag.Shift):
                     assert self.__state == self.STATE_PAUSE
@@ -506,6 +491,10 @@ class I2cInterface(BaseInterface, i2c.Interface):
                 cmd += self._cmd_write(op.data)
                 op.__ack_off = rsp_size
                 rsp_size += len(op.data)
+
+            elif isinstance(op, base.Reset):
+                cmd.append(self.handle.cmd_reset(op.asserted))
+
             else:
                 raise base.ProtocolError("Unknown I2C operation %s" % type(op))
 
@@ -632,6 +621,9 @@ class SwdInterface(BaseInterface, swd.Interface):
                 elif isinstance(op, swd.JtagToSwd):
                     cmd.append(self.handle.cmd_out(op.out))
 
+                elif isinstance(op, base.Reset):
+                    cmd.append(self.handle.cmd_reset(op.asserted))
+
                 else:
                     raise base.ProtocolError("Unknown SWD operation %s" % type(op))
 
@@ -709,9 +701,9 @@ class ChipconInterface(BaseInterface, chipcon.Interface):
         for op in operation_list:
             if isinstance(op, chipcon.DebugInit):
                 self.handle.execute(cmd_oe_off)
-                self.reset = True
+                self.reset(True)
                 self.handle.execute(bytes([api.MPSSE_WRITE | api.MPSSE_BITS | api.MPSSE_WRITE_NEG, 1, 0]))
-                self.reset = False
+                self.reset(False)
 
             elif isinstance(op, chipcon.Wait):
                 time.sleep(op.cycles / self.freq)
@@ -786,6 +778,9 @@ class SpiInterface(BaseInterface, spi.Interface):
                         rsp_length += op.mosi
                     else:
                         raise ValueError("Unhandled data type for mosi", op.mosi)
+
+                elif isinstance(op, base.Reset):
+                    cmd.append(self.handle.cmd_reset(op.asserted))
 
                 elif isinstance(op, spi.Cs):
                     if op.value is not None:

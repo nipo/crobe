@@ -496,7 +496,7 @@ class Mpsse(Handle):
         return ret
 
     @classmethod
-    def cmd_reset(cls):
+    def cmd_tlr(cls):
         return cls.cmd_tms_shift(BitString(-1, 5))
 
     @classmethod

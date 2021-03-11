@@ -131,13 +131,9 @@ class Interface(base.Interface):
 
     def run(self, count):
         self.execute([self.cmd_run(count)])
-        
-class Operation(object):
-    def __init__(self):
-        pass
 
-    def __repr__(self):
-        return str(self)
+class Operation(base.Operation):
+    pass
 
 class CaptureDr(Operation):
     def __str__(self):
@@ -243,9 +239,9 @@ class Chain(PortComponent):
         self.port.trst = True
 
         if self.port.do_reset:
-            self.port.reset = True
+            self.port.reset(True)
             time.sleep(.1)
-            self.port.reset = False
+            self.port.reset(False)
 
         self.port.tap_reset()
         self.port.trst = False

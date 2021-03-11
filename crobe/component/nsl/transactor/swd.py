@@ -12,6 +12,7 @@ class SwdTransactor(PortComponent):
     CMD_BITBANG      = 0xe0
     CMD_READ         = 0x90
     CMD_WRITE        = 0x80
+    CMD_SYS_RESET    = 0xd8
 
     RSP_OP_MASK          = 0xf0
     RSP_ACK_MASK         = 0x07
@@ -118,6 +119,11 @@ class SwdTransactor(PortComponent):
                         cmd[cmd_size] = self.CMD_RUN | 10
                         cmd_size += 1
                         rsp_size += 1
+
+                elif isinstance(op, base.Reset):
+                    cmd[cmd_size] = self.CMD_SYS_RESET | int(op.asserted)
+                    cmd_size += 1
+                    rsp_size += 1
                     
                 elif isinstance(op, swd.Wakeup):
                     count = op.cycles

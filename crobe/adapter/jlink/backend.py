@@ -378,6 +378,7 @@ class Handle(Component):
         else:
             cmd = HwReset0()
         self.execute([cmd])
+
     @property
     def tresetn(self):
         return self.pin_state_get()["trst"]

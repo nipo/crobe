@@ -16,6 +16,7 @@ class JtagTransactor(PortComponent):
     CMD_IR_CAPTURE   = 0x81
     CMD_SWD_TO_JTAG  = 0x82
     CMD_DIVISOR      = 0x83 # | 8 bits divisor - 1, next byte
+    CMD_SYS_RESET    = 0x84 # | 1 bit asserted
     CMD_RESET        = 0x98 # | 3 bits cycle count -1
     CMD_RTI          = 0x90 # | 3 bits cycle count -1
     CMD_RESET8       = 0x90 # | 4 bits cycle count /8 -1
@@ -69,6 +70,9 @@ class JtagTransactor(PortComponent):
                     cycles -= (count + 1) * 8
                 if cycles:
                     pending.append(([self.CMD_RESET | (cycles - 1)], 1, None, 0))
+
+            elif isinstance(op, base.Reset):
+                pending.append(([self.CMD_SYS_RESET | int(op.asserted)], 1, None, 0))
 
             elif isinstance(op, jtag.Run):
                 cycles = op.cycles + 1
