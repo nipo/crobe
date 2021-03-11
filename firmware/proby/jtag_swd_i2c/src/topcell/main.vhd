@@ -63,7 +63,9 @@ architecture arch of main is
   signal swd_i : nsl_coresight.swd.swd_master_i;
   signal jtag_o : nsl_jtag.jtag.jtag_ate_o;
   signal jtag_i : nsl_jtag.jtag.jtag_ate_i;
-  signal spi : nsl_spi.spi.spi_bus;
+  signal spi_o : nsl_spi.spi.spi_master_o;
+  signal spi_i : nsl_spi.spi.spi_master_i;
+  signal jtag_system_reset_n_o, swd_system_reset_n_o: nsl_io.io.opendrain;
 
   subtype mode_t is std_ulogic_vector(2 downto 0);
   signal mode: mode_t;
@@ -341,7 +343,9 @@ begin
       rsp_i => comm_swd.framed_rsp.ack,
       
       swd_o => swd_o,
-      swd_i => swd_i
+      swd_i => swd_i,
+
+      system_reset_n_o => swd_system_reset_n_o
       );
 
   i2c: nsl_i2c.transactor.transactor_framed_controller
@@ -369,7 +373,9 @@ begin
       rsp_i => comm_jtag.framed_rsp.ack,
 
       jtag_o => jtag_o,
-      jtag_i => jtag_i
+      jtag_i => jtag_i,
+
+      system_reset_n_o => jtag_system_reset_n_o
       );
 
   cs: nsl_bnoc.control_status.framed_control_status
@@ -421,10 +427,10 @@ begin
       rsp_o => comm_spi.framed_rsp.req,
       rsp_i => comm_spi.framed_rsp.ack,
 
-      sck_o => spi.sck,
-      cs_n_o(0) => spi.cs_n,
-      mosi_o => spi.mosi,
-      miso_i => spi.miso
+      sck_o => spi_o.sck,
+      cs_n_o(0) => spi_o.cs_n,
+      mosi_o => spi_o.mosi,
+      miso_i => spi_i.miso
       );
 
   mode <= s_cs_config(3)(mode'range);
@@ -434,7 +440,8 @@ begin
   s_cs_status(2)(0) <= dbg_trst_i;
   s_cs_status(3)(mode'range) <= mode;
 
-  ios: process(mode, jtag_o, swd_o, cc_o, s_cs_config(1), spi, dbg_tdo_i, dbg_tdi_i)
+  ios: process(mode, jtag_o, swd_o, cc_o, s_cs_config(1), spi_o,
+               dbg_tdo_i, dbg_tdi_i, jtag_system_reset_n_o, swd_system_reset_n_o)
   begin
     dbg_tck_o <= '0';
     dbg_srst_o.drain_n <= not s_cs_config(1)(0);
@@ -446,36 +453,44 @@ begin
     dbg_tdo_o.v <= '-';
     dbg_trst_o.output <= '0';
     dbg_trst_o.v <= '-';
-    spi.miso <= '-';
+    spi_i.miso <= '-';
 
     if mode = mode_swd then
       dbg_tms_o <= swd_o.dio;
       dbg_tck_o <= swd_o.clk;
+      if swd_system_reset_n_o.drain_n = '0' then
+        dbg_srst_o.drain_n <= '0';
+      end if;
     elsif mode = mode_jtag then
       dbg_tck_o <= jtag_o.tck;
       dbg_tms_o.output <= '1';
       dbg_tms_o.v <= jtag_o.tms;
+      dbg_trst_o.output <= jtag_o.trst;
+      dbg_trst_o.v <= '1';
       dbg_tdi_o.output <= '1';
       dbg_tdi_o.v <= jtag_o.tdi;
       dbg_tdo_o.output <= '0';
+      if jtag_system_reset_n_o.drain_n = '0' then
+        dbg_srst_o.drain_n <= '0';
+      end if;
     elsif mode = mode_cc then
       dbg_tck_o <= cc_o.dc;
       dbg_srst_o.drain_n <= not cc_o.reset_n;
       dbg_tms_o <= cc_o.dd;
     elsif mode = mode_spi then
-      dbg_tck_o <= spi.sck;
+      dbg_tck_o <= spi_o.sck;
       dbg_tms_o.v <= '0';
-      dbg_tms_o.output <= not spi.cs_n;
+      dbg_tms_o.output <= not spi_o.cs_n.drain_n;
       dbg_tdi_o.output <= '1';
-      dbg_tdi_o.v <= spi.mosi;
-      spi.miso <= dbg_tdo_i;
+      dbg_tdi_o.v <= spi_o.mosi;
+      spi_i.miso <= dbg_tdo_i;
     elsif mode = mode_spi_inv then
-      dbg_tck_o <= spi.sck;
+      dbg_tck_o <= spi_o.sck;
       dbg_tms_o.v <= '0';
-      dbg_tms_o.output <= not spi.cs_n;
+      dbg_tms_o.output <= not spi_o.cs_n.drain_n;
       dbg_tdo_o.output <= '1';
-      dbg_tdo_o.v <= spi.mosi;
-      spi.miso <= dbg_tdi_i;
+      dbg_tdo_o.v <= spi_o.mosi;
+      spi_i.miso <= dbg_tdi_i;
     end if;
   end process;
   

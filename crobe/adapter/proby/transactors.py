@@ -75,9 +75,10 @@ class I2cInterface(i2c.Interface):
         self.i2c.execute(op_list)
 
 class SpiInterface(spi.Interface):
-    def __init__(self, meta, framed_spi, base_freq):
+    def __init__(self, meta, framed_spi, cs, base_freq):
         from ...component.nsl.transactor.spi import SpiTransactor
 
+        self.cs = cs
         self.spi = SpiTransactor(framed_spi, base_freq)
 
         super().__init__(meta, "spi")
@@ -86,8 +87,21 @@ class SpiInterface(spi.Interface):
     def freq_update(self, freq):
         return self.spi.freq_update(freq)
 
+    def reset_assert(self, asserted):
+        self.cs.srst_set(asserted)
+
     def execute(self, op_list):
-        self.spi.execute(op_list)
+        todo = []
+        for o in op_list:
+            if isinstance(o, base.Reset):
+                if todo:
+                    self.spi.execute(todo)
+                todo = []
+                self.reset_assert(o.asserted)
+            else:
+                todo.append(o)
+        if todo:
+            self.spi.execute(todo)
 
 class CcInterface(chipcon.Interface):
     def __init__(self, meta, framed_cc, base_freq):
@@ -149,6 +163,7 @@ class Meta(PortComponent):
             self.interface = SpiInterface(
                 self,
                 routed.FramedEndpoint(routed.Route(self.router, 0xf, 0x5)),
+                self.cs,
                 self.base_freq)
 
         elif mode == "spi-inv":
@@ -156,5 +171,6 @@ class Meta(PortComponent):
             self.interface = SpiInterface(
                 self,
                 routed.FramedEndpoint(routed.Route(self.router, 0xf, 0x5)),
+                self.cs,
                 self.base_freq)
 
