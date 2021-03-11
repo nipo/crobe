@@ -1,5 +1,5 @@
 from . import model
-from ..protocol import i2c, spi
+from ..protocol import i2c, spi, swd, jtag, base
 from .. import bitstring
 from ..util.pretty import metric
 from ..util import endian
@@ -13,6 +13,7 @@ import os
 import math
 import struct
 import threading
+from ..component.nsl.transactor.cs import ControlStatus
 
 __all__ = []
 
@@ -66,9 +67,9 @@ class Adapter(model.Adapter):
         except:
             pass
         if interface_name.lower() == "spi":
-            return SpiInterface(self)
+            return BlSpiInterface(self)
 
-class SpiInterface(spi.Interface):
+class BlSpiInterface(spi.Interface):
     def __init__(self, port):
         from ..component.nsl.transactor.spi import SpiTransactor
         self.transactor = None
@@ -86,3 +87,260 @@ class SpiInterface(spi.Interface):
 
     def execute(self, operation_list):
         return self.transactor.execute(operation_list)
+
+class Registers(ControlStatus):
+    REG_V = 0
+    REG_I = 1
+    REG_APP_CLK = 2
+    REG_MODE = 3
+
+    def reg_update(self, id, mask, new_value):
+        old = self.reg_read(id)
+        new = (old & ~mask) | (new_value & mask)
+        self.logger.debug("RMW %d: 0x%08x + (0x%08x &  0x%08x) ->  0x%08x",
+                          id, old, mask, new_value, new)
+        self.reg_write(id, new)
+
+    def target_voltage_set(self, supply = False, voltage = None):
+        mask = 0x0003f003
+        value = 0
+        assert not supply or voltage is not None
+        if voltage is not None:
+            value |= int(voltage * 16) << 12
+        else:
+            value |= 2 # track
+        if supply:
+            value |= 1
+        self.reg_update(self.REG_V, mask, value)
+
+    def mode_set(self, mode = "NONE"):
+        if mode == "JTAG":
+            m = 1
+        elif mode == "SWD":
+            m = 2
+        elif mode == "SPI":
+            m = 3
+        elif mode == "SPI-INV":
+            m = 4
+        else:
+            try:
+                m = int(mode)
+            except:
+                m = 0
+        self.reg_update(self.REG_MODE, 0x7, m)
+
+    def reset_assert(self, asserted):
+        self.logger.info("%s reset", "Holding" if asserted else "Releasing")
+        self.reg_update(self.REG_MODE, 0x10, -int(bool(asserted)))
+
+    def target_voltage_get(self):
+        reg = self.reg_read(self.REG_V)
+        xadc_v = ((reg >> 4) & 0xfff) / (1 << 12)
+        vtarget = xadc_v * 10
+        return vtarget
+
+    def target_current_get(self):
+        reg = self.reg_read(self.REG_I)
+        xadc_v = ((reg >> 4) & 0xfff) / (1 << 12)
+        itarget = xadc_v * .125
+        return itarget
+
+    def is_over_current(self):
+        reg = self.reg_read(self.REG_I)
+        return bool(reg & 1)
+
+    def base_freq(self):
+        return self.reg_read(self.REG_APP_CLK)
+
+class DbgFpgaVoltage:
+    def __init__(self, regs):
+        self.regs = regs
+        self.power = "track", None
+
+    def option_set(self, value):
+        if value.startswith("vsupply="):
+            self.power = "supply", float(value[8:])
+            return True
+        if value.startswith("vref="):
+            self.power = "force", float(value[5:])
+            return True
+
+    def apply(self):
+        mode, value = self.power
+        if mode == "track":
+            self.regs.logger.info("Tracking target voltage")
+            self.regs.target_voltage_set()
+        elif mode == "supply":
+            self.regs.logger.info("Setting target voltage as %1.1fV", value)
+            self.regs.target_voltage_set(supply = True, voltage = value+.025)
+        else:
+            self.regs.logger.info("Setting reference voltage to %1.1fV", value)
+            self.regs.target_voltage_set(voltage = value+.025)
+        self.regs.logger.info("Current target voltage: %1.3f", self.regs.target_voltage_get())
+    
+class SwdInterface(swd.Interface):
+    def __init__(self, framed_swd, base_freq, regs):
+        from crobe.component.nsl.transactor.swd import SwdTransactor
+        self.swd = SwdTransactor(framed_swd, base_freq)
+        super().__init__(self.swd, "swd")
+        self.voltage = DbgFpgaVoltage(regs)
+
+    def start(self):
+        self.voltage.apply()
+        super().start()
+
+    def option_set(self, opt):
+        if self.voltage.option_set(opt):
+            return
+        super().option_set(opt)
+        
+    @property
+    def turnaround_cycles(self):
+        return self.swd.turnaround_cycles
+
+    @turnaround_cycles.setter
+    def turnaround_cycles(self, cycles):
+        self.swd.turnaround_cycles = cycles
+
+    def execute(self, op_list):
+        self.swd.execute(op_list)
+
+    def freq_update(self, freq):
+        return self.swd.freq_update(freq)
+
+class JtagInterface(jtag.Interface):
+    def __init__(self, framed_jtag, base_freq, regs):
+        from crobe.component.nsl.transactor.jtag import JtagTransactor
+        self.jtag = JtagTransactor(framed_jtag, base_freq)
+        super().__init__(self.jtag, "jtag")
+        self.voltage = DbgFpgaVoltage(regs)
+
+    def start(self):
+        self.voltage.apply()
+        super().start()
+
+    def option_set(self, opt):
+        if self.voltage.option_set(opt):
+            return
+        super().option_set(opt)
+
+    def execute(self, op_list):
+        self.jtag.execute(op_list)
+
+    def freq_update(self, freq):
+        return self.jtag.freq_update(freq)
+
+class SpiInterface(spi.Interface):
+    def __init__(self, framed_spi, base_freq, regs):
+        from crobe.component.nsl.transactor.spi import SpiTransactor
+        self.regs = regs
+        self.spi = SpiTransactor(framed_spi, base_freq)
+        super().__init__(self.spi, "spi")
+        self.voltage = DbgFpgaVoltage(regs)
+        self.child_add(spi.Target(self, "cs0", 0))
+
+    def start(self):
+        self.voltage.apply()
+        super().start()
+
+    def option_set(self, opt):
+        if self.voltage.option_set(opt):
+            return
+        super().option_set(opt)
+
+    def reset_assert(self, asserted):
+        self.regs.reset_assert(asserted)
+        
+    def execute(self, op_list):
+        todo = []
+        for o in op_list:
+            if isinstance(o, base.Reset):
+                if todo:
+                    self.spi.execute(todo)
+                todo = []
+                self.reset_assert(o.asserted)
+            else:
+                todo.append(o)
+        if todo:
+            self.spi.execute(todo)
+
+    def freq_update(self, freq):
+        return self.spi.freq_update(freq)
+    
+@model.UsbEnumerator.db.register(model.UsbInfo(idVendor = 0x1500, idProduct = 0xdeba))
+class Adapter(model.Adapter):
+    EP_IN  = 0x81
+    EP_OUT = 0x01
+    supported_interfaces = ["cs", "jtag", "swd"]
+
+    def bulk_out(self, data, timeout = None):
+        self.logger.debug("BULK OUT %s", binascii.b2a_hex(data))
+        self.device.write(self.EP_OUT, data, int((timeout or 1.) * 1000))
+
+    def bulk_in(self, size, timeout = None):
+        self.logger.debug("BULK IN %d", size)
+        data = self.device.read(self.EP_IN, size, int((timeout or 1.) * 1000))
+        self.logger.debug("-> %s", binascii.b2a_hex(data))
+        return data
+
+    def execute(self, blob, read_size = 0):
+        self.logger.debug("Execute, %d out, %d in", len(blob), read_size)
+        self.bulk_out(blob)
+        rbuf = b''
+        while len(rbuf) < read_size:
+            rbuf += self.bulk_in(512)
+        return rbuf
+
+    @classmethod
+    def from_device(cls, d):
+        serial = usb.util.get_string(d, d.iSerialNumber)
+        return cls(d, "df-%s" % (serial,))
+
+    def __init__(self, device, name):
+        model.Adapter.__init__(self, name)
+        self.device = device
+
+        cfg = self.device.get_active_configuration()
+        if cfg.bConfigurationValue == 0:
+            self.device.set_configuration(1)
+            cfg = self.device.get_active_configuration()
+
+    def write(self, data):
+        self.bulk_out(data)
+
+    def _read(self):
+        return self.bulk_in(512)
+        
+    def open(self, interface_name):
+        from ..component.nsl.bnoc.routed import Router
+        from ..component.nsl.bnoc.sized import Sized
+
+        s = Sized(self)
+        r = Router(s)
+        self.regs = Registers(r.route(0xf, 0x0).framed_endpoint())
+        self.child_add(self.regs)
+
+        self.base_freq = self.regs.base_freq()
+
+        if interface_name.lower() == "cs":
+            return self.regs
+        elif interface_name.lower() == "jtag":
+            self.jtag = JtagInterface(r.route(0xf, 0x2).framed_endpoint(), self.base_freq, self.regs)
+            self.child_add(self.jtag)
+            self.regs.mode_set("JTAG")
+            return self.jtag
+        elif interface_name.lower() == "spi":
+            self.spi = SpiInterface(r.route(0xf, 0x3).framed_endpoint(), self.base_freq, self.regs)
+            self.child_add(self.spi)
+            self.regs.mode_set("SPI")
+            return self.spi
+        elif interface_name.lower() == "spi-inv":
+            self.spi = SpiInterface(r.route(0xf, 0x3).framed_endpoint(), self.base_freq, self.regs)
+            self.child_add(self.spi)
+            self.regs.mode_set("SPI-INV")
+            return self.spi
+        elif interface_name.lower() == "swd":
+            self.swd = SwdInterface(r.route(0xf, 0x1).framed_endpoint(), self.base_freq, self.regs)
+            self.child_add(self.swd)
+            self.regs.mode_set("SWD")
+            return self.swd
