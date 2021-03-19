@@ -126,6 +126,9 @@ class Target(PortComponent, FreqCapper):
         if opt.startswith("fmax="):
             self.freq_cap("user", sci_parse(opt[5:]))
             return
+        if opt == "reset=keep":
+            self.port.reset(True)
+            return
         super().option_set(opt)
 
 class Operation(base.Operation):
