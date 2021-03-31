@@ -85,11 +85,15 @@ class Series67(jtag.Tap):
 
         prog_dr = bitstring.BitString(blob)
 
-        rsp = self.dr_shift(cmd, prog_dr, read_tdo = read_rsp)
-        self.run(30)
+        shift = self.cmd_dr_shift(cmd, prog_dr, read_tdo = read_rsp)
 
+        self.execute([
+            shift,
+            self.cmd_run(30),
+        ])
+        
         if read_rsp:
-            return self._cfg_conv_tdo(bytes(rsp))
+            return self._cfg_conv_tdo(bytes(shift.tdo))
 
     def dna_read(self):
         ops = [self.cmd_dr_shift(self.IR_ISC_ENABLE, None),

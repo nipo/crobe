@@ -110,7 +110,11 @@ class Series6(Series67):
 
         ok = self.config_write(blob)
 
+        # This is important, it enables internal CCLK
+        self.run(1000)
+
         self.logger.info("Status: %04x", self.cfg_status)
+        self.cfg_status_dump()
 
         end = datetime.datetime.now()
 
@@ -118,9 +122,6 @@ class Series6(Series67):
             raise RuntimeError("Unable to start FPGA")
         else:
             self.logger.info("Done OK, time taken: %s", end - begin)
-
-        # This is important, it enables internal CCLK
-        self.run(1000)
 
         return self.send_op_wait(-1, self.IR_STATUS_DONE)
 
