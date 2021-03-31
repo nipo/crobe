@@ -18,7 +18,7 @@ class Ap(PortComponent):
     def reg_read(self, addr):
         ops = [self.cmd_read(addr)]
         self.port.execute(ops)
-        return ops[0].data
+        return ops[0].data & 0xffffffff
 
     def reg_write(self, addr, data):
         self.port.execute([self.cmd_write(addr, data)])
