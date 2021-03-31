@@ -5,6 +5,7 @@ class Framed(PortComponent):
     def __init__(self, port):
         super().__init__(port, "framed_io")
         self.rx_buf = []
+        port.child_add(self)
 
     def reset(self):
         while self.port.read():

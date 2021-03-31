@@ -107,7 +107,9 @@ class Route(PortComponent):
         return r
             
     def framed_endpoint(self):
-        return FramedEndpoint(self)
+        r = FramedEndpoint(self)
+        self.child_add(r)
+        return r
                     
 class FramedEndpoint(PortComponent):
     def __init__(self, port):
