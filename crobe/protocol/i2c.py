@@ -28,7 +28,7 @@ class Interface(base.Interface):
     db = Db("I2C chip type")
 
     def __init__(self, port, name = None):
-        base.Interface.__init__(self, port, (name or port.name) + "/I2C")
+        base.Interface.__init__(self, port, (name or port.name) + "-I2C")
 
     def start(self):
         self.freq_cap("fast", 400e3)

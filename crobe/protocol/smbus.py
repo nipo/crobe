@@ -26,7 +26,7 @@ class Interface(base.Interface):
     db = Db("SMBUS chip type")
 
     def __init__(self, port, name = None):
-        base.Interface.__init__(self, port, (name or port.name) + "/SMBus")
+        base.Interface.__init__(self, port, (name or port.name) + "-SMBus")
 
     def start(self):
         self.port.freq_cap("smbus", 400e3)

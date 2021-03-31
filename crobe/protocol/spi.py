@@ -24,7 +24,7 @@ class Interface(base.Interface):
     """
 
     def __init__(self, port, name = None):
-        base.Interface.__init__(self, port, (name or port.name) + "/SPI")
+        base.Interface.__init__(self, port, (name or port.name) + "-SPI")
 
     @property
     def power(self):

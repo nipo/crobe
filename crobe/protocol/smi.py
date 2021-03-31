@@ -16,7 +16,7 @@ class Interface(base.Interface):
     db = Db("SMI chip type")
 
     def __init__(self, port, name = None):
-        base.Interface.__init__(self, port, (name or port.name) + "/SMI")
+        base.Interface.__init__(self, port, (name or port.name) + "-SMI")
 
     def start(self):
         self.freq_cap("IEEE", 25e6)

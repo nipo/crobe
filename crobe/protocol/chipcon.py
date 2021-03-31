@@ -32,7 +32,7 @@ class Interface(base.Interface):
     SFR_MEMCTR = 0xc7
 
     def __init__(self, port, name = None):
-        base.Interface.__init__(self, port, (name or port.name) + "/CC")
+        base.Interface.__init__(self, port, (name or port.name) + "-CC")
 
     def start(self):
         self.freq_cap("enumeration", .5e6)
