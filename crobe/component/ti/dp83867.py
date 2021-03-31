@@ -186,20 +186,20 @@ class Dp83867(ethernet_phy.Clause22EthernetPhy):
             return fl
 
     def tdr_execute(self):
-        self.__tdr_start(False)
+        self.__tdr_start(cross = False)
         while retry_for(3):
             if self.__tdr_is_done():
                 break
         no_cross = self.__tdr_stats_gather()
 
-        self.__tdr_start(True)
+        self.__tdr_start(cross = True)
         while retry_for(3):
             if self.__tdr_is_done():
                 break
         with_cross = self.__tdr_stats_gather()
 
-        print(no_cross)
-        print(with_cross)
+        self.logger.info("Without cross: %s", no_cross)
+        self.logger.info("With cross: %s", with_cross)
 
         for i in range(len(with_cross) - 1, -1, -1):
             x = with_cross[i]
