@@ -136,7 +136,7 @@ class BaseInterface(object):
 
         self.handle = adapter.device.open(interface = channel, gpio_oe = oe, gpio_val = val)
 
-    def cmd_reset(self, reset):
+    def cmd_trst(self, reset):
         if self.__reset_pin and self.__reset_oe_pin:
             pin, polarity = self.__reset_pin
             mod = 1 << pin
@@ -312,7 +312,7 @@ class JtagInterface(BaseInterface, jtag.Interface):
                     self.__state = self.STATE_RESET
 
                 elif isinstance(op, base.Reset):
-                    cmd.append(self.handle.cmd_reset(op.asserted))
+                    cmd.append(self.cmd_trst(op.asserted))
 
                 elif isinstance(op, jtag.Shift):
                     assert self.__state == self.STATE_PAUSE
@@ -390,8 +390,8 @@ class I2cInterface(BaseInterface, i2c.Interface):
         self.__sda_out = bytes([api.MPSSE_SET_BITS_LOW, out_base, oe_base | scl | sda])
         self.__sda_in = bytes([api.MPSSE_SET_BITS_LOW, out_base, oe_base | scl])
         
-        self.__adaptive_on = bytes([api.MPSSE_ADAPTIVE_ENABLE]) if has_scl_in and self.adapter.can_adaptive else b''
-        self.__adaptive_off = bytes([api.MPSSE_ADAPTIVE_DISABLE]) if has_scl_in and self.adapter.can_adaptive else b''
+        self.__adaptive_on = bytes([api.MPSSE_ADAPTIVE_ENABLE]) if has_scl_in and self.handle.can_adaptive else b''
+        self.__adaptive_off = bytes([api.MPSSE_ADAPTIVE_DISABLE]) if has_scl_in and self.handle.can_adaptive else b''
 
         cmd_init = bytes([api.MPSSE_3_PHASE_ENABLE])
         if use_open_collector and self.handle.can_opendrain:
@@ -493,7 +493,7 @@ class I2cInterface(BaseInterface, i2c.Interface):
                 rsp_size += len(op.data)
 
             elif isinstance(op, base.Reset):
-                cmd.append(self.handle.cmd_reset(op.asserted))
+                cmd.append(self.cmd_trst(op.asserted))
 
             else:
                 raise base.ProtocolError("Unknown I2C operation %s" % type(op))
@@ -622,7 +622,7 @@ class SwdInterface(BaseInterface, swd.Interface):
                     cmd.append(self.handle.cmd_out(op.out))
 
                 elif isinstance(op, base.Reset):
-                    cmd.append(self.handle.cmd_reset(op.asserted))
+                    cmd.append(self.cmd_trst(op.asserted))
 
                 else:
                     raise base.ProtocolError("Unknown SWD operation %s" % type(op))
@@ -780,7 +780,7 @@ class SpiInterface(BaseInterface, spi.Interface):
                         raise ValueError("Unhandled data type for mosi", op.mosi)
 
                 elif isinstance(op, base.Reset):
-                    cmd.append(self.handle.cmd_reset(op.asserted))
+                    cmd.append(self.cmd_trst(op.asserted))
 
                 elif isinstance(op, spi.Cs):
                     if op.value is not None:
