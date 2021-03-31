@@ -1,6 +1,7 @@
 from ....model import PortComponent
 from ....protocol import base, i2c
 from ....util.pretty import metric
+import math
 
 class I2cTransactor(PortComponent):
     CMD_READ_ACK     = 0xc0
@@ -9,9 +10,11 @@ class I2cTransactor(PortComponent):
     CMD_START        = 0x20
     CMD_STOP         = 0x21
     CMD_DIV          = 0x00
+
+    pre_div = 2**5
     
     def __init__(self, route, base_freq):
-        self.base_freq = None
+        self.base_freq = base_freq
 
         super().__init__(route, "i2c")
 
@@ -23,10 +26,10 @@ class I2cTransactor(PortComponent):
             return 0
         if not freq:
             freq = 1e6
-        d = math.ceil(self.base_freq / float(freq * 4 * 8) / 4)
-        self.__div = min(0x1f, max(2, d))
+        d = math.ceil(self.base_freq / float(freq) / self.pre_div / 2)
+        self.__div = min(0x3f, max(2, d))
 
-        return self.base_freq / self.__div / 4 / 4 / 8
+        return self.base_freq / self.__div / self.pre_div / 2
 
     def execute(self, operation_list):
         ops = list(operation_list)
@@ -38,6 +41,8 @@ class I2cTransactor(PortComponent):
 
         prev = None
         for i, cur in enumerate(ops):
+            #self.logger.info("op %d %s", i, cur)
+
             next = ops[i+1] if i < len(ops) - 1 else None
 
             if not prev or (isinstance(prev, i2c.Read) != isinstance(cur, i2c.Read)):
@@ -101,6 +106,7 @@ class I2cTransactor(PortComponent):
         cmd.append(self.CMD_STOP)
         rsp_size += 1
 
+        #self.logger.info("Running %s", bytes(cmd).hex())
         rsp += self.port.execute(bytes(cmd), rsp_size)
 
         for op, s in starts:
