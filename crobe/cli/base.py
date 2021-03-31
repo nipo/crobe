@@ -9,15 +9,20 @@ import re
 class DomainFilter(logging.Filter):
     silent = set()
 
-    def __init__(self, off, only_re = None):
+    def __init__(self, off, silent_re = None, only_re = None):
         logging.Filter.__init__(self)
         self.silent = set(off)
+        self.silent_re = None
         self.only_re = None
         if only_re is not None:
             self.only_re = re.compile(only_re)
+        if silent_re is not None:
+            self.silent_re = re.compile(silent_re)
 
     def filter(self, record):
         if record.name in self.silent:
+            return False
+        if self.silent_re is not None and self.silent_re.match(record.name):
             return False
         if self.only_re is not None:
             if self.only_re.match(record.name) or record.name == "cli":
@@ -41,11 +46,12 @@ class RelativeFormatter(logging.Formatter):
 @click.option('-e', '--raw-error', is_flag = True, help = "Do not mangle exceptions")
 @click.option('-q', '--quiet', count = True, help = "Less verbosity")
 @click.option('--silent', multiple = True, type = str, help = "Silent one component by name")
+@click.option('--silent-re', type = str, help = "Silent one component by regex")
 @click.option('--only-re', type = str, help = "Only components by regex", default = None)
 @click.pass_context
-def cli(ctx, verbose, raw_error, quiet, silent, only_re):
+def cli(ctx, verbose, raw_error, quiet, silent, silent_re, only_re):
     formatter = RelativeFormatter()
-    f = DomainFilter(silent, only_re)
+    f = DomainFilter(silent, silent_re, only_re)
     ctx.obj["log_filter"] = f
     ctx.obj["raw_error"] = raw_error
 
