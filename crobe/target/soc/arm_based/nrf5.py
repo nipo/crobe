@@ -43,6 +43,8 @@ class nRF5(SoC, pin_control.Controller):
                 ios = [0, 1, 3, 4, 5, 8, 11, 12, 14, 15, 16, 17, 18, 20, 21]
             if self.GPIO_COUNT == 17:
                 ios = [0, 1, 4, 5, 6, 9, 10, 12, 14, 15, 16, 18, 20, 21, 25, 28, 30]
+            if self.GPIO_COUNT == 18:
+                ios = [0, 1, 2, 3, 4, 5, 6, 7, 8, 14, 15, 16, 17, 18, 20, 28, 29, 30]
             for i in ios:
                 self.gpio_map["P%02d" % i] = 0, i
         else:
@@ -258,11 +260,11 @@ class nRF5(SoC, pin_control.Controller):
                 value |= self.GPIO_PIN_CNF_PULL_UP
             elif mode & pin_control.Mode.ResistorDown_:
                 value |= self.GPIO_PIN_CNF_PULL_DOWN
-            if value & (pin_control.Mode.DriveUp_ | pin_control.Mode.DriveDown_) == (pin_control.Mode.DriveUp_ | pin_control.Mode.DriveDown_):
+            if mode & (pin_control.Mode.DriveUp_ | pin_control.Mode.DriveDown_) == (pin_control.Mode.DriveUp_ | pin_control.Mode.DriveDown_):
                 value |= self.GPIO_PIN_CNF_DRIVE_S0S1
-            elif value & pin_control.Mode.DriveUp_:
+            elif mode & pin_control.Mode.DriveUp_:
                 value |= self.GPIO_PIN_CNF_DRIVE_D0S1
-            elif value & pin_control.Mode.DriveDown_:
+            elif mode & pin_control.Mode.DriveDown_:
                 value |= self.GPIO_PIN_CNF_DRIVE_S0D1
             else:
                 value &= ~self.GPIO_PIN_CNF_DIR_OUTPUT
