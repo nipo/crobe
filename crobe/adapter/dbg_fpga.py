@@ -93,6 +93,7 @@ class Registers(ControlStatus):
     REG_I = 1
     REG_APP_CLK = 2
     REG_MODE = 3
+    REG_IO = 4
 
     def reg_update(self, id, mask, new_value):
         old = self.reg_read(id)
@@ -114,20 +115,28 @@ class Registers(ControlStatus):
         self.reg_update(self.REG_V, mask, value)
 
     def mode_set(self, mode = "NONE"):
-        if mode == "JTAG":
-            m = 1
+        if mode == "NONE":
+            m = 0x0
+        elif mode == "JTAG":
+            m = 0x1
         elif mode == "SWD":
-            m = 2
+            m = 0x2
         elif mode == "SPI":
-            m = 3
+            m = 0x3
         elif mode == "SPI-INV":
-            m = 4
+            m = 0x4
+        elif mode == "I2C-INT":
+            m = 0x5
+        elif mode == "I2C-EXT":
+            m = 0x6
+        elif mode == "FORCE":
+            m = 0x1f
         else:
             try:
                 m = int(mode)
             except:
                 m = 0
-        self.reg_update(self.REG_MODE, 0x7, m)
+        self.reg_update(self.REG_MODE, 0x1f, m)
 
     def reset_assert(self, asserted):
         self.logger.info("%s reset", "Holding" if asserted else "Releasing")
@@ -177,7 +186,27 @@ class DbgFpgaVoltage:
             self.regs.logger.info("Setting reference voltage to %1.1fV", value)
             self.regs.target_voltage_set(voltage = value+.025)
         self.regs.logger.info("Current target voltage: %1.3f", self.regs.target_voltage_get())
-    
+
+class I2cInterface(i2c.Interface):
+    def __init__(self, framed_i2c, base_freq, regs):
+        from crobe.component.nsl.transactor.i2c import I2cTransactor
+        self.__i2c_trx = I2cTransactor(framed_i2c, base_freq)
+        super().__init__(self.__i2c_trx, "i2c")
+        self.child_add(self.__i2c_trx)
+        self.voltage = DbgFpgaVoltage(regs)
+
+    def execute(self, op_list):
+        self.logger.info(op_list)
+        self.__i2c_trx.execute(op_list)
+
+    def freq_update(self, freq):
+        return self.__i2c_trx.freq_update(freq)
+
+    def option_set(self, opt):
+        if self.voltage.option_set(opt):
+            return
+        super().option_set(opt)
+
 class SwdInterface(swd.Interface):
     def __init__(self, framed_swd, base_freq, regs):
         from crobe.component.nsl.transactor.swd import SwdTransactor
@@ -271,7 +300,7 @@ class SpiInterface(spi.Interface):
 class Adapter(model.Adapter):
     EP_IN  = 0x81
     EP_OUT = 0x01
-    supported_interfaces = ["cs", "jtag", "swd"]
+    supported_interfaces = ["cs", "jtag", "swd", "spi", "spi-inv", "i2c", "i2c-int"]
 
     def bulk_out(self, data, timeout = None):
         self.logger.debug("BULK OUT %s", binascii.b2a_hex(data))
@@ -319,28 +348,41 @@ class Adapter(model.Adapter):
         r = Router(s)
         self.regs = Registers(r.route(0xf, 0x0).framed_endpoint())
         self.child_add(self.regs)
-
         self.base_freq = self.regs.base_freq()
+
+        self.swd = SwdInterface(r.route(0xf, 0x1).framed_endpoint(), self.base_freq, self.regs)
+        self.jtag = JtagInterface(r.route(0xf, 0x2).framed_endpoint(), self.base_freq, self.regs)
+        self.spi = SpiInterface(r.route(0xf, 0x3).framed_endpoint(), self.base_freq, self.regs)
+        self.i2c = I2cInterface(r.route(0xf, 0x4).framed_endpoint(), self.base_freq, self.regs)
+
+        self.child_add(self.jtag)
+        self.child_add(self.spi)
+        self.child_add(self.swd)
+        self.child_add(self.i2c)
 
         if interface_name.lower() == "cs":
             return self.regs
+
         elif interface_name.lower() == "jtag":
-            self.jtag = JtagInterface(r.route(0xf, 0x2).framed_endpoint(), self.base_freq, self.regs)
-            self.child_add(self.jtag)
             self.regs.mode_set("JTAG")
             return self.jtag
+
         elif interface_name.lower() == "spi":
-            self.spi = SpiInterface(r.route(0xf, 0x3).framed_endpoint(), self.base_freq, self.regs)
-            self.child_add(self.spi)
             self.regs.mode_set("SPI")
             return self.spi
+
         elif interface_name.lower() == "spi-inv":
-            self.spi = SpiInterface(r.route(0xf, 0x3).framed_endpoint(), self.base_freq, self.regs)
-            self.child_add(self.spi)
             self.regs.mode_set("SPI-INV")
             return self.spi
+
         elif interface_name.lower() == "swd":
-            self.swd = SwdInterface(r.route(0xf, 0x1).framed_endpoint(), self.base_freq, self.regs)
-            self.child_add(self.swd)
             self.regs.mode_set("SWD")
             return self.swd
+
+        elif interface_name.lower() == "i2c":
+            self.regs.mode_set("I2C-EXT")
+            return self.i2c
+
+        elif interface_name.lower() == "i2c-int":
+            self.regs.mode_set("I2C-INT")
+            return self.i2c
