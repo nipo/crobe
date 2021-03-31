@@ -6,7 +6,7 @@ def metric(value, unit = "", ascii = False):
     if not isinstance(value, Decimal):
         return value
     if value == 0:
-        return "0"
+        return "0" + unit
 
     if value < 0:
         value = -value
