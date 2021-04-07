@@ -23,8 +23,8 @@ class Adapter(model.Adapter):
         return self.enumerator.name
 
     def open(self, interface_name, **defaults):
-        if not interface_name.lower() in self.supported_interfaces:
-            return None
+#        if not interface_name.lower() in self.supported_interfaces:
+#            return None
 
         d = {}
         d.update(self.enumerator.defaults)
