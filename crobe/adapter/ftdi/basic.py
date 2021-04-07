@@ -1,6 +1,6 @@
 from .. import model
 from ...bitstring import BitString
-from ...protocol import jtag, base, swd, spi, chipcon, i2c
+from ...protocol import jtag, base, swd, spi, chipcon, i2c, bitbang
 from . import ftdi, api
 from ...util.pretty import metric
 from collections import deque
@@ -46,6 +46,9 @@ class Adapter(model.Adapter):
 
         if interface_name.lower() == "i2c":
             return I2cInterface(self, **d)
+
+        if interface_name.lower() == "mpsse_bb":
+            return MpsseBitbangInterface(self, **d)
 
 class AdapterEnumerator(model.AutoEnumerator):
     adapter_class = Adapter
@@ -802,3 +805,84 @@ class SpiInterface(BaseInterface, spi.Interface):
                     else:
                         l = len(op.mosi)
                     op.miso = rsp[op.__offset : op.__offset + l]
+
+class MpsseIoInfo(bitbang.IoInfo):
+    def __init__(self, name, high, no):
+        self.name = name
+        self.high = high
+        self.no = no
+        self.mode = bitbang.Mode.Input
+        self.value = False
+                    
+class MpsseBitbangInterface(BaseInterface, bitbang.Interface):
+    def __init__(self, adapter, channel = "A"):
+        BaseInterface.__init__(self, adapter, channel = channel)
+        bitbang.Interface.__init__(self, adapter, channel)
+        
+        self._ios = {}
+        for i in range(8):
+            self._ios[f"D{i}"] = MpsseIoInfo(f"D{i}", False, i)
+            self._ios[f"C{i}"] = MpsseIoInfo(f"C{i}", True, i)
+        
+    def _execute(self, operation_list):
+        ops = deque(operation_list)
+        pending = {}
+        cmd = b''
+        rsp_length = 0
+
+        for index, op in enumerate(ops):
+            if isinstance(op, bitbang.IoSet):
+                dirty = [False, False]
+                for iop in op.ops:
+                    io = self._ios[iop.io]
+                    if iop.mode != None:
+                        io.mode = iop.mode
+                    if iop.value != None:
+                        io.value = bool(iop.value)
+                    dirty[int(io.high)] = True
+                for d, (c, dc) in zip(dirty, [(api.MPSSE_SET_BITS_LOW, "D"), (api.MPSSE_SET_BITS_HIGH, "C")]):
+                    if not d:
+                        continue
+                    value = 0
+                    drive = 0
+                    for i in range(8):
+                        io = self._ios[f"{dc}{i}"]
+                        if (io.mode & bitbang.Mode.D1) and io.value:
+                            value |= 1 << i
+                            drive |= 1 << i
+                        if (io.mode & bitbang.Mode.D0) and not io.value:
+                            drive |= 1 << i
+                    cmd += bytes([c, value, drive])
+            elif isinstance(op, bitbang.IoGet):
+                needed = [False, False]
+                for ion in op.ios:
+                    io = self._ios[ion]
+                    needed[int(io.high)] = True
+                pending[index] = rsp_length, needed
+                for n, c in zip(needed, [api.MPSSE_GET_BITS_LOW, api.MPSSE_GET_BITS_HIGH]):
+                    if not n:
+                        continue
+                    cmd += bytes([c])
+                    rsp_length += 1
+
+            else:
+                raise base.ProtocolError("Unknown BITBANG operation %s" % type(op))
+
+        cmd += bytes([api.MPSSE_SEND_IMMEDIATE])
+
+        rsp = self.handle.execute(cmd, rsp_length)
+
+        for index, (offset, needed) in pending.items():
+            op = ops[index]
+            values = {}
+            for i, (dc, n) in enumerate(zip("DC", needed)):
+                if not n:
+                    continue
+                data = rsp[offset]
+                offset += 1
+                for i in range(8):
+                    values[f"{dc}{i}"] = bool((data >> i) & 1)
+            op.values = {x: values[x] for x in op.ios}
+
+    def io_info(self):
+        return self._ios
