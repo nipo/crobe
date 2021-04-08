@@ -131,7 +131,7 @@ class Component(object):
 
     def child_remove(self, obj):
         if obj.__parent is None:
-            raise RuntimeError("Object is already dandling")
+            raise RuntimeError("Object is already dangling")
         assert obj.__parent is self, obj.__parent
         obj.__parent = None
         self.__children.remove(obj)
