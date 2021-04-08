@@ -119,15 +119,24 @@ class Stm(SoC, pin_control.Controller):
         self.info = Info.from_soc(self)
         self.name = self.info.name
 
-        uid_blob = self.info.uid_read(self)
-        self.uid = int.from_bytes(uid_blob, byteorder = "little")
-        self.logger.info("MCU UID: %024x", self.uid)
+    def start(self):
+        super().start()
 
-        ram_size = self.ram_size_probe(0x20000000, 512 * 1024)
-        self.info.flash_add(lambda name, base, size, page: self.child_add(Stm32f1Flash(name, base, size, page, self)),
-                            self.info.flash_kb_get(self))
-        self.child_add(Stm32f1Opt("opt", 0x1ffff800, 16, 16, self))
-        self.child_add(BusRam("ram", 0x20000000, ram_size, self.buses[0]))
+        try:
+            uid_blob = self.info.uid_read(self)
+            self.uid = int.from_bytes(uid_blob, byteorder = "little")
+            self.logger.info("MCU UID: %024x", self.uid)
+        except:
+            self.logger.warning("Unable to read UID")
+
+        try:
+            ram_size = self.ram_size_probe(0x20000000, 512 * 1024)
+            self.info.flash_add(lambda name, base, size, page: self.child_add(Stm32f1Flash(name, base, size, page, self)),
+                                self.info.flash_kb_get(self))
+            self.child_add(Stm32f1Opt("opt", 0x1ffff800, 16, 16, self))
+            self.child_add(BusRam("ram", 0x20000000, ram_size, self.buses[0]))
+        except:
+            self.logger.warning("Unable to get RAM size")
 
         if self.info.uid_blob_is_coords:
             x, y, no, self.lot_number = struct.unpack("<HHB7s", uid_blob)
