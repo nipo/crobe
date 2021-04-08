@@ -308,7 +308,11 @@ class JtagInterface(BaseInterface, jtag.Interface):
                             # TODO anything shorter ?
                             cmd.append(self.handle.cmd_tms_shift(BitString(0, op.cycles-1)))
                     else:
-                        raise model.ProtocolError("Bad state sequence")
+                        self.logger.warning("Running from unknown state, passing through TLR")
+
+                        cmd.append(self.handle.cmd_tms_shift(BitString(-1, 5)))
+                        cmd.append(self.__cmd_reset_rti)
+                        self.__state = self.STATE_RTI
 
                 elif isinstance(op, jtag.GenericOperation):
                     cmd.append(self.handle.cmd_tms_shift(op.tms))
