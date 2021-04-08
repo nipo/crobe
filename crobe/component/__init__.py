@@ -22,3 +22,4 @@ from . import silabs
 from . import ethernet_phy
 from . import gowin
 from . import gigadevice
+from . import rfmd
