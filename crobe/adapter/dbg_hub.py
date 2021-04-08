@@ -81,13 +81,18 @@ class EnumeratorV2(basic.AdapterEnumerator):
         return adapter.device.vendor == "Nipo" and adapter.device.model == "Hub Debug v2"
 
 class HubJtagAdapter(basic.Adapter):
-    supported_interfaces = ["jtag"]
+    supported_interfaces = ["jtag", "i2c"]
 
     def open(self, interface_name):
         if interface_name == "jtag":
             return basic.Adapter.open(self, interface_name,
                                       gpio_output = 0x0b, gpio_value = 0x0,
                                       channel = "A")
+        elif interface_name == "i2c":
+            bb = basic.Adapter.open(self, "mpsse_bb", channel = "A")
+            i2c = bb.child_summon("i2c(sda=C1,scl=C0)")
+            bb.child_remove(i2c)
+            return i2c
 
 @model.HwRoot.register
 class HubJtagEnumerator(basic.AdapterEnumerator):
