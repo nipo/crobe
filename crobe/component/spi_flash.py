@@ -250,6 +250,7 @@ class SpiFlash(PortComponent, Bus):
             chosen = None
 
     def erase_sector(self, addr, si):
+        self.unprotect()
         self.write_enable(True)
         self.logger.info("Erasing %d bytes at %08x (%02x)", si["size"], addr, si["erase_cmd"][0])
         self.command(si["erase_cmd"], arg = self.addr(addr))
