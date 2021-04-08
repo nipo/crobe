@@ -10,7 +10,8 @@ class JtagFifoTransport(PortComponent):
         data = self.port.dr_discover(data_ir, shift_in = 0)
         if status_ir is not None:
             status = self.port.dr_discover(status_ir, shift_in = 0)
-            assert len(status) == 32
+            if len(status) != 32:
+                status_ir = None
         assert len(data) == width + 2, len(data)
         
         self.width = width
