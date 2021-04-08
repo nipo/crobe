@@ -320,6 +320,7 @@ class Handle(Context):
             blob += bytes([api.MPSSE_GET_BITS_LOW])
             rsize = 1
             padded = True
+        blob += bytes([api.MPSSE_SEND_IMMEDIATE])
 
         self.write(blob)
         rsp = b''
