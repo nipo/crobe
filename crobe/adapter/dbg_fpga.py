@@ -164,9 +164,13 @@ class Registers(ControlStatus):
 class DbgFpgaVoltage:
     def __init__(self, regs):
         self.regs = regs
+        self.cycle = False
         self.power = "track", None
 
     def option_set(self, value):
+        if value.startswith("poweroff"):
+            self.cycle = True
+            return True
         if value.startswith("vsupply="):
             self.power = "supply", float(value[8:])
             return True
@@ -175,6 +179,11 @@ class DbgFpgaVoltage:
             return True
 
     def apply(self):
+        if self.cycle:
+            self.regs.logger.info("Cycling target")
+            self.regs.target_voltage_set(supply = True, voltage = 0)
+            time.sleep(.2)
+
         mode, value = self.power
         if mode == "track":
             self.regs.logger.info("Tracking target voltage")
@@ -185,6 +194,7 @@ class DbgFpgaVoltage:
         else:
             self.regs.logger.info("Setting reference voltage to %1.1fV", value)
             self.regs.target_voltage_set(voltage = value+.025)
+        time.sleep(.2)
         self.regs.logger.info("Current target voltage: %1.3f", self.regs.target_voltage_get())
 
 class I2cInterface(i2c.Interface):
