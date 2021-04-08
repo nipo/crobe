@@ -343,7 +343,7 @@ class RegisterMap(object):
                 selected = slot == self.__getattr__(f"ID{i}_CFG_SEL")
                 div = (intg + ((res / den) if den else 0)) / 128
                 freq = (vco_freq / div) if div else 0
-                print(f"ID{i}{bank} = VCO / {div} ({intg // 128} + {(intg % 128) * den + res * 128} / {den}) = {metric(freq, 'Hz')}{' *' if selected else ''}{' w/SS (todo)' if ss_ena else ''}")
+                print(f"ID{i}{bank} = VCO / {div} ({intg // 128} + {(intg % 128) * den + res} / {den}) = {metric(freq, 'Hz')}{' *' if selected else ''}{' w/SS (todo)' if ss_ena else ''}")
                 if selected:
                     ndiv.append(freq)
 
@@ -401,7 +401,7 @@ class Si5332(i2c.Slave):
 
     def write(self, base, values):
         self.logger.debug("Reg write @0x%02x: %s", base, [f"{x:#4x}" for x in values])
-        self.write(bytes([base] + values))
+        super().write(bytes([base]) + bytes(values))
 
     def start(self):
         self.regs.reload()
@@ -425,7 +425,10 @@ class Si5332(i2c.Slave):
                          r.factory_opn_id4,
                          r.factory_opn_revision)
 
-        self.state_dump()
+    def commit(self):
+        self.write(6, b'\x01')
+        self.regs.flush()
+        self.write(6, b'\x02')
         
     def state_dump(self, xosc = 0, clkin_2 = 0, clkin_3 = 0):
         self.regs.state_dump(xosc, clkin_2, clkin_3)
