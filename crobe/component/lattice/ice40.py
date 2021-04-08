@@ -20,7 +20,8 @@ class Ice40SlaveSerial(PortComponent):
         pass
 
     def reset(self):
-        pass
+        self.port.port.reset = True
+        self.port.port.reset = False
 
     def load(self, program):
         self.port.port.reset = True
