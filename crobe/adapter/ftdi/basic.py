@@ -257,6 +257,7 @@ class JtagInterface(BaseInterface, jtag.Interface):
             pending = []
             cmd = [self.cmd_activity(True)]
             tdo_length = 0
+            timeout = 1.
 
             #while ops \
             #          and sum(len(x) for x in cmd) < self.handle.max_packet_size - 48 \
@@ -327,8 +328,10 @@ class JtagInterface(BaseInterface, jtag.Interface):
                         blob, counts = self.handle.cmd_shift_io(op.tdi)
                         op.__tdo = tdo_length, counts
                         tdo_length += sum([bc for bc, bic in counts])
+                        timeout += tdo_length * 1e5
                     else:
                         blob = self.handle.cmd_shift_out(op.tdi)
+                        timeout += len(op.tdi) * 1e5
                     cmd.append(blob)
 
                 elif isinstance(op, jtag.Pause):

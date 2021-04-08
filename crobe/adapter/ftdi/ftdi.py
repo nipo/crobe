@@ -10,6 +10,7 @@ import binascii
 import threading, queue
 import queue
 import math
+import time
 
 class FtdiError(base.CommunicationError):
     pass
@@ -300,22 +301,20 @@ class Handle(Context):
         size = self.check(api.read_data(self.context, blob, size))
         return bytes(blob[:size])
 
-    def read(self, rsize):
+    def read(self, rsize, timeout = 1.):
         ret = bytearray()
-        retries = 1000
+        deadline = time.time() + timeout
         while len(ret) < rsize:
             chunk = self._read(rsize - len(ret))
-            if chunk:
-                retries += 1000
             ret += chunk
-            retries -= 1
-            if not retries:
+
+            if time.time() > deadline:
                 print(">> %s" % binascii.b2a_hex(ret))
                 raise base.CommunicationError("Short read, expected %d bytes, had %d" % (rsize, len(ret)))
         self.logger.debug(">> %s", binascii.b2a_hex(ret))
         return ret
     
-    def execute(self, blob, rsize = None):
+    def execute(self, blob, rsize = None, timeout = 1.):
         padded = False
         if not rsize:
             blob += bytes([api.MPSSE_GET_BITS_LOW])
@@ -325,7 +324,7 @@ class Handle(Context):
         self.write(blob)
         rsp = b''
         while len(rsp) < rsize:
-            rsp += self.read(rsize - len(rsp))
+            rsp += self.read(rsize - len(rsp), timeout = timeout)
         if padded:
             rsp = rsp[:-1]
         return rsp
