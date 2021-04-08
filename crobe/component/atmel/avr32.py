@@ -5,7 +5,7 @@ parts = {
     0x1edc: "AVR32",
 }
 
-@jtag.Tap.db.register(*[PartId(0, 0x1f, p) for p in parts.keys()])
+@jtag.Chain.db.register(*[PartId(0, 0x1f, p) for p in parts.keys()])
 class Avr32(jtag.Tap):
     irlen = 5
 

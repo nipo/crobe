@@ -309,7 +309,7 @@ class Pic32Tap(EjtagTap):
         if read_tdo:
             return ops[-1].tdo
 
-@jtag.Tap.db.register(*[PartId(0, 0x29, p) for p in parts.keys()])
+@jtag.Chain.db.register(*[PartId(0, 0x29, p) for p in parts.keys()])
 class Pic32MZTap(Pic32Tap):
     def __init__(self, port, index, idcode):
         Pic32Tap.__init__(self, port, index, idcode)

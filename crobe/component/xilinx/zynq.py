@@ -15,7 +15,7 @@ parts = {
     0x03736093: "100",
 }
 
-@jtag.Tap.db.register(*[PartId.from_idcode(c).drop_revision() for c in parts.keys()])
+@jtag.Chain.db.register(*[PartId.from_idcode(c).drop_revision() for c in parts.keys()])
 class Zynq(series7.Series7, xadc.Xadc):
     irlen = 6
     max_freq = 66e6

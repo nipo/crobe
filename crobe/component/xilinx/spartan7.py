@@ -12,7 +12,7 @@ parts = {
     0x037c7093: "S100",
 }
 
-@jtag.Tap.db.register(*[PartId.from_idcode(c).drop_revision() for c in parts.keys()])
+@jtag.Chain.db.register(*[PartId.from_idcode(c).drop_revision() for c in parts.keys()])
 class Spartan7(series7.Series7, xadc.Xadc):
     db = Db("S7 applicative firmware")
     config_memory_size = 500*1024

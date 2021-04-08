@@ -8,7 +8,7 @@ parts = {
     0x0362d093: "XC7A35T",
 }
 
-@jtag.Tap.db.register(*[PartId.from_idcode(c).drop_revision() for c in parts.keys()])
+@jtag.Chain.db.register(*[PartId.from_idcode(c).drop_revision() for c in parts.keys()])
 class Artix7(series7.Series7, xadc.Xadc):
     irlen = 6
     max_freq = 66e6

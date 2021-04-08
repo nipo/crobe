@@ -21,7 +21,7 @@ parts = {
 
 # Reference: UG290-2.3E
 # https://www.gowinsemi.com/upload/database_doc/1130/document/6020e45f5fe13.pdf
-@jtag.Tap.db.register(*set([PartId(8, 0x0d, p) for p in parts.keys()]))
+@jtag.Chain.db.register(*set([PartId(8, 0x0d, p) for p in parts.keys()]))
 class GowinFpga(jtag.Tap):
     irlen = 8
     max_freq = 25e6

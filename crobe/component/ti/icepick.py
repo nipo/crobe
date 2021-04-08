@@ -1,7 +1,7 @@
 from ...part_id import PartId
 from ...protocol import jtag
 
-@jtag.Tap.db.register(PartId(0, 0x17, 0x1ce))
+@jtag.Chain.db.register(PartId(0, 0x17, 0x1ce))
 class IcePick(jtag.Tap):
     irlen = 6
 

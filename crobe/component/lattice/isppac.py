@@ -7,7 +7,7 @@ parts = {
     0x00147043: "ispPAC-POWR607",
 }
 
-@jtag.Tap.db.register(*[PartId.from_idcode(c).drop_revision() for c in parts.keys()])
+@jtag.Chain.db.register(*[PartId.from_idcode(c).drop_revision() for c in parts.keys()])
 class IspPac(jtag.Tap):
     irlen = 8
     max_freq = 25e6

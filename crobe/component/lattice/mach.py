@@ -483,7 +483,7 @@ class MachXO2Config(jtag.InstructionRegistry):
             self.cmd_run(1000),
             ])
 
-@jtag.Tap.db.register(*set([PartId.from_idcode(p.idcode).drop_revision() for p in parts.PARTS]))
+@jtag.Chain.db.register(*set([PartId.from_idcode(p.idcode).drop_revision() for p in parts.PARTS]))
 class MachXO2(jtag.Tap, MachXO2Config):
     """JTAG-based specialization of Mach-XO2 controller
 

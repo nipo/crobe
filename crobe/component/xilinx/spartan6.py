@@ -21,7 +21,7 @@ parts = {
     0x0403D093: "LX150T",
 }
 
-@jtag.Tap.db.register(*[PartId.from_idcode(c).drop_revision() for c in parts.keys()])
+@jtag.Chain.db.register(*[PartId.from_idcode(c).drop_revision() for c in parts.keys()])
 class Spartan6(series6.Series6):
     db = Db("S6 applicative firmware")
     config_memory_size = 500*1024

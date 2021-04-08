@@ -203,6 +203,12 @@ class Chain(PortComponent):
 
     This can handle SWD to JTAG switching or ICEPick initialization.
     """
+
+    """
+    TAP Registry, by IDCode.
+    """
+    db = Db("TAP IDCODE")
+
     def __init__(self, port):
         PortComponent.__init__(self, port, "JTAG Chain")
         self.name = self.port.port.name + "-Chain"
@@ -415,7 +421,7 @@ class Chain(PortComponent):
 
         for index, idcode in enumerate(id_codes):
             idcode = idcode or PartId.from_idcode(1)
-            tap = Tap.db.call(idcode, self, index, idcode)
+            tap = Chain.db.call(idcode, self, index, idcode)
             self.child_add(tap)
 
         self.logger.info("Discovered chain:")
@@ -424,7 +430,7 @@ class Chain(PortComponent):
 
     def irlen_for(self, idcode):
         try:
-            matches = Tap.db.get(idcode)
+            matches = Chain.db.get(idcode)
         except NoMatch:
             return 0
 
@@ -476,7 +482,7 @@ class Chain(PortComponent):
         self.idcodes.insert(index, idcode)
         self.ir_lengths.insert(index, irlen)
 
-        tap = Tap.db.call(idcode, self, index)
+        tap = Chain.db.call(idcode, self, index)
         self.logger.info("Inserting %s at index %d in chain, irlen=%d", idcode, index, irlen)
 
         self.children.insert(index, tap)
@@ -586,6 +592,7 @@ class TapInstruction:
         if read_tdo or dr is not None or read_ir:
             return op.tdo
 
+@Chain.db.register_default
 class Tap(PortComponent, InstructionRegistry):
     """
     A TAP model, i.e. a device in a JTAG chain.  This transparently
@@ -611,12 +618,12 @@ class Tap(PortComponent, InstructionRegistry):
     """
     irlen = None
 
-    """
-    TAP Registry, by IDCode.
-    """
-    db = Db("TAP IDCODE")
-
     max_freq = None
+
+    """
+    TAP children registry, by usage
+    """
+    db = Db("TAP subprotocol")
 
     def __init__(self, port, index, idcode):
         self.idcode = idcode
@@ -767,8 +774,9 @@ class Tap(PortComponent, InstructionRegistry):
         """
         return TapRun(cycles)
 
-Tap.db.register_default(Tap)
-    
+    def child_spawn(self, sub):
+        return self.db.call(sub, self)
+
 class TapOperation(object):
     def __str__(self):
         return "<%s>" % self.__class__.__name__
