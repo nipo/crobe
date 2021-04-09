@@ -23,3 +23,4 @@ from . import ethernet_phy
 from . import gowin
 from . import gigadevice
 from . import rfmd
+from . import bscan_bitbang
