@@ -103,7 +103,10 @@ class Device(object):
         return "<%s %r %r %r>" % (self.connection_id, self.vendor, self.model, self.serial)
         
     def open(self, interface = "A", mode = "mpsse", **defaults):
-        if mode == "mpsse":
+        if mode == "engine":
+            from .mpsse import Engine
+            return Engine(self, interface)
+        elif mode == "mpsse":
             return Mpsse(self, interface, **defaults)
         elif mode == "ft245_sync_fifo":
             return Handle(self.connection_id, interface, "SYNCFF")
