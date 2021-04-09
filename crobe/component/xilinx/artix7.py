@@ -34,3 +34,5 @@ class Artix7(series7.Series7, xadc.Xadc):
     def child_spawn(self, mode = None):
         if mode == "spi":
             return self.spi_interface()
+        return super().child_spawn(mode)
+

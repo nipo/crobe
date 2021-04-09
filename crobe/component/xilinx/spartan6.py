@@ -1,6 +1,5 @@
 from ...part_id import PartId
 from ...protocol import jtag
-from ...db import Db
 import os, os.path
 from . import series6
 import pkg_resources
@@ -23,7 +22,6 @@ parts = {
 
 @jtag.Chain.db.register(*[PartId.from_idcode(c).drop_revision() for c in parts.keys()])
 class Spartan6(series6.Series6):
-    db = Db("S6 applicative firmware")
     config_memory_size = 500*1024
 
     PART_NAMES = {
@@ -47,17 +45,18 @@ class Spartan6(series6.Series6):
         self.name = "Spartan6-" + parts[int(self.idcode.drop_revision())]
 
     def child_spawn(self, sub):
-        return self.db.call(sub, self)
+        if sub == "spi":
+            return self.spi_slave()
+        return super().child_spawn(sub)
 
-@Spartan6.db.register("spi")
-def spi_slave(s6):
-    from ...loadable.object import Program
+    def spi_slave(self):
+        from ...loadable.object import Program
 
-    fw_name = "fw/" + s6.name.lower() + "_jtag_spi.bit.gz"
-    fd = pkg_resources.resource_filename(__name__, fw_name)
-    s6.load(Program.from_file(fd))
+        fw_name = "fw/" + self.name.lower() + "_jtag_spi.bit.gz"
+        fd = pkg_resources.resource_filename(__name__, fw_name)
+        self.load(Program.from_file(fd))
 
-    from ..jtag_spi_bridge import JtagSpiBridge
+        from ..jtag_spi_bridge import JtagSpiBridge
 
-    bridge = JtagSpiBridge(s6, s6.IR_USER1, s6.IR_USER2, 50e6)
-    return bridge
+        bridge = JtagSpiBridge(self, self.IR_USER1, self.IR_USER2, 50e6)
+        return bridge
