@@ -293,7 +293,8 @@ class MachXO2Config(jtag.InstructionRegistry):
         return self.LSC_READ_FEATURE.shift(0)
 
     def busy_get(self):
-        return self.LSC_CHECK_BUSY.shift(0)
+#        return self.Status(self.status_get()).Busy
+        return self.LSC_CHECK_BUSY.shift(0) & 1
 
     def status_check(self, expect_clear, expect_set):
         mask = expect_set | expect_clear
@@ -340,6 +341,7 @@ class MachXO2Config(jtag.InstructionRegistry):
 
     def _mem_read(self, offset, size, addr_init_op, offset_base):
         assert self.__bg_enable is not None
+        self._isc_enable(self.TARGET_FLASH, True)
         self.status_check(0, 0xa00)
 
         addr_init_op.shift(offset_base >> 28)
