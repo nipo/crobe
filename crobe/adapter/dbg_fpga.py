@@ -129,6 +129,8 @@ class Registers(ControlStatus):
             m = 0x5
         elif mode == "I2C-EXT":
             m = 0x6
+        elif mode == "I2C-TGT":
+            m = 0x7
         elif mode == "FORCE":
             m = 0x1f
         else:
@@ -310,7 +312,7 @@ class SpiInterface(spi.Interface):
 class Adapter(model.Adapter):
     EP_IN  = 0x81
     EP_OUT = 0x01
-    supported_interfaces = ["cs", "jtag", "swd", "spi", "spi-inv", "i2c", "i2c-int"]
+    supported_interfaces = ["cs", "jtag", "swd", "spi", "spi-inv", "i2c", "i2c-int", "i2c-ext"]
 
     def bulk_out(self, data, timeout = None):
         self.logger.debug("BULK OUT %s", binascii.b2a_hex(data))
@@ -390,6 +392,10 @@ class Adapter(model.Adapter):
             return self.swd
 
         elif interface_name.lower() == "i2c":
+            self.regs.mode_set("I2C-TGT")
+            return self.i2c
+
+        elif interface_name.lower() == "i2c-ext":
             self.regs.mode_set("I2C-EXT")
             return self.i2c
 
