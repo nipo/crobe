@@ -9,7 +9,7 @@ class I2cInterface(i2c.Interface):
         self.scl = None
 
     def freq_update(self, freq):
-        return freq or 0
+        return self.port.freq_cap("i2c", freq or 400e3)
         
     def start(self):
         if not self.sda or not self.scl:
