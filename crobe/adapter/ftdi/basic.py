@@ -962,80 +962,78 @@ class SpiInterface(EngineInterface, spi.Interface):
                 op.miso = bytes(op.miso)
 
 class MpsseIoInfo(bitbang.IoInfo):
-    def __init__(self, name, high, no):
+    def __init__(self, name, no):
         self.name = name
-        self.high = high
         self.no = no
         self.mode = bitbang.Mode.Input
         self.value = False
                     
-class MpsseBitbangInterface(BaseInterface, bitbang.Interface):
+class MpsseBitbangInterface(EngineInterface, bitbang.Interface):
     def __init__(self, adapter, channel = "A"):
-        BaseInterface.__init__(self, adapter, channel = channel)
+        EngineInterface.__init__(self, adapter, channel = channel)
         bitbang.Interface.__init__(self, adapter, channel)
         
         self._ios = {}
         for i in range(8):
-            self._ios[f"D{i}"] = MpsseIoInfo(f"D{i}", False, i)
-            self._ios[f"C{i}"] = MpsseIoInfo(f"C{i}", True, i)
+            self._ios[f"D{i}"] = MpsseIoInfo(f"D{i}", i)
+            self._ios[f"C{i}"] = MpsseIoInfo(f"C{i}", i+8)
         
     def _execute(self, operation_list):
-        ops = deque(operation_list)
-        pending = {}
-        cmd = b''
-        rsp_length = 0
+        mpsse_ops = []
+        tdos = []
 
-        for index, op in enumerate(ops):
+        for index, op in enumerate(operation_list):
+            cmd_count_before = len(mpsse_ops)
+            
             if isinstance(op, bitbang.IoSet):
-                dirty = [False, False]
+                mask = 0
+                value = 0
+                oe = 0
                 for iop in op.ops:
                     io = self._ios[iop.io]
-                    if iop.mode != None:
+
+                    if iop.mode is not None:
                         io.mode = iop.mode
-                    if iop.value != None:
-                        io.value = bool(iop.value)
-                    dirty[int(io.high)] = True
-                for d, (c, dc) in zip(dirty, [(api.MPSSE_SET_BITS_LOW, "D"), (api.MPSSE_SET_BITS_HIGH, "C")]):
-                    if not d:
-                        continue
-                    value = 0
-                    drive = 0
-                    for i in range(8):
-                        io = self._ios[f"{dc}{i}"]
-                        if (io.mode & bitbang.Mode.D1) and io.value:
-                            value |= 1 << i
-                            drive |= 1 << i
-                        if (io.mode & bitbang.Mode.D0) and not io.value:
-                            drive |= 1 << i
-                    cmd += bytes([c, value, drive])
+
+                    if iop.value is not None:
+                        mask |= 1 << io.no
+                        if (io.mode & bitbang.Mode.D1) and iop.value:
+                            value |= mask
+                            oe |= mask
+                        if (io.mode & bitbang.Mode.D0) and not iop.value:
+                            oe |= mask
+                mpsse_ops += self.cmds_gpio(mask = mask, oe = oe, value = value)
+
             elif isinstance(op, bitbang.IoGet):
                 needed = [False, False]
                 for ion in op.ios:
                     io = self._ios[ion]
-                    needed[int(io.high)] = True
-                pending[index] = rsp_length, needed
-                for n, c in zip(needed, [api.MPSSE_GET_BITS_LOW, api.MPSSE_GET_BITS_HIGH]):
+                    needed[int(io.no > 7)] = True
+
+                for n, c in zip(needed, [mpsse.GetBitsLow, mpsse.GetBitsHigh]):
                     if not n:
                         continue
-                    cmd += bytes([c])
-                    rsp_length += 1
+                    mpsse_ops.append(c())
 
             else:
                 raise base.ProtocolError("Unknown BITBANG operation %s" % type(op))
 
-        rsp = self.handle.execute(cmd, rsp_length)
+            cmd_count_after = len(mpsse_ops)
+            tdos.append((cmd_count_before, cmd_count_after))
 
-        for index, (offset, needed) in pending.items():
-            op = ops[index]
-            values = {}
-            for i, (dc, n) in enumerate(zip("DC", needed)):
-                if not n:
-                    continue
-                data = rsp[offset]
-                offset += 1
-                for i in range(8):
-                    values[f"{dc}{i}"] = bool((data >> i) & 1)
-            op.values = {x: values[x] for x in op.ios}
+        self._mpsse_run(mpsse_ops)
+
+        for op, (before, after) in zip(operation_list, tdos):
+            if not isinstance(op, bitbang.IoGet):
+                continue
+            rv = 0
+            for cmd in mpsse_ops[before : after]:
+                offset = 8 if isinstance(cmd, mpsse.GetBitsHigh) else 0
+                rv |= cmd.value << offset
+            op.values = {}
+            for name in op.ios:
+                iod = self._ios[name]
+                op.values[name] = (rv >> iod.no) & 1
 
     def io_info(self):
         return self._ios
