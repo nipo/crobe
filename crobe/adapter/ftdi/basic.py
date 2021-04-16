@@ -372,26 +372,32 @@ class EngineInterface(object):
         self.handle.execute(pre + list(operation_list) + post)
     
 class JtagInterface(EngineInterface, jtag.Interface):
+    __cmd_rti_dr_pause = mpsse.ShiftTms(0b0101, 4)
+    __cmd_rti_ir_pause = mpsse.ShiftTms(0b01011, 5)
+    __cmd_update = mpsse.ShiftTms(0b11, 2)
+    __cmd_pause_shift = mpsse.ShiftTms(0b01, 2)
+    __cmd_exit1_pause = mpsse.ShiftTms(0b0, 1)
+    __cmd_shift_end = staticmethod(lambda tdi, read = False: mpsse.ShiftTms(0b0, 1, tdi = tdi, read = read))
+    __cmd_rti1 = mpsse.ShiftTms(0b0, 1)
+    __cmd_reset = mpsse.ShiftTms(0b11111, 5)
+
     def __init__(self, adapter, oe_pin = None, oen_pin = None, name = None, **args):
-        args["gpio_output"] = (args.get("gpio_output", 0) & 0xfff0) | 0xb
         EngineInterface.__init__(self, adapter, **args)
         jtag.Interface.__init__(self, adapter, name)
         self.freq_cap("hardware", adapter.freq_max)
 
         self.__state = None
-        self.__cmd_rti_dr_pause = mpsse.ShiftTms(0b0101, 4)
-        self.__cmd_rti_ir_pause = mpsse.ShiftTms(0b01011, 5)
-        self.__cmd_pause_capture_dr_pause = mpsse.ShiftTms(0x0101111, 6)
-        self.__cmd_pause_capture_ir_pause = mpsse.ShiftTms(0b01011111, 7)
-        self.__cmd_update = mpsse.ShiftTms(0b11, 2)
-        self.__cmd_pause_shift = mpsse.ShiftTms(0b01, 2)
-        self.__cmd_exit1_pause = mpsse.ShiftTms(0b0, 1)
-        self.__cmd_rti1 = mpsse.ShiftTms(0b0, 1)
-        self.__cmd_reset = mpsse.ShiftTms(0b11111, 5)
 
+    def start(self):
+        # Dont execute, super().start() will init GPIOs
+        self.cmds_gpio(mpsse.Pin.Tck | mpsse.Pin.Tdi | mpsse.Pin.Tdo | mpsse.Pin.Tms,
+                       0,
+                       mpsse.Pin.Tck | mpsse.Pin.Tdi | mpsse.Pin.Tms)
+        EngineInterface.start(self)
+        jtag.Interface.start(self)
+        
     def _execute(self, operation_list):
         self.logger.debug("Running %s", operation_list)
-        max_shift_bits = 65535*8
         mpsse_ops = []
         tdos = {}
 
@@ -402,7 +408,7 @@ class JtagInterface(EngineInterface, jtag.Interface):
                 if self.__state == self.STATE_RTI:
                     mpsse_ops.append(self.__cmd_rti_dr_pause)
                 elif self.__state == self.STATE_PAUSE:
-                    mpsse_ops.append(self.__cmd_pause_capture_dr_pause)
+                    mpsse_ops.append(self.__cmd_update + self.__cmd_rti_dr_pause)
                 else:
                     raise model.ProtocolError("Bad state sequence")
                 self.__state = self.STATE_PAUSE
@@ -411,7 +417,7 @@ class JtagInterface(EngineInterface, jtag.Interface):
                 if self.__state == self.STATE_RTI:
                     mpsse_ops.append(self.__cmd_rti_ir_pause)
                 elif self.__state == self.STATE_PAUSE:
-                    mpsse_ops.append(self.__cmd_pause_capture_ir_pause)
+                    mpsse_ops.append(self.__cmd_update + self.__cmd_rti_ir_pause)
                 else:
                     raise model.ProtocolError("Bad state sequence")
                 self.__state = self.STATE_PAUSE
@@ -428,11 +434,17 @@ class JtagInterface(EngineInterface, jtag.Interface):
                     mpsse_ops.append(self.__cmd_rti1)
                     left = op.cycles - 1
                     while left >= 8:
-                        c = min(left, 65536 * 8) & ~7
-                        mpsse_ops.append(mpsse.ClockBits8(c))
+                        c = min(left, 65536 * 8)
+                        if self.handle.can_pad:
+                            mpsse_ops.append(mpsse.ClockBits8(c // 8))
+                        else:
+                            mpsse_ops.append(mpsse.ShiftBits8(b'\x00' * (c // 8)))
                         left -= c
                     if left:
-                        mpsse_ops.append(mpsse.ClockBits(left))
+                        if self.handle.can_pad:
+                            mpsse_ops.append(mpsse.ClockBits(left))
+                        else:
+                            mpsse_ops.append(mpsse.ShiftBits(0, left))
                 else:
                     self.logger.warning("Running from unknown state, passing through TLR")
 
@@ -447,7 +459,7 @@ class JtagInterface(EngineInterface, jtag.Interface):
                 self.__state = self.STATE_RESET
 
             elif isinstance(op, base.Reset):
-                mpsse_ops.append(self.cmds_system_reset(op.asserted))
+                mpsse_ops += self.cmds_system_reset(op.asserted)
 
             elif isinstance(op, jtag.Shift):
                 assert self.__state == self.STATE_PAUSE
@@ -455,53 +467,57 @@ class JtagInterface(EngineInterface, jtag.Interface):
                 if isinstance(op.tdi, int):
                     cycle_count = op.tdi
                     data_in = None
-                    first = 0
                 elif isinstance(op.tdi, bytes):
                     cycle_count = len(op.tdi) * 8
                     data_in = BitString(op.tdi)
-                    first = op.tdi[0] & 1
                 else:
                     assert isinstance(op.tdi, BitString)
                     cycle_count = len(op.tdi)
                     data_in = op.tdi
-                    first = op.tdi[0]
 
-                mpsse_ops.append(mpsse.ShiftTms(0b01, 2, tdi = first))
+                if cycle_count:
+                    mpsse_ops.append(self.__cmd_pause_shift)
 
-                cmd_count_before = len(mpsse_ops)
-                
-                if data_in is None and not op.read_tdo:
-                    left = cycle_count - 1
-                    while left >= 8:
-                        c = min(left, 65536 * 8)
-                        mpsse_ops.append(mpsse.ClockBits8(c))
-                        left -= c
-                    if left:
-                        mpsse_ops.append(mpsse.ClockBits(left))
-                    mpsse_ops.append(mpsse.ShiftTms(1, 1))
-                elif data_in is None and op.read_tdo:
-                    left = cycle_count - 1
-                    while left >= 8:
-                        c = min(left, 65536 * 8)
-                        mpsse_ops.append(mpsse.ShiftBits8(None, c, read = True))
-                        left -= c
-                    if left:
-                        mpsse_ops.append(mpsse.ShiftBits(None, left, read = True))
-                    mpsse_ops.append(mpsse.ShiftTms(1, 1, read = True))
-                else:
-                    left = cycle_count - 1
-                    while left >= 8:
-                        c = min(left, 65536 * 8)
-                        mpsse_ops.append(mpsse.ShiftBits8(data_in[-1-left : -1-left+c], c, read = True))
-                        left -= c
-                    if left:
-                        mpsse_ops.append(mpsse.ShiftBits(data_in[-1-left : -1], left, read = True))
-                    mpsse_ops.append(mpsse.ShiftTms(1, 1, read = True, tdi = data_in[-1]))
+                    cmd_count_before = len(mpsse_ops)
 
-                cmd_count_after = len(mpsse_ops)
-                tdos[index] = (cmd_count_before, cmd_count_after)
+                    if data_in is None and not op.read_tdo:
+                        left = cycle_count - 1
+                        while left >= 8:
+                            c = min(left, 65536 * 8)
+                            if self.handle.can_pad:
+                                mpsse_ops.append(mpsse.ClockBits8(c // 8))
+                            else:
+                                mpsse_ops.append(mpsse.ShiftBits8(b'\x00' * (c // 8)))
+                            left -= c
+                        if left:
+                            if self.handle.can_pad:
+                                mpsse_ops.append(mpsse.ClockBits(left))
+                            else:
+                                mpsse_ops.append(mpsse.ShiftBits(0, left))
+                        mpsse_ops.append(self.__cmd_shift_end(read = False, tdi = 0))
+                    elif data_in is None and op.read_tdo:
+                        left = cycle_count - 1
+                        while left >= 8:
+                            c = min(left, 65536 * 8) & ~7
+                            mpsse_ops.append(mpsse.ShiftBits8(None, c, read = True))
+                            left -= c
+                        if left:
+                            mpsse_ops.append(mpsse.ShiftBits(None, left, read = True))
+                        mpsse_ops.append(self.__cmd_shift_end(read = True, tdi = 0))
+                    else:
+                        left = cycle_count - 1
+                        while left >= 8:
+                            c = min(left, 65536 * 8) & ~7
+                            mpsse_ops.append(mpsse.ShiftBits8(bytes(data_in[-1-left : -1-left+c]), c, read = True))
+                            left -= c
+                        if left:
+                            mpsse_ops.append(mpsse.ShiftBits(int(data_in[-1-left : -1]), left, read = True))
+                        mpsse_ops.append(self.__cmd_shift_end(read = True, tdi = data_in[-1]))
 
-                mpsse_ops.append(self.__cmd_exit1_pause)
+                    cmd_count_after = len(mpsse_ops)
+                    tdos[index] = (cmd_count_before, cmd_count_after)
+
+                    mpsse_ops.append(self.__cmd_exit1_pause)
 
             elif isinstance(op, jtag.Pause):
                 pass
