@@ -898,79 +898,79 @@ class ChipconInterface(BaseInterface, chipcon.Interface):
 
         self.handle.execute(self.cmd_activity(False))
 
-class SpiInterface(BaseInterface, spi.Interface):
-    MAX_PACKET_SIZE = 2048
-
+class SpiInterface(EngineInterface, spi.Interface):
     def __init__(self, adapter, csn_pin = None, name = None, **args):
-        args["gpio_output"] = (args["gpio_output"] & 0xfff0) | 0x3
-        BaseInterface.__init__(self, adapter, **args)
+        EngineInterface.__init__(self, adapter, **args)
         spi.Interface.__init__(self, adapter, name)
         self.freq_cap("hardware", adapter.freq_max)
 
-        self.__cmd_cs_on = self.handle.cmd_gpio_mask_set(
-            1 << csn_pin, 1 << csn_pin, 0 << csn_pin)
-        self.__cmd_cs_off = self.handle.cmd_gpio_mask_set(
-            1 << csn_pin, 1 << csn_pin, 1 << csn_pin)
-
+        self.__cs = PinControl(self, n_pin = csn_pin)
         self.child_add(spi.Target(self, "cs0", 0))
 
-    MAX_PACKET_SIZE = 2048
+    def start(self):
+        # Dont execute, super().start() will init GPIOs
+        self.cmds_gpio(mpsse.Pin.Tck | mpsse.Pin.Tdi | mpsse.Pin.Tdo,
+                       0,
+                       mpsse.Pin.Tck | mpsse.Pin.Tdi)
+        EngineInterface.start(self)
+        spi.Interface.start(self)
         
     def _execute(self, operation_list):
-        ops = deque(operation_list)
+        self.logger.debug("Running %s", operation_list)
+        mpsse_ops = []
+        tdos = {}
 
-        while ops:
-            pending = []
-            cmd = b''
-            rsp_length = 0
+        for index, op in enumerate(operation_list):
+            cmd_count_before = len(mpsse_ops)
 
-            #while ops and len(cmd) < self.MAX_PACKET_SIZE - 48 and rsp_length < self.MAX_PACKET_SIZE - 48:
-            while ops:
-                op = ops.popleft()
-                pending.append(op)
-
-                if isinstance(op, spi.Shift):
-                    if isinstance(op.mosi, (bytes, bytearray)):
-                        io = api.MPSSE_WRITE_NEG | api.MPSSE_WRITE
-                        if op.read_miso:
-                            io |= api.MPSSE_READ
-                        op.__offset = rsp_length
-                        for i in range(0, len(op.mosi), 1 << 16):
-                            chunk = op.mosi[i : i+(1 << 16)]
-                            cmd += struct.pack("<BH", io, len(chunk) - 1) + chunk
-                        if op.read_miso:
-                            rsp_length += len(op.mosi)
-                    elif isinstance(op.mosi, int):
-                        io = api.MPSSE_READ
-                        op.__offset = rsp_length
-                        for i in range(0, op.mosi, 1<<16):
-                            cl = min(1<<16, op.mosi - i)
-                            cmd += struct.pack("<BH", io, cl - 1)
-                        rsp_length += op.mosi
-                    else:
-                        raise ValueError("Unhandled data type for mosi", op.mosi)
-
-                elif isinstance(op, base.Reset):
-                    cmd.append(self.cmd_trst(op.asserted))
-
-                elif isinstance(op, spi.Cs):
-                    if op.value is not None:
-                        cmd += self.__cmd_cs_on
-                    else:
-                        cmd += self.__cmd_cs_off
-
+            if isinstance(op, spi.Shift):
+                if isinstance(op.mosi, (bytes, bytearray)):
+                    for off in range(0, len(op.mosi), 65536):
+                        chunk = bytes(op.mosi[off : off + 65536])
+                        mpsse_ops.append(
+                            mpsse.ShiftBits8(chunk,
+                                             write_pol = '-', read_pol = '+',
+                                             lsb_first = False,
+                                             read = op.read_miso))
+                elif isinstance(op.mosi, int) and op.read_miso:
+                    for off in range(0, op.mosi, 65536):
+                        chunk_len = min(op.mosi - off, 65536)
+                        mpsse_ops.append(
+                            mpsse.ShiftBits8(chunk_len,
+                                             write_pol = '-', read_pol = '+',
+                                             lsb_first = False,
+                                             read = True))
+                elif isinstance(op.mosi, int) and not op.read_miso:
+                    for off in range(0, op.mosi, 65536):
+                        chunk_len = min(op.mosi - off, 65536)
+                        if self.handle.can_pad:
+                            mpsse_ops.append(mpsse.ClockBits8(chunk_len))
+                        else:
+                            mpsse_ops.append(mpsse.ShiftBits8(b'\x00' * chunk_len))
                 else:
-                    raise base.ProtocolError("Unknown SPI operation %s" % type(op))
+                    raise ValueError("Unhandled data type for mosi", op.mosi)
 
-            rsp = self.handle.execute(cmd, rsp_length)
+            elif isinstance(op, base.Reset):
+                mpsse_ops += self.cmds_system_reset(op.asserted)
 
-            for op in pending:
-                if isinstance(op, spi.Shift) and op.read_miso:
-                    if isinstance(op.mosi, int):
-                        l = op.mosi
-                    else:
-                        l = len(op.mosi)
-                    op.miso = rsp[op.__offset : op.__offset + l]
+            elif isinstance(op, spi.Cs):
+                mpsse_ops += self.__cs.cmds_set(op.value == 0)
+
+            else:
+                raise base.ProtocolError("Unknown SPI operation %s" % type(op))
+
+            cmd_count_after = len(mpsse_ops)
+            tdos[index] = (cmd_count_before, cmd_count_after)
+
+        self._mpsse_run(mpsse_ops)
+
+        for index, op in enumerate(operation_list):
+            if isinstance(op, spi.Shift) and op.read_miso:
+                op.miso = BitString()
+                l, r = tdos[index]
+                for mo in mpsse_ops[l:r]:
+                    op.miso += mo.data
+                op.miso = bytes(op.miso)
 
 class MpsseIoInfo(bitbang.IoInfo):
     def __init__(self, name, high, no):
