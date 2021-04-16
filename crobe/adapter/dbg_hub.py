@@ -4,7 +4,7 @@ from .ftdi import basic
 __all__ = []
 
 class DbgV1(basic.Adapter):
-    supported_interfaces = ["jtag", "swd", "spi", "i2c", "spi_rst"]
+    supported_interfaces = ["jtag", "swd", "spi", "i2c", "spi_rst", "1wire"]
 
     def open(self, interface_name):
         if interface_name == "jtag":
@@ -24,6 +24,10 @@ class DbgV1(basic.Adapter):
                                       channel = "A",
                                       csn_pin = 3,
                                       reset_od_pin = 4)
+        elif interface_name == "1wire":
+            return basic.Adapter.open(self, interface_name,
+                                      gpio_output = 0x22, gpio_value = 0x02,
+                                      channel = "B")
         elif interface_name == "spi_rst":
             return basic.Adapter.open(self, "spi",
                                       gpio_output = 0xfb, gpio_value = 0x20,
