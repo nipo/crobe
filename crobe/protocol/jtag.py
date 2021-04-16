@@ -813,7 +813,7 @@ class TapDrShift(TapOperation):
 
     def __str__(self):
         if self.ir:
-            return "<DrShift 0x%x %s %s>" % (self.ir,
+            return "<DrShift %s %s %s>" % (self.ir,
                                              self.tdi,
                                              BitString(self.tdo, len(self.tdi or [])))
         else:
