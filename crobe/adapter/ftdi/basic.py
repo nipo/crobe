@@ -1,6 +1,6 @@
 from .. import model
 from ...bitstring import BitString
-from ...protocol import jtag, base, swd, spi, chipcon, i2c, bitbang
+from ...protocol import jtag, base, swd, spi, chipcon, i2c, bitbang, one_wire
 from . import ftdi, api, mpsse
 from ...util.pretty import metric
 from collections import deque
@@ -47,6 +47,9 @@ class Adapter(model.Adapter):
 
         if interface_name.lower() == "i2c":
             return I2cInterface(self, **d)
+
+        if interface_name.lower() == "1wire":
+            return OneWireInterface(self, **d)
 
         if interface_name.lower() == "mpsse_bb":
             return MpsseBitbangInterface(self, **d)
@@ -1037,3 +1040,149 @@ class MpsseBitbangInterface(EngineInterface, bitbang.Interface):
 
     def io_info(self):
         return self._ios
+
+class OneWireInterface(EngineInterface, one_wire.Interface):
+    """
+    1-Wire implementation using MPSSE D1/D2 lines (data out and data
+    in) with an external opendrain gate on D1. This is compatible with
+    I2C adaptation for SDA line.
+
+    This driver implements "recovery" (strongly driving DQ line up) for
+    phantom powering by driving D2 line high during recovery time.
+    """
+    def __init__(self, adapter, name = None, **args):
+        EngineInterface.__init__(self, adapter, **args)
+        one_wire.Interface.__init__(self, adapter, name)
+        self.freq_cap("hardware", adapter.freq_max)
+
+    def start(self):
+        self.cmds_gpio(mpsse.Pin.Tck | mpsse.Pin.Tdi | mpsse.Pin.Tdo,
+                       0,
+                       mpsse.Pin.Tdi)
+        EngineInterface.start(self)
+        one_wire.Interface.start(self)
+
+    def _cmds_pad(self, time):
+        """
+        Spill MPSSE commands to get idle DQ line for /time/
+        """
+        cycles = int(math.ceil(self.freq * time))
+        ret = []
+        while cycles >= 8:
+            c = min(cycles // 8, 65536)
+            ret.append(mpsse.ShiftBits8(b'\xff' * c, read = False))
+            cycles -= c * 8
+        if cycles:
+            ret.append(mpsse.ShiftBits(0xff, cycles, read = False))
+        return ret
+
+    def _cmds_recover(self, time):
+        """
+        Spill MPSSE commands to get idle DQ line driven high for /time/
+        """
+        ret = self.cmds_gpio(mpsse.Pin.Tdo, mpsse.Pin.Tdo, mpsse.Pin.Tdo)
+        ret += self._cmds_pad(time)
+        ret += self.cmds_gpio(mpsse.Pin.Tdo, 0, 0)
+        return ret
+
+    def _cmds_zero(self, time):
+        """
+        Spill MPSSE commands to get idle DQ line driven low for /time/
+        """
+        cycles = int(math.ceil(self.freq * time))
+        ret = []
+        while cycles >= 8:
+            c = min(cycles // 8, 65536)
+            ret.append(mpsse.ShiftBits8(b'\x00' * c, read = False))
+            cycles -= c * 8
+        if cycles:
+            ret.append(mpsse.ShiftBits(0, cycles, read = False))
+        return ret
+
+    def _cmds_read(self, time):
+        """
+        Spill MPSSE commands to get idle DQ line undrived for /time/ and read back
+        """
+        cycles = int(math.ceil(self.freq * time))
+        ret = []
+        while cycles >= 8:
+            c = min(cycles // 8, 65536)
+            ret.append(mpsse.ShiftBits8(b'\xff' * c, read = True))
+            cycles -= c * 8
+        if cycles:
+            ret.append(mpsse.ShiftBits(0xff, cycles, read = True))
+        return ret
+
+    # override this one to take lower bound for tLOW1
+    tLOW1 = 10e-6
+    
+    def _execute(self, operation_list):
+        self.logger.debug("Running %s", operation_list)
+        mpsse_ops = []
+        tdos = []
+
+        for index, op in enumerate(operation_list):
+            read_zones = []
+            if isinstance(op, one_wire.Reset):
+                mpsse_ops += self._cmds_recover(self.tRSTL)
+                mpsse_ops += self._cmds_zero(self.tRSTL)
+                mpsse_ops += self._cmds_pad(self.tPDL)
+                before = len(mpsse_ops)
+                mpsse_ops += self._cmds_read(self.tRSTH)
+                after = len(mpsse_ops)
+                mpsse_ops += self._cmds_recover(self.tREC)
+
+                read_zones.append((before, after))
+
+            elif isinstance(op, one_wire.Wait):
+                mpsse_ops += self._cmds_recover(op.delay)
+
+            elif isinstance(op, one_wire.Write):
+                for i in range(len(op.data)):
+                    b = op.data[i]
+
+                    if not b:
+                        mpsse_ops += self._cmds_zero(self.tLOW0)
+                        mpsse_ops += self._cmds_pad(self.tSLOT - self.tLOW0)
+                    else:
+                        mpsse_ops += self._cmds_zero(self.tLOW1)
+                        mpsse_ops += self._cmds_pad(self.tSLOT - self.tLOW1)
+                    mpsse_ops += self._cmds_recover(self.tREC)
+
+            elif isinstance(op, one_wire.Read):
+                for i in range(op.count):
+
+                    mpsse_ops += self._cmds_zero(self.tLOWR)
+                    before = len(mpsse_ops)
+                    mpsse_ops += self._cmds_read(self.tRDV - self.tLOWR)
+                    after = len(mpsse_ops)
+                    mpsse_ops += self._cmds_pad(self.tRDV)
+                    mpsse_ops += self._cmds_recover(self.tREC)
+
+                    read_zones.append((before, after))
+
+            else:
+                raise base.ProtocolError("Unknown 1-Wire operation %s" % type(op))
+
+            tdos.append(read_zones)
+
+        self._mpsse_run(mpsse_ops)
+
+        for rz, op in zip(tdos, operation_list):
+            reads = []
+            for b, a in rz:
+                r = BitString()
+                for x in mpsse_ops[b:a]:
+                    r += x.data
+                reads.append(int(r) == ((1 << len(r)) - 1))
+
+#            self.logger.debug("%s -> %s", op, reads)
+
+            if isinstance(op, one_wire.Reset):
+                op.presence = not reads[0]
+
+            elif isinstance(op, one_wire.Read):
+                rdata = BitString()
+                for r in reads:
+                    rdata += BitString(int(r), 1)
+                op.data = rdata
