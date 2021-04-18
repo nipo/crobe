@@ -91,7 +91,7 @@ class I2cInterface(i2c.Interface):
                         _, nack = self._shift_byte(data = op.addr << 1)
                         if nack:
                             raise i2c.AddressNack(op.addr)
-                    for d in range(op.data):
+                    for d in op.data:
                         _, nack = self._shift_byte(data = d)
                         if nack:
                             raise i2c.DataNack()
