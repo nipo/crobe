@@ -689,158 +689,147 @@ class I2cInterface(BaseInterface, i2c.Interface):
                     if rsp[off] & 1:
                         raise i2c.DataNack()
 
-class SwdInterface(BaseInterface, swd.Interface):
+class SwdInterface(EngineInterface, swd.Interface):
     def __init__(self, adapter, oen_pin = None, oe_pin = None, name = None, **args):
-        args["gpio_output"] = (args["gpio_output"] & 0xfff0) | 0x3
-        BaseInterface.__init__(self, adapter, **args)
+        EngineInterface.__init__(self, adapter, **args)
         swd.Interface.__init__(self, adapter, name)
         self.freq_cap("hardware", adapter.freq_max)
-        if oen_pin is None and oe_pin is not None:
-            self.oe_pin = (oe_pin, True)
-        elif oe_pin is None and oen_pin is not None:
-            self.oe_pin = (oen_pin, False)
-        else:
+
+        if oen_pin is None and oe_pin is None:
             raise ValueError("Need oen_pin or oe_pin")
 
-        self.__cmd_oe_on0 = self.cmd_oe(True, 0)
-        self.__cmd_oe_on1 = self.cmd_oe(True, 1)
-        self.__cmd_oe_off0 = self.cmd_oe(False, 0)
-        self.__cmd_oe_off1 = self.cmd_oe(False, 1)
-        self.__cmd_in3 = self.handle.cmd_in(3)
-        self.__cmd_in32 = self.handle.cmd_in(32)
-        self.__cmd_in1 = self.handle.cmd_in(1)
-        self.__cmd_idle8 = self.handle.cmd_idle(8, 0)
+        self.__oe = PinControl(self, pin = oe_pin, n_pin = oen_pin)
 
-    def cmd_oe(self, val, tdi):
-        pin, pol = self.oe_pin
-        return self.handle.cmd_gpio_mask_set((1 << pin) | 2,
-                                             (1 << pin) | 2,
-                                              (int(bool(val) == pol) << pin) | (int(tdi) << 1))
+    def start(self):
+        # Dont execute, super().start() will init GPIOs
+        self.cmds_gpio(mpsse.Pin.Tck | mpsse.Pin.Tdi | mpsse.Pin.Tdo,
+                       0,
+                       mpsse.Pin.Tck | mpsse.Pin.Tdi)
+        EngineInterface.start(self)
+        swd.Interface.start(self)
 
     def _execute(self, operation_list):
-        ops = list(operation_list)
+        self.logger.debug("Running %s", operation_list)
+        mpsse_ops = []
+        tdos = {}
 
-        #self.logger.debug("running %s", ops)
-        cmd_turn = self.handle.cmd_idle(self.turnaround_cycles, 1)
+        for index, op in enumerate(operation_list):
+            if isinstance(op, swd.Read):
+                mpsse_ops += self.__oe.cmds_set(True)
+                mpsse_ops.append(mpsse.ShiftBits(0, 1))
+                mpsse_ops.append(mpsse.ShiftBits(op.cmd, 8))
+                mpsse_ops += self.__oe.cmds_set(False)
+                mpsse_ops.append(mpsse.ShiftBits(0, self.turnaround_cycles))
+                ack_idx = len(mpsse_ops)
+                mpsse_ops.append(mpsse.ShiftBits(None, 3, read = True))
+                data_idx = len(mpsse_ops)
+                mpsse_ops.append(mpsse.ShiftBits8(4, read = True))
+                par_idx = len(mpsse_ops)
+                mpsse_ops.append(mpsse.ShiftBits(None, 1, read = True))
+                mpsse_ops.append(mpsse.ShiftBits(0, self.turnaround_cycles))
+                mpsse_ops += self.__oe.cmds_set(True)
 
-        while ops:
-            pending = []
+                if op.ap:
+                    mpsse_ops.append(mpsse.ShiftBits(0, 8))
 
-            cmd = []
-            cmd.append(self.cmd_activity(True))
-            rsp_length = 0
-            with_rsp = []
+                tdos[index] = (ack_idx, data_idx, par_idx)
 
-            #while ops and sum(len(x) for x in cmd) < self.handle.max_packet_size - 48 and rsp_length < self.handle.max_packet_size - 48:
-            while ops:
-                op = ops.pop(0)
-                pending.append(op)
+            elif isinstance(op, swd.Write):
+                mpsse_ops += self.__oe.cmds_set(True)
+                mpsse_ops.append(mpsse.ShiftBits(0, 1))
+                mpsse_ops.append(mpsse.ShiftBits(op.cmd, 8))
+                mpsse_ops += self.__oe.cmds_set(False)
+                mpsse_ops.append(mpsse.ShiftBits(0, self.turnaround_cycles))
+                ack_idx = len(mpsse_ops)
+                mpsse_ops.append(mpsse.ShiftBits(None, 3, read = True))
+                mpsse_ops.append(mpsse.ShiftBits(0, self.turnaround_cycles))
+                mpsse_ops += self.__oe.cmds_set(True)
+                mpsse_ops.append(mpsse.ShiftBits8(int(op.data).to_bytes(4, "little"), 4))
+                dparity = int(op.data)
+                dparity ^= dparity >> 16
+                dparity ^= dparity >> 8
+                dparity ^= dparity >> 4
+                dparity = (0x6996 >> (dparity & 0xf)) & 1
+                mpsse_ops.append(mpsse.ShiftBits(dparity, 1))
 
-                if isinstance(op, swd.Read):
-                    cmd.append(self.__cmd_oe_on1)
-                    cmd.append(self.handle.cmd_out(BitString(op.cmd << 1, 9)))
-                    cmd.append(self.__cmd_oe_off1)
-                    cmd.append(cmd_turn)
-                    c, ack = self.__cmd_in3
-                    cmd.append(c)
-                    c, data = self.__cmd_in32
-                    cmd.append(c)
-                    c, par = self.__cmd_in1
-                    cmd.append(c)
-                    cmd.append(cmd_turn)
-                    cmd.append(self.cmd_oe(True, 0))
+                if op.ap:
+                    mpsse_ops.append(mpsse.ShiftBits(0, 8))
 
-                    if op.ap:
-                        cmd.append(self.__cmd_idle8)
+                tdos[index] = ack_idx,
 
-                    op.__ack = rsp_length, ack
-                    rsp_length += sum([bc for bc, bic in ack])
-                    op.__data = rsp_length, data
-                    rsp_length += sum([bc for bc, bic in data])
-                    op.__par = rsp_length, par
-                    rsp_length += sum([bc for bc, bic in par])
-                    with_rsp.append(op)
-
-                elif isinstance(op, swd.Write):
-                    cmd.append(self.handle.cmd_out(BitString(op.cmd << 1, 9)))
-                    cmd.append(self.__cmd_oe_off1)
-                    cmd.append(cmd_turn)
-                    c, ack = self.__cmd_in3
-                    cmd.append(c)
-                    cmd.append(cmd_turn)
-                    cmd.append(self.__cmd_oe_on1 if op.data & 1 else self.__cmd_oe_on0)
-                    dparity = int(op.data)
-                    dparity ^= dparity >> 16
-                    dparity ^= dparity >> 8
-                    dparity ^= dparity >> 4
-                    dparity = (0x6996 >> (dparity & 0xf)) & 1
-                    cmd.append(self.handle.cmd_out(BitString(op.data | (dparity << 32), 33)))
-
-                    if op.ap:
-                        cmd.append(self.__cmd_idle8)
-
-                    op.__ack = rsp_length, ack
-                    rsp_length += sum([bc for bc, bic in ack])
-                    with_rsp.append(op)
-
-                elif isinstance(op, swd.Wakeup):
-                    cmd.append(self.__cmd_oe_on1)
-                    cmd.append(self.handle.cmd_idle(op.cycles, 1))
-
-                elif isinstance(op, swd.Run):
-                    cmd.append(self.handle.cmd_idle(op.cycles, 0))
-
-                elif isinstance(op, swd.JtagToSwd):
-                    cmd.append(self.handle.cmd_out(op.out))
-
-                elif isinstance(op, base.Reset):
-                    cmd.append(self.cmd_trst(op.asserted))
-
+            elif isinstance(op, swd.Wakeup):
+                if self.handle.can_pad:
+                    mpsse_ops += self.__oe.cmds_set(True)
+                    c = min(op.cycles, 8)
+                    mpsse_ops.append(mpsse.ShiftBits(0xff, c))
+                    left = op.cycles - c
+                    while left >= 8:
+                        c = min(left // 8, 65536)
+                        mpsse_ops.append(mpsse.ClockBits8(c))
+                        left -= c * 8
+                    if left:
+                        mpsse_ops.append(mpsse.ClockBits(left))
                 else:
-                    raise base.ProtocolError("Unknown SWD operation %s" % type(op))
+                    mpsse_ops += self.__oe.cmds_set(True)
+                    left = op.cycles
+                    while left >= 8:
+                        c = min(left, 65536 * 8)
+                        mpsse_ops.append(mpsse.ShiftBits8(b'\xff' * (c // 8)))
+                        left -= c
+                    if left:
+                        mpsse_ops.append(mpsse.ShiftBits(0xff, left))
 
-            cmd.append(self.cmd_activity(False))
+            elif isinstance(op, swd.Run):
+                if self.handle.can_pad:
+                    mpsse_ops += self.__oe.cmds_set(True)
+                    c = min(op.cycles, 8)
+                    mpsse_ops.append(mpsse.ShiftBits(0, c))
+                    left = op.cycles - c
+                    while left >= 8:
+                        c = min(left // 8, 65536)
+                        mpsse_ops.append(mpsse.ClockBits8(c))
+                        left -= c * 8
+                    if left:
+                        mpsse_ops.append(mpsse.ClockBits(left))
+                else:
+                    mpsse_ops += self.__oe.cmds_set(True)
+                    left = op.cycles
+                    while left >= 8:
+                        c = min(left, 65536 * 8)
+                        mpsse_ops.append(mpsse.ShiftBits8(b'\x00' * (c // 8)))
+                        left -= c
+                    if left:
+                        mpsse_ops.append(mpsse.ShiftBits(0, left))
 
-            rsp = self.handle.execute(b''.join(cmd), rsp_length)
+            elif isinstance(op, swd.JtagToSwd):
+                mpsse_ops.append(mpsse.ShiftBits8(bytes(op.out)))
 
-            if rsp_length:
-                for idx, op in enumerate(pending):
-                    if op not in with_rsp:
-                        continue
+            elif isinstance(op, base.Reset):
+                mpsse_ops += self.cmds_system_reset(op.asserted)
 
-                    ack = self.tdo_merge(rsp, *op.__ack)
-
-                    try:
-                        ack = swd.Ack(ack)
-                    except ValueError:
-                        ack = swd.Ack.INVALID
-
-                    op.ack = ack
-
-                    if isinstance(op, swd.Read):
-                        op.data = self.tdo_merge(rsp, *op.__data)
-
-    @staticmethod
-    def tdo_merge(rsp, base, bs):
-        if len(bs) == 1:
-            bytec, bits = bs[0]
-            if bits is None:
-                return int.from_bytes(rsp[base : base + bytec], byteorder = 'little')
             else:
-                return rsp[base] >> (8 - bits)
+                raise base.ProtocolError("Unknown SWD operation %s" % type(op))
 
-        tdo = 0
-        tdo_len = 0
+        self._mpsse_run(mpsse_ops)
 
-        for bytec, bits in bs:
-            if bits is None:
-                v = int.from_bytes(rsp[base : base + bytec], byteorder = 'little')
-                bits = bytec * 8
-            else:
-                v = rsp[base] >> (8 - bits)
-            tdo |= v << tdo_len
-            tdo_len += bits
-        return tdo
+        for op_index, rx in tdos.items():
+            op = operation_list[op_index]
+
+            try:
+                ack = swd.Ack(int(mpsse_ops[rx[0]].data))
+            except ValueError:
+                ack = swd.Ack.INVALID
+            op.ack = ack
+
+            if isinstance(op, swd.Read):
+                op.data = int(mpsse_ops[rx[1]].data)
+                dparity = int(op.data)
+                dparity ^= dparity >> 16
+                dparity ^= dparity >> 8
+                dparity ^= dparity >> 4
+                dparity = (0x6996 >> (dparity & 0xf)) & 1
+                if dparity != int(mpsse_ops[rx[2]].data):
+                    op.ack = swd.Ack.PARITY_ERR
 
 class ChipconInterface(BaseInterface, chipcon.Interface):
     def __init__(self, adapter, oen_pin = None, oe_pin = None, name = None, **args):
