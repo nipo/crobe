@@ -36,7 +36,7 @@ class FreqCapper:
 
         freq = self.freq_update(freq)
         if freq is None:
-            raise RuntimeError("Freq update must return actual freq", self.freq_update)
+            raise RuntimeError("%s did not return actual freq" % self.freq_update)
         self.__freq = freq
 
         self.logger.info("  -> got %s", metric(self.freq, "Hz"))
