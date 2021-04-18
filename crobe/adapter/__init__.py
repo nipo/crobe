@@ -15,3 +15,4 @@ from . import littlewire
 from . import dbgsafe
 from . import dbg_fpga
 from . import sipeed
+from . import efinix
