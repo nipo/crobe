@@ -30,7 +30,10 @@ class Interface(base.Interface):
 
     def start(self):
         self.port.freq_cap("smbus", 400e3)
-        
+
+    def freq_update(self, freq):
+        return self.port.freq_cap("smbus", freq)
+
     def pec_write(self, addr, data):
         p = pec(bytes([addr << 1]) + data)
         self.port.write(addr, data + bytes([p]))

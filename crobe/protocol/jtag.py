@@ -241,24 +241,31 @@ class Chain(PortComponent):
         
     def reset(self):
         import time
-        self.port.tap_reset()
-        self.port.trst = True
-
+        cmds = [
+            self.port.cmd_tap_reset(),
+        ]
         if self.port.do_reset:
-            self.port.reset(True)
-            time.sleep(.1)
-            self.port.reset(False)
-
-        self.port.tap_reset()
-        self.port.trst = False
-        self.port.tap_reset()
-        self.port.run(1)
+            cmds += [
+                self.port.cmd_reset(True),
+                self.port.cmd_run(50),
+                self.port.cmd_reset(False),
+            ]
+        cmds += [
+            self.port.cmd_tap_reset(),
+            self.port.cmd_reset(False),
+            self.port.cmd_tap_reset(),
+            self.port.cmd_run(1),
+        ]
+        self.execute(cmds)
 
     def swd_to_jtag(self):
-        self.port.tap_reset(50)
-        self.port.swd_to_jtag()
-        self.port.tap_reset(50)
-        self.port.run(50)
+        cmds = [
+            self.port.cmd_tap_reset(50),
+            self.port.cmd_swd_to_jtag(),
+            self.port.cmd_tap_reset(50),
+            self.port.cmd_run(50),
+            ]
+        self.execute(cmds)
 
     def tap7_cmd(self, lengths_array):
         self.port.freq_cap("tap7", 1e5)
@@ -325,9 +332,10 @@ class Chain(PortComponent):
         """
         # Get device ID codes
         #self.port.tap_reset()
-        self.port.run(1)
-
-        self.port.capture_dr()
+        self.port.execute([
+            self.port.cmd_run(1),
+            self.port.cmd_capture_dr(),
+            ])
         self.logger.debug("Discovering DR after reset")
         reset_dr = self.chain_shift_discover()
             
