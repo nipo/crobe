@@ -122,13 +122,12 @@ class Cortex(Cpu):
             b.enable(False)
 
     def reset(self, block_after_reset = True):
-        if block_after_reset:
-            tmp = self.scs.cpu_reset_catch
-            self.scs.cpu_reset_catch = True
-            self.scs.cpu_reset()
-            time.sleep(.1)
-            while self.scs.cpu_state == Cpu.State.RUN:
-                pass
-            self.scs.cpu_reset_catch = tmp
-        else:
-            self.scs.cpu_reset()
+        tmp = self.scs.cpu_reset_catch
+        self.scs.cpu_reset_catch = True
+        self.scs.cpu_reset()
+        time.sleep(.1)
+        while self.scs.cpu_state == Cpu.State.RUN:
+            pass
+        self.scs.cpu_reset_catch = tmp
+        if not block_after_reset:
+            self.resume(allow_interrupts = True)
