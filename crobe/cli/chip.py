@@ -25,8 +25,10 @@ def chip(ctx, roots, field, target):
 @click.option('-e', '--erase', is_flag = True, help = "Mass erase before write")
 @click.option('-c', '--check', is_flag = True, help = "Check written memory")
 @click.option('--run', is_flag = True, help = "Run target after programming")
+@click.option('--reset', is_flag = True, help = "Reset target after programming")
+@click.option('--nodetach', is_flag = True, help = "Dont detach from target (Useful when SWO is running)")
 @click.pass_context
-def program(ctx, programs, assume_clean, erase, check, run):
+def program(ctx, programs, assume_clean, erase, check, run, nodetach, reset):
     target = ctx.obj["target"]
 
     click.echo("Target: %s" % target)
@@ -40,11 +42,16 @@ def program(ctx, programs, assume_clean, erase, check, run):
                  do_verify = check,
                  do_start = run,
                  assume_clean = assume_clean)
-    try:
-        target.detach()
-    except:
-        pass
 
+    if not nodetach:
+        try:
+            target.detach()
+        except:
+            pass
+
+    if reset:
+        target.reset()
+        
 @chip.command(help = "Reset target")
 @click.pass_context
 def reset(ctx):
