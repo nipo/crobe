@@ -49,7 +49,7 @@ class TapBitbang(bitbang.Interface):
         
     def __init__(self, tap):
         self.controller = None
-        self.padding_cycles = 0
+        self.padding_cycles = 1
         super().__init__(tap, "bb")
         self.package = None
 
@@ -61,7 +61,7 @@ class TapBitbang(bitbang.Interface):
         slot_cycles = self.controller.boundary_len + 10
         jtag_freq = self.port.port.port.freq
         target_slot_cycles = jtag_freq / freq
-        self.padding_cycles = int(max(0, target_slot_cycles - slot_cycles))
+        self.padding_cycles = int(max(1, target_slot_cycles - slot_cycles))
         new_freq = jtag_freq / (slot_cycles + self.padding_cycles)
 
         self.logger.info("Now inserting %d run cycles over boundary len of %d for capping freq to %s from JTAG freq of %s",
@@ -109,7 +109,7 @@ class TapBitbang(bitbang.Interface):
         self.controller.disable()
         self.scanned_once = False
 
-    def _execute(self, operation_list):
+    def execute(self, operation_list):
         ops = list(operation_list)
         cmds = []
         pending = {}
@@ -133,15 +133,14 @@ class TapBitbang(bitbang.Interface):
                 read = True
 
             else:
-                raise base.ProtocolError("Unknown BITBANG operation %s" % type(op))
+                raise base.ProtocolError("Unknown Bitbang operation %s" % type(op))
 
             cmds.append(self.port.cmd_dr_shift(ir = self.controller.ir_extest,
                                                dr = self.boundary_control,
                                                read_tdo = read,
                                                return_type = BitString))
 
-            if self.padding_cycles:
-                cmds.append(self.port.cmd_run(self.padding_cycles))
+            cmds.append(self.port.cmd_run(self.padding_cycles))
 
         self.port.execute(cmds)
 
