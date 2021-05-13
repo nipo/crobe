@@ -318,19 +318,10 @@ class Handle(Context):
         return ret
     
     def execute(self, blob, rsize = None, timeout = 1.):
-        padded = False
-        if not rsize:
-            blob += bytes([api.MPSSE_GET_BITS_LOW])
-            rsize = 1
-            padded = True
-        blob += bytes([api.MPSSE_SEND_IMMEDIATE])
-
         self.write(blob)
         rsp = b''
-        while len(rsp) < rsize:
+        while len(rsp) < (rsize or 0):
             rsp += self.read(rsize - len(rsp), timeout = timeout)
-        if padded:
-            rsp = rsp[:-1]
         return rsp
 
 @api.stream_callback_fn
