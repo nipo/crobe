@@ -202,6 +202,18 @@ class Bitfield(object, metaclass = _register_meta):
     def __int__(self):
         return self.__value
 
+    def dump_pretty(self, printer):
+        all_width = self._fields["all"].width
+        nibble_count = (all_width + 3) // 4
+
+        for name, f in sorted(self._fields.items(), key = lambda x: (x[1].lsb, -x[1].width)):
+            pad_post = " " * (f.lsb // 4)
+            pad_in = f.lsb % 4
+            hex_aligned_mask = ("%%0%dx" % ((pad_in + f.width + 3) // 4)) % ((((1 << f.width) - 1)) << pad_in)
+            pad_pre = " " * (nibble_count - len(pad_post) - len(hex_aligned_mask))
+            val = ("%% %dx" % ((all_width + 3) // 4)) % (self[f.slice])
+            printer("  % -20s %s%s%s %s %s" % (name, pad_pre, hex_aligned_mask, pad_post, val, f.get_from(self)))
+
     def __str__(self):
         values = {
             name: f.get_from(self)
