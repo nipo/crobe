@@ -380,7 +380,7 @@ class JtagInterface(EngineInterface, jtag.Interface):
     __cmd_update = mpsse.ShiftTms(0b11, 2)
     __cmd_pause_shift = mpsse.ShiftTms(0b01, 2)
     __cmd_exit1_pause = mpsse.ShiftTms(0b0, 1)
-    __cmd_shift_end = staticmethod(lambda tdi, read = False: mpsse.ShiftTms(0b0, 1, tdi = tdi, read = read))
+    __cmd_shift_end = staticmethod(lambda tdi, read = False: mpsse.ShiftTms(0b1, 1, tdi = tdi, read = read))
     __cmd_rti1 = mpsse.ShiftTms(0b0, 1)
     __cmd_reset = mpsse.ShiftTms(0b11111, 5)
 
