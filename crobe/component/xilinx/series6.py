@@ -68,6 +68,18 @@ class Series6(Series67):
         idcode = self.cfg_read(self.CFG_IDCODE, 2)
         return (idcode[0] << 16) | idcode[1]
 
+    def dna_read(self):
+        ops = [self.cmd_dr_shift(self.IR_ISC_ENABLE, None),
+               self.cmd_run(20),
+               self.cmd_dr_shift(self.IR_ISC_DNA, 0, 57),
+               self.cmd_run(20),
+               self.cmd_dr_shift(self.IR_ISC_DISABLE, None),
+               ]
+
+        self.execute(ops)
+
+        return ops[2].tdo
+
     def load(self, program, force_reload = False):
         if len(program) != 1:
             raise ValueError("Bitstream programming only supports one config payload")

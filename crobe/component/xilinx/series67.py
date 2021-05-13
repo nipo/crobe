@@ -9,6 +9,7 @@ class Series67(jtag.Tap):
 
     def __init__(self, port, index, idcode):
         jtag.Tap.__init__(self, port, index, idcode)
+        self.__can_stop = False
 
     IR_ISC_ENABLE  = 0x10
     IR_ISC_PROGRAM = 0x11
@@ -48,7 +49,15 @@ class Series67(jtag.Tap):
     def cfg_status(self):
         return self.cfg_read(self.CFG_STATUS, 1)[0]
 
+    def option_set(self, opt):
+        if opt == "can_stop":
+            self.__can_stop = True
+            return
+        super().option_set(opt)
+
     def start(self):
+        if self.__can_stop:
+            self.stop()
         if not (self.ir_status_read() & self.IR_STATUS_DONE):
             self.dna = self.dna_read()
             self.logger.info("Device DNA: %x", self.dna)
@@ -94,18 +103,6 @@ class Series67(jtag.Tap):
         
         if read_rsp:
             return self._cfg_conv_tdo(bytes(shift.tdo))
-
-    def dna_read(self):
-        ops = [self.cmd_dr_shift(self.IR_ISC_ENABLE, None),
-               self.cmd_run(20),
-               self.cmd_dr_shift(self.IR_ISC_DNA, 0, 57),
-               self.cmd_run(20),
-               self.cmd_dr_shift(self.IR_ISC_DISABLE, None),
-               ]
-
-        self.execute(ops)
-
-        return ops[2].tdo
 
     def stop(self):
         ops = [self.cmd_dr_shift(self.IR_JPROGRAM, None),

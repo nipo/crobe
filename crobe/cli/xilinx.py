@@ -36,6 +36,27 @@ def info(root):
         return
 
     root.cfg_status_dump()
+    if isinstance(root, series7.Series7):
+        root.bbram_open()
+        rows = []
+        for row in range(0x20):
+            rows.append(root.efuse_row_read(row))
+
+        pretty = {}
+        for i in range(32):
+            try:
+                pretty[i] = getattr(root, "Efuse%d" % i)
+            except AttributeError:
+                pass
+            
+        for i, r in enumerate(rows):
+            print(" Efuse%d, 0x%08x" % (i, r))
+            if (root.efuse_ecc_update(r) ^ r) & 0x3fffffff:
+                print("  ECC Failure: differences = 0x%08x" % (root.efuse_ecc_update(r) ^ r))
+                  
+            if i in pretty:
+                dumper = pretty[i](all = r)
+                dumper.dump_pretty(print)
 
 @xilinx.command(help = "Efuse key setter")
 @click.option('-r', '--root', type = base.ROOT)

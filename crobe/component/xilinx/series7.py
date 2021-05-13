@@ -74,12 +74,43 @@ class Series7(Series67):
     def cfg_idcode(self):
         return self.cfg_read(self.CFG_IDCODE, 1)[0]
 
+    class FuseDNA(bitfield.Bitfield):
+        all          = bitfield.Field(0, 64)
+        Unk0         = bitfield.Field(0, 2)
+        ID1          = bitfield.Field(2, 7)
+        ID2          = bitfield.Field(9, 7)
+        ID0          = bitfield.Field(16, 5)
+        Unk1         = bitfield.Field(21, 2)
+        Code5        = bitfield.MappingField(23, 5, "0123456789ABCDEFG??TT?????U?????")
+        Code4        = bitfield.MappingField(28, 5, "0123456789ABCDEFG??TT?????U?????")
+        Code3        = bitfield.MappingField(33, 5, "0123456789ABCDEFG??TT?????U?????")
+        Code2        = bitfield.MappingField(38, 5, "0123456789ABCDEFG??TT?????U?????")
+        Code1        = bitfield.MappingField(43, 5, "0123456789ABCDEFG??TT?????U?????")
+        Code0        = bitfield.MappingField(48, 5, "0123456789ABCDEFG??TT?????U?????")
+        Unk2         = bitfield.Field(53, 11)
+    
     def dna_read(self):
-        ops = [self.cmd_dr_shift(self.IR_FUSE_DNA, 0, 64)]
-
+        ops = [self.cmd_dr_shift(self.IR_ISC_ENABLE, None),
+               self.cmd_run(20),
+               self.cmd_dr_shift(self.IR_FUSE_DNA, 0, 64, return_type = bitstring.BitString),
+               self.cmd_dr_shift(self.IR_XSC_DNA, 0, 56, return_type = bitstring.BitString),
+               self.cmd_run(20),
+               self.cmd_dr_shift(self.IR_ISC_DISABLE, None),
+               ]
         self.execute(ops)
 
-        return ops[0].tdo
+        self.fuse_dna = self.FuseDNA(all = int(ops[2].tdo))
+        self.jtag_dna = "%s%s%s%s%s%s_%d_%d_%d" % (
+            self.fuse_dna.Code0, self.fuse_dna.Code1,
+            self.fuse_dna.Code2, self.fuse_dna.Code3,
+            self.fuse_dna.Code4, self.fuse_dna.Code5,
+            self.fuse_dna.ID0, self.fuse_dna.ID1,
+            self.fuse_dna.ID2)
+        self.logger.info("Fuse DNA: %s %s", ops[2].tdo, self.fuse_dna)
+        self.logger.info("XSC DNA: %s", ops[3].tdo)
+        self.logger.info("JTAG DNA: %s", self.jtag_dna)
+        
+        return int(ops[2].tdo)
 
     def load(self, program, force_reload = False):
         if len(program) != 1:
@@ -167,23 +198,28 @@ class Series7(Series67):
     ###
 
     class Status(bitfield.Bitfield):
-        Res          = bitfield.Field(27, 5)
+        Res31        = bitfield.BooleanField(31)
+        CfgBvs       = bitfield.BooleanField(30)
+        BadPktError  = bitfield.BooleanField(29)
+        PudcB        = bitfield.BooleanField(28)
+        HMacError    = bitfield.BooleanField(27)
         BusWidth     = bitfield.MappingField(25, 2, {0:"1",1:"8",2:"16",3:"32"})
+        Res21        = bitfield.Field(21, 4)
         StartupPhase = bitfield.Field(18, 3)
-        DecryptError = bitfield.BooleanField(16)
-        IDError      = bitfield.BooleanField(15)
+        SecurityError= bitfield.BooleanField(16)
+        IDCodeError  = bitfield.BooleanField(15)
         Done         = bitfield.BooleanField(14)
-        InternalDone = bitfield.BooleanField(13)
+        DoneInt      = bitfield.BooleanField(13)
         InitB        = bitfield.BooleanField(12)
-        InitComplete = bitfield.BooleanField(11)
+        InitBInt     = bitfield.BooleanField(11)
         Mode         = bitfield.Field(8, 3)
         GHIGH_B      = bitfield.BooleanField(7)
-        FF_RAM_Write = bitfield.BooleanField(6)
-        IOs          = bitfield.BinaryField(5, "High-Z", "As per config")
-        EndOfStartup = bitfield.BinaryField(4, "pending", "reached")
-        DCI          = bitfield.BinaryField(3, "not matched", "matched")
-        MMCM         = bitfield.BinaryField(2, "not locked", "locked")
-        Part         = bitfield.BinaryField(1, "unsecure", "secured")
+        GWE          = bitfield.BooleanField(6)
+        GTSCfgB      = bitfield.BooleanField(5)
+        EOSReached   = bitfield.BooleanField(4)
+        DCIMatch     = bitfield.BooleanField(3)
+        PLLLock      = bitfield.BooleanField(2)
+        DecryptEn    = bitfield.BooleanField(1)
         CRC          = bitfield.BinaryField(0, "OK", "error")
 
     class BootStatus(bitfield.Bitfield):
@@ -213,38 +249,19 @@ class Series7(Series67):
     FUSE_CFG_KEY_PROTECT_READ = 3
     FUSE_CFG_USER_PROTECT_READ = 4
 
-    class Efuse0(bitfield.Bitfield):
-        ForcePowerCycleReconfig        = bitfield.BooleanField(1)
-        AESUserW                       = bitfield.BooleanField(2, inverted = True)
-        AESUserWAESR                   = bitfield.BooleanField(3, inverted = True)
-        AESUserWUserR                  = bitfield.BooleanField(4, inverted = True)
-        FUSEControlW                   = bitfield.BooleanField(5, inverted = True)
-        Unsup0                         = bitfield.BooleanField(6, inverted = True)
-        Unsup1                         = bitfield.BooleanField(7, inverted = True)
-        AESOnly                        = bitfield.BooleanField(8)
-        ARMJTAG                        = bitfield.BooleanField(9, inverted = True)
-        BBRAMKey                       = bitfield.BooleanField(10, inverted = True)
-        Repeat_ForcePowerCycleReconfig = bitfield.BooleanField(14+1)
-        Repeat_AESUserW                = bitfield.BooleanField(14+2, inverted = True)
-        Repeat_AESUserWAESR            = bitfield.BooleanField(14+3, inverted = True)
-        Repeat_AESUserWUserR           = bitfield.BooleanField(14+4, inverted = True)
-        Repeat_FUSEControlW            = bitfield.BooleanField(14+5, inverted = True)
-        Repeat_Unsup0                  = bitfield.BooleanField(14+6, inverted = True)
-        Repeat_Unsup1                  = bitfield.BooleanField(14+7, inverted = True)
-        Repeat_AESOnly                 = bitfield.BooleanField(14+8)
-        Repeat_ARMJTAG                 = bitfield.BooleanField(14+9, inverted = True)
-        Repeat_BBRAMKey                = bitfield.BooleanField(14+10, inverted = True)
-
     class Efuse5(bitfield.Bitfield):
-        DNA = bitfield.Field(8, 16)
+        all = bitfield.Field(0, 32)
+        DNA15_0 = bitfield.Field(8, 16)
         Ecc = bitfield.Field(24, 6)
 
     class Efuse6(bitfield.Bitfield):
-        DNA = bitfield.Field(0, 24)
+        all = bitfield.Field(0, 32)
+        DNA40_16 = bitfield.Field(0, 24)
         Ecc = bitfield.Field(24, 6)
         
     class Efuse7(bitfield.Bitfield):
-        DNA = bitfield.Field(0, 24)
+        all = bitfield.Field(0, 32)
+        DNA64_41 = bitfield.Field(0, 24)
         Ecc = bitfield.Field(24, 6)
 
     # Efuse 20-29: AES key (24 bit each + ECC)

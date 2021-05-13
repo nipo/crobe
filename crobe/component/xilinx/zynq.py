@@ -1,5 +1,6 @@
 from ...part_id import PartId
 from ...protocol import jtag
+from ... import bitfield
 from . import series7, xadc
 
 parts = {
@@ -20,6 +21,29 @@ class Zynq(series7.Series7, xadc.Xadc):
     irlen = 6
     max_freq = 66e6
     config_memory_size = 4045564
+
+    class Efuse0(bitfield.Bitfield):
+        all = bitfield.Field(0, 32)
+        ForcePowerCycleReconfig        = bitfield.BooleanField(1)
+        WenBKeyUser                    = bitfield.BooleanField(2, inverted = True)
+        RenBKey                        = bitfield.BooleanField(3, inverted = True)
+        RenBUser                       = bitfield.BooleanField(4, inverted = True)
+        WenBCntl                       = bitfield.BooleanField(5, inverted = True)
+        Unsup0                         = bitfield.BooleanField(6, inverted = True)
+        Unsup1                         = bitfield.BooleanField(7, inverted = True)
+        AESOnly                        = bitfield.BooleanField(8)
+        JtagTAP                        = bitfield.BooleanField(9, inverted = True)
+        BBRAMKey                       = bitfield.BooleanField(10, inverted = True)
+        Repeat_ForcePowerCycleReconfig = bitfield.BooleanField(14+1)
+        Repeat_WenBKeyUser             = bitfield.BooleanField(14+2, inverted = True)
+        Repeat_RenBKey                 = bitfield.BooleanField(14+3, inverted = True)
+        Repeat_RenBUser                = bitfield.BooleanField(14+4, inverted = True)
+        Repeat_WenBCntl                = bitfield.BooleanField(14+5, inverted = True)
+        Repeat_Unsup0                  = bitfield.BooleanField(14+6, inverted = True)
+        Repeat_Unsup1                  = bitfield.BooleanField(14+7, inverted = True)
+        Repeat_AESOnly                 = bitfield.BooleanField(14+8)
+        Repeat_JtagTAP                 = bitfield.BooleanField(14+9, inverted = True)
+        Repeat_BBRAMKey                = bitfield.BooleanField(14+10, inverted = True)
 
     def __init__(self, port, index, idcode):
         series7.Series7.__init__(self, port, index, idcode)
