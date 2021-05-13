@@ -309,16 +309,12 @@ class EngineInterface(object):
         ret = self.__reset.cmds_set(asserted)
         if not ret:
             self.logger.warning("Reset %s ignored", "asserting" if asserted else "deasserted")
-        else:
-            self.logger.info("%s reset", "asserting" if asserted else "deasserted")
         return ret
 
     def cmds_power(self, enabled):
         ret = self.__power.cmds_set(enabled)
         if not ret:
             self.logger.warning("Power %s ignored", "enabling" if enabled else "disabling")
-        else:
-            self.logger.info("%s power", "enabling" if enabled else "disabling")
         return ret
 
     def cmds_activity(self, value):
