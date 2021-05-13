@@ -1,5 +1,6 @@
 from .. import ethernet_phy
-from ...protocol import smi
+from ...protocol import smi, jtag
+from ...part_id import PartId
 from ...bitfield import *
 from ...util.pretty import metric
 from ...util.bit import *
@@ -234,3 +235,17 @@ class Peak:
 
     def __repr__(self):
         return str(self)
+
+@jtag.Chain.db.register("dp83867")
+class Dp83867Tap(jtag.Tap):
+    max_freq = 20e6
+
+    TEST = jtag.Dr(32)
+    BOUNDARY = jtag.Dr(63)
+    EXTEST = jtag.Instruction(0x1, "BOUNDARY")
+    SAMPLE = jtag.Instruction(0x2, "BOUNDARY")
+    PRELOAD = jtag.Instruction(0x2, "BOUNDARY")
+    TESTMODE = jtag.Instruction(0x4, "TEST")
+
+    def __init__(self, port, index, idcode):
+        super().__init__(port, index, idcode, "DP83867")
