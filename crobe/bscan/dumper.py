@@ -33,6 +33,10 @@ class Dumper:
             except:
                 pkg = ""
 
+            if not tap.idcode:
+                self.definitions.append((None, tap))
+                continue
+
             d = cache.filter(idcode = int(tap.idcode), package = pkg)
 
             if not d:
@@ -73,7 +77,7 @@ class Dumper:
         while True:
             values = self.pin_values()
             read = time.time()
-
+            
             diffs = self.differences(last_values, values)
 
             for i in range(len(diffs)-1, -1, -1):
