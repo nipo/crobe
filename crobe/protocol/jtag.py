@@ -78,6 +78,7 @@ class Interface(base.Interface):
 
     def start(self):
         self.logger.info("starting")
+        super().start()
         
     def _execute(self, operation_list):
         raise NotImplementedError()
@@ -213,6 +214,7 @@ class Chain(PortComponent):
         PortComponent.__init__(self, port, "JTAG Chain")
         self.name = self.port.port.name + "-Chain"
         self.default_dr_override = []
+        self.tap = {}
         
     def start(self):
         PortComponent.start(self)
@@ -229,6 +231,7 @@ class Chain(PortComponent):
             self.icepick_enable()
         else:
             self.swd_to_jtag()
+            self.port.tap_reset()
             self.discover()
 
         self.port.freq_cap("enumeration", None)
@@ -314,6 +317,7 @@ class Chain(PortComponent):
             back = BitString(-1 if bool(shift_in) else 0, len(register))
             self.logger.debug("Shifting back %s", back)
             self.port.shift(back)
+        self.port.run(1)
 
         return register
 
@@ -331,9 +335,9 @@ class Chain(PortComponent):
         attached on matching TAPs.
         """
         # Get device ID codes
-        #self.port.tap_reset()
         self.port.execute([
-            self.port.cmd_run(1),
+#            self.port.cmd_tap_reset(50),
+            self.port.cmd_run(50),
             self.port.cmd_capture_dr(),
             ])
         self.logger.debug("Discovering DR after reset")
@@ -427,11 +431,17 @@ class Chain(PortComponent):
         self.idcodes = id_codes
         self.ir_lengths = ir_length_possibilities[0]
 
+        for c in self.children[:]:
+            self.child_remove(c)
+        
         for index, idcode in enumerate(id_codes):
-            idcode = idcode or PartId.from_idcode(1)
-            tap = Chain.db.call(idcode, self, index, idcode)
+            try:
+                key = self.tap[index]
+            except KeyError:
+                key = idcode
+            tap = Chain.db.call(key, self, index, key)
             self.child_add(tap)
-
+            
         self.logger.info("Discovered chain:")
         for i, tap in enumerate(self.children):
             self.logger.info("- %s", tap)
@@ -461,6 +471,12 @@ class Chain(PortComponent):
         m = self._default_dr_opt.match(opt)
         if m:
             self.default_dr_override.append((int(m.group("left")), int(m.group("right")), int(m.group("idcode"), 16)))
+            return
+
+        if opt.startswith("tap#"):
+            no, value = opt.split("=", 1)
+            no = int(no[4:])
+            self.tap[no] = value
             return
 
         super().option_set(opt)
@@ -633,9 +649,14 @@ class Tap(PortComponent, InstructionRegistry):
     """
     db = Db("TAP subprotocol")
 
-    def __init__(self, port, index, idcode):
+    def __init__(self, port, index, idcode, name = None):
         self.idcode = idcode
-        PortComponent.__init__(self, port, "TAP[0x%08x]" % int(idcode))
+        if name is None:
+            if isinstance(self.idcode, (PartId, int)):
+                name = "TAP#%d[0x%08x]" % (index, int(idcode))
+            else:
+                name = "TAP#%d[None]" % (index,)
+        PortComponent.__init__(self, port, name)
         InstructionRegistry.__init__(self)
 
         self.index = index
