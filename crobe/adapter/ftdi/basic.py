@@ -1,5 +1,5 @@
 from .. import model
-from ...bitstring import BitString
+from ...bitstring import BitString, BitStringSlice
 from ...protocol import jtag, base, swd, spi, chipcon, i2c, bitbang, one_wire
 from . import ftdi, api, mpsse
 from ...util.pretty import metric
@@ -474,7 +474,7 @@ class JtagInterface(EngineInterface, jtag.Interface):
                     cycle_count = len(op.tdi) * 8
                     data_in = BitString(op.tdi)
                 else:
-                    assert isinstance(op.tdi, BitString)
+                    assert isinstance(op.tdi, (BitString, BitStringSlice))
                     cycle_count = len(op.tdi)
                     data_in = op.tdi
 
@@ -999,12 +999,13 @@ class MpsseBitbangInterface(EngineInterface, bitbang.Interface):
                         io.mode = iop.mode
 
                     if iop.value is not None:
-                        mask |= 1 << io.no
+                        m = 1 << io.no
+                        mask |= m
                         if (io.mode & bitbang.Mode.D1) and iop.value:
-                            value |= mask
-                            oe |= mask
+                            value |= m
+                            oe |= m
                         if (io.mode & bitbang.Mode.D0) and not iop.value:
-                            oe |= mask
+                            oe |= m
                 mpsse_ops += self.cmds_gpio(mask = mask, oe = oe, value = value)
 
             elif isinstance(op, bitbang.IoGet):
