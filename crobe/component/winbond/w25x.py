@@ -1,4 +1,4 @@
-from ..spi_flash import SpiFlash
+from ..spi_flash import SpiFlash, SfdpFlash
 import binascii
 
 @SpiFlash.db.register(0xef3013)
@@ -25,3 +25,8 @@ class W25x(SpiFlash):
     def unprotect(self):
         self.command(self.CMD_STATUS_WRITE_ENABLE)
         SpiFlash.unprotect(self)
+
+@SpiFlash.db.register(0xef7018)
+class W25Q(SfdpFlash):
+    page_size = 256
+    write_buffer_size = 256
