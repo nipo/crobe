@@ -61,6 +61,9 @@ class PartId(object):
         return hash((self.jep106_bank, self.jep106_id, self.part_no, self.revision))
     
     def __eq__(self, other):
+        if not isinstance(other, PartId):
+            return False
+
         if self.revision is None or other.revision is None:
             return self.is_same_part(other)
 
