@@ -161,6 +161,8 @@ class Ms(Bitfield):
 
         if ratio == 4:
             self.divby4 = True
+            self.p1 = 0
+            self.p2, self.p3 = 0, 1
             return
 
         self.divby4 = False
@@ -355,7 +357,7 @@ class Si5351(i2c.Slave):
     
     def __init__(self, bus, saddr):
         super().__init__(bus, "si5351", saddr)
-
+        
     def reg_read(self, reg):
         reg = RegAddr(int(reg))
         addr = bytes([int(reg)])
@@ -371,7 +373,7 @@ class Si5351(i2c.Slave):
 
         return pretty
 
-    def reg_write(self, reg, value):
+    def reg_write_data(self, reg, value):
         reg = RegAddr(int(reg))
         addr = bytes([int(reg)])
 
@@ -383,13 +385,17 @@ class Si5351(i2c.Slave):
 
         self.logger.debug("Reg write %s %s: %s", reg, data.hex(), pretty)
 
+        return addr, data
+        
+    def reg_write(self, reg, value):
+        addr, data = self.reg_write_data(reg, value)
         self.write(addr + data)
 
-    def start(self):
-        for no, klass in self.reg_map.items():
-            value = self.reg_read(no)
-            raw = int(value).to_bytes(value._width // 8, value._endian)
-            self.logger.info("%s (%s) %r", no, raw.hex(), value)
+    #def start(self):
+    #    for no, klass in self.reg_map.items():
+    #        value = self.reg_read(no)
+    #        raw = int(value).to_bytes(value._width // 8, value._endian)
+    #        self.logger.info("%s (%s) %r", no, raw.hex(), value)
             
     def state_dump(self, clkin = 0, xtal = 0):
         cur = {}
@@ -402,7 +408,7 @@ class Si5351(i2c.Slave):
         ckin_pres = not cur[RegAddr.Status].los_clkin
         xtal_pres = not cur[RegAddr.Status].los_xtal
 
-        oe = set(i for i in range(8) if not ((1 << i) & (int(cur[RegAddr.Oeb]) & int(cur[RegAddr.OebMask]))))
+        oe = set(i for i in range(8) if not ((1 << i) & int(cur[RegAddr.Oeb])))
 
         clkin_div = cur[RegAddr.ClkIn].clkin_div
         clkin_divided = clkin / clkin_div
@@ -434,7 +440,7 @@ class Si5351(i2c.Slave):
             int_only = ((i % 2 == 0) and control.ms_int) or i >= 6
             if int_only:
                 ratio = int(ratio)
-            output = ms_input / ratio
+            output = ms_input / (ratio or 1)
             ms_out[i] = output
             print(f"  MS{i} {'on' if control.enable else 'off'}, {control.ms_src} {'//' if int_only else '/'} {int(ms.ratio) if int_only else float(ms)} = {metric(output, 'Hz')}")
 
