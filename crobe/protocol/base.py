@@ -13,7 +13,6 @@ class Interface(model.PortComponent, FreqCapper):
     power = None
 
     def __init__(self, port, name):
-        self.do_reset = False
         model.PortComponent.__init__(self, port, name)
         FreqCapper.__init__(self)
         self._lock = threading.Lock()
@@ -25,6 +24,10 @@ class Interface(model.PortComponent, FreqCapper):
         #self.port.child_remove(self)
         pass
 
+    @property
+    def do_reset(self):
+        return self.__reset is not None
+    
     def option_set(self, opt):
         if opt == "reset":
             self.__reset = True
@@ -65,7 +68,7 @@ class Interface(model.PortComponent, FreqCapper):
             time.sleep(self.__reset)
             self.reset(False)
         elif self.__reset is True:
-            self.logger.info("Cycling reset", self.__reset)
+            self.logger.info("Cycling reset")
             self.execute([self.cmd_reset(True), self.cmd_reset(False)])
 
         if self.__wait:
