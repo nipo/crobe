@@ -7,13 +7,17 @@ class I2cInterface(i2c.Interface):
         super().__init__(port, "i2c")
         self.sda = None
         self.scl = None
+        self.hi = []
 
     def freq_update(self, freq):
-        return self.port.freq_cap("i2c", freq or 400e3)
+        return self.port.freq_cap("i2c", freq or 1200e3)
         
     def start(self):
         if not self.sda or not self.scl:
             raise ValueError("Should set sda/scl options")
+
+        for port in self.hi:
+            self.port.set(IoOp(port, value = True, mode = Mode.D0D1))
 
         self.port.set(IoOp(self.scl, value = True, mode = Mode.D0Z1),
                       IoOp(self.sda, value = True, mode = Mode.D0Z1))
@@ -24,6 +28,9 @@ class I2cInterface(i2c.Interface):
             return
         if opt.startswith("scl="):
             self.scl = opt[4:]
+            return
+        if opt.startswith("hi="):
+            self.hi = opt[3:].split(",")
             return
         super().option_set(opt)
 
