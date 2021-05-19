@@ -51,16 +51,20 @@ def enumerate(roots, field, cpuid):
 
 @info.command(help = "I2C bus scan")
 @click.option('-r', '--root', type = base.ROOT)
+@click.option("--write", help = "Use a zero-byte write operation. This may not be supported by all masters", is_flag = True)
 @click.option("--first", type = base.HEX, default = 0x01, help = "First address to scan")
 @click.option("--last", type = base.HEX, default = 0x7f, help = "Last address to scan")
 @click.option("--addr", type = base.HEX, help = "Explicitly add address to scan", multiple = True)
-def i2c_scan(root, first, last, addr):
+def i2c_scan(root, first, last, addr, write):
     from ..protocol.i2c import AddressNack
     addresses = list(addr or range(first, last + 1))
 
     for addr in addresses:
         try:
-            root.read(addr, 1)
+            if write:
+                root.write(addr, b'')
+            else:
+                root.read(addr, 1)
         except AddressNack:
             continue
         click.echo("Slave on address %02x" % addr)
