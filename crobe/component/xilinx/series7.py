@@ -497,8 +497,8 @@ class Series7SlaveSerial(PortComponent):
         pass
 
     def load(self, program):
-        self.port.port.reset = True
-        self.port.port.reset = False
+        self.port.port.reset(True)
+        self.port.port.reset(False)
 
         blob = program[0].data
         self.logger.info("Loading %d bytes bitstream", len(blob))
