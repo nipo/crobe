@@ -42,6 +42,9 @@ class Dacx0508(PortComponent):
 
         self.port.execute([self.port.cmd_cs(True), cmd, self.port.cmd_cs(False)])
 
+    def channel_write(self, no, value):
+        self.reg_write(int(Registers.Dac0) + no, value)
+        
     def start(self):
         devid = self.reg_read(Register.DeviceId)
 
