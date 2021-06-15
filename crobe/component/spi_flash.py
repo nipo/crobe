@@ -219,7 +219,6 @@ class SpiFlash(PortComponent, Bus):
         self.logger.debug("Waiting for erase to complete")
         while self.status & self.STATUS_WIP:
             time.sleep(.1)
-            pass
         self.write_enable(False)
     
     def erase(self, base, size):
@@ -256,14 +255,16 @@ class SpiFlash(PortComponent, Bus):
         self.command(si["erase_cmd"], arg = self.addr(addr))
         while self.status & self.STATUS_WIP:
             pass
-        self.write_enable(False)
 
+    def page_program(self, addr, data):
+        self.write_enable(True)
+        self.command(self.CMD_PAGE_PROGRAM, arg = self.addr(addr), wdata = data)
+        while self.status & self.STATUS_WIP:
+            time.sleep(.01)
+        
     def write_chunk(self, addr, data):
         for retry in range(10):
-            self.write_enable(True)
-            self.command(self.CMD_PAGE_PROGRAM, arg = self.addr(addr), wdata = data)
-            while self.status & self.STATUS_WIP:
-                pass
+            self.page_program(addr, data)
 
             readback = self.read(addr, len(data))
             if readback == data:
