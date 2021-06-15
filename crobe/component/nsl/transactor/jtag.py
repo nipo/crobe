@@ -1,7 +1,7 @@
 from ....model import PortComponent
 from ....protocol import base, jtag
 from ....util.pretty import metric
-from ....bitstring import BitString
+from ....bitstring import BitString, BitStringSlice
 import math
 from collections import deque
 
@@ -96,7 +96,7 @@ class JtagTransactor(PortComponent):
                     data = b''
                     bit_count = op.tdi
                 else:
-                    assert isinstance(op.tdi, BitString)
+                    assert isinstance(op.tdi, (BitString, BitStringSlice))
                     has_tdi = True
                     shift_bytes |= self.CMD_SHIFT_BYTE_W
                     shift_bits |= self.CMD_SHIFT_BIT_W
