@@ -292,35 +292,39 @@ class Chain(PortComponent):
         self.discover([PartId(0, 0x17, 0x1ce)])
 
     def chain_shift_discover(self, max_length = 512, shift_back = False, shift_in = None):
-        marker = 0xdecafbad
-        tdo = self.port.shift(BitString(marker, max_length + 32))
-        tdo = tdo[:max_length+32]
+        self.port.freq_cap("shift_discover", 1e6)
+        try:
+            marker = 0xdecafbad
+            tdo = self.port.shift(BitString(marker, max_length + 32))
+            tdo = tdo[:max_length+32]
 
-        if not int(tdo):
-            raise OpenChain("TDO stuck low. Bad TDO connection ?")
+            if not int(tdo):
+                raise OpenChain("TDO stuck low. Bad TDO connection ?")
 
-        if tdo == BitString(-1, len(tdo)):
-            raise OpenChain("TDO stuck high. Bad TDO connection ?")
+            if tdo == BitString(-1, len(tdo)):
+                raise OpenChain("TDO stuck high. Bad TDO connection ?")
 
-        length = int(math.log(int(tdo), 2) + 1)
-        register = tdo[:length - 32]
-        rx_marker = tdo[length - 32 : length]
+            length = int(math.log(int(tdo), 2) + 1)
+            register = tdo[:length - 32]
+            rx_marker = tdo[length - 32 : length]
 
-        self.logger.debug("After %d bit shift, tdo = %s, probable length = %d, register = %s, rx_marker = %x (expected %x)", len(tdo), tdo, len(register), register, int(rx_marker), marker)
-        if int(tdo[length - 32 : length]) != marker:
-            raise OpenChain("TDO changed, but never got TDI back. Bad TDI/TDO connection ?")
+            self.logger.info("After %d bit shift, tdo = %s, probable length = %d, register = %s, rx_marker = %x (expected %x)", len(tdo), tdo, len(register), register, int(rx_marker), marker)
+            if int(tdo[length - 32 : length]) != marker:
+                raise OpenChain("TDO changed, but never got TDI back. Bad TDI/TDO connection ?")
 
-        if shift_back:
-            self.logger.debug("Shifting back captured value")
-            self.port.shift(register)
-        elif shift_in is not None:
-            back = BitString(-1 if bool(shift_in) else 0, len(register))
-            self.logger.debug("Shifting back %s", back)
-            self.port.shift(back)
-        self.port.run(1)
+            if shift_back:
+                self.logger.debug("Shifting back captured value")
+                self.port.shift(register)
+            elif shift_in is not None:
+                back = BitString(-1 if bool(shift_in) else 0, len(register))
+                self.logger.debug("Shifting back %s", back)
+                self.port.shift(back)
+            self.port.run(1)
 
-        return register
-
+            return register
+        finally:
+            self.port.freq_cap("shift_discover", None)
+            
             
     def discover(self, forced_idcodes = None):
         """
