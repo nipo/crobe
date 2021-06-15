@@ -47,19 +47,15 @@ class Artix7(series7.Series7, xadc.Xadc):
 
     IR_XADC_DRP    = 0x37
 
-    def spi_interface(self):
-        from ...loadable.object import Program
+@Artix7.db.register("spi")
+def spi_interface(a7):
+    from ...loadable.object import Program
 
-        fw_name = "fw/" + self.name.lower() + "_jtag_spi.bit.gz"
-        fd = pkg_resources.resource_filename(__name__, fw_name)
-        self.load(Program.from_file(fd))
+    fw_name = "fw/" + a7.name.lower() + "_jtag_spi.bit.gz"
+    fd = pkg_resources.resource_filename(__name__, fw_name)
+    a7.load(Program.from_file(fd))
 
-        from ..jtag_spi_bridge import JtagSpiBridge
+    from ..jtag_spi_bridge import JtagSpiBridge
 
-        return JtagSpiBridge(self, self.IR_USER1, self.IR_USER2, 60e6)
-
-    def child_spawn(self, mode = None):
-        if mode == "spi":
-            return self.spi_interface()
-        return super().child_spawn(mode)
+    return JtagSpiBridge(a7, a7.IR_USER1, a7.IR_USER2, 60e6)
 
