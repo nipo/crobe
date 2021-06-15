@@ -47,8 +47,8 @@ def to_hex(programs, hex, within, paged):
 @click.option("--pid", type = base.HEX, required = True, help = "Product ID")
 @click.option("--did", type = base.HEX, required = True, help = "Device ID")
 def to_fx2(programs, bin, vid, pid, did):
-    p = Program.from_programs(programs)
-    bin.write(struct.pack("<BHHHB", 0xc2, vid, pid, did, 0x01))
+    p = Program.from_programs(programs).simplified()
+    bin.write(struct.pack("<BHHHB", 0xc2, vid, pid, did, 0x41))
     for s in p.simplified():
         bin.write(struct.pack(">HH", len(s), s.address))
         bin.write(s.data)
@@ -60,6 +60,16 @@ def to_fx2(programs, bin, vid, pid, did):
 def to_fx3(programs, bin):
     p = Program.from_programs(programs)
     p.save_cypress_img(bin)
+
+@cli.command(help = "Convert to MEM image")
+@click.argument("programs", type = base.PROGRAM, nargs = -1)
+@click.argument("mem", type = click.File("w"))
+def to_mem(programs, mem):
+    p = Program.from_programs(programs).simplified()
+    for s in p:
+        mem.write("@%07x\n" % s.address)
+        for b in s.data:
+            mem.write("%02x\n" % b)
 
 if __name__ == "__main__":
     cli.main()

@@ -405,6 +405,7 @@ class Program:
         raise ValueError("Not bitstream data in %s" % filename)
 
     EXT_MAP = {
+        ".mem": "mem",
         ".jed": "jed",
         ".bin": "bin",
         ".bin.gz": "bin",
