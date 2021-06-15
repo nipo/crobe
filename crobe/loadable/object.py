@@ -418,6 +418,9 @@ class Program:
         ".elf": "elf",
         ".out": "elf",
         ".axf": "elf",
+        "__literal": "literal",
+        "__zero": "zero",
+        "__random": "random",
         }
 
     @classmethod
@@ -451,6 +454,46 @@ class Program:
     @classmethod
     def from_files(cls, filenames):
         return cls.from_programs([cls.from_file(f) for f in filenames])
+
+    @classmethod
+    def from_mem(cls, filename, offset = 0):
+        self = cls()
+        with open(filename, "r") as fd:
+            address = None
+            data = b''
+            for line in fd.readlines():
+                line = line.strip()
+                if line.startswith("/"):
+                    continue
+                if line.startswith("@"):
+                    if address is not None and data:
+                        self.append(Segment(address + offset, data))
+                    data = b''
+                    address = int(line[1:], 16)
+                    continue
+                data += bytes([int(line, 16)])
+            if address is not None and data:
+                self.append(Segment(address + offset, data))
+        return self
+
+    @classmethod
+    def from_literal(cls, hex_string, offset = 0):
+        program = cls()
+        program.append(Segment(address = offset, data = bytes.fromhex(hex_string)))
+        return program
+
+    @classmethod
+    def from_random(cls, size, offset = 0):
+        from ..util.random import random_data
+        program = cls()
+        program.append(Segment(address = offset, data = random_data(int(size))))
+        return program
+
+    @classmethod
+    def from_zero(cls, size, offset = 0):
+        program = cls()
+        program.append(Segment(address = offset, data = b'\x00' * int(size)))
+        return program
 
     @classmethod
     def from_programs(cls, programs):
