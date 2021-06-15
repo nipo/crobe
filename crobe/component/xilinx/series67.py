@@ -56,6 +56,8 @@ class Series67(jtag.Tap):
         super().option_set(opt)
 
     def start(self):
+        self.cfg_status_dump()
+            
         if self.__can_stop:
             self.stop()
         if not (self.ir_status_read() & self.IR_STATUS_DONE):
@@ -121,6 +123,8 @@ class Series67(jtag.Tap):
         return self.cfg_read(self.CFG_BOOTSTS, 1)[0]
 
     def cfg_status_dump(self):
-        self.logger.info(repr(self.Status(self.cfg_status)))
-        self.logger.info(repr(self.BootStatus(self.cfg_boot_status)))
+        cs = self.Status(self.cfg_status)
+        cbs = self.BootStatus(self.cfg_boot_status)
+        self.logger.info("Config status %r %08x", cs, cs.all)
+        self.logger.info("Config boot status %r %08x", cbs, cbs.all)
 

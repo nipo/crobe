@@ -81,36 +81,41 @@ class Series7(Series67):
         ID2          = bitfield.Field(9, 7)
         ID0          = bitfield.Field(16, 5)
         Unk1         = bitfield.Field(21, 2)
-        Code5        = bitfield.MappingField(23, 5, "0123456789ABCDEFG??TT?????U?????")
-        Code4        = bitfield.MappingField(28, 5, "0123456789ABCDEFG??TT?????U?????")
-        Code3        = bitfield.MappingField(33, 5, "0123456789ABCDEFG??TT?????U?????")
-        Code2        = bitfield.MappingField(38, 5, "0123456789ABCDEFG??TT?????U?????")
-        Code1        = bitfield.MappingField(43, 5, "0123456789ABCDEFG??TT?????U?????")
-        Code0        = bitfield.MappingField(48, 5, "0123456789ABCDEFG??TT?????U?????")
+        Code5        = bitfield.MappingField(23, 5, "0123456789ABCDEFG??TT?????UvwxYz")
+        Code4        = bitfield.MappingField(28, 5, "0123456789ABCDEFG??TT?????UvwxYz")
+        Code3        = bitfield.MappingField(33, 5, "0123456789ABCDEFG??TT?????UvwxYz")
+        Code2        = bitfield.MappingField(38, 5, "0123456789ABCDEFG??TT?????UvwxYz")
+        Code1        = bitfield.MappingField(43, 5, "0123456789ABCDEFG??TT?????UvwxYz")
+        Code0        = bitfield.MappingField(48, 5, "0123456789ABCDEFG??TT?????UvwxYz")
         Unk2         = bitfield.Field(53, 11)
     
     def dna_read(self):
-        ops = [self.cmd_dr_shift(self.IR_ISC_ENABLE, None),
-               self.cmd_run(20),
-               self.cmd_dr_shift(self.IR_FUSE_DNA, 0, 64, return_type = bitstring.BitString),
-               self.cmd_dr_shift(self.IR_XSC_DNA, 0, 56, return_type = bitstring.BitString),
-               self.cmd_run(20),
-               self.cmd_dr_shift(self.IR_ISC_DISABLE, None),
-               ]
-        self.execute(ops)
+        self.port.port.freq_cap("dna", 1e6)
 
-        self.fuse_dna = self.FuseDNA(all = int(ops[2].tdo))
-        self.jtag_dna = "%s%s%s%s%s%s_%d_%d_%d" % (
-            self.fuse_dna.Code0, self.fuse_dna.Code1,
-            self.fuse_dna.Code2, self.fuse_dna.Code3,
-            self.fuse_dna.Code4, self.fuse_dna.Code5,
-            self.fuse_dna.ID0, self.fuse_dna.ID1,
-            self.fuse_dna.ID2)
-        self.logger.info("Fuse DNA: %s %s", ops[2].tdo, self.fuse_dna)
-        self.logger.info("XSC DNA: %s", ops[3].tdo)
-        self.logger.info("JTAG DNA: %s", self.jtag_dna)
-        
-        return int(ops[2].tdo)
+        try:
+            xsc_dna_read = self.cmd_dr_shift(self.IR_XSC_DNA, 0, 56, return_type = bitstring.BitString)
+            fuse_dna_read = self.cmd_dr_shift(self.IR_FUSE_DNA, 0, 64, return_type = bitstring.BitString)
+            self.execute([self.cmd_dr_shift(self.IR_ISC_ENABLE, None), self.cmd_run(20),
+                          xsc_dna_read, fuse_dna_read,
+                          self.cmd_run(20), self.cmd_dr_shift(self.IR_ISC_DISABLE, None)])
+
+            self.xsc_dna_value = xsc_dna_read.tdo
+            self.fuse_dna_value = fuse_dna_read.tdo
+
+            self.fuse_dna = self.FuseDNA(all = int(self.fuse_dna_value))
+            self.jtag_dna = "%s%s%s%s%s%s_%d_%d_%d" % (
+                self.fuse_dna.Code0, self.fuse_dna.Code1,
+                self.fuse_dna.Code2, self.fuse_dna.Code3,
+                self.fuse_dna.Code4, self.fuse_dna.Code5,
+                self.fuse_dna.ID0, self.fuse_dna.ID1,
+                self.fuse_dna.ID2)
+            self.logger.info("Fuse DNA: %s %s", self.fuse_dna_value, self.fuse_dna)
+            self.logger.info("XSC DNA: %s", self.xsc_dna_value)
+            self.logger.info("JTAG DNA: %s", self.jtag_dna)
+
+            return int(self.fuse_dna_value)
+        finally:
+            self.port.port.freq_cap("dna", None)
 
     def load(self, program, force_reload = False):
         if len(program) != 1:
@@ -163,10 +168,9 @@ class Series7(Series67):
     def config_write(self, blob):
         prog_data = struct.unpack(">" + "L" * (len(blob) // 4), blob)
 
-        self.logger.info("Ready to load program, %d config words", len(prog_data))
+        self.logger.info("Ready to load program of %d config words", len(prog_data))
 
         self.logger.info("Resetting...")
-
         self.dr_shift(self.IR_JPROGRAM, None)
         self.run(20)
 
@@ -174,20 +178,21 @@ class Series7(Series67):
         self.run(20)
 
         self.logger.info("CFG IDCODE: %08x", self.cfg_idcode)
-
         self.cfg_status_dump()
 
         self.logger.info("Loading program data...")
-
         self._cfg_shift(self.IR_CFG_IN, prog_data)
         self.run(100000)
 
-        self.logger.info("Starting...")
+        self.logger.info("Loading done...")
+        self.cfg_status_dump()
 
+        self.logger.info("Starting...")
         self.dr_shift(self.IR_JSTART, None)
         self.run(10000)
         self.dr_shift(self.IR_BYPASS, None)
         self.run(10000)
+        self.logger.info("Start done...")
 
         self.cfg_status_dump()
 
@@ -198,6 +203,7 @@ class Series7(Series67):
     ###
 
     class Status(bitfield.Bitfield):
+        all          = bitfield.Field(0, 32)
         Res31        = bitfield.BooleanField(31)
         CfgBvs       = bitfield.BooleanField(30)
         BadPktError  = bitfield.BooleanField(29)
@@ -205,7 +211,7 @@ class Series7(Series67):
         HMacError    = bitfield.BooleanField(27)
         BusWidth     = bitfield.MappingField(25, 2, {0:"1",1:"8",2:"16",3:"32"})
         Res21        = bitfield.Field(21, 4)
-        StartupPhase = bitfield.Field(18, 3)
+        StartupPhase = bitfield.GrayField(18, 3)
         SecurityError= bitfield.BooleanField(16)
         IDCodeError  = bitfield.BooleanField(15)
         Done         = bitfield.BooleanField(14)
@@ -223,7 +229,8 @@ class Series7(Series67):
         CRC          = bitfield.BinaryField(0, "OK", "error")
 
     class BootStatus(bitfield.Bitfield):
-        Res          = bitfield.BooleanField(16)
+        all          = bitfield.Field(0, 32)
+        Res          = bitfield.Field(16, 16)
         HMAC1Err     = bitfield.BinaryField(15, "OK", "error")
         Wrap1Err     = bitfield.BinaryField(14, "OK", "error")
         CRC1Err      = bitfield.BinaryField(13, "OK", "error")
