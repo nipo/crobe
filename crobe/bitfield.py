@@ -135,6 +135,17 @@ class BinaryField(MappingField):
     def __init__(self, bit, when0, when1):
         super().__init__(bit, 1, {0: when0, 1: when1})
 
+class GrayField(Field):
+    def parse(self, value):
+        return value ^ (value >> 1)
+
+    def represent(self, value):
+        mask = value >> 1
+        while mask:
+            value ^= mask
+            mask >>= 1
+        return value
+
 class _register_meta(type):
     def __new__(cls, name, bases, attrs, **kwargs):
         new_attrs = {}
