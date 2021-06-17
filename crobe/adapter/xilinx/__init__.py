@@ -1,5 +1,5 @@
 from .. import model
-from ...protocol import jtag
+from ...protocol import jtag, base
 from ... import bitstring
 from ...util.pretty import metric
 from ..cypress import fx2
@@ -240,6 +240,8 @@ class JtagInterface(jtag.Interface):
     MPS = 512
 
     def freq_update(self, freq):
+        if freq is None:
+            freq = 1e6
         div = 771e9 / float(freq)
         div = math.ceil(math.log2(div))
         div = max(4, min(255, div))
@@ -390,6 +392,9 @@ class JtagInterface(jtag.Interface):
                     tdo_length += c[2]
 
                 elif isinstance(op, jtag.Pause):
+                    pass
+
+                elif isinstance(op, base.Reset):
                     pass
 
                 else:
