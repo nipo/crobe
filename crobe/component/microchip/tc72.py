@@ -1,10 +1,12 @@
 from ...model import PortComponent
 from ...protocol import spi
+import time
 
 @spi.Target.db.register("tc72")
 class Tc72(PortComponent):
     def __init__(self, port):
         super().__init__(port, "tc72")
+        self.port.freq_cap("tc72", 7.5e6)
 
     def _read(self, base, length):
         cmd = self.port.cmd_shift(bytes([int(base)]), read_miso = False)
@@ -17,13 +19,16 @@ class Tc72(PortComponent):
         self.port.execute([self.port.cmd_cs(True), cmd, self.port.cmd_cs(False)])
 
     def control_set(self, one_shot = False, shutdown = True):
-        v = 0
+        v = 0x04
         v |= 0x10 if one_shot else 0
         v |= 0x01 if shutdown else 0
         self._write(0, bytes([v]))
 
     def control_get(self):
         return self._read(0, 1)[0]
+
+    def id_get(self):
+        return self._read(3, 1)[0]
 
     def is_conversion_ready(self):
         ctrl = self.control_get()
