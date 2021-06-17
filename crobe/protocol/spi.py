@@ -80,17 +80,22 @@ class Target(PortComponent, FreqCapper):
     db = Db("SPI chip type")
 
     def __init__(self, port, name, cs, mode = 0):
+        self.__freq = 1e6
         PortComponent.__init__(self, port, name)
         FreqCapper.__init__(self)
         self.cs = cs
         self.mode = mode
-        self.port.freq_cap("target", self.freq)
+        self.freq_cap(self.freq)
 
     def freq_update(self, freq):
+        self.__freq = freq
         return self.port.freq_cap(self, freq)
-        
+
     def execute(self, ops):
+        self.logger.debug("execute %s", self.__freq)
+        self.port.freq_cap("target", self.__freq)
         r = self.port.execute(ops)
+        self.port.freq_cap("target")
         return r
 
     def transaction(self, mosi, read_miso = True):
