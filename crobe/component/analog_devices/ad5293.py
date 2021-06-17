@@ -16,6 +16,10 @@ class Ad5293(PortComponent):
     def __init__(self, port):
         super().__init__(port, "ad5293")
 
+    def start(self):
+        super().start()
+        self.read(0)
+        
     def write(self, opcode, arg = 0):
         """
         Write one opcode with argument.
