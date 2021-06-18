@@ -16,11 +16,12 @@ class Dumper:
             chain = tap.port
             interface = chain.port
             only = tap
+            taps = [tap]
         else:
             interface.start()
             chain = interface.child_summon("chain")
             chain.child_summon("0")
-        taps = chain.children[:]
+            taps = chain.children[:]
         self.interface = interface
 
         cache = Cache.open()
@@ -33,11 +34,16 @@ class Dumper:
             except:
                 pkg = ""
 
-            if not tap.idcode:
-                self.definitions.append((None, tap))
-                continue
-
-            d = cache.filter(idcode = int(tap.idcode), package = pkg)
+            d = cache.filter(name = tap.name.lower() if tap.idcode is None else None,
+                             idcode = int(tap.idcode) if tap.idcode is not None else None,
+                             package = pkg)
+            self.logger.info("For TAP #%d, %s %s %s: %s",
+                             index,
+                             tap.name.lower() if tap.idcode is None else None,
+                             hex(int(tap.idcode)) if tap.idcode is not None else None,
+                             pkg, d)
+            for e in d:
+                self.logger.info("%s %s %s %s", e.name, e.id_codes, e.package_variant, e.user_codes)
 
             if not d:
                 self.logger.warn("No BSDL entry for %s", tap.idcode)

@@ -16,6 +16,7 @@ class Cache:
         self.logger = logging.getLogger("BSDL")
         self.path = path
         self.by_idcode_package = {}
+        self.by_name_package = {}
         try:
             self.load()
         except Exception:
@@ -29,6 +30,7 @@ class Cache:
 
     def clear(self):
         self.by_idcode_package = {}
+        self.by_name_package = {}
 
     def create(self):
         os.makedirs(self.path, exist_ok = True)
@@ -39,6 +41,10 @@ class Cache:
             cache_filename = self.by_idcode_package[k]
             if not os.path.exists(cache_filename):
                 del self.by_idcode_package[k]
+        for k in list(self.by_name_package.keys()):
+            cache_filename = self.by_name_package[k]
+            if not os.path.exists(cache_filename):
+                del self.by_name_package[k]
         
     def rebuild(self):
         self.clear()
@@ -72,28 +78,37 @@ class Cache:
 
             entity.dump(cache_filename)
 
-        if not entity.id_codes:
-            print("no ID Codes")
-            return
+        #if not entity.id_codes:
+        #    print("no ID Codes")
+        #    return
 
         self.logger.info("Found %s/%s: %s", entity.name, entity.package_variant,
                          [PartId.from_idcode(c.value).pretty() for c in entity.id_codes])
 
         for code in entity.id_codes:
             self.by_idcode_package[(code, entity.package_variant)] = cache_filename
+        self.by_name_package[(entity.name, entity.package_variant)] = cache_filename
 
     def filter(self, name = None, idcode = None, package = None):
-        r = []
-        for (code, pv), filename in self.by_idcode_package.items():
-            if idcode and code.mask & idcode != code.value:
-                continue
-            if package and pv != package:
-                continue
-            e = bsdl.Entity.load(os.path.join(self.path, filename))
-            if name and not e.name.startswith(name):
-                continue
-            r.append(e)
-        return r
+        r = set()
+        if idcode is not None:
+            for (code, pv), filename in self.by_idcode_package.items():
+                if code.mask & idcode != code.value:
+                    continue
+                if package and pv != package:
+                    continue
+                e = bsdl.Entity.load(os.path.join(self.path, filename))
+                r.add(e)
+
+        if name is not None:
+            for (pname, pv), filename in self.by_name_package.items():
+                if pname != name:
+                    continue
+                if package and pv != package:
+                    continue
+                e = bsdl.Entity.load(os.path.join(self.path, filename))
+                r.add(e)
+        return list(sorted(r)) # , key = lambda x:(x.name, x.id_codes)))
 
     def load(self):
         cache = os.path.join(self.path, "index.json")
@@ -104,14 +119,24 @@ class Cache:
             except:
                 continue
             self.by_idcode_package[(bsdl.Pattern(idc), package)] = v
+        for k, v in obj["by_name_package"].items():
+            try:
+                name, package = k.split("/", 1)
+            except:
+                continue
+            self.by_name_package[(name, package)] = v
 
     def save(self):
         cache = os.path.join(self.path, "index.json")
         by_idcode_package = {}
         for (idcode, package), v in self.by_idcode_package.items():
             by_idcode_package[str(idcode)+"/"+package] = v
+        by_name_package = {}
+        for (name, package), v in self.by_name_package.items():
+            by_name_package[name+"/"+package] = v
 
-        obj = {"by_idcode_package": by_idcode_package}
+        obj = {"by_idcode_package": by_idcode_package,
+               "by_name_package": by_name_package}
 
         fd = open(cache, "w")
         json.dump(obj, fd)
