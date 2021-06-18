@@ -353,8 +353,7 @@ class Chain(PortComponent):
         # Get default IR, load bypass
         self.port.capture_ir()
         self.logger.debug("Discovering IR")
-        captured_ir = self.chain_shift_discover(max_length = len(reset_dr) * 2,
-                                               shift_in = 1)
+        captured_ir = self.chain_shift_discover(shift_in = 1)
         captured_ir_length = len(captured_ir)
 
         # Discover device count
@@ -654,7 +653,11 @@ class Tap(PortComponent, InstructionRegistry):
     db = Db("TAP subprotocol")
 
     def __init__(self, port, index, idcode, name = None):
-        self.idcode = idcode
+        if isinstance(idcode, (PartId, int)):
+            self.idcode = idcode
+        else:
+            self.idcode = None
+
         if name is None:
             if isinstance(self.idcode, (PartId, int)):
                 name = "TAP#%d[0x%08x]" % (index, int(idcode))
