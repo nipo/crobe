@@ -192,6 +192,9 @@ class Component(object):
         return child.child_summon(*invocation)
 
     def __child_lookup(self, crit):
+        if crit == "..":
+            return self.__parent
+
         if crit == "*" and len(self.__children) == 1:
             return self.__children[0]
 
