@@ -14,4 +14,4 @@ all: ../../../../crobe/adapter/proby/fw/jtag_swd_raw.bit.gz
 ../../../../crobe/adapter/proby/fw/jtag_swd_raw.bit.gz: jtag_swd_raw-compressed.bit
 	gzip -c9 < $< > $@
 
-include ../../../../nsl/build/build.mk
+include $(NSL)/build/build.mk

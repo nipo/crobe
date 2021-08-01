@@ -10,4 +10,4 @@ all: ../../../../crobe/adapter/proby/fw/jtag_swapped.bit.gz
 ../../../../crobe/adapter/proby/fw/jtag_swapped.bit.gz: jtag_swapped-compressed.bit
 	gzip -c9 < $< > $@
 
-include ../../../../nsl/build/build.mk
+include $(NSL)/build/build.mk
