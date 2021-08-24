@@ -210,7 +210,7 @@ class C22Write(Operation):
         self.data = data
 
     def __str__(self):
-        return "<C22 Write 0x%x 0x%x>" % (self.phyad, self.addr, self.data)
+        return "<C22 Write 0x%x 0x%x %04x>" % (self.phyad, self.addr, self.data)
 
 class C45Write(Operation):
     def __init__(self, prtad, devad, data):
