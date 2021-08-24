@@ -96,7 +96,6 @@ class Route(PortComponent):
             try:
                 return self.waiting.pop()
             except:
-                self.logger.debug("_pop fail")
                 pass
             self._wait(timeout = timeout)
 
