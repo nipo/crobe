@@ -55,8 +55,8 @@ class ControlStatus(PortComponent):
         off = 0
         for o in operation_list:
             if isinstance(o, StatusRead):
-                off += 5
                 o.value = int.from_bytes(rsp[off+1:off+5], 'little')
+                off += 5
             else:
                 off += 1
 
