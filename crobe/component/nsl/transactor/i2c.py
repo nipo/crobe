@@ -67,13 +67,6 @@ class I2cTransactor(PortComponent):
                         cmd.append(self.CMD_READ_NACK | (size - 1))
                     else:
                         cmd.append(self.CMD_READ_ACK | (size - 1))
-
-                    if len(cmd) > 1000 or rsp_size > 1000:
-                        rsp += self.port.execute(bytes(cmd), rsp_size)
-                        cmd = []
-                        rsp_total_size += rsp_size
-                        rsp_size = 0
-
         
             elif isinstance(cur, i2c.Write):
                 cur.__rsp = []
@@ -86,22 +79,10 @@ class I2cTransactor(PortComponent):
                     cmd.append(self.CMD_WRITE | (size - 1))
                     cmd += cur.data[offset : offset + size]
 
-                    if len(cmd) > 1000 or rsp_size > 1000:
-                        rsp += self.port.execute(bytes(cmd), rsp_size)
-                        cmd = []
-                        rsp_total_size += rsp_size
-                        rsp_size = 0
-
             else:
                 raise base.ProtocolError("Unknown I2C operation %s" % type(op))
 
             prev = cur
-
-            if len(cmd) > 1000 or rsp_size > 1000:
-                rsp += self.port.execute(bytes(cmd), rsp_size)
-                cmd = []
-                rsp_total_size += rsp_size
-                rsp_size = 0
 
         cmd.append(self.CMD_STOP)
         rsp_size += 1
