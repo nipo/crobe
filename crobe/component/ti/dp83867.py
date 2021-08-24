@@ -1,7 +1,7 @@
 from .. import ethernet_phy
 from ...protocol import smi, jtag
 from ...part_id import PartId
-from ...bitfield import *
+from ... import bitfield
 from ...util.pretty import metric
 from ...util.bit import *
 from ...util.timeout import *
@@ -103,6 +103,16 @@ class Register(enum.IntEnum):
     TdrGeneralStatus = 0x1a4
     TdrPeakSign = 0x1a5 # 2 times to 0x1a6
     ProgGain = 0x1d5
+
+class AutoNegExpansion(bitfield.Bitfield):
+    res = bitfield.Field(7, 9)
+    rx_np_able = bitfield.BooleanField(6)
+    rx_np_store = bitfield.BooleanField(5)
+    pdf = bitfield.BooleanField(4)
+    lp_np_able = bitfield.BooleanField(3)
+    np_able = bitfield.BooleanField(2)
+    page_rx = bitfield.BooleanField(1)
+    lp_np_able = bitfield.BooleanField(0)
 
 @smi.Interface.db.register("dp83867")
 class Dp83867(ethernet_phy.Clause22EthernetPhy):
