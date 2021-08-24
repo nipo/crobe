@@ -27,7 +27,7 @@ class I2cTransactor(PortComponent):
         if not freq:
             freq = 1e6
         d = math.ceil(self.base_freq / float(freq) / self.pre_div / 2)
-        self.__div = min(0x3f, max(2, d))
+        self.__div = min(0x1f, max(2, d))
 
         return self.base_freq / self.__div / self.pre_div / 2
 
