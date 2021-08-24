@@ -80,7 +80,6 @@ class BlSpiInterface(spi.Interface):
         self.child_add(spi.Target(self, "cs1", 1))
 
     def freq_update(self, freq):
-        print("freq_update", freq, self.transactor)
         if self.transactor is None:
             return 1
         return self.transactor.freq_update(freq)
