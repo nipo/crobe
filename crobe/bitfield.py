@@ -231,7 +231,11 @@ class Bitfield(object, metaclass = _register_meta):
             for name, f in self._fields.items()
             if name != "all"
         }
-        fields = ", ".join(f"{name} = {value}" for name, value in sorted(values.items()))
+        def pretty(x):
+            if isinstance(x, int) and x is not True and x is not False:
+                return hex(x)
+            return str(x)
+        fields = ", ".join(f"{name} = {pretty(value)}" for name, value in sorted(values.items()))
         return f"<{self.__class__.__name__}: {fields}>"
 
     def __repr__(self):
@@ -240,7 +244,11 @@ class Bitfield(object, metaclass = _register_meta):
             for name, f in self._fields.items()
             if name != "all"
         }
-        fields = ", ".join(f"{name} = {repr(value)}" for name, value in sorted(values.items()))
+        def pretty(x):
+            if isinstance(x, int) and x is not True and x is not False:
+                return hex(x)
+            return repr(x)
+        fields = ", ".join(f"{name} = {pretty(value)}" for name, value in sorted(values.items()))
         return f"{self.__class__.__name__}({fields})"
 
     def set(self, value):
