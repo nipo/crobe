@@ -219,6 +219,9 @@ class JtagInterface(jtag.Interface):
                 elif isinstance(op, jtag.Pause):
                     pass
 
+                elif isinstance(op, base.Reset):
+                    pass
+
                 else:
                     raise base.ProtocolError("Unknown JTAG operation %s" % type(op))
 
