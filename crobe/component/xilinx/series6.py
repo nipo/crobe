@@ -17,6 +17,7 @@ class Series6(Series67):
     ### Config port
     ###
 
+    IR_BYPASS      = 0x3f
     IR_ISC_DNA     = 0x30 # Doc says 0x31, iMPACT does 0x30
     IR_ISC_NOP     = 0x14
 
@@ -123,7 +124,7 @@ class Series6(Series67):
         ok = self.config_write(blob)
 
         # This is important, it enables internal CCLK
-        self.run(1000)
+        self.run(10000)
 
         self.logger.info("Status: %04x", self.cfg_status)
         self.cfg_status_dump()
@@ -142,15 +143,9 @@ class Series6(Series67):
 
         self.logger.info("Ready to load program, %d config words", len(prog_data))
 
-        self.dr_shift(self.IR_ISC_ENABLE, None)
-        self.run(20)
-
         self.logger.info("Resetting...")
-
         if not self.send_op_wait(self.IR_JPROGRAM, self.IR_STATUS_INIT):
             raise RuntimeError("Unable to reset FPGA")
-
-        self.dr_shift(self.IR_JSHUTDOWN, None)
 
         self.logger.info("Loading program data...")
 
@@ -158,14 +153,7 @@ class Series6(Series67):
         self.run(40)
 
         self.logger.info("Starting...")
-
-        self.dr_shift(self.IR_JSTART, None)
-        self.run(20)
-
-        self.dr_shift(self.IR_ISC_DISABLE, None)
-        self.run(20)
-
-        return self.send_op_wait(-1, self.IR_STATUS_DONE)
+        return self.send_op_wait(self.IR_JSTART, self.IR_STATUS_DONE)
 
     ###
     ### Status
