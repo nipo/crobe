@@ -1,7 +1,7 @@
 from ...part_id import PartId
 from ...protocol import jtag
 from ... import bitfield
-from ...db import Db
+from ...db import Db, NoMatch
 from . import series7, xadc
 
 parts = {
@@ -57,4 +57,7 @@ class Spartan7(series7.Series7, xadc.Xadc):
         self.name = "Spartan7-" + parts[int(self.idcode.drop_revision())]
 
     def child_spawn(self, sub):
-        return self.db.call(sub, self)
+        try:
+            return self.db.call(sub, self)
+        except NoMatch:
+            return series7.Series7.db.call(sub, self)
