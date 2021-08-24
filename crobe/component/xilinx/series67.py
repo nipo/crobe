@@ -58,13 +58,12 @@ class Series67(jtag.Tap):
     def start(self):
         self.cfg_status_dump()
             
-        if self.__can_stop:
+        if not self.__can_stop and self.done:
+            self.logger.info("Device is running, cannot get DNA")
+        else:
             self.stop()
-        if not (self.ir_status_read() & self.IR_STATUS_DONE):
             self.dna = self.dna_read()
             self.logger.info("Device DNA: %x", self.dna)
-        else:
-            self.logger.info("Device is running, cannot get DNA")
         jtag.Tap.start(self)
 
     @property
