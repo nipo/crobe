@@ -28,8 +28,10 @@ class SpiTransactor(PortComponent):
         if not freq:
             freq = 15e6
         divisor = int(math.ceil(self.base_freq / 2. / float(freq))) - 1
-        self.__divisor = max(0, min(divisor, 0x1f))
-        self.__rate_dirty = True
+        next_divisor = max(0, min(divisor, 0x1f))
+        if self.__divisor != next_divisor:
+            self.__divisor = next_divisor
+            self.__rate_dirty = True
         return self.base_freq / ((self.__divisor + 1) * 2)
     
     def execute(self, operation_list):
