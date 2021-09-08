@@ -234,11 +234,13 @@ class ShiftBits(Operation):
         if not (1 <= count <= 8):
             raise ValueError(f"Shifting too many bits: {count}")
 
+        self.lsb_first = lsb_first
         cmd = api.MPSSE_BITS
 
         data_out = b''
         if lsb_first:
             cmd |= api.MPSSE_LSB
+            data <<= 8 - count
         if data is not None:
             cmd |= api.MPSSE_WRITE
             if write_pol != "+":
@@ -258,7 +260,10 @@ class ShiftBits(Operation):
 
     def rsp_handle(self, blob):
         if self.read:
-            self.data = BitString(blob[0] >> (8 - self.count), self.count)
+            if self.lsb_first:
+                self.data = BitString(blob[0] >> (8 - self.count), self.count)
+            else:
+                self.data = BitString(blob[0], self.count)
         else:
             self.data = None
 
@@ -282,6 +287,7 @@ class ShiftBits8(Operation):
         if not (1 <= byte_count <= 65536):
             raise ValueError(f"Shifting too many bytes: {byte_count}")
 
+        self.lsb_first = lsb_first
         if lsb_first:
             cmd |= api.MPSSE_LSB
         if read:
@@ -301,6 +307,8 @@ class ShiftBits8(Operation):
 
     def rsp_handle(self, blob):
         if self.read:
+            if not self.lsb_first:
+                blob = blob[::-1]
             self.data = BitString(blob, self.byte_count * 8)
         else:
             self.data = None
