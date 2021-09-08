@@ -8,19 +8,34 @@ __all__ = ["Interface"]
 class ProtocolError(base.ProtocolError):
     pass
 
+def smi_id_eq(reg_key, lookup):
+    if not isinstance(reg_key, int) or not isinstance(lookup, int):
+        return reg_key == lookup
+    return reg_key & 0xfffffff0 == lookup & 0xfffffff0
+
 class Interface(base.Interface):
     """
     SMI protocol interface.
     """
 
-    db = Db("SMI chip type")
+    db = Db("SMI chip type", eq_func = smi_id_eq)
 
     def __init__(self, port, name = None):
         base.Interface.__init__(self, port, (name or port.name) + "-SMI")
+        self.__do_scan = True
 
     def start(self):
         self.freq_cap("IEEE", 25e6)
         base.Interface.start(self)
+
+        for i in range(0x20):
+            id0 = self.cmd_c22_read(i, 2)
+            id1 = self.cmd_c22_read(i, 3)
+            self.execute([id0, id1])
+            id = (id0.data << 16) | id1.data
+            if id != 0xffffffff and id != 0:
+                self.logger.debug("Found phy at address 0x%x: IDR=%08x", i, id)
+                self.child_add(self.db.call(id, self, phyad = i))
         
     def _execute(self, operation_list):
         """
@@ -28,6 +43,12 @@ class Interface(base.Interface):
         stopping with a stop condition, with restarts in the middle.
         """
         raise NotImplementedError()
+
+    def option_set(self, opt):
+        if opt == 'noscan':
+            self.__do_scan = False
+            return
+        super().option_set(opt)
 
     def c22_read(self, phyad, addr):
         """
