@@ -11,14 +11,20 @@ class I2cMem(i2c.Slave, Bus):
         Bus.__init__(self, self.name)
         self.addr_bytes = addr_bytes
         self.saddr_bits = saddr_bits
+        self.size = size
+        self.page_size = page_size
 
-        max_size = 1 << (addr_bytes * 8 + saddr_bits)
-        self.size = size or max_size
-        self.page_size = page_size or self.size
+    def start(self):
+        super().start()
+        max_size = 1 << (self.addr_bytes * 8 + self.saddr_bits)
+        if self.size is None:
+            self.size = max_size
+        if self.page_size is None:
+            self.page_size = 16
 
         if self.size > max_size:
             raise ValueError("Memory size is more than accessible addresses")
-
+        
     def _addr(self, addr):
         baddr = (addr & ((1 << (self.addr_bytes * 8)) - 1)).to_bytes(self.addr_bytes, 'big')
         saddr = self.saddr + (addr >> (self.addr_bytes * 8))
@@ -31,8 +37,13 @@ class I2cMem(i2c.Slave, Bus):
         r = b''
         for off in range(addr, addr + size, read_by):
             saddr, baddr = self._addr(off)
+            saddr_old = self.saddr
 
-            r += i2c.Slave.write_read(self, baddr, read_by)
+            self.saddr = saddr
+            try:
+                r += i2c.Slave.write_read(self, baddr, read_by)
+            finally:
+                self.saddr = saddr_old
         return r[:size]
 
     def write(self, addr, data):
@@ -59,8 +70,13 @@ class I2cMem(i2c.Slave, Bus):
         assert addr // self.page_size == (addr + len(data) - 1) // self.page_size
 
         saddr, baddr = self._addr(addr)
+        saddr_old = self.saddr
 
-        i2c.Slave.write(self, baddr + data)
+        self.saddr = saddr
+        try:
+            i2c.Slave.write(self, baddr + data)
+        finally:
+            self.saddr = saddr_old
 
     def option_set(self, opt):
         k, v = opt.split('=', 1)
@@ -69,7 +85,7 @@ class I2cMem(i2c.Slave, Bus):
         elif k == 'addr_bytes':
             self.addr_bytes = int(v)
         elif k == 'size':
-            self.size = int(v)
+            self.size = int(v, 0)
         elif k == 'page_size':
             self.page_size = int(v)
         else:
@@ -97,6 +113,19 @@ class I2cEeprom(I2cMem):
                     continue
                 break
         raise RuntimeError()
+
+@i2c.Interface.db.register("m24m02")
+def m24m02(bus):
+    return I2cEeprom(bus, None,
+                     addr_bytes = 2,
+                     saddr_bits = 2,
+                     page_size = 256)
+
+@i2c.Interface.db.register("24lc128")
+def _24lc128(bus):
+    return I2cEeprom(bus, None,
+                     addr_bytes = 2,
+                     page_size = 64)
 
 @i2c.Interface.db.register("eeprom")
 def i2c_eeprom_gen(bus):
