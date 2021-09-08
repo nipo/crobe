@@ -71,6 +71,7 @@ class UnformattedPage(bitfield.Bitfield):
     np = bitfield.BooleanField(15)
     
 @smi.Interface.db.register("eth_phy")
+@smi.Interface.db.register_default
 class Clause22EthernetPhy(smi.C22Slave):
     def __init__(self, bus, name = "phy", phyad = None):
         super().__init__(bus, name = name, phyad = phyad)
