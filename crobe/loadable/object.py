@@ -487,13 +487,13 @@ class Program:
     def from_random(cls, size, offset = 0):
         from ..util.random import random_data
         program = cls()
-        program.append(Segment(address = offset, data = random_data(int(size))))
+        program.append(Segment(address = offset, data = random_data(int(size, 0))))
         return program
 
     @classmethod
     def from_zero(cls, size, offset = 0):
         program = cls()
-        program.append(Segment(address = offset, data = b'\x00' * int(size)))
+        program.append(Segment(address = offset, data = b'\x00' * int(size, 0)))
         return program
 
     @classmethod
