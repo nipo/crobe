@@ -60,6 +60,11 @@ class Adapter(model.Adapter):
         self.device = device
 
     def open(self, interface_name):
+        if self.device.is_kernel_driver_active(0):
+            self.device.detach_kernel_driver(0)
+        if self.device.is_kernel_driver_active(1):
+            self.device.detach_kernel_driver(1)
+
         if interface_name.lower() == "jtag":
             return JtagInterface(self)
 
@@ -80,7 +85,7 @@ class JtagInterface(jtag.Interface):
         self.jtag_enable()
 
     def freq_update(self, freq):
-        return self.openjtag.freq_set(freq)
+        return 450e3
         
     def jtag_enable(self):
         return self.adapter.ctrl(op = self.JTAG_ENABLE,

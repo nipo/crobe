@@ -12,7 +12,10 @@ class Adapter(fx.Adapter):
         self.mem_write(cpu_address, data)
 
     def firmware_load(self, program):
-        self.device.set_configuration(0)
+        try:
+            self.device.set_configuration(0)
+        except:
+            pass
         self.reset(True)
 
         fx.Adapter.firmware_load(self, program)
