@@ -114,10 +114,9 @@ class AutoNegExpansion(bitfield.Bitfield):
     page_rx = bitfield.BooleanField(1)
     lp_np_able = bitfield.BooleanField(0)
 
-@smi.Interface.db.register("dp83867")
-class Dp83867(ethernet_phy.Clause22EthernetPhy):
-    def __init__(self, bus, name = "dp83867", phyad = None):
-        super().__init__(bus, name = "dp83867", phyad = phyad)
+class Genesis(ethernet_phy.Clause22EthernetPhy):
+    def __init__(self, bus, name = "genesis", phyad = None):
+        super().__init__(bus, name = name, phyad = phyad)
 
     def reg_set(self, reg, value):
         if reg <= 0x1f:
@@ -130,6 +129,25 @@ class Dp83867(ethernet_phy.Clause22EthernetPhy):
             return self.read(reg)
         else:
             return self.ext_read(0x1f, reg)
+
+class Peak:
+    def __init__(self, channel, location, amplitude, cross = False):
+        self.channel = channel
+        self.location = location
+        self.amplitude = amplitude
+        self.cross = cross
+
+    def __str__(self):
+        return f"Chan {self.channel}: {self.amplitude} @ {metric(self.location, 'm')} {'cross' if self.cross else ''}"
+
+    def __repr__(self):
+        return str(self)
+
+@smi.Interface.db.register("dp83867")
+@smi.Interface.db.register(0x2000a231)
+class Dp83867(Genesis):
+    def __init__(self, port, name = "dp83867", phyad = None):
+        super().__init__(port, name, phyad)
 
     def __tdr_stats_gather(self):
         loc = []
@@ -233,21 +251,14 @@ class Dp83867(ethernet_phy.Clause22EthernetPhy):
         cross = [x for x in with_cross if x.cross]
         return no_cross + cross
 
-class Peak:
-    def __init__(self, channel, location, amplitude, cross = False):
-        self.channel = channel
-        self.location = location
-        self.amplitude = amplitude
-        self.cross = cross
-
-    def __str__(self):
-        return f"Chan {self.channel}: {self.amplitude} @ {metric(self.location, 'm')} {'cross' if self.cross else ''}"
-
-    def __repr__(self):
-        return str(self)
+@smi.Interface.db.register("dp83869")
+@smi.Interface.db.register(0x2000a0f1)
+class Dp83867(Genesis):
+    def __init__(self, port, name = "dp83869", phyad = None):
+        super().__init__(port, name, phyad)
 
 @jtag.Chain.db.register("dp83867")
-class Dp83867Tap(jtag.Tap):
+class GenesisTap(jtag.Tap):
     max_freq = 20e6
 
     TEST = jtag.Dr(32)
