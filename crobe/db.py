@@ -46,13 +46,13 @@ class Db(object):
 
         raise NoMatch(self.db_name, id)
 
-    def call(self, id, *args, allow_default = True):
+    def call(self, id, *args, allow_default = True, **kwargs):
         poss = self.get(id, allow_default = allow_default)
         exc = []
         
         for i, f in enumerate(poss):
             try:
-                return f(*args)
+                return f(*args, **kwargs)
             except NoMatch as e:
                 exc.append(e)
             except InitializationFailure as e:
@@ -61,7 +61,7 @@ class Db(object):
                 exc.append(e)
 
         if self.default is not None and allow_default:
-            return self.default(*args)
+            return self.default(*args, **kwargs)
 
         if len(exc) == 1:
             raise NoMatch(self.db_name, id) from exc[0]
