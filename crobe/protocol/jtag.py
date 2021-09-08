@@ -294,8 +294,8 @@ class Chain(PortComponent):
     def chain_shift_discover(self, max_length = 512, shift_back = False, shift_in = None):
         self.port.freq_cap("shift_discover", 1e6)
         try:
-            marker = 0xdecafbad
-            tdo = self.port.shift(BitString(marker, max_length + 32))
+            marker = 0xc05a5a03
+            tdo = self.port.shift(BitString(marker, max_length + 36))
             tdo = tdo[:max_length+32]
 
             if not int(tdo):
