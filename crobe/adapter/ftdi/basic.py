@@ -1,6 +1,6 @@
 from .. import model
 from ...bitstring import BitString, BitStringSlice
-from ...protocol import jtag, base, swd, spi, chipcon, i2c, bitbang, one_wire
+from ...protocol import jtag, base, swd, spi, chipcon, i2c, bitbang, one_wire, smi
 from . import ftdi, api, mpsse
 from ...util.pretty import metric
 from collections import deque
@@ -44,6 +44,9 @@ class Adapter(model.Adapter):
 
         if interface_name.lower() == "swd":
             return SwdInterface(self, **d)
+
+        if interface_name.lower() == "smi":
+            return SmiInterface(self, **d)
 
         if interface_name.lower() == "i2c":
             return I2cInterface(self, **d)
@@ -1183,3 +1186,66 @@ class OneWireInterface(EngineInterface, one_wire.Interface):
                 for r in reads:
                     rdata += BitString(int(r), 1)
                 op.data = rdata
+
+class SmiInterface(EngineInterface, smi.Interface):
+    """
+    SMI using TCK/TMS with IOs like SWD
+    """
+    def __init__(self, adapter, oen_pin = None, oe_pin = None, name = None, **args):
+        EngineInterface.__init__(self, adapter, **args)
+        smi.Interface.__init__(self, adapter, name)
+        self.freq_cap("hardware", 5e6)
+
+        if oen_pin is None and oe_pin is None:
+            raise ValueError("Need oen_pin or oe_pin")
+
+        self.__tdi = PinControl(self, pin = 1)
+        self.__oe = PinControl(self, pin = oe_pin, n_pin = oen_pin)
+
+    def start(self):
+        # Dont execute, super().start() will init GPIOs
+        self.cmds_gpio(mpsse.Pin.Tck | mpsse.Pin.Tdi | mpsse.Pin.Tdo,
+                       0,
+                       mpsse.Pin.Tck | mpsse.Pin.Tdi)
+        EngineInterface.start(self)
+        smi.Interface.start(self)
+    
+    def _execute(self, operation_list):
+        self.logger.debug("Running %s", operation_list)
+        mpsse_ops = []
+        tdos = {}
+
+        for index, op in enumerate(operation_list):
+            mpsse_ops += self.__tdi.cmds_set(True)
+            mpsse_ops += self.__oe.cmds_set(True)
+            mpsse_ops.append(mpsse.ShiftBits8(b'\xff\xff\xff\xff'))
+            if isinstance(op, smi.C22Read):
+                mpsse_ops.append(mpsse.ShiftBits8(((0b110110 << 10) | (op.phyad << 5) | op.addr).to_bytes(2, "big"), lsb_first = False))
+                mpsse_ops += self.__oe.cmds_set(False)
+                mpsse_ops.append(mpsse.ShiftBits(0, 1))
+                tdos[index] = len(mpsse_ops)
+                mpsse_ops.append(mpsse.ShiftBits8(2, read_pol = "-", lsb_first = False, read = True))
+                mpsse_ops.append(mpsse.ShiftBits(0, 1))
+
+            elif isinstance(op, smi.C22Write):
+                mpsse_ops.append(mpsse.ShiftBits8(((0b0101 << 28) | (op.phyad << 23) | (op.addr << 18) | (0b10 << 16) | op.data).to_bytes(4, "big"), lsb_first = False))
+                mpsse_ops += self.__oe.cmds_set(False)
+                mpsse_ops.append(mpsse.ShiftBits(1, 1))
+
+#            elif isinstance(op, smi.C45Read):
+#                pending.append(([self.CMD_C45_READ | op.prtad, op.devad], 3, op))
+#            elif isinstance(op, smi.C45Write):
+#                pending.append(([self.CMD_C45_WRITE | op.prtad, op.devad, op.data >> 8, op.data & 0xff], 1, None))
+#            elif isinstance(op, smi.C45Addr):
+#                pending.append(([self.CMD_C45_ADDR | op.prtad, op.devad, op.addr >> 8, op.addr & 0xff], 1, None))
+#            elif isinstance(op, smi.C45ReadInc):
+#                pending.append(([self.CMD_C45_READINC | op.prtad, op.devad], 3, op))
+            else:
+                raise base.ProtocolError("Unknown SMI operation %s" % type(op))
+            mpsse_ops += self.__tdi.cmds_set(True)
+
+        self._mpsse_run(mpsse_ops)
+
+        for index, op in enumerate(operation_list):
+            if index in tdos:
+                op.data = int(mpsse_ops[tdos[index]].data)
