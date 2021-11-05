@@ -1,5 +1,5 @@
 from . import api
-from ...bitstring import BitString
+from ...bitstring import BitString, BitStringSlice
 from .ftdi import Handle
 import enum
 
@@ -23,7 +23,6 @@ class Pin(enum.IntFlag):
 
 class Engine(Handle):
     def __init__(self, device, interface):
-        print("Trying to open %s/%s as MPSSE", device.connection_id, interface)
         Handle.__init__(self, device.connection_id, interface, "MPSSE")
 
         self.logger.info("Using MPSSE with a %s device, MPS: %d", self.type,
@@ -240,17 +239,22 @@ class ShiftBits(Operation):
         data_out = b''
         if lsb_first:
             cmd |= api.MPSSE_LSB
-            data <<= 8 - count
+
+        if write_pol != "+":
+            cmd |= api.MPSSE_WRITE_NEG
+
         if data is not None:
             cmd |= api.MPSSE_WRITE
-            if write_pol != "+":
-                cmd |= api.MPSSE_WRITE_NEG
-            data_out = bytes([data or 0])
+            data = data or 0
+            if not lsb_first:
+                data <<= 8 - count
+            data_out = bytes([data])
+
         if read:
             cmd |= api.MPSSE_READ
             if read_pol != "+":
                 cmd |= api.MPSSE_READ_NEG
-        
+
         self.cmd = bytes([cmd, count - 1]) + data_out
         self.count = count
         self.read = read
@@ -273,16 +277,27 @@ class ShiftBits(Operation):
 class ShiftBits8(Operation):
     def __init__(self, data_or_bytecnt, write_pol = "-", read_pol = "+", lsb_first = True, read = False):
         cmd = 0
+        self.rt = bytes
 
         if isinstance(data_or_bytecnt, int):
             byte_count = data_or_bytecnt
             data_out = b''
+        elif isinstance(data_or_bytecnt, (BitString, BitStringSlice)):
+            assert (len(data_or_bytecnt) % 8) == 0
+            data_out = bytes(data_or_bytecnt)
+            if not lsb_first:
+                data_out = data_out[::-1]
+            byte_count = len(data_out)
+            cmd |= api.MPSSE_WRITE
+            self.rt = BitString
         else:
+            assert isinstance(data_or_bytecnt, (bytes, bytearray))
             data_out = bytes(data_or_bytecnt)
             byte_count = len(data_out)
             cmd |= api.MPSSE_WRITE
-            if write_pol != "+":
-                cmd |= api.MPSSE_WRITE_NEG
+
+        if write_pol != "+":
+            cmd |= api.MPSSE_WRITE_NEG
 
         if not (1 <= byte_count <= 65536):
             raise ValueError(f"Shifting too many bytes: {byte_count}")
@@ -307,9 +322,12 @@ class ShiftBits8(Operation):
 
     def rsp_handle(self, blob):
         if self.read:
-            if not self.lsb_first:
-                blob = blob[::-1]
-            self.data = BitString(blob, self.byte_count * 8)
+            if self.rt is bytes:
+                self.data = blob
+            else:
+                if not self.lsb_first:
+                    blob = blob[::-1]
+                self.data = BitString(blob, self.byte_count * 8)
         else:
             self.data = None
 

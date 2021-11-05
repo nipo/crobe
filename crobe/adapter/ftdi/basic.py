@@ -245,15 +245,15 @@ class PinControl:
             self.__idle = 0, 0
 
         if oe_pin is not None:
-            self.__mask |= m(oe_pin)
-            self.__deasseted |= m(oe_pin), 0
-            self.__asseted |= m(oe_pin), m(oe_pin)
-            self.__idle |= m(oe_pin), 0
+            self.__mask = m(oe_pin)
+            self.__deasseted = m(oe_pin), 0
+            self.__asseted = m(oe_pin), m(oe_pin)
+            self.__idle = m(oe_pin), 0
         elif oen_pin is not None:
-            self.__mask |= m(oe_pin)
-            self.__deasseted |= m(oe_pin), m(oe_pin)
-            self.__asseted |= m(oe_pin), 0
-            self.__idle |= m(oe_pin), m(oe_pin)
+            self.__mask = m(oen_pin)
+            self.__deasseted = m(oen_pin), m(oen_pin)
+            self.__asseted = m(oen_pin), 0
+            self.__idle = m(oen_pin), m(oen_pin)
 
     def cmds_set(self, asserted = None):
         if not self.__mask:
@@ -733,6 +733,8 @@ class SwdInterface(EngineInterface, swd.Interface):
 
                 if op.ap:
                     mpsse_ops.append(mpsse.ShiftBits(0, 8))
+                else:
+                    mpsse_ops.append(mpsse.ShiftBits(0, 8))
 
                 tdos[index] = (ack_idx, data_idx, par_idx)
 
@@ -755,6 +757,8 @@ class SwdInterface(EngineInterface, swd.Interface):
                 mpsse_ops.append(mpsse.ShiftBits(dparity, 1))
 
                 if op.ap:
+                    mpsse_ops.append(mpsse.ShiftBits(0, 8))
+                else:
                     mpsse_ops.append(mpsse.ShiftBits(0, 8))
 
                 tdos[index] = ack_idx,
@@ -824,7 +828,10 @@ class SwdInterface(EngineInterface, swd.Interface):
             op.ack = ack
 
             if isinstance(op, swd.Read):
-                op.data = int(mpsse_ops[rx[1]].data)
+                d = mpsse_ops[rx[1]].data
+                if isinstance(d, bytes):
+                    d = int.from_bytes(d, "little")
+                op.data = int(d)
                 dparity = int(op.data)
                 dparity ^= dparity >> 16
                 dparity ^= dparity >> 8
@@ -896,13 +903,15 @@ class SpiInterface(EngineInterface, spi.Interface):
         self.freq_cap("hardware", adapter.freq_max)
 
         self.__cs = PinControl(self, n_pin = csn_pin)
+        self.__sck = PinControl(self, pin = 0)
         self.child_add(spi.Target(self, "cs0", 0))
 
     def start(self):
         # Dont execute, super().start() will init GPIOs
         self.cmds_gpio(mpsse.Pin.Tck | mpsse.Pin.Tdi | mpsse.Pin.Tdo,
-                       0,
+                       mpsse.Pin.Tms,
                        mpsse.Pin.Tck | mpsse.Pin.Tdi)
+        self.__cs.cmds_set(False)
         EngineInterface.start(self)
         spi.Interface.start(self)
         
@@ -910,6 +919,8 @@ class SpiInterface(EngineInterface, spi.Interface):
         self.logger.debug("Running %s", operation_list)
         mpsse_ops = []
         tdos = {}
+        write_pol = '-'
+        read_pol = '+'
 
         for index, op in enumerate(operation_list):
             cmd_count_before = len(mpsse_ops)
@@ -920,7 +931,8 @@ class SpiInterface(EngineInterface, spi.Interface):
                         chunk = bytes(op.mosi[off : off + 65536])
                         mpsse_ops.append(
                             mpsse.ShiftBits8(chunk,
-                                             write_pol = '-', read_pol = '+',
+                                             write_pol = write_pol,
+                                             read_pol = read_pol,
                                              lsb_first = False,
                                              read = op.read_miso))
                 elif isinstance(op.mosi, int) and op.read_miso:
@@ -928,7 +940,8 @@ class SpiInterface(EngineInterface, spi.Interface):
                         chunk_len = min(op.mosi - off, 65536)
                         mpsse_ops.append(
                             mpsse.ShiftBits8(chunk_len,
-                                             write_pol = '-', read_pol = '+',
+                                             write_pol = write_pol,
+                                             read_pol = read_pol,
                                              lsb_first = False,
                                              read = True))
                 elif isinstance(op.mosi, int) and not op.read_miso:
@@ -937,7 +950,9 @@ class SpiInterface(EngineInterface, spi.Interface):
                         if self.handle.can_pad:
                             mpsse_ops.append(mpsse.ClockBits8(chunk_len))
                         else:
-                            mpsse_ops.append(mpsse.ShiftBits8(b'\x00' * chunk_len))
+                            mpsse_ops.append(mpsse.ShiftBits8(b'\x00' * chunk_len,
+                                                              write_pol = write_pol,
+                                                              read_pol = read_pol))
                 else:
                     raise ValueError("Unhandled data type for mosi", op.mosi)
 
@@ -945,7 +960,26 @@ class SpiInterface(EngineInterface, spi.Interface):
                 mpsse_ops += self.cmds_system_reset(op.asserted)
 
             elif isinstance(op, spi.Cs):
-                mpsse_ops += self.__cs.cmds_set(op.value == 0)
+                if op.value != 0:
+                    mpsse_ops += self.__cs.cmds_set(False)
+                if op.mode == 0:
+                    mpsse_ops += self.__sck.cmds_set(False)
+                    write_pol = '-'
+                    read_pol = '+'
+                elif op.mode == 1:
+                    mpsse_ops += self.__sck.cmds_set(False)
+                    write_pol = '+'
+                    read_pol = '-'
+                elif op.mode == 2:
+                    mpsse_ops += self.__sck.cmds_set(True)
+                    write_pol = '+'
+                    read_pol = '-'
+                else:
+                    mpsse_ops += self.__sck.cmds_set(True)
+                    write_pol = '-'
+                    read_pol = '+'
+                if op.value == 0:
+                    mpsse_ops += self.__cs.cmds_set(True)
 
             else:
                 raise base.ProtocolError("Unknown SPI operation %s" % type(op))
