@@ -249,8 +249,8 @@ registers = [
     RegDef("OUT10_DIS", 0xBD, 10, 1),
     RegDef("OUT11_DIS", 0xBD, 11, 1),
     RegDef("XOSC_CINT_ENA", 0xBF, 7, 1),
-#    RegDef("XOSC_CTRIM_XA", 0xC0, 0, 6),
-#    RegDef("XOSC_CTRIM_XB", 0xC1, 0, 6),
+    RegDef("XOSC_CTRIM_XA", 0xC0, 0, 6),
+    RegDef("XOSC_CTRIM_XB", 0xC1, 0, 6),
     RegDef("XOSC_CTRIM_XIN", 0xC0, 0, 6),
     RegDef("XOSC_CTRIM_XOUT", 0xC1, 0, 6),
     ]
@@ -348,7 +348,7 @@ class RegisterMap(object):
         new = (mask & to_set) | (~mask & old)
         self.__values[addr : addr + byte_count] = list(new.to_bytes(byte_count, "big"))
         self.__dirty[addr : addr + byte_count] = [True] * byte_count
-
+        
     def raw_set(self, regs):
         for a, v in regs:
             self.__values[a] = v
@@ -428,8 +428,6 @@ class RegisterMap(object):
 
             freq = (omux[source] / div) if div else 0
 
-            print(freq)
-
             print(f"OUT{i}, OMUX{source} / {div} = {metric(freq, 'Hz')}, mode={mode}, stop={stop_highz}, skew={skew}ps, oe={'on' if oe else 'off'}, slew={cmos_slew}, inv={cmos_inv}, str={cmos_str}")
         
         
@@ -437,6 +435,10 @@ class Si5332(i2c.Slave):
     def __init__(self, bus, saddr):
         super().__init__(bus, "si5332", saddr)
         self.regs = RegisterMap(self)
+
+    def status_get(self):
+        data, = self.read(0x7, 1)
+        return data
         
     def read(self, base, size):
         rdata = self.write_read([base], size)
