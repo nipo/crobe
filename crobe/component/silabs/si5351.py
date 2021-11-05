@@ -16,6 +16,12 @@ class Interrupt(Bitfield):
     los_xtal = BooleanField(3)
     revid = Field(0, 2)
 
+class Address(Bitfield):
+    _endian = "little"
+    all = Field(0, 8)
+    one = Field(0, 4)
+    i2c_address = Field(4, 4)
+
 class OutputEn(Bitfield):
     _endian = "big"
     all = Field(0, 8)
@@ -280,6 +286,7 @@ class RegAddr(enum.IntEnum):
     IntSticky = 1
     IntMask = 2
     Oeb = 3
+    Address = 7
     OebMask = 9
     ClkIn = 15
     Clk0 = 16
@@ -319,6 +326,7 @@ class Si5351(i2c.Slave):
         RegAddr.Status: Interrupt,
         RegAddr.IntSticky: Interrupt,
         RegAddr.IntMask: Interrupt,
+        RegAddr.Address: Address,
         RegAddr.Oeb: OutputEn,
         RegAddr.OebMask: OutputEn,
         RegAddr.ClkIn: Source,
@@ -373,22 +381,21 @@ class Si5351(i2c.Slave):
 
         return pretty
 
-    def reg_write_data(self, reg, value):
+    @classmethod
+    def reg_write_data(cls, reg, value):
         reg = RegAddr(int(reg))
         addr = bytes([int(reg)])
 
-        reg_class = self.reg_map[reg]
+        reg_class = cls.reg_map[reg]
         reg_size = reg_class._width // 8
-
-        pretty = reg_class(int(value))
         data = int(value).to_bytes(reg_size, reg_class._endian)
 
-        self.logger.debug("Reg write %s %s: %s", reg, data.hex(), pretty)
-
-        return addr, data
+        return reg, addr, data
         
     def reg_write(self, reg, value):
-        addr, data = self.reg_write_data(reg, value)
+        reg, addr, data = self.reg_write_data(reg, value)
+        pretty = reg_class(int(value))
+        self.logger.debug("Reg write %s %s: %s", addr, data.hex(), pretty)
         self.write(addr + data)
 
     #def start(self):
@@ -408,6 +415,10 @@ class Si5351(i2c.Slave):
         ckin_pres = not cur[RegAddr.Status].los_clkin
         xtal_pres = not cur[RegAddr.Status].los_xtal
 
+        self.config_dump(clkin, xtal, cur, sync_a, sync_b, ckin_pres, xtal_pres)
+
+    @classmethod
+    def config_dump(cls, clkin, xtal, cur, sync_a = None, sync_b = None, ckin_pres = None, xtal_pres = None):
         oe = set(i for i in range(8) if not ((1 << i) & int(cur[RegAddr.Oeb])))
 
         clkin_div = cur[RegAddr.ClkIn].clkin_div
@@ -423,8 +434,16 @@ class Si5351(i2c.Slave):
 
         print(f"Clkin freq = {metric(clkin, 'Hz')} / {clkin_div} = {metric(clkin_divided, 'Hz')}")
         print(f"Xtal freq = {metric(xtal, 'Hz')}")
-        print(f"PLLA source: {cur[RegAddr.ClkIn].plla_src} x {plla_ratio}, {'locked' if sync_a else 'unlocked'}, {metric(plla_out, 'Hz')}")
-        print(f"PLLB source: {cur[RegAddr.ClkIn].pllb_src} x {pllb_ratio}, {'locked' if sync_b else 'unlocked'}, {metric(pllb_out, 'Hz')}")
+        print(f"PLLA source: {cur[RegAddr.ClkIn].plla_src} x {plla_ratio}", end = "")
+        if sync_a is not None:
+            print(", {'locked' if sync_a else 'unlocked'}, {metric(plla_out, 'Hz')}")
+        else:
+            print()
+        print(f"PLLB source: {cur[RegAddr.ClkIn].pllb_src} x {pllb_ratio}", end = "")
+        if sync_b is not None:
+            print(", {'locked' if sync_b else 'unlocked'}, {metric(pllb_out, 'Hz')}")
+        else:
+            print()
 
         ms_out = [0] * 8
         for i in range(8):
