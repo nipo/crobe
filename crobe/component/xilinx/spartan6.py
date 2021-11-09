@@ -46,6 +46,12 @@ class Spartan6(series6.Series6):
         series6.Series6.__init__(self, port, index, idcode)
         self.name = "Spartan6-" + parts[int(self.idcode.drop_revision())]
 
+    def child_spawn(self, sub):
+        try:
+            return self.db.call(sub, self)
+        except NoMatch:
+            return series7.Series7.db.call(sub, self)
+
 @Spartan6.db.register("spi")
 def spi_slave(s6):
     from ...loadable.object import Program
