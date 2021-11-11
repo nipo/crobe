@@ -5,9 +5,10 @@ from tqdm import tqdm
 from crobe.target.pin_control import Mode
 
 class Net:
-    def __init__(self, *pins, shuffle = True):
+    def __init__(self, *pins, shuffle = True, name = None):
         self.pins = list(pins)
         self.shuffle = shuffle
+        self.name = name
 
     def shift(self, i):
         if i and not self.shuffle:
@@ -28,6 +29,7 @@ class TestPhase:
 
         scanned_pins = set()
         self.equipots = {}
+        self.nets = {}
         self.observers = set()
         self.drivers = {}
         self.constants = constants
@@ -45,6 +47,8 @@ class TestPhase:
                 self.drivers[o] = driver
             
             self.equipots[driver] = observers
+            for p in net.pins:
+                self.nets[p] = net
 
         w = math.ceil(math.log2(len(self.equipots)))
         self.pattern = {}
@@ -117,7 +121,7 @@ class TestPhase:
             expected_driver = self.drivers[observer]
             expected_pattern = self.pattern[expected_driver]
             if actual_driver != expected_driver:
-                ret[observer] = expected_driver, actual_driver, BitString(expected_pattern, self.count), BitString(observed_pattern, self.count)
+                ret[observer] = expected_driver, actual_driver, BitString(expected_pattern, self.count), BitString(observed_pattern, self.count), self.nets[observer]
 
         return ret
 

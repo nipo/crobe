@@ -47,18 +47,20 @@ class Pin:
     @property
     def value(self):
         if self.ic_idx is None:
-            raise RuntimeError("Pin has no input cell")
+            raise RuntimeError(f"Pin {self.name} has no input cell")
         return self.board.boundary_status[self.ic_idx]
 
     @value.setter
     def value(self, value):
         if self.oc_idx is None:
-            raise RuntimeError("Pin has no output cell")
+            raise RuntimeError(f"Pin {self.name} has no output cell")
         self.board.boundary_control[self.oc_idx] = bool(value)
 
     def drive(self, drive):
         if self.cc_disable is None:
-            raise RuntimeError("Pin has no inout control")
+            if not drive:
+                return
+            raise RuntimeError(f"Pin {self.name} has no inout control")
         self.board.boundary_control[self.cc_idx] = drive ^ self.cc_disable
 
     def disable(self):
@@ -68,9 +70,11 @@ class Pin:
             self.board.boundary_control[self.oc_idx] = self.oc_safe
 
 class ChipInfo:
-    def __init__(self, name, package):
+    def __init__(self, name, package, idcode = None, bsdl_name = None):
         self.name = name
         self.package = package
+        self.idcode = idcode
+        self.bsdl_name = bsdl_name
         
 class BoardController:
     """BoardController is a boundary scan controller for a board.  It can
@@ -108,10 +112,12 @@ class BoardController:
                 boundary_len += 1
                 continue
 
-            d = cache.filter(idcode = int(tap.idcode), package = info.package)
+            d = cache.filter(name = info.bsdl_name or tap.name.lower() or None,
+                             idcode = int(info.idcode or 0) or int(tap.idcode or 0) or None,
+                             package = info.package)
 
             if not d:
-                raise ValueError("No BSDL entry for %s", tap.idcode)
+                raise ValueError("No BSDL entry for %s (%s)" % (tap.idcode, tap))
             if len(d) > 1:
                 raise KeyError("Ambiguity for part at index %d (%s), choose among packages: %s"
                                % (index, tap.idcode, ",".join(x.package_variant for x in d)))

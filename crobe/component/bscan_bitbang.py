@@ -86,7 +86,7 @@ class TapBitbang(bitbang.Interface):
     def start(self):
         self._cache_init()
 
-        d = self.cache.filter(idcode = int(self.port.idcode), package = self.package)
+        d = self.cache.filter(idcode = int(self.port.idcode or 0), package = self.package)
 
         if not d:
             raise ValueError("No BSDL entry for %s in package %s", self.port.idcode, self.package)
