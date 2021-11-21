@@ -1,7 +1,7 @@
 from . import model
 from ..protocol import i2c, spi, swd, jtag, base
 from .. import bitstring
-from ..util.pretty import metric
+from ..util.pretty import metric, sci_parse
 from ..util import endian
 from ..db import NoMatch
 from collections import deque
@@ -36,11 +36,11 @@ class Adapter(model.Adapter):
 
     def bulk_out(self, data, timeout = None):
         self.logger.debug("BULK OUT %s", binascii.b2a_hex(data))
-        self.device.write(self.EP_OUT, data, int((timeout or 1.) * 1000))
+        self.handle.write(self.EP_OUT, data, int((timeout or 1.) * 1000))
 
     def bulk_in(self, size, timeout = None):
         self.logger.debug("BULK IN %d", size)
-        data = self.device.read(self.EP_IN, size, int((timeout or 1.) * 1000))
+        data = self.handle.read(self.EP_IN, size, int((timeout or 1.) * 1000))
         self.logger.debug("-> %s", binascii.b2a_hex(data))
         return data
 
@@ -59,7 +59,7 @@ class Adapter(model.Adapter):
 
     def __init__(self, device, name):
         model.Adapter.__init__(self, name)
-        self.device = device
+        self.handle = device
 
     def open(self, interface_name):
         try:
@@ -93,6 +93,7 @@ class Registers(ControlStatus):
     REG_APP_CLK = 2
     REG_MODE = 3
     REG_IO = 4
+    REG_BAUDRATE = 5
 
     def reg_update(self, id, mask, new_value):
         old = self.reg_read(id)
@@ -162,13 +163,27 @@ class Registers(ControlStatus):
     def base_freq(self):
         return self.reg_read(self.REG_APP_CLK)
 
-class DbgFpgaVoltage:
+    def baudrate_set(self, rate):
+        app_clk = self.reg_read(self.REG_APP_CLK)
+        divisor = int(app_clk / rate) - 1
+        self.reg_write(self.REG_BAUDRATE, divisor)
+
+    def baudrate_get(self):
+        app_clk = self.reg_read(self.REG_APP_CLK)
+        divisor = self.reg_read(self.REG_BAUDRATE) + 1
+        return int(app_clk / divisor)
+
+class DbgFpgaOpts:
     def __init__(self, regs):
         self.regs = regs
         self.cycle = False
         self.power = "track", None
+        self.baudrate = None
 
     def option_set(self, value):
+        if value.startswith("baudrate="):
+            self.baudrate = sci_parse(value[9:])
+            return True
         if value.startswith("poweroff"):
             self.cycle = True
             return True
@@ -180,6 +195,13 @@ class DbgFpgaVoltage:
             return True
 
     def apply(self):
+        if self.baudrate is not None:
+            self.regs.baudrate_set(self.baudrate)
+            br = self.regs.baudrate_get()
+            self.regs.logger.info("Setting baud rate to %s, got %s",
+                                  metric(self.baudrate, "baud"),
+                                  metric(br, "baud"))
+
         if self.cycle:
             self.regs.logger.info("Cycling target")
             self.regs.target_voltage_set(supply = True, voltage = 0)
@@ -204,7 +226,7 @@ class I2cInterface(i2c.Interface):
         self.__i2c_trx = I2cTransactor(framed_i2c, base_freq)
         super().__init__(self.__i2c_trx, "i2c")
         self.child_add(self.__i2c_trx)
-        self.voltage = DbgFpgaVoltage(regs)
+        self.options = DbgFpgaOpts(regs)
 
     def execute(self, op_list):
         self.logger.info(op_list)
@@ -214,7 +236,7 @@ class I2cInterface(i2c.Interface):
         return self.__i2c_trx.freq_update(freq)
 
     def option_set(self, opt):
-        if self.voltage.option_set(opt):
+        if self.options.option_set(opt):
             return
         super().option_set(opt)
 
@@ -223,14 +245,14 @@ class SwdInterface(swd.Interface):
         from crobe.component.nsl.transactor.swd import SwdTransactor
         self.swd = SwdTransactor(framed_swd, base_freq)
         super().__init__(self.swd, "swd")
-        self.voltage = DbgFpgaVoltage(regs)
+        self.options = DbgFpgaOpts(regs)
 
     def start(self):
-        self.voltage.apply()
+        self.options.apply()
         super().start()
 
     def option_set(self, opt):
-        if self.voltage.option_set(opt):
+        if self.options.option_set(opt):
             return
         super().option_set(opt)
         
@@ -253,14 +275,14 @@ class JtagInterface(jtag.Interface):
         from crobe.component.nsl.transactor.jtag import JtagTransactor
         self.jtag = JtagTransactor(framed_jtag, base_freq)
         super().__init__(self.jtag, "jtag")
-        self.voltage = DbgFpgaVoltage(regs)
+        self.options = DbgFpgaOpts(regs)
 
     def start(self):
-        self.voltage.apply()
+        self.options.apply()
         super().start()
 
     def option_set(self, opt):
-        if self.voltage.option_set(opt):
+        if self.options.option_set(opt):
             return
         super().option_set(opt)
 
@@ -276,15 +298,15 @@ class SpiInterface(spi.Interface):
         self.regs = regs
         self.spi = SpiTransactor(framed_spi, base_freq)
         super().__init__(self.spi, "spi")
-        self.voltage = DbgFpgaVoltage(regs)
+        self.options = DbgFpgaOpts(regs)
         self.child_add(spi.Target(self, "cs0", 0))
 
     def start(self):
-        self.voltage.apply()
+        self.options.apply()
         super().start()
 
     def option_set(self, opt):
-        if self.voltage.option_set(opt):
+        if self.options.option_set(opt):
             return
         super().option_set(opt)
 
@@ -309,17 +331,15 @@ class SpiInterface(spi.Interface):
     
 @model.UsbEnumerator.db.register(model.UsbInfo(idVendor = 0x1500, idProduct = 0xdeba))
 class Adapter(model.Adapter):
-    EP_IN  = 0x81
-    EP_OUT = 0x01
     supported_interfaces = ["cs", "jtag", "swd", "spi", "spi-inv", "i2c", "i2c-int", "i2c-ext"]
 
     def bulk_out(self, data, timeout = None):
         self.logger.debug("BULK OUT %s", binascii.b2a_hex(data))
-        self.device.write(self.EP_OUT, data, int((timeout or 1.) * 1000))
+        self.handle.write(self.EP_OUT, data, int((timeout or 1.) * 1000))
 
     def bulk_in(self, size, timeout = None):
         self.logger.debug("BULK IN %d", size)
-        data = self.device.read(self.EP_IN, size, int((timeout or 1.) * 1000))
+        data = self.handle.read(self.EP_IN, size, int((timeout or 1.) * 1000))
         self.logger.debug("-> %s", binascii.b2a_hex(data))
         return data
 
@@ -338,12 +358,41 @@ class Adapter(model.Adapter):
 
     def __init__(self, device, name):
         model.Adapter.__init__(self, name)
-        self.device = device
+        self.handle = device
 
-        cfg = self.device.get_active_configuration()
+        cfg = self.handle.get_active_configuration()
         if cfg.bConfigurationValue == 0:
-            self.device.set_configuration(1)
-            cfg = self.device.get_active_configuration()
+            self.handle.set_configuration(1)
+            cfg = self.handle.get_active_configuration()
+        for intf in cfg:
+            self.logger.info("Has interface %d, %02x:%02x:%02x",
+                  intf.index,
+                  intf.bInterfaceClass,
+                  intf.bInterfaceSubClass,
+                  intf.bInterfaceProtocol)
+            if intf.bInterfaceClass == 0xff and \
+               intf.bInterfaceSubClass == 0xff and \
+               intf.bInterfaceProtocol == 0xff:
+                self.intf = intf
+                break
+        usb.util.claim_interface(self.handle, self.intf)
+
+        self.ep_in = usb.util.find_descriptor(
+            self.intf,
+            custom_match = lambda e:
+            usb.util.endpoint_direction(e.bEndpointAddress) ==
+            usb.util.ENDPOINT_IN)
+        self.ep_out = usb.util.find_descriptor(
+            self.intf,
+            custom_match = lambda e:
+            usb.util.endpoint_direction(e.bEndpointAddress) ==
+            usb.util.ENDPOINT_OUT)
+
+        self.EP_IN = self.ep_in.bEndpointAddress
+        self.EP_OUT = self.ep_out.bEndpointAddress
+
+        self.logger.info("Using interface %d, EP_IN: %02x, EP_OUT: %02x",
+                         self.intf.index, self.EP_IN, self.EP_OUT)
 
     def write(self, data):
         self.bulk_out(data)
