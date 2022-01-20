@@ -133,6 +133,103 @@ class Interface(base.Interface):
     def run(self, count):
         self.execute([self.cmd_run(count)])
 
+    def shift_discover(self, max_length = 512, shift_back = False, shift_in = None):
+        self.freq_cap("shift_discover", 1e6)
+        try:
+            marker = 0xc05a5a03
+            tdo = self.shift(BitString(marker, max_length + 36))
+            tdo = tdo[:max_length+32]
+
+            if not int(tdo):
+                raise OpenChain("TDO stuck low. Bad TDO connection ?")
+
+            if tdo == BitString(-1, len(tdo)):
+                raise OpenChain("TDO stuck high. Bad TDO connection ?")
+
+            length = int(math.log(int(tdo), 2) + 1)
+            register = tdo[:length - 32]
+            rx_marker = tdo[length - 32 : length]
+
+            self.logger.info("After %d bit shift, tdo = %s, probable length = %d, register = %s, rx_marker = %x (expected %x)", len(tdo), tdo, len(register), register, int(rx_marker), marker)
+            if int(tdo[length - 32 : length]) != marker:
+                raise OpenChain("TDO changed, but never got TDI back. Bad TDI/TDO connection ?")
+
+            if shift_back:
+                self.logger.debug("Shifting back captured value")
+                self.shift(register)
+            elif shift_in is not None:
+                back = BitString(shift_in, len(register))
+                self.logger.debug("Shifting back %s", back)
+                self.shift(back)
+            self.run(1)
+
+            return register
+        finally:
+            self.freq_cap("shift_discover", None)
+
+    def freq_test(self, fmin, fmax, fstep, ir):
+        test = FreqTest(self, fmin, fmax, fstep, ir)
+        return test.results()
+            
+class FreqTest:
+    marker = BitString(0x8d09476592d845109b94f6dd0d97d835, 128)
+
+    def __init__(self, interface, fmin = 1e3, fmax = 100e6, fstep = 100, ir = -1):
+        self.interface = interface
+
+        self.interface.run(1)
+        self.interface.capture_ir()
+        self.ir = self.interface.shift_discover(shift_in = ir)
+
+        self.interface.capture_dr()
+        self.dr = self.interface.shift_discover(shift_in = 0, max_length = 2048)
+        self.interface.run(1)
+
+        self.pad = BitString(0, len(self.dr))
+
+        self.interface.freq_cap("enumeration", None)
+        self.interface.freq_cap("shift_discover", None)
+
+        self.tested = set()
+        self.freq_fail = set()
+
+        self.__test_step(fmin, fmax, fstep)
+
+        self.interface.freq_cap("test", None)
+
+    def __test_step(self, fmin, fmax, fstep):
+        cur = (fmin + fmax) / 2
+        effective = self.interface.freq_cap("test", cur)
+        if effective in self.tested:
+            return
+        self.tested.add(effective)
+
+        shift = self.interface.cmd_shift(self.marker + self.pad, read_tdo = True)
+        self.interface.execute([self.interface.cmd_capture_dr(), shift, self.interface.cmd_run(1)])
+        rb = shift.tdo
+
+        if rb[len(self.pad):] != self.marker:
+            self.freq_fail.add(effective)
+
+        if cur - fmin > fstep:
+            self.__test_step(fmin, cur, fstep)
+        if fmax - cur > fstep:
+            self.__test_step(cur, fmax, fstep)
+
+    def results(self):
+        last_outcome = None
+        group = set()
+        for freq in sorted(self.tested):
+            outcome = freq not in self.freq_fail
+            if outcome != last_outcome:
+                if group:
+                    yield (min(group), max(group), last_outcome)
+                    group = set()
+                last_outcome = outcome
+            group.add(freq)
+        if group:
+            yield (min(group), max(group), last_outcome)
+            
 class Operation(base.Operation):
     pass
 
@@ -290,41 +387,6 @@ class Chain(PortComponent):
         self.port.execute([Run(5), CaptureIr(), Shift(BitString(0x4, 6)), Run(3)])
         self.port.freq_cap("icepick", None)
         self.discover([PartId(0, 0x17, 0x1ce)])
-
-    def chain_shift_discover(self, max_length = 512, shift_back = False, shift_in = None):
-        self.port.freq_cap("shift_discover", 1e6)
-        try:
-            marker = 0xc05a5a03
-            tdo = self.port.shift(BitString(marker, max_length + 36))
-            tdo = tdo[:max_length+32]
-
-            if not int(tdo):
-                raise OpenChain("TDO stuck low. Bad TDO connection ?")
-
-            if tdo == BitString(-1, len(tdo)):
-                raise OpenChain("TDO stuck high. Bad TDO connection ?")
-
-            length = int(math.log(int(tdo), 2) + 1)
-            register = tdo[:length - 32]
-            rx_marker = tdo[length - 32 : length]
-
-            self.logger.info("After %d bit shift, tdo = %s, probable length = %d, register = %s, rx_marker = %x (expected %x)", len(tdo), tdo, len(register), register, int(rx_marker), marker)
-            if int(tdo[length - 32 : length]) != marker:
-                raise OpenChain("TDO changed, but never got TDI back. Bad TDI/TDO connection ?")
-
-            if shift_back:
-                self.logger.debug("Shifting back captured value")
-                self.port.shift(register)
-            elif shift_in is not None:
-                back = BitString(-1 if bool(shift_in) else 0, len(register))
-                self.logger.debug("Shifting back %s", back)
-                self.port.shift(back)
-            self.port.run(1)
-
-            return register
-        finally:
-            self.port.freq_cap("shift_discover", None)
-            
             
     def discover(self, forced_idcodes = None):
         """
@@ -345,7 +407,7 @@ class Chain(PortComponent):
             self.port.cmd_capture_dr(),
             ])
         self.logger.debug("Discovering DR after reset")
-        reset_dr = self.chain_shift_discover()
+        reset_dr = self.port.shift_discover()
             
         if len(reset_dr) == 0:
             raise ClosedChain()
@@ -353,13 +415,13 @@ class Chain(PortComponent):
         # Get default IR, load bypass
         self.port.capture_ir()
         self.logger.debug("Discovering IR")
-        captured_ir = self.chain_shift_discover(shift_in = 1)
+        captured_ir = self.port.shift_discover(shift_in = -1)
         captured_ir_length = len(captured_ir)
 
         # Discover device count
         self.port.capture_dr()
         self.logger.debug("Discovering Bypass DR")
-        bypass_dr = self.chain_shift_discover(max_length = len(captured_ir) // 2)
+        bypass_dr = self.port.shift_discover(max_length = len(captured_ir) // 2)
         device_count = len(bypass_dr)
 
         self.logger.info("DR at TAP reset: %s", reset_dr)
@@ -700,7 +762,7 @@ class Tap(PortComponent, InstructionRegistry):
         self.port.port.capture_dr()
         max_length += dr_pre + dr_post
         try:
-            register = self.port.chain_shift_discover(max_length = max_length,
+            register = self.port.port.shift_discover(max_length = max_length,
                                                       **kwargs)
         finally:
             self.dr_shift(-1, None)
