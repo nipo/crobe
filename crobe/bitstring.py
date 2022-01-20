@@ -1,4 +1,43 @@
-class BitStringSlice:
+class BitStringBase:
+    def __eq__(self, other):
+        if len(self) != len(other):
+            return False
+        if bytes(self) != bytes(other):
+            return False
+        return True
+
+    def __bytes__(self):
+        return self.data
+
+    def __bool__(self):
+        """
+        Whether BitString is zero length (regardless of value).
+        """
+        return bool(len(self))
+
+    def __int__(self):
+        """
+        Integer representation of data.
+        """
+        return int.from_bytes(self.data, byteorder = 'little')
+
+    def __str__(self):
+        """
+        String representation, in bit order (LSB first).
+        """
+        if len(self) > 1024:
+            return "[%d bits]" % len(self)
+
+        if len(self):
+            return bin(int(self))[2:][::-1].ljust(len(self), '0')
+        return "."
+
+    def __repr__(self):
+        if len(self) > 1024:
+            return "BitString([...], %d)" % (len(self))
+        return "BitString(%r, %d)" % (self.data, len(self))
+
+class BitStringSlice(BitStringBase):
     def __init__(self, bs, begin, end):
         self.__bs = bs
         self.__begin = begin
@@ -17,16 +56,10 @@ class BitStringSlice:
     @property
     def data(self):
         return int(self).to_bytes(length = (self.__length + 7)//8, byteorder = 'little')
-
-    def __bytes__(self):
-        return int(self).to_bytes(length = (self.__length + 7)//8, byteorder = 'little')
     
     def __len__(self):
         return self.__length
     
-    def __bool__(self):
-        return bool(self.__length)
-
     def __add__(self, other):
         n = BitString(int(self), self.__length)
         n.append(other)
@@ -61,20 +94,7 @@ class BitStringSlice:
 
         return bool(data[offset // 8] & (1 << (offset & 7)))
 
-    def __str__(self):
-        if self.__length > 1024:
-            return "[%d bits]" % self.__length
-
-        if self.__length:
-            return bin(int(self))[2:][::-1].ljust(self.__length, '0')
-        return "."
-        
-    def __repr__(self):
-        if self.__length > 1024:
-            return "BitString([...], %d)" % (self.__length)
-        return "BitString(%r, %d)" % (self.data, self.__length)
-
-class BitString:
+class BitString(BitStringBase):
     """
     A bitstring.
 
@@ -178,9 +198,6 @@ class BitString:
 
         return self.__data_cache
 
-    def __bytes__(self):
-        return self.data
-
     def __len__(self):
         """
         Length of bit string, in bits.
@@ -257,34 +274,6 @@ class BitString:
                 self.__last_byte &= ~(1 << bit)
 
         self.__data_cache = None
-
-    def __str__(self):
-        """
-        String representation, in bit order (LSB first).
-        """
-        if self.__length > 1024:
-            return "[%d bits]" % self.__length
-
-        if self.__length:
-            return bin(int(self))[2:][::-1].ljust(self.__length, '0')
-        return "."
-
-    def __repr__(self):
-        if self.__length > 1024:
-            return "BitString([...], %d)" % (self.__length)
-        return "BitString(%r, %d)" % (self.data, self.__length)
-
-    def __bool__(self):
-        """
-        Whether BitString is zero length (regardless of value).
-        """
-        return bool(self.__length)
-
-    def __int__(self):
-        """
-        Integer representation of data.
-        """
-        return int.from_bytes(self.data, byteorder = 'little')
 
 if __name__ == "__main__":
     a = BitString(0x1234, 16)
