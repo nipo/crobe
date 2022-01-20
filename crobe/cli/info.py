@@ -49,6 +49,20 @@ def enumerate(roots, field, cpuid):
         for c in cortexes:
             CpuidDumper(c.scs).dump(click.echo)
 
+@info.command(help = "Check JTAG chain at all possible frequencies")
+@click.option('-r', '--root', help = "JTAG interface", type = base.ROOT, multiple = False)
+@click.option("--fmin", type = int, help = "Minimal frequency", default = 1000)
+@click.option("--fmax", type = int, help = "Maximal frequency", default = 100000000)
+@click.option("--step", type = int, help = "Frequency step", default = 1000)
+@click.option("--ir", type = int, help = "Chain IR reg to test on", default = -1)
+def jtag_frequency_test(root, fmin, fmax, step, ir):
+    from ..protocol.jtag import Interface
+    assert isinstance(root, Interface)
+    from ..util.pretty import metric
+
+    for low, high, ok in root.freq_test(fmin, fmax, step, ir):
+        print(f"Frequencies {metric(low, 'Hz')}-{metric(high, 'Hz')}: {'OK' if ok else 'Fails'}")
+
 @info.command(help = "I2C bus scan")
 @click.option('-r', '--root', type = base.ROOT)
 @click.option("--write", help = "Use a zero-byte write operation. This may not be supported by all masters", is_flag = True)
