@@ -387,9 +387,19 @@ class JtagInterface(EngineInterface, jtag.Interface):
         EngineInterface.__init__(self, adapter, **args)
         jtag.Interface.__init__(self, adapter, name)
         self.freq_cap("hardware", adapter.freq_max)
-
+        self.read_pol = "+"
         self.__state = None
 
+    def freq_update(self, freq):
+        # This is mostly a hack. For high clock rates, skew actual
+        # sampling time to the falling edge. This gives a little extra
+        # margin for propagation.
+        if freq and freq >= 10e6:
+            self.read_pol = '-'
+        else:
+            self.read_pol = '+'
+        return EngineInterface.freq_update(self, freq)
+        
     def start(self):
         # Dont execute, super().start() will init GPIOs
         self.cmds_gpio(mpsse.Pin.Tck | mpsse.Pin.Tdi | mpsse.Pin.Tdo | mpsse.Pin.Tms,
@@ -440,13 +450,15 @@ class JtagInterface(EngineInterface, jtag.Interface):
                         if self.handle.can_pad:
                             mpsse_ops.append(mpsse.ClockBits8(c // 8))
                         else:
-                            mpsse_ops.append(mpsse.ShiftBits8(b'\x00' * (c // 8)))
+                            mpsse_ops.append(mpsse.ShiftBits8(b'\x00' * (c // 8),
+                                                              read_pol = self.read_pol))
                         left -= c
                     if left:
                         if self.handle.can_pad:
                             mpsse_ops.append(mpsse.ClockBits(left))
                         else:
-                            mpsse_ops.append(mpsse.ShiftBits(0, left))
+                            mpsse_ops.append(mpsse.ShiftBits(0, left,
+                                                              read_pol = self.read_pol))
                 else:
                     self.logger.warning("Running from unknown state, passing through TLR")
 
@@ -489,31 +501,37 @@ class JtagInterface(EngineInterface, jtag.Interface):
                             if self.handle.can_pad:
                                 mpsse_ops.append(mpsse.ClockBits8(c // 8))
                             else:
-                                mpsse_ops.append(mpsse.ShiftBits8(b'\x00' * (c // 8)))
+                                mpsse_ops.append(mpsse.ShiftBits8(b'\x00' * (c // 8),
+                                                              read_pol = self.read_pol))
                             left -= c
                         if left:
                             if self.handle.can_pad:
                                 mpsse_ops.append(mpsse.ClockBits(left))
                             else:
-                                mpsse_ops.append(mpsse.ShiftBits(0, left))
+                                mpsse_ops.append(mpsse.ShiftBits(0, left,
+                                                              read_pol = self.read_pol))
                         mpsse_ops.append(self.__cmd_shift_end(read = False, tdi = 0))
                     elif data_in is None and op.read_tdo:
                         left = cycle_count - 1
                         while left >= 8:
                             c = min(left, 65536 * 8) & ~7
-                            mpsse_ops.append(mpsse.ShiftBits8(None, c, read = True))
+                            mpsse_ops.append(mpsse.ShiftBits8(None, c, read = True,
+                                                              read_pol = self.read_pol))
                             left -= c
                         if left:
-                            mpsse_ops.append(mpsse.ShiftBits(None, left, read = True))
+                            mpsse_ops.append(mpsse.ShiftBits(None, left, read = True,
+                                                              read_pol = self.read_pol))
                         mpsse_ops.append(self.__cmd_shift_end(read = True, tdi = 0))
                     else:
                         left = cycle_count - 1
                         while left >= 8:
                             c = min(left, 65536 * 8) & ~7
-                            mpsse_ops.append(mpsse.ShiftBits8(bytes(data_in[-1-left : -1-left+c]), c, read = True))
+                            mpsse_ops.append(mpsse.ShiftBits8(bytes(data_in[-1-left : -1-left+c]), c, read = True,
+                                                              read_pol = self.read_pol))
                             left -= c
                         if left:
-                            mpsse_ops.append(mpsse.ShiftBits(int(data_in[-1-left : -1]), left, read = True))
+                            mpsse_ops.append(mpsse.ShiftBits(int(data_in[-1-left : -1]), left, read = True,
+                                                              read_pol = self.read_pol))
                         mpsse_ops.append(self.__cmd_shift_end(read = True, tdi = data_in[-1]))
 
                     cmd_count_after = len(mpsse_ops)
