@@ -1,4 +1,5 @@
 import warnings
+from collections import deque
 import struct
 
 __all__ = ['Segment', 'Program']
@@ -346,6 +347,28 @@ class Program:
         return self
 
     @classmethod
+    def from_fs(cls, filename, offset = 0):
+        from ..bitstring import BitString
+
+        self = cls(filename)
+
+        with open(filename, "r") as fd:
+            lines = deque(fd.readlines())
+            while lines and lines[0].startswith("//"):
+                try:
+                    k, v = lines.popleft().strip()[2:].split(":", 1)
+                except:
+                    continue
+                self.info[k] = v.strip()
+
+        stream = "".join(l.strip() for l in lines)
+        data = BitString(int(stream, 2), len(stream))
+
+        self.append(Segment(0, bytes(data), filename))
+
+        return self
+
+    @classmethod
     def from_xilinx_bit(cls, filename, offset = 0):
         """Load a Program from an Xilinx bit file"""
         HEADER = bytes([0x00, 0x09, 0x0f, 0xf0, 0x0f, 0xf0, 0x0f, 0xf0, 0x0f, 0xf0, 0x00, 0x00, 0x01])
@@ -419,6 +442,7 @@ class Program:
         ".elf": "elf",
         ".out": "elf",
         ".axf": "elf",
+        ".fs": "fs",
         "__literal": "literal",
         "__zero": "zero",
         "__random": "random",
