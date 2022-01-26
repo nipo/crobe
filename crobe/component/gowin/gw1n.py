@@ -2,6 +2,7 @@ from ...model import PortComponent
 from ...part_id import PartId
 from ...protocol import jtag
 from ... import bitfield
+from ... import bitstring
 from ...util.endian import bitswap8
 import time
 
@@ -17,6 +18,7 @@ parts = {
     0x3001: "GW1NS[RE]-2C",
     0x9002: "GW1N-1",
     0x9003: "GW1N-1S",
+    0x1206: "GW1-2[B]/1P5",
 }
 
 # Reference: UG290-2.3E
@@ -29,19 +31,19 @@ class GowinFpga(jtag.Tap):
     BOUNDARY      = jtag.Dr(232)
     ISC_DEFAULT   = jtag.Dr(1)
     ISC_PDATA     = jtag.Dr(None)
+    STATUS        = jtag.Dr(32)
 
     ISC_DISABLE          = jtag.Instruction(0x3a, "ISC_DEFAULT")
     ISC_NOOP             = jtag.Instruction(0x02, "ISC_DEFAULT")
     ISC_PROGRAM_SECURITY = jtag.Instruction(0x0b, "ISC_DEFAULT")
     ISC_SRAM_ERASE       = jtag.Instruction(0x05, "ISC_DEFAULT")
     ISC_SRAM_ERASE_DONE  = jtag.Instruction(0x09, "ISC_DEFAULT")
-    ISC_EFLASH_ERASE     = jtag.Instruction(0x75, "ISC_DEFAULT")
-    ISC_SRAM_ERASE_DONE  = jtag.Instruction(0x09, "ISC_DEFAULT")
+    ISC_EFLASH_ERASE     = jtag.Instruction(0x75, "STATUS")
     ISC_ENABLE           = jtag.Instruction(0x15, "ISC_DEFAULT")
     ISC_PROGRAM_DONE     = jtag.Instruction(0x08, "ISC_DEFAULT")
 
     ISC_ADDRESS_INIT     = jtag.Instruction(0x12, "ISC_DEFAULT")
-    ISC_TRANSFER_CONFIG  = jtag.Instruction(0x17, "ISC_DEFAULT")
+    ISC_TRANSFER_CONFIG  = jtag.Instruction(0x17, "ISC_PDATA")
 
     HIGHZ                = jtag.Instruction(0x0c, "TAP_BYPASS")
     CLAMP                = jtag.Instruction(0x07, "TAP_BYPASS")
@@ -54,6 +56,8 @@ class GowinFpga(jtag.Tap):
     ISC_READ             = jtag.Instruction(0x03, "ISC_PDATA")
     ISC_PROGRAM          = jtag.Instruction(0x14, "ISC_PDATA")
 
+    READ_STATUS          = jtag.Instruction(0x41, "STATUS")
+
     PRELOAD              = jtag.Instruction(0x01, "BOUNDARY")
     SAMPLE               = jtag.Instruction(0x01, "BOUNDARY")
     EXTEST               = jtag.Instruction(0x04, "BOUNDARY")
@@ -61,3 +65,52 @@ class GowinFpga(jtag.Tap):
     def __init__(self, port, index, idcode):
         super().__init__(port, index, idcode)
         self.name = parts[idcode.part_no]
+
+    def start(self):
+        super().start()
+        self.logger.info("IR status: %x", self.ir_status_read())
+        self.logger.info("Status: %x", self.READ_STATUS.shift(read_tdo = True))
+        
+    def sram_erase(self):
+        self.execute([
+            self.ISC_ENABLE.cmd(),
+            self.ISC_SRAM_ERASE.cmd(),
+            ])
+        time.sleep(10e-3)
+        self.execute([
+            self.ISC_SRAM_ERASE_DONE.cmd(),
+            self.ISC_DISABLE.cmd(),
+            self.ISC_NOOP.cmd(),
+            ])
+
+    def flash_erase(self):
+        self.execute([
+            self.ISC_ENABLE.cmd(),
+            self.ISC_EFLASH_ERASE.cmd(),
+            self.cmd_run(100),
+            self.ISC_EFLASH_ERASE.cmd(0),
+            self.cmd_run(10000),
+            self.ISC_DISABLE.cmd(),
+            self.ISC_NOOP.cmd(),
+            ])
+
+    def sram_configure(self, program_data):
+        self.execute([
+            self.ISC_ENABLE.cmd(),
+            self.ISC_ADDRESS_INIT.cmd(),
+            self.ISC_TRANSFER_CONFIG.cmd(bitstring.BitString(program_data)),
+            self.ISC_DISABLE.cmd(),
+            self.ISC_NOOP.cmd(),
+            ])
+
+    def load(self, program):
+        self.sram_erase()
+        data = program[0].data
+        self.sram_configure(data)
+
+    def stop(self):
+        self.sram_erase()
+
+    def reset(self):
+        self.logger.warning("Not implemented")
+

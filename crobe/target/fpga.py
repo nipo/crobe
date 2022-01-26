@@ -7,12 +7,13 @@ from ..component.xilinx.kintex7 import Kintex7
 from ..component.xilinx.zynq import Zynq
 from ..component.lattice.mach import MachXO2
 from ..component.lattice.ice40 import Ice40SlaveSerial
+from ..component.gowin.gw1n import GowinFpga
 from . import memory
 import time
 
 __all__ = []
 
-@model.Target.register(Spartan6, Spartan7, Zynq, MachXO2, Ice40SlaveSerial, Artix7, Series7SlaveSerial, Kintex7)
+@model.Target.register(Spartan6, Spartan7, Zynq, MachXO2, Ice40SlaveSerial, Artix7, Series7SlaveSerial, Kintex7, GowinFpga)
 class FpgaVolatileConfig(model.Target, memory.Loadable):
     """
     A volatile configuration for a FPGA
