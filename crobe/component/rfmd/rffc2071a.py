@@ -1,6 +1,7 @@
 from ...model import PortComponent
 from ...protocol import spi
 import enum
+import time
 
 class Register(enum.IntEnum):
     LF = 0x00
@@ -38,15 +39,19 @@ class Register(enum.IntEnum):
 
 @spi.Target.db.register("rffc2071a")
 class Rffc2071a(PortComponent):
-    freq = 1e6
+    freq = 1e4
 
     def __init__(self, port):
         super().__init__(port, "rffc2071a")
-        self.four_wire_spi = False
+        self.four_wire_spi = True
+        self.do_reset = False
 
     def option_set(self, opt):
-        if opt == "spi4":
-            self.four_wire_spi = True
+        if opt == "spi3":
+            self.four_wire_spi = False
+            return
+        if opt == "reset":
+            self.do_reset = True
             return
         super().option_set(opt)
 
@@ -54,32 +59,39 @@ class Rffc2071a(PortComponent):
         target = self.port
         spi = target.port
 
-        cmd = spi.cmd_shift(bytes([0x40 | int(reg)]), read_miso = False)
-        data = spi.cmd_shift(b"\x00" * 2, read_miso = True)
+        c = (0x80 | int(reg)) << 16
+        c |= 0xffff
+        c <<= 7
+        cmd = spi.cmd_shift(c.to_bytes(4, "big"), read_miso = True)
 
         spi.freq_cap(self.name, self.freq)
         spi.execute([
+            spi.cmd_shift(b"\x00"),
             spi.cmd_cs(target.cs, mode = 0),
             cmd,
-            spi.cmd_cs(target.cs, mode = 0),
-            spi.cmd_cs(target.cs, mode = 2),
-            spi.cmd_cs(target.cs, mode = 0),
-            spi.cmd_cs(target.cs, mode = 2),
-            data,
             spi.cmd_cs(None, mode = 0),
         ])
         spi.freq_cap(self.name, None)
 
-        return int.from_bytes(data.miso, "big")
+        return (int.from_bytes(cmd.miso, "big") >> 5) & 0xffff
 
     def reg_write(self, reg, data):
         target = self.port
         spi = target.port
 
-        cmd = spi.cmd_shift(bytes([int(reg)]) + int(data).to_bytes(2, "big"), read_miso = False)
+        if int(reg) == int(Register.SDI_CTRL):
+            if self.four_wire_spi:
+                data = int(data) | 0x1000
+            else:
+                data = int(data) & ~0x1000
+        
+        c = (int(reg) << 16) | int(data)
+        c <<= 7
+        cmd = spi.cmd_shift(c.to_bytes(4, "big"), read_miso = False)
 
         spi.freq_cap(self.name, self.freq)
         spi.execute([
+            spi.cmd_shift(b"\x00"),
             spi.cmd_cs(target.cs, mode = 0),
             cmd,
             spi.cmd_cs(None, mode = 0),
@@ -92,10 +104,19 @@ class Rffc2071a(PortComponent):
         self.reg_write(addr, new)
         
     def start(self):
+        self.reg_write(Register.DEV_CTRL, 0)
+        if self.do_reset:
+            self.reg_write(Register.SDI_CTRL, 0x1)
+            time.sleep(.01)
+            self.reg_write(Register.SDI_CTRL, 0)
+
         if self.four_wire_spi:
             self.reg_write(Register.SDI_CTRL, 0x1000)
-            
-        self.reg_mod(Register.DEV_CTRL, 0xf000, 0x0)
+            self.reg_write(Register.GPO, 0x0)
+        else:
+            self.reg_write(Register.SDI_CTRL, 0x0)
+
+        self.reg_write(Register.DEV_CTRL, 0x0)
         devid = self.reg_read(Register.READBACK)
 
         self.logger.info("Rffc2071a devid 0x%04x", devid);
