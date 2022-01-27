@@ -436,12 +436,12 @@ class Si5351(i2c.Slave):
         print(f"Xtal freq = {metric(xtal, 'Hz')}")
         print(f"PLLA source: {cur[RegAddr.ClkIn].plla_src} x {plla_ratio}", end = "")
         if sync_a is not None:
-            print(", {'locked' if sync_a else 'unlocked'}, {metric(plla_out, 'Hz')}")
+            print(f", {'locked' if sync_a else 'unlocked'}, {metric(plla_out, 'Hz')}")
         else:
             print()
         print(f"PLLB source: {cur[RegAddr.ClkIn].pllb_src} x {pllb_ratio}", end = "")
         if sync_b is not None:
-            print(", {'locked' if sync_b else 'unlocked'}, {metric(pllb_out, 'Hz')}")
+            print(f", {'locked' if sync_b else 'unlocked'}, {metric(pllb_out, 'Hz')}")
         else:
             print()
 
