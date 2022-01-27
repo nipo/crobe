@@ -5,3 +5,4 @@ from . import dacx0508
 from . import cdcm6208
 from . import dp83867
 from . import tla202x
+from . import dac3171
