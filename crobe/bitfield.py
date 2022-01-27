@@ -38,15 +38,22 @@ class _Field(object):
 """
 
 class Field(_Field):
-    def __init__(self, lsb, width, offset = 0):
+    def __init__(self, lsb, width, offset = 0, signed = False):
         super().__init__(lsb, width)
         self.offset = offset
+        self.signed = signed
 
     def parse(self, value):
-        return super().parse(value) - self.offset
+        v = super().parse(value)
+        if self.signed and v & (1 << (self.width - 1)):
+            v -= 1 << (self.width - 1)
+        return v - self.offset
 
     def represent(self, value):
-        return super().represent(value + self.offset)
+        v = value + self.offset
+        if self.signed and v < 0:
+            v += 1 << (self.width - 1)
+        return super().represent(v)
 
     def docstring(self):
         return super().docstring() + """
