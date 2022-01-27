@@ -445,6 +445,7 @@ class Program:
         ".fs": "fs",
         "__literal": "literal",
         "__zero": "zero",
+        "__one": "one",
         "__random": "random",
         }
 
@@ -518,6 +519,12 @@ class Program:
     def from_zero(cls, size, offset = 0):
         program = cls()
         program.append(Segment(address = offset, data = b'\x00' * int(size, 0)))
+        return program
+
+    @classmethod
+    def from_one(cls, size, offset = 0):
+        program = cls()
+        program.append(Segment(address = offset, data = b'\xff' * int(size, 0)))
         return program
 
     @classmethod
