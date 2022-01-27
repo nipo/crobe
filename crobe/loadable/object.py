@@ -364,7 +364,7 @@ class Program:
         stream = "".join(l.strip() for l in lines)
         data = BitString(int(stream, 2), len(stream))
 
-        self.append(Segment(0, bytes(data), filename))
+        self.append(Segment(0, bytes(data)[::-1], filename))
 
         return self
 
