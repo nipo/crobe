@@ -61,7 +61,9 @@ class GowinFpga(jtag.Tap):
     PRELOAD              = jtag.Instruction(0x01, "BOUNDARY")
     SAMPLE               = jtag.Instruction(0x01, "BOUNDARY")
     EXTEST               = jtag.Instruction(0x04, "BOUNDARY")
-    
+
+    UNDOC62              = jtag.Instruction(0x62, "ISC_DEFAULT")
+
     def __init__(self, port, index, idcode):
         super().__init__(port, index, idcode)
         self.name = parts[idcode.part_no]
@@ -72,35 +74,54 @@ class GowinFpga(jtag.Tap):
         self.logger.info("Status: %x", self.READ_STATUS.shift(read_tdo = True))
         
     def sram_erase(self):
+        self.logger.info("Erasing SRAM")
         self.execute([
             self.ISC_ENABLE.cmd(),
+            self.cmd_run(100),
             self.ISC_SRAM_ERASE.cmd(),
-            ])
-        time.sleep(10e-3)
-        self.execute([
-            self.ISC_SRAM_ERASE_DONE.cmd(),
-            self.ISC_DISABLE.cmd(),
+            self.cmd_run(1000),
             self.ISC_NOOP.cmd(),
+            self.cmd_run(100),
+            self.ISC_SRAM_ERASE_DONE.cmd(),
+            self.cmd_run(100),
+            self.ISC_NOOP.cmd(),
+            self.cmd_run(100),
+            self.ISC_DISABLE.cmd(),
+            self.cmd_run(100),
+            self.ISC_NOOP.cmd(),
+            self.cmd_run(100),
             ])
 
     def flash_erase(self):
+        self.logger.info("Erasing flash")
         self.execute([
             self.ISC_ENABLE.cmd(),
+            self.cmd_run(1000),
             self.ISC_EFLASH_ERASE.cmd(),
-            self.cmd_run(100),
+            self.cmd_run(1),
             self.ISC_EFLASH_ERASE.cmd(0),
             self.cmd_run(10000),
             self.ISC_DISABLE.cmd(),
+            self.cmd_run(2),
             self.ISC_NOOP.cmd(),
+            self.cmd_run(5),
             ])
 
     def sram_configure(self, program_data):
+        self.logger.info("Loading %d bytes to SRAM", len(program_data))
+        program_data = bitswap8(program_data)
+        program_data = b'\xff'*60 + program_data + b'\xff'*60
         self.execute([
             self.ISC_ENABLE.cmd(),
+            self.cmd_run(2),
             self.ISC_ADDRESS_INIT.cmd(),
+            self.ISC_TRANSFER_CONFIG.cmd(),
+            self.cmd_run(2),
             self.ISC_TRANSFER_CONFIG.cmd(bitstring.BitString(program_data)),
             self.ISC_DISABLE.cmd(),
+            self.cmd_run(2),
             self.ISC_NOOP.cmd(),
+            self.cmd_run(5),
             ])
 
     def load(self, program):
