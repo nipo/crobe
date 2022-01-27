@@ -8,6 +8,7 @@ class I2cInterface(i2c.Interface):
         self.sda = None
         self.scl = None
         self.hi = []
+        self.lo = []
 
     def freq_update(self, freq):
         return self.port.freq_cap("i2c", freq or 1200e3)
@@ -18,6 +19,8 @@ class I2cInterface(i2c.Interface):
 
         for port in self.hi:
             self.port.set(IoOp(port, value = True, mode = Mode.D0D1))
+        for port in self.lo:
+            self.port.set(IoOp(port, value = False, mode = Mode.D0D1))
 
         self.port.set(IoOp(self.scl, value = True, mode = Mode.D0Z1),
                       IoOp(self.sda, value = True, mode = Mode.D0Z1))
@@ -31,6 +34,9 @@ class I2cInterface(i2c.Interface):
             return
         if opt.startswith("hi="):
             self.hi = opt[3:].split(",")
+            return
+        if opt.startswith("lo="):
+            self.lo = opt[3:].split(",")
             return
         super().option_set(opt)
 
