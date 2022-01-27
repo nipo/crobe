@@ -23,22 +23,20 @@ parts = {
 
 # Reference: UG290-2.3E
 # https://www.gowinsemi.com/upload/database_doc/1130/document/6020e45f5fe13.pdf
-@jtag.Chain.db.register(*set([PartId(8, 0x0d, p) for p in parts.keys()]))
 class GowinFpga(jtag.Tap):
     irlen = 8
-    max_freq = 25e6
 
-    BOUNDARY      = jtag.Dr(232)
-    ISC_DEFAULT   = jtag.Dr(1)
-    ISC_PDATA     = jtag.Dr(None)
-    STATUS        = jtag.Dr(32)
+    BOUNDARY        = jtag.Dr(None)
+    ISC_DEFAULT     = jtag.Dr(1)
+    ISC_PDATA       = jtag.Dr(None)
+    STATUS_REGISTER = jtag.Dr(32)
 
     ISC_DISABLE          = jtag.Instruction(0x3a, "ISC_DEFAULT")
     ISC_NOOP             = jtag.Instruction(0x02, "ISC_DEFAULT")
     ISC_PROGRAM_SECURITY = jtag.Instruction(0x0b, "ISC_DEFAULT")
     ISC_SRAM_ERASE       = jtag.Instruction(0x05, "ISC_DEFAULT")
     ISC_SRAM_ERASE_DONE  = jtag.Instruction(0x09, "ISC_DEFAULT")
-    ISC_EFLASH_ERASE     = jtag.Instruction(0x75, "STATUS")
+    ISC_EFLASH_ERASE     = jtag.Instruction(0x75, "STATUS_REGISTER")
     ISC_ENABLE           = jtag.Instruction(0x15, "ISC_DEFAULT")
     ISC_PROGRAM_DONE     = jtag.Instruction(0x08, "ISC_DEFAULT")
 
@@ -56,14 +54,12 @@ class GowinFpga(jtag.Tap):
     ISC_READ             = jtag.Instruction(0x03, "ISC_PDATA")
     ISC_PROGRAM          = jtag.Instruction(0x14, "ISC_PDATA")
 
-    READ_STATUS          = jtag.Instruction(0x41, "STATUS")
+    READ_STATUS          = jtag.Instruction(0x41, "STATUS_REGISTER")
 
     PRELOAD              = jtag.Instruction(0x01, "BOUNDARY")
     SAMPLE               = jtag.Instruction(0x01, "BOUNDARY")
     EXTEST               = jtag.Instruction(0x04, "BOUNDARY")
-
-    UNDOC62              = jtag.Instruction(0x62, "ISC_DEFAULT")
-
+    
     def __init__(self, port, index, idcode):
         super().__init__(port, index, idcode)
         self.name = parts[idcode.part_no]
@@ -72,39 +68,55 @@ class GowinFpga(jtag.Tap):
         super().start()
         self.logger.info("IR status: %x", self.ir_status_read())
         self.logger.info("Status: %x", self.READ_STATUS.shift(read_tdo = True))
-        
+
+    def sram_erase(self):
+        raise NotImplementedError()
+
+    def flash_erase(self):
+        raise NotImplementedError()
+
+    def sram_configure(self, program_data):
+        raise NotImplementedError()
+
+    def load(self, program):
+        self.sram_erase()
+        data = program[0].data
+        self.sram_configure(data)
+        self.logger.info(self.status_read())
+
+    def stop(self):
+        self.sram_erase()
+        self.logger.info(self.status_read())
+
+    def reset(self):
+        self.logger.warning("Not implemented")
+
+    def status_read(self):
+        c = self.READ_STATUS.cmd(0)
+        self.execute([c])
+        return self.Status(all = int(c.tdo))
+
     def sram_erase(self):
         self.logger.info("Erasing SRAM")
         self.execute([
             self.ISC_ENABLE.cmd(),
-            self.cmd_run(100),
+            self.cmd_run(8),
             self.ISC_SRAM_ERASE.cmd(),
-            self.cmd_run(1000),
+            self.cmd_run(8),
             self.ISC_NOOP.cmd(),
-            self.cmd_run(100),
-            self.ISC_SRAM_ERASE_DONE.cmd(),
-            self.cmd_run(100),
-            self.ISC_NOOP.cmd(),
-            self.cmd_run(100),
-            self.ISC_DISABLE.cmd(),
-            self.cmd_run(100),
-            self.ISC_NOOP.cmd(),
-            self.cmd_run(100),
-            ])
-
-    def flash_erase(self):
-        self.logger.info("Erasing flash")
-        self.execute([
-            self.ISC_ENABLE.cmd(),
-            self.cmd_run(1000),
-            self.ISC_EFLASH_ERASE.cmd(),
-            self.cmd_run(1),
-            self.ISC_EFLASH_ERASE.cmd(0),
-            self.cmd_run(10000),
-            self.ISC_DISABLE.cmd(),
             self.cmd_run(2),
+            ])
+        time.sleep(.01)
+        self.execute([
+            self.ISC_SRAM_ERASE_DONE.cmd(),
+            self.cmd_run(8),
             self.ISC_NOOP.cmd(),
-            self.cmd_run(5),
+            self.cmd_run(8),
+            self.ISC_DISABLE.cmd(),
+            self.cmd_run(8),
+            self.ISC_NOOP.cmd(),
+            self.cmd_run(8),
+            self.cmd_run(8),
             ])
 
     def sram_configure(self, program_data):
@@ -123,15 +135,52 @@ class GowinFpga(jtag.Tap):
             self.ISC_NOOP.cmd(),
             self.cmd_run(5),
             ])
+        
+@jtag.Chain.db.register(*set([PartId(8, 0x0d, p) for (p,n) in parts.items() if n.startswith("GW1")]))
+class Gw1(GowinFpga):
+    max_freq = 10e6
 
-    def load(self, program):
-        self.sram_erase()
-        data = program[0].data
-        self.sram_configure(data)
+    class Status(bitfield.Bitfield):
+        all          = bitfield.Field(0, 32)
+        CRCError     = bitfield.BooleanField(0)
+        BadCommand   = bitfield.BooleanField(1)
+        IdError      = bitfield.BooleanField(2)
+        Timeout      = bitfield.BooleanField(3)
+        Vld          = bitfield.BooleanField(12)
+        Done         = bitfield.BooleanField(13)
+        Security     = bitfield.BooleanField(14)
+        Ready        = bitfield.BooleanField(15)
 
-    def stop(self):
-        self.sram_erase()
+    def flash_erase(self):
+        raise NotImplementedError()
 
-    def reset(self):
-        self.logger.warning("Not implemented")
+@jtag.Chain.db.register(*set([PartId(8, 0x0d, p) for (p,n) in parts.items() if n.startswith("GW2A")]))
+class Gw2a(GowinFpga):
+    max_freq = 30e6
 
+    class Status(bitfield.Bitfield):
+        all          = bitfield.Field(0, 32)
+        CRCError     = bitfield.BooleanField(0)
+        BadCommand   = bitfield.BooleanField(1)
+        IdError      = bitfield.BooleanField(2)
+        Timeout      = bitfield.BooleanField(3)
+        Vld          = bitfield.BooleanField(12)
+        Done         = bitfield.BooleanField(13)
+        Security     = bitfield.BooleanField(14)
+        Encrypted    = bitfield.BooleanField(15)
+        KeyOk        = bitfield.BooleanField(16)
+
+    def flash_erase(self):
+        self.logger.info("Erasing flash")
+        self.execute([
+            self.ISC_ENABLE.cmd(),
+            self.cmd_run(10),
+            self.ISC_EFLASH_ERASE.cmd(),
+            self.cmd_run(1),
+            self.ISC_EFLASH_ERASE.cmd(0),
+            self.cmd_run(10000),
+            self.ISC_DISABLE.cmd(),
+            self.cmd_run(2),
+            self.ISC_NOOP.cmd(),
+            self.cmd_run(5),
+            ])
