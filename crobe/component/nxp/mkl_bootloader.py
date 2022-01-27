@@ -2,7 +2,7 @@ from ...model import PortComponent
 from ...protocol import i2c
 import binascii
 import time
-import crcmod
+from ...util.crc import crc
 
 __all__ = ["MklBootloader"]
 
@@ -17,9 +17,9 @@ class MklBootloader(PortComponent):
         PortComponent.__init__(self, port, "MklBl")
 
     @staticmethod
-    def crc(blob):
-        crc16 = crcmod.mkCrcFun(0x11021, rev=False, initCrc=0, xorOut=0)
-        return crc16(blob).to_bytes(2, "little")
+    def crc(blob, state = 0):
+        state = crc(data, state, 0x11021, pop_lsb = False, push_lsb = True, inv_state = False)
+        return state.to_bytes(2, "little")
 
     FRAME_START         = 0x5a
     FRAME_ACK           = 0xa1

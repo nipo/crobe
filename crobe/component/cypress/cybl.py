@@ -1,8 +1,8 @@
 from ...protocol import i2c
 import time
 import enum
-import crcmod
 import math
+from ...util.crc import crc
 
 __all__ = ["CyBl"]
 
@@ -20,8 +20,7 @@ class CyBl(i2c.Slave):
         
     def checksum(self, blob):
         if self.checksum_mode == "crc":
-            crc16 = crcmod.mkCrcFun(0x11021, rev=False, initCrc=0, xorOut=0)
-            return crc16(blob)
+            return crc(blob, 0, 0x11021, pop_lsb = False, push_lsb = True, inv_state = False)
         elif self.checksum_mode == "sum":
             return (-sum(blob, 0)) & 0xffff
         else:
