@@ -25,9 +25,10 @@ def program_get(programs, within):
 @cli.command(help = "Convert to binary")
 @click.argument("programs", type = base.PROGRAM, nargs = -1)
 @click.argument("bin", type = click.File("wb"))
+@click.option('-s', '--bitswap', is_flag = True, help = "Byte swap output")
 @click.option("--within", type = base.ADDRESS_RANGE, multiple = True)
-def to_bin(programs, bin, within):
-    program_get(programs, within).bin_dump(bin)
+def to_bin(programs, bin, within, bitswap):
+    program_get(programs, within).bin_dump(bin, bitswap = bitswap)
 
 @cli.command(help = "Convert to hex")
 @click.argument("programs", type = base.PROGRAM, nargs = -1)

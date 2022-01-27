@@ -567,7 +567,7 @@ class Program:
         fd.write(struct.pack("<L", chk & 0xffffffff))
         fd.close()
 
-    def bin_dump(self, fd):
+    def bin_dump(self, fd, bitswap = False):
         begin = self.address
         end = self.end
 
@@ -575,6 +575,9 @@ class Program:
         for s in self.segments:
             blob = blob[: s.address - begin] + s.data + blob[s.address - begin + len(s):]
 
+        if bitswap:
+            from ..util.endian import bitswap8
+            blob = bitswap8(blob)
         fd.write(blob)
 
     def save_hex(self, filename):
