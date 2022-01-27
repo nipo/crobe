@@ -10,7 +10,7 @@ class Tc72(PortComponent):
 
     def _read(self, base, length):
         cmd = self.port.cmd_shift(bytes([int(base)]), read_miso = False)
-        cmd2 = self.port.cmd_shift(length, read_miso = True)
+        cmd2 = self.port.cmd_shift(b'\x00' * length, read_miso = True)
         self.port.execute([self.port.cmd_cs(True), cmd, cmd2, self.port.cmd_cs(False)])
         return cmd2.miso
 
@@ -41,9 +41,9 @@ class Tc72(PortComponent):
 
     def temperature_measure(self):
         """Trigger one-shot, wait for completion and return reading in Celcius"""
-        self.control_set(one_shot = True)
-        while not self.is_conversion_ready():
-            time.sleep(.01)
+        self.control_set(shutdown = False)
+#        while not self.is_conversion_ready():
+        time.sleep(.01)
         return self.temperature_get()
 
     def sensors_read(self):
