@@ -14,7 +14,7 @@ from ....db import Db
 from ....util.info import TimedLogger
 from .puppet_code import crc32_cm0
 from tqdm import tqdm
-import zlib
+from ....util.crc import crc32
 
 __all__ = ["SoC", 'ArmMPuppet', 'StubFlash']
 
@@ -166,7 +166,7 @@ class StubFlash(BusFlash):
         code = puppet.stub(puppet.CRC32)
         for i, (address, data) in enumerate(tqdm(sorted(pages.items()), desc = "Scanning")):
             from_mem = code.call(address, self.page_size)
-            crc = zlib.crc32(data)
+            crc = crc32(data)
             self.logger.info("Page at 0x%08x, CRC32=%08x, in mem=%08x",
                              address, crc, from_mem)
             if from_mem == crc:
