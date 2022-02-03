@@ -46,16 +46,3 @@ class Artix7(series7.Series7, xadc.Xadc):
         self.name = parts[int(self.idcode.drop_revision())]
 
     IR_XADC_DRP    = 0x37
-
-@Artix7.application_db.register("spi")
-def spi_interface(tap):
-    from ...loadable.object import Program
-
-    fw_name = "fw/" + tap.name.lower() + "_jtag_spi.bit.gz"
-    fd = pkg_resources.resource_filename(__name__, fw_name)
-    tap.load(Program.from_file(fd))
-
-    from ..jtag_spi_bridge import JtagSpiBridge
-
-    return JtagSpiBridge(tap, tap.USER_IR[0], tap.USER_IR[1], 60e6)
-

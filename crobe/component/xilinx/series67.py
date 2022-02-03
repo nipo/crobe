@@ -1,5 +1,6 @@
 from ...protocol import jtag
 import struct
+from ... import db
 from ... import bitstring
 from ..model import JtagSramFpga
 import datetime
@@ -128,4 +129,19 @@ class Series67(jtag.Tap, JtagSramFpga):
         cbs = self.BootStatus(self.cfg_boot_status)
         self.logger.info("Config status %r %08x", cs, cs.all)
         self.logger.info("Config boot status %r %08x", cbs, cbs.all)
+
+@Series67.application_db.register("spi")
+def spi_interface(tap):
+    from ...loadable.object import Program
+    import pkg_resources
+
+    fw_name = f"fw/{int(tap.idcode.drop_revision()):#010x}_jtag_spi.bit.gz"
+    try:
+        filename = pkg_resources.resource_filename(__name__, fw_name)
+    except:
+        raise db.NoMatch("spi")
+    tap.load(Program.from_file(filename))
+
+    from ..jtag_spi_bridge import JtagSpiBridge
+    return JtagSpiBridge(tap, tap.USER_IR[0], tap.USER_IR[1], tap.max_freq)
 

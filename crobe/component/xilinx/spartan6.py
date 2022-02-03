@@ -2,7 +2,6 @@ from ...part_id import PartId
 from ...protocol import jtag
 import os, os.path
 from . import series6
-import pkg_resources
 
 parts = {
     0x04000093: "LX4",
@@ -43,15 +42,3 @@ class Spartan6(series6.Series6):
     def __init__(self, port, index, idcode):
         series6.Series6.__init__(self, port, index, idcode)
         self.name = "Spartan6-" + parts[int(self.idcode.drop_revision())]
-
-@Spartan6.application_db.register("spi")
-def spi_slave(tap):
-    from ...loadable.object import Program
-
-    fw_name = "fw/" + tap.name.lower() + "_jtag_spi.bit.gz"
-    fd = pkg_resources.resource_filename(__name__, fw_name)
-    tap.load(Program.from_file(fd))
-
-    from ..jtag_spi_bridge import JtagSpiBridge
-
-    return JtagSpiBridge(tap, tap.USER_IR[0], tap.USER_IR[1], 50e6)

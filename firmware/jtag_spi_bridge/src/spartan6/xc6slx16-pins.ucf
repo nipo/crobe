@@ -1,0 +1,4 @@
+NET spi_sck_o       LOC = N12 | IOSTANDARD = LVCMOS33 | SLEW = FAST;
+NET spi_mosi_o      LOC = R11 | IOSTANDARD = LVCMOS33 | SLEW = FAST;
+NET spi_miso_i      LOC = P11 | IOSTANDARD = LVCMOS33;
+NET spi_cs_n_o      LOC = R3 | IOSTANDARD = LVCMOS33 | SLEW = FAST;

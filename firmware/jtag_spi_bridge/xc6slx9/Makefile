@@ -1,13 +1,13 @@
-top = main.jtag_spi
+top = work.spartan6.boundary
 target = jtag_spi
-main-srcdir = $(SRC_DIR)/../src
+work-srcdir = $(SRC_DIR)/../src
 target_part = xc6slx9
 target_package = tqg144
 target_speed = -2
 hwdep = xilinx
 tool = ise
 
-fw = ../../../crobe/component/xilinx/fw/spartan6-lx9_$(target).bit.gz
+fw = ../../../crobe/component/xilinx/fw/0x04001093_jtag_spi.bit.gz
 
 all: $(fw)
 

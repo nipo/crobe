@@ -2,14 +2,25 @@ library ieee;
 use ieee.std_logic_1164.all;
 use ieee.numeric_std.all;
 
-library nsl_hwdep, nsl_bnoc, nsl_spi, nsl_jtag, nsl_indication, unisim, nsl_io;
+library nsl_bnoc, nsl_spi, nsl_jtag, nsl_indication, nsl_io, nsl_clocking;
 
 entity jtag_spi is
+  generic(
+    clock_hz_c : integer
+    );
   port (
-    spi_cs_n_o: inout std_logic;
-    spi_mosi_o: out std_ulogic;
-    spi_miso_i: in std_ulogic
-  );
+    clock_i : in std_ulogic;
+    reset_n_i : in std_ulogic;
+
+    chip_tdi_i: in std_ulogic := '0';
+    chip_tck_i: in std_ulogic := '0';
+    chip_tms_i: in std_ulogic := '0';
+    chip_tdo_o: out std_logic;
+
+    spi_o: out nsl_spi.spi.spi_master_o;
+    spi_i: in nsl_spi.spi.spi_master_i;
+    led_o : out std_ulogic
+    );
 end jtag_spi;
 
 architecture arch of jtag_spi is
@@ -26,54 +37,46 @@ architecture arch of jtag_spi is
   end record;
 
   signal comm_spi : slave_conns;
-  signal spi_sck: std_ulogic;
-  signal spi_cs_n: nsl_io.io.opendrain;
 
-  signal reset_internal_n, reset_jtag_n, clock : std_ulogic;
-
-  signal done_led_n : std_ulogic;
+  signal reset_n_s, gen_reset_n_s : std_ulogic;
   
 begin
 
-  startupe2_inst : unisim.vcomponents.startupe2
-    port map (
-      cfgmclk => clock,
-      eos => reset_internal_n,
-      clk => '0',
-      gsr => '0',
-      gts => '0',
-      keyclearb => '1',
-      pack => '0',
-      usrcclko => spi_sck,
-      usrcclkts => '0', -- oe_n
-      usrdoneo => '0',
-      usrdonets => done_led_n -- oe_n
-      );
-
-  act: nsl_indication.activity.activity_monitor
-    generic map(
-      blink_cycles_c => 65000000 / 4,
-      on_value_c => '0'
-      )
+  reset_sync: nsl_clocking.async.async_edge
     port map(
-      reset_n_i => reset_internal_n,
-      clock_i => clock,
-      togglable_i => spi_cs_n.drain_n,
-      activity_o => done_led_n
+      clock_i => clock_i,
+      data_i => reset_n_i,
+      data_o => gen_reset_n_s
       );
   
-  jtag_io: nsl_jtag.fifo_transport.jtag_fifo_transport_slave
+  act: nsl_indication.activity.activity_monitor
     generic map(
-      data_reg_no_c => 1,
-      status_reg_no_c => 2,
-      rx_fifo_depth_c => 2048,
-      tx_fifo_depth_c => 2048,
+      blink_cycles_c => clock_hz_c / 4,
+      on_value_c => '1'
+      )
+    port map(
+      reset_n_i => reset_n_s,
+      clock_i => clock_i,
+      togglable_i => comm_spi.pre_fifo.rsp.req.valid,
+      activity_o => led_o
+      );
+  
+  jtag_io: nsl_jtag.fifo_transport.jtag_fifo_transport_slave_tap
+    generic map(
+      status_enable_c => true,
+      rx_fifo_depth_c => 256,
+      tx_fifo_depth_c => 256,
       width_c => 9
       )
     port map(
-      clock_i => clock,
-      reset_n_i => reset_internal_n,
-      reset_n_o => reset_jtag_n,
+      clock_i => clock_i,
+      reset_n_i => gen_reset_n_s,
+      reset_n_o => reset_n_s,
+
+      chip_tdi_i => chip_tdi_i,
+      chip_tck_i => chip_tck_i,
+      chip_tms_i => chip_tms_i,
+      chip_tdo_o => chip_tdo_o,
 
       tx_data_i(8) => comm_spi.pre_fifo.rsp.req.last,
       tx_data_i(7 downto 0) => comm_spi.pre_fifo.rsp.req.data,
@@ -88,12 +91,12 @@ begin
 
   inbound_fifo: nsl_bnoc.framed.framed_fifo
     generic map(
-      depth => 4096,
+      depth => 256,
       clk_count => 1
       )
     port map(
-      p_resetn => reset_jtag_n,
-      p_clk(0) => clock,
+      p_resetn => reset_n_s,
+      p_clk(0) => clock_i,
 
       p_in_val => comm_spi.pre_fifo.cmd.req,
       p_in_ack => comm_spi.pre_fifo.cmd.ack,
@@ -104,12 +107,12 @@ begin
 
   outbound_fifo: nsl_bnoc.framed.framed_fifo
     generic map(
-      depth => 4096,
+      depth => 256,
       clk_count => 1
       )
     port map(
-      p_resetn => reset_jtag_n,
-      p_clk(0) => clock,
+      p_resetn => reset_n_s,
+      p_clk(0) => clock_i,
 
       p_out_val => comm_spi.pre_fifo.rsp.req,
       p_out_ack => comm_spi.pre_fifo.rsp.ack,
@@ -123,24 +126,18 @@ begin
       slave_count_c => 1
       )
     port map(
-      clock_i  => clock,
-      reset_n_i => reset_jtag_n,
+      clock_i  => clock_i,
+      reset_n_i => reset_n_i,
       
-      sck_o => spi_sck,
-      cs_n_o(0) => spi_cs_n,
-      mosi_o => spi_mosi_o,
-      miso_i => spi_miso_i,
+      sck_o => spi_o.sck,
+      cs_n_o(0) => spi_o.cs_n,
+      mosi_o => spi_o.mosi,
+      miso_i => spi_i.miso,
 
       cmd_i => comm_spi.post_fifo.cmd.req,
       cmd_o => comm_spi.post_fifo.cmd.ack,
       rsp_o => comm_spi.post_fifo.rsp.req,
       rsp_i => comm_spi.post_fifo.rsp.ack
-      );
-
-  cs_driver: nsl_io.io.opendrain_io_driver
-    port map(
-      io_io => spi_cs_n_o,
-      v_i => spi_cs_n
       );
 
 end arch;
