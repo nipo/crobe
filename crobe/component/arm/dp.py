@@ -86,7 +86,9 @@ class Dp(PortComponent, FreqCapper):
 
     def child_spawn(self, crit):
         if crit.startswith("ap#"):
-            return self.__ap_discover(int(crit[3:]))
+            no = int(crit[3:])
+            self.logger.info("Spawning AP %d", no)
+            return self.__ap_discover(no)
         
     def __str__(self):
         try:
