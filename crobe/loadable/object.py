@@ -352,14 +352,21 @@ class Program:
 
         self = cls(filename)
 
-        with open(filename, "r") as fd:
-            lines = deque(fd.readlines())
-            while lines and lines[0].startswith("//"):
-                try:
-                    k, v = lines.popleft().strip()[2:].split(":", 1)
-                except:
-                    continue
-                self.info[k] = v.strip()
+        if filename.endswith(".fs.gz"):
+            import gzip
+            fd = gzip.open(filename, 'r')
+        else:
+            fd = open(filename, 'r')
+
+        lines = deque(fd.readlines())
+        if isinstance(lines[0], bytes):
+            lines = deque(str(x, "utf-8", "ignore") for x in lines)
+        while lines and lines[0].startswith("//"):
+            try:
+                k, v = lines.popleft().strip()[2:].split(":", 1)
+            except:
+                continue
+            self.info[k] = v.strip()
 
         stream = "".join(l.strip() for l in lines)
         data = BitString(int(stream, 2), len(stream))
@@ -443,6 +450,7 @@ class Program:
         ".out": "elf",
         ".axf": "elf",
         ".fs": "fs",
+        ".fs.gz": "fs",
         "__literal": "literal",
         "__zero": "zero",
         "__one": "one",
