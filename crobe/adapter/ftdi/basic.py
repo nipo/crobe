@@ -447,6 +447,7 @@ class JtagInterface(EngineInterface, jtag.Interface):
                     left = op.cycles - 1
                     while left >= 8:
                         c = min(left, 65536 * 8)
+                        c = c & ~7
                         if self.handle.can_pad:
                             mpsse_ops.append(mpsse.ClockBits8(c // 8))
                         else:
