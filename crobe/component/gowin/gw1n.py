@@ -205,3 +205,19 @@ class Gw2a(GowinFpga):
             self.ISC_NOOP.cmd(),
             self.cmd_run(5),
             ])
+
+@GowinFpga.application_db.register("spi")
+def spi_interface(tap):
+    from ...loadable.object import Program
+    import pkg_resources
+
+    fw_name = f"fw/{int(tap.idcode.drop_revision()):#010x}_jtag_spi.fs.gz"
+    try:
+        filename = pkg_resources.resource_filename(__name__, fw_name)
+    except:
+        raise db.NoMatch("spi")
+    tap.load(Program.from_file(filename))
+
+    from ..jtag_spi_bridge import JtagSpiBridge
+    return JtagSpiBridge(tap, tap.USER_IR[0], tap.USER_IR[1], tap.max_freq)
+
