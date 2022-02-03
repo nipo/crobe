@@ -19,8 +19,8 @@ class JtagTransactor(PortComponent):
     CMD_SYS_RESET    = 0x84 # | 1 bit asserted
     CMD_RESET        = 0x98 # | 3 bits cycle count -1
     CMD_RTI          = 0x90 # | 3 bits cycle count -1
-    CMD_RESET8       = 0x90 # | 4 bits cycle count /8 -1
-    CMD_RTI8         = 0x90 # | 4 bits cycle count /8 -1
+    CMD_RESET8       = 0xb0 # | 4 bits cycle count /8 -1
+    CMD_RTI8         = 0xa0 # | 4 bits cycle count /8 -1
     
     def __init__(self, route, base_freq):
         self.base_freq = base_freq
@@ -75,12 +75,14 @@ class JtagTransactor(PortComponent):
                 pending.append(([self.CMD_SYS_RESET | int(op.asserted)], 1, None, 0))
 
             elif isinstance(op, jtag.Run):
-                cycles = op.cycles + 1
+                if op.cycles == 0:
+                    raise ValueError("Cannot run 0 cycles")
+                cycles = op.cycles
                 while cycles > 8:
                     packs = cycles // 8
-                    count = min(packs, 16) - 1
-                    pending.append(([self.CMD_RTI8 | count], 1, None, 0))
-                    cycles -= (count + 1) * 8
+                    packs = min(packs, 16)
+                    pending.append(([self.CMD_RTI8 | (packs - 1)], 1, None, 0))
+                    cycles -= packs * 8
                 if cycles:
                     pending.append(([self.CMD_RTI | (cycles - 1)], 1, None, 0))
 
