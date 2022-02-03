@@ -114,6 +114,8 @@ class MemAp(ap.Ap, model.Bus):
         else:
             base = base & ~0xfff
 
+        if base is None and self.port.idr == 0x6ba02477:
+            base = 0xe00ff000
         if base is not None:
             self.base = base
 
