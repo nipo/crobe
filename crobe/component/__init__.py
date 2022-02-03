@@ -26,3 +26,4 @@ from . import rfmd
 from . import bscan_bitbang
 from . import maxim
 from . import idt
+from . import aps
