@@ -60,8 +60,11 @@ class MemAp(ap.Ap, model.Bus):
 
     def enable(self, enable = True):
         if enable:
-            while not self.csw & self.CSW_DEVICEEN:
-                self.csw = self.csw | self.CSW_SPIDEN
+            if self.rev == 8:
+                self.csw = self.csw | 0x6f000000
+            else:
+                while not (self.csw & (self.CSW_DEVICEEN | self.CSW_DBGSWEN)):
+                    self.csw = self.csw | self.CSW_SPIDEN
         else:
             self.csw = self.csw & ~self.CSW_SPIDEN & ~self.CSW_DBGSWEN
 
@@ -81,8 +84,12 @@ class MemAp(ap.Ap, model.Bus):
         self.large_data = bool(cfg & self.CFG_LARGE_DATA)
         self.large_address = bool(cfg & self.CFG_LARGE_ADDRESS)
 
+        self.logger.info("CSW before enable: %8x", self.csw)
+
         self.enable()
         self.csw_base = self.csw & ~0x00000f37
+        if self.rev == 8:
+            self.csw_base |= 0x6f000000
 
         self.logger.info("CSW default: %8x", self.csw_base)
 
