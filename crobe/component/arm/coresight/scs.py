@@ -1,7 +1,9 @@
 from .model import MemoryMappedComponent
+from .. import dp
 from ...model import Cpu
 from .. import cpuid
 from ....part_id import PartId
+import time
 
 @MemoryMappedComponent.db.register(
     PartId(4, 0x3b, 0x000), # m3
@@ -198,10 +200,18 @@ class Scs(MemoryMappedComponent):
             self.cmd_reg_write(self.AIRCR, self.AIRCR_KEY | self.AIRCR_SYSRESETREQ),
             ])
 
+        errs = 0
         while True:
-            dhcsr = self.reg_read(self.DHCSR)
-            if not (dhcsr & self.DHCSR_S_RESET_ST):
-                break
+            try:
+                dhcsr = self.reg_read(self.DHCSR)
+                errs = 0
+                if not (dhcsr & self.DHCSR_S_RESET_ST):
+                    break
+            except dp.DpAccessFailure:
+                time.sleep(.01)
+                errs += 1
+                if errs > 100:
+                    raise
 
     # System control and ID registers
     # 0x000-0x00f  Interrupts, Auxilary control
