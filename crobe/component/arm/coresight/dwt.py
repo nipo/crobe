@@ -4,6 +4,7 @@ from ....part_id import PartId
 @MemoryMappedComponent.db.register(
     PartId(4, 0x3b, 0x002), # m3
     PartId(4, 0x3b, 0x00a), # m0
+    PartId(4, 0x3b, 0x1a02), # v8 Devarch
     )
 class Dwt(MemoryMappedComponent):
     CTRL = 0

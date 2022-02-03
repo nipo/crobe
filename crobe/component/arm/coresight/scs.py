@@ -7,6 +7,7 @@ from ....part_id import PartId
     PartId(4, 0x3b, 0x000), # m3
     PartId(4, 0x3b, 0x008), # m0
     PartId(4, 0x3b, 0x00c), # m4
+    PartId(4, 0x3b, 0x2a04), # v8 Devarch
     )
 class Scs(MemoryMappedComponent):
     def __init__(self, ap, base):

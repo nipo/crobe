@@ -4,6 +4,7 @@ from ....part_id import PartId
 @MemoryMappedComponent.db.register(
     PartId(4, 0x3b, 0x001),
     PartId(4, 0x3b, 0x913),
+    PartId(4, 0x3b, 0x1a01), # v8 Devarch
     )
 class Itm(CoresightComponent):
     STIM = staticmethod(lambda x: 4 * x)

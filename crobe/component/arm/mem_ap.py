@@ -54,7 +54,9 @@ class MemAp(ap.Ap, model.Bus):
 
         name = {1: "AHB-AP", 2: "APB-AP", 4: "AXI-AP"}.get(self.idr & 0xf, "Mem-AP")
 
+        self.rev = self.idr >> 28
         model.Bus.__init__(self, name)
+        self.base = None
 
     def enable(self, enable = True):
         if enable:
@@ -82,7 +84,7 @@ class MemAp(ap.Ap, model.Bus):
         self.enable()
         self.csw_base = self.csw & ~0x00000f37
 
-        self.logger.info("CSW base: %8x", self.csw_base)
+        self.logger.info("CSW default: %8x", self.csw_base)
 
         if self.large_address and self.large_data:
             self.name = self.name + " LP64"
@@ -104,7 +106,9 @@ class MemAp(ap.Ap, model.Bus):
                 base = None
         else:
             base = base & ~0xfff
-        self.base = base
+
+        if base is not None:
+            self.base = base
 
         if self.base is not None:
             self.logger.info("Base: %16x", self.base)

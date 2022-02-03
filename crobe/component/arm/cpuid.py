@@ -44,6 +44,9 @@ def decode(cpuid):
             if cno in cortex_table:
                 part_name = cortex_table[cno] % (partno & 0xf)
 
+        if partno & 0xf00 == 0xd00:
+            part_name = "Cortex-M%d" % (partno & 0xff)
+
     return "%s %s r%dp%d" % (impl_name, part_name, variant, revision)
 
 def short_name(cpuid):

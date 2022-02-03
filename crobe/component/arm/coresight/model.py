@@ -6,6 +6,7 @@ from ....db import Db, NoMatch
 __all__ = ["MemoryMappedComponent"]
 
 class MemoryMappedComponent(model.Bus32Component):
+    DEVARCH = 0xfbc
     DEVID = 0xfc0
     PID1 = 0xfd0
     PID0 = 0xfe0
@@ -20,6 +21,11 @@ class MemoryMappedComponent(model.Bus32Component):
 
         blob = bus.mem_read(self.base | self.DEVID, 16 * 4)
         self.devid, pid0, pid1, self.cid = struct.unpack("<LLLL", blob[::4])
+        devarch = int.from_bytes(bus.mem_read(self.base | self.DEVARCH, 4), "little")
+        if devarch & 0x00100000:
+            self.devarch = PartId(devarch >> 28, (devarch >> 21) & 0x7f, devarch & 0xffff, (devarch >> 16) & 0xf)
+        else:
+            self.devarch = None
         self.pid = (pid0 << 32) | pid1
 
         self.use_jep106 = bool(self.pid & 0x80000)
@@ -33,6 +39,8 @@ class MemoryMappedComponent(model.Bus32Component):
                          self.base,
                          self.devid, self.pid, self.cid, self.partid,
                          self.use_jep106)
+
+        self.logger.info("Devarch: %s", self.devarch)
 
         self.component_class = (self.cid >> 12) & 0xf
         self.dev_type = self.devid >> 24
@@ -55,6 +63,12 @@ class MemoryMappedComponent(model.Bus32Component):
             self.name = "<0x%08x: %s (0x%08x/0x%08x)>" % (self.base, self.name, self.pid, self.cid)
 
     def cast(self):
+        if self.devarch:
+            try:
+                return self.db.call(self.devarch, self.bus, self.base)
+            except NoMatch:
+                pass
+
         if self.use_jep106:
             try:
                 return self.db.call(self.partid, self.bus, self.base)
