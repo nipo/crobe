@@ -210,7 +210,17 @@ class SramFpga(Component, metaclass = _sram_fpga_meta):
         Component.__init__(self)
 
     def child_spawn(self, sub):
-        return self.application_db.call(sub, self)
+        from ..db import NoMatch
+
+        for clas in self.__class__.__mro__:
+            if issubclass(clas, SramFpga):
+                self.logger.debug("Looking up %s in application db of %s",
+                                  sub, clas)
+                try:
+                    return clas.application_db.call(sub, self)
+                except (NoMatch, BadInvocation):
+                    continue
+        raise BadInvocation(sub)
         
     def load(self, program):
         raise NotImplementedError()
