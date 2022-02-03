@@ -60,6 +60,8 @@ def jtag_frequency_test(root, fmin, fmax, step, ir):
     assert isinstance(root, Interface)
     from ..util.pretty import metric
 
+    root.start()
+
     for low, high, ok in root.freq_test(fmin, fmax, step, ir):
         print(f"Frequencies {metric(low, 'Hz')}-{metric(high, 'Hz')}: {'OK' if ok else 'Fails'}")
 
