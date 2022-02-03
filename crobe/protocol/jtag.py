@@ -771,10 +771,12 @@ class Tap(PortComponent, InstructionRegistry):
                          ir, len(register), register)
         return register
 
-    def dr_discover_all(self):
+    def dr_discover_all(self, excluded_ir = set()):
         ir_pre, ir_len, ir_post = self.ir_pre_post()
         ir_lengths = {}
         for i in range(0, 2 ** ir_len):
+            if i in excluded_ir:
+                continue
             try:
                 ir_lengths[i] = len(self.dr_discover(i))
             except OpenChain:
