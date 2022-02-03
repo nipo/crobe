@@ -11,6 +11,7 @@ parts = {
     0x0002: "GW2A-55/55C",
     0x1001: "GW1N[R]-4",
     0x1003: "GW1N[R]-4[BC]",
+    0x1004: "GW1N-UV9",
     0x1005: "GW1N[R]-9[C]",
     0x1006: "GW1NZ-1",
     0x1009: "GW1NS[ER]-4C",
@@ -30,6 +31,8 @@ class GowinFpga(jtag.Tap):
     ISC_DEFAULT     = jtag.Dr(1)
     ISC_PDATA       = jtag.Dr(None)
     STATUS_REGISTER = jtag.Dr(32)
+
+    BYPASS2              = jtag.Instruction(0x00, "TAP_BYPASS")
 
     ISC_DISABLE          = jtag.Instruction(0x3a, "ISC_DEFAULT")
     ISC_NOOP             = jtag.Instruction(0x02, "ISC_DEFAULT")
@@ -59,6 +62,21 @@ class GowinFpga(jtag.Tap):
     PRELOAD              = jtag.Instruction(0x01, "BOUNDARY")
     SAMPLE               = jtag.Instruction(0x01, "BOUNDARY")
     EXTEST               = jtag.Instruction(0x04, "BOUNDARY")
+    UNK_06 = jtag.Instruction(0x06, 'BOUNDARY')
+
+    # User registers
+    USER1 = jtag.Instruction(0x42, None)
+    USER2 = jtag.Instruction(0x43, None)
+    IR_USER1 = 0x42
+    IR_USER2 = 0x43
+
+    
+    # Documented for SPI configuration
+    WRITE_DISABLE     = jtag.Instruction(0x3a, 'ISC_DEFAULT')
+    WRITE_DATA        = jtag.Instruction(0x3b, None)
+    RECONFIGURE       = jtag.Instruction(0x3c, 'ISC_DEFAULT')
+    PROGRAM_SPI_FLASH = jtag.Instruction(0x16, 'ISC_DEFAULT')
+
     
     def __init__(self, port, index, idcode):
         super().__init__(port, index, idcode)
@@ -137,7 +155,7 @@ class GowinFpga(jtag.Tap):
             ])
         
 @jtag.Chain.db.register(*set([PartId(8, 0x0d, p) for (p,n) in parts.items() if n.startswith("GW1")]))
-class Gw1(GowinFpga):
+class Gw1n(GowinFpga):
     max_freq = 10e6
 
     class Status(bitfield.Bitfield):
