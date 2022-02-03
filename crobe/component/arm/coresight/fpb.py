@@ -5,11 +5,12 @@ from ....part_id import PartId
     PartId(4, 0x3b, 0x003), # m3
     PartId(4, 0x3b, 0x00b), # m0 BPU
     PartId(4, 0x3b, 0x00e), # m7
+    PartId(4, 0x3b, 0x1a03), # v8 Devarch
     )
 class Fpb(MemoryMappedComponent):
     CTRL = 0x000
     REMAP = 0x004
-    COMP = lambda x: 0x008 + 4 * x
+    COMP = staticmethod(lambda x: 0x008 + 4 * x)
 
     def __init__(self, ap, base):
         MemoryMappedComponent.__init__(self, ap, base, "FPB")
