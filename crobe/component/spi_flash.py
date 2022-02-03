@@ -11,33 +11,25 @@ import time
 __all__ = ["SpiFlash"]
 
 @spi.Target.db.register("flash")
+@spi.Target.db.register("memory")
 def spi_flash_probe(target, *args):
-    return SpiFlash.detect(target)
+    return SpiMemory.detect(target)
 
-class SpiFlash(PortComponent, Bus):
-    db = Db("SPI Flash type")
-
+class SpiMemory(PortComponent, Bus):
     max_freq = 33e6
     
     total_size = 0
 
     ADDRESS_SIZE = 3
-    
+
+    db = Db("SPI memory type")
+
     CMD_FAST_READ = b"\x0b"
     CMD_READ_JEDEC_ID = b"\x9f"
-    CMD_PAGE_PROGRAM = b"\x02"
-    CMD_WRITE_STATUS = None
-    CMD_WRITE_VOLATILE_STATUS = None
-    CMD_CHIP_ERASE = b'\xc7'
-    CMD_WRITE_ENABLE = b'\x06'
-    CMD_WRITE_DISABLE = b'\x04'
-    CMD_READ_STATUS = b'\x05'
     CMD_RESET_ENABLE = b'\x66'
     CMD_RESET = b'\x99'
-    STATUS_WIP = 1
-    STATUS_WEL = 2
+
     write_buffer_size = 1
-    SECTOR_INFO = []
     
     def __init__(self, port, idr = 0, name = "SPI Flash"):
         PortComponent.__init__(self, port, name)
@@ -46,8 +38,6 @@ class SpiFlash(PortComponent, Bus):
             idr = self.idr_get()
         self.idr = idr
         self.logger.info("SPI flash with IDR=%06x", self.idr)
-        if idr == 0x9f0000:
-            raise ValueError("Bad IDR: %06x" % idr)
 
     @property
     def page_size(self):
@@ -58,17 +48,6 @@ class SpiFlash(PortComponent, Bus):
 
     def mem_write(self, address, data):
         return self.write(address, data)
-
-    def info(self):
-        self.logger.info("Total size: %s (%s)", base2(self.total_size, "B"), base2(self.total_size * 8, "b"))
-        self.logger.info("%d bytes address, %d-byte write buffer", self.ADDRESS_SIZE, self.write_buffer_size)
-        self.logger.info("Fast read: %02x, Page program: %02x, erase commands:", self.CMD_FAST_READ[0], self.CMD_PAGE_PROGRAM[0])
-        for s in self.SECTOR_INFO:
-            self.logger.info("- type %d: %d x %s sectors, erase command: %s",
-                             s["type"], self.total_size / s["size"], base2(s["size"], 'B'),
-                             ("0x%02x" % s["erase_cmd"][0]) if s["erase_cmd"] else "-")
-        if self.CMD_WRITE_VOLATILE_STATUS:
-            self.logger.info("Volatile status write op: 0x%02x", self.CMD_WRITE_VOLATILE_STATUS[0])
 
     @classmethod
     def detect(cls, port):
@@ -118,9 +97,10 @@ class SpiFlash(PortComponent, Bus):
         sfdp = sfdp.miso
         id_cfi = idr.miso[0x10:0x13]
         idr = int.from_bytes(idr.miso[:3], "big")
+        port.logger.info("IDR: 0x%06x", idr)
         port.logger.info("SFDP: %s", sfdp)
-
-        if idr in [0, 0xffffff]:
+        
+        if idr in [0, 0xffffff, 0x9f0000, 0x9fffff]:
             raise InitializationFailure("Bad SPI IDR: 0x%06x" % idr)
 
         try:
@@ -181,6 +161,37 @@ class SpiFlash(PortComponent, Bus):
         if op is None:
             op = self.CMD_FAST_READ
         return self.command(op, arg = self.addr(address), rsize = size, dummy_words = 1)
+
+    def verify(self, program):
+        si = self.SECTOR_INFO[0]
+
+        for page in program.paged(si["size"], fill = b'\x00'):
+            if self.read(page.address, len(page)) != page.data:
+                return False
+        return True
+
+class SpiFlash(SpiMemory):
+    CMD_PAGE_PROGRAM = b"\x02"
+    CMD_WRITE_STATUS = None
+    CMD_WRITE_VOLATILE_STATUS = None
+    CMD_CHIP_ERASE = b'\xc7'
+    CMD_WRITE_ENABLE = b'\x06'
+    CMD_WRITE_DISABLE = b'\x04'
+    CMD_READ_STATUS = b'\x05'
+    STATUS_WIP = 1
+    STATUS_WEL = 2
+    SECTOR_INFO = []
+
+    def info(self):
+        self.logger.info("Total size: %s (%s)", base2(self.total_size, "B"), base2(self.total_size * 8, "b"))
+        self.logger.info("%d bytes address, %d-byte write buffer", self.ADDRESS_SIZE, self.write_buffer_size)
+        self.logger.info("Fast read: %02x, Page program: %02x, erase commands:", self.CMD_FAST_READ[0], self.CMD_PAGE_PROGRAM[0])
+        for s in self.SECTOR_INFO:
+            self.logger.info("- type %d: %d x %s sectors, erase command: %s",
+                             s["type"], self.total_size / s["size"], base2(s["size"], 'B'),
+                             ("0x%02x" % s["erase_cmd"][0]) if s["erase_cmd"] else "-")
+        if self.CMD_WRITE_VOLATILE_STATUS:
+            self.logger.info("Volatile status write op: 0x%02x", self.CMD_WRITE_VOLATILE_STATUS[0])
 
     def write_enable(self, enable):
         retries = 0
@@ -305,13 +316,19 @@ class SpiFlash(PortComponent, Bus):
         else:
             return self._write(base, data)
 
-    def verify(self, program):
-        si = self.SECTOR_INFO[0]
+class SpiPSRam(SpiMemory):
+    CMD_WRITE = b"\x02"
 
-        for page in program.paged(si["size"], fill = b'\x00'):
-            if self.read(page.address, len(page)) != page.data:
-                return False
-        return True
+    def info(self):
+        self.logger.info("Fast read: %02x, Write: %02x", self.CMD_FAST_READ[0], self.CMD_WRITE[0])
+
+    def erase(self, base, size):
+        self.write(base, b"\xff" * size)
+
+    def write(self, base, data):
+        for off in range(0, len(data), self.write_buffer_size):
+            blob = data[off:][:self.write_buffer_size]
+            self.command(self.CMD_WRITE, arg = self.addr(base + off), wdata = blob)
 
 class SelfDescriptiveFlash(SpiFlash):
     def __init__(self, port, idr, name):

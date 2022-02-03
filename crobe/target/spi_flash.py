@@ -54,3 +54,44 @@ class SpiFlash(model.Target, memory.Loadable):
     def erase_all(self):
         self.component.erase_all()
         self.force_blank()
+
+class RamBank(memory.Ram):
+    def __init__(self, flash):
+        memory.NandFlash.__init__(self, flash.name + " data", 0, flash.total_size, 4096)
+        self.flash = flash
+
+    def erase(self, offset, size):
+        self.flash.erase(offset, size)
+
+    def write(self, offset, data):
+        off = 0
+
+        while off < len(data):
+            alignment = (offset + off) % self.page_size
+            size = self.page_size - alignment
+
+            chunk = data[off : off + size]
+
+            self.flash.write(offset + off, chunk)
+            self.blank = False
+
+            off += len(chunk)
+
+    def read(self, offset, size):
+        return self.flash.read(offset, size)
+
+@model.Target.register(component_spi_flash.SpiPSRam)
+class SpiPSRam(model.Target, memory.Loadable):
+    """
+    A SPI PSRam
+    """
+
+    def __init__(self, comp):
+        model.Target.__init__(self, comp.name)
+        memory.Loadable.__init__(self)
+        self.child_add(RamBank(comp))
+        self.component = comp
+
+    def erase_all(self):
+        self.component.erase(0, self.component.total_size)
+        self.force_blank()

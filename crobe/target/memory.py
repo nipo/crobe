@@ -190,8 +190,8 @@ class Loadable:
                 end = max(end, region.address + region.size)
 
         for region in self.children_of_class(Region):
-            if region.type not in [Type.FLASH, Type.EEPROM]:
-                continue
+            #if region.type not in [Type.FLASH, Type.EEPROM]:
+            #    continue
             if not (region.flags & set([Flag.PARTIAL_READ, Flag.MM_READ])):
                 continue
             roff = max(0, begin - region.address)
