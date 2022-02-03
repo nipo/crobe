@@ -314,6 +314,7 @@ class Chain(PortComponent):
         self.tap = {}
         
     def start(self):
+        self.logger.info("starting")
         PortComponent.start(self)
 
         import time

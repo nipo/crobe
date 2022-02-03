@@ -3,6 +3,7 @@ from ... import bitstring
 from ... import bitfield
 from ...util.endian import swib_u32
 from ...model import PortComponent
+from ..model import SramFpga
 import datetime
 from .series67 import Series67
 from ...protocol import spi
@@ -13,6 +14,9 @@ class Series7(Series67):
 
     def __init__(self, port, index, idcode):
         Series67.__init__(self, port, index, idcode)
+
+    # JtagSramFpga
+    USER_IR = [0x02, 0x03, 0x22, 0x23]
 
     ###
     ### Config port
@@ -489,9 +493,10 @@ class Series7(Series67):
 def series7_slave_probe(target, *args):
     return Series7SlaveSerial(target)
 
-class Series7SlaveSerial(PortComponent):
+class Series7SlaveSerial(PortComponent, SramFpga):
     def __init__(self, port):
         PortComponent.__init__(self, port, "Slave Series7")
+        SramFpga.__init__(self)
 
     def start(self):
         self.port.freq_cap("series7", 50e6)

@@ -13,6 +13,9 @@ class Series6(Series67):
     def __init__(self, port, index, idcode):
         Series67.__init__(self, port, index, idcode)
 
+    # JtagSramFpga
+    USER_IR = [0x02, 0x03, 0x1a, 0x1b]
+        
     ###
     ### Config port
     ###

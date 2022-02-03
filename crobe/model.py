@@ -34,9 +34,12 @@ class Component(object):
     There are utilities to retrieve a component in the subtree of an
     other.
     """
-    def __init__(self, name):
-        assert isinstance(name, str)
-        self.name = name
+    def __init__(self, name = None):
+        if name is None:
+            assert hasattr(self, "name")
+        else:
+            assert isinstance(name, str)
+            self.name = name
         self.__parent = None
         self.__children = []
         self.__started = False
@@ -176,7 +179,7 @@ class Component(object):
         if child:
             child.__options_apply(options)
         else:
-            child = self.child_spawn(crit)
+            child = self.__child_spawn(crit)
             if not child:
                 raise BadInvocation(crit)
 
@@ -210,8 +213,26 @@ class Component(object):
         if len(possible) == 1:
             return possible[0]
     
-    def child_spawn(self, crit):
+    def __child_spawn(self, crit):
+        from .db import NoMatch, InitializationFailure
+        self.logger.debug("Spawning '%s' on %s", crit, self.__class__.__mro__)
+        for cla in self.__class__.__mro__:
+            try:
+                method = cla.__dict__["child_spawn"]
+            except KeyError:
+                continue
+
+            self.logger.debug("Trying on '%s'", cla.__name__)
+
+            try:
+                return method(self, crit)
+            except (NoMatch, InitializationFailure, BadInvocation) as e:
+                self.logger.debug(" -> %s", e.__class__.__name__)
+                pass
         return None
+
+    def child_spawn(self, crit):
+        raise BadInvocation(crit)
 
 class BusComponent(Component):
     """

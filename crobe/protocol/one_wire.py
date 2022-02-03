@@ -98,10 +98,7 @@ class Interface(base.Interface):
         return Reset()
 
     def child_spawn(self, sub):
-        try:
-            return self.db.call(sub, self)
-        except NoMatch:
-            return
+        return self.db.call(sub, self)
         
     def targetted_command(self, target, command, arg = b'', rsize = 0):
         cmds = []

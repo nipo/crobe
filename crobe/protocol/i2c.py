@@ -90,10 +90,7 @@ class Interface(base.Interface):
         return Write(addr, data)
 
     def child_spawn(self, sub):
-        try:
-            return self.db.call(sub, self)
-        except NoMatch:
-            return
+        return self.db.call(sub, self)
 
 class Slave(PortComponent):
     def __init__(self, port, name, saddr = None):

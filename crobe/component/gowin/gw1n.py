@@ -1,3 +1,4 @@
+from ..model import JtagSramFpga
 from ...model import PortComponent
 from ...part_id import PartId
 from ...protocol import jtag
@@ -24,8 +25,10 @@ parts = {
 
 # Reference: UG290-2.3E
 # https://www.gowinsemi.com/upload/database_doc/1130/document/6020e45f5fe13.pdf
-class GowinFpga(jtag.Tap):
+class GowinFpga(jtag.Tap, JtagSramFpga):
     irlen = 8
+
+    USER_IR = [0x42, 0x43]
 
     BOUNDARY        = jtag.Dr(None)
     ISC_DEFAULT     = jtag.Dr(1)
@@ -67,9 +70,6 @@ class GowinFpga(jtag.Tap):
     # User registers
     USER1 = jtag.Instruction(0x42, None)
     USER2 = jtag.Instruction(0x43, None)
-    IR_USER1 = 0x42
-    IR_USER2 = 0x43
-
     
     # Documented for SPI configuration
     WRITE_DISABLE     = jtag.Instruction(0x3a, 'ISC_DEFAULT')
@@ -77,9 +77,12 @@ class GowinFpga(jtag.Tap):
     RECONFIGURE       = jtag.Instruction(0x3c, 'ISC_DEFAULT')
     PROGRAM_SPI_FLASH = jtag.Instruction(0x16, 'ISC_DEFAULT')
 
+    # 32-bit unknown IRs
+    # 0x10, 0x50, 0x70, 0x71, 0x73, 0x76, 0x80
     
     def __init__(self, port, index, idcode):
-        super().__init__(port, index, idcode)
+        jtag.Tap.__init__(self, port, index, idcode)
+        JtagSramFpga.__init__(self)
         self.name = parts[idcode.part_no]
 
     def start(self):

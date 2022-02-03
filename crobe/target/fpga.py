@@ -1,26 +1,18 @@
 from . import model
-from ..component.xilinx.spartan6 import Spartan6
-from ..component.xilinx.spartan7 import Spartan7
-from ..component.xilinx.series7 import Series7SlaveSerial
-from ..component.xilinx.artix7 import Artix7
-from ..component.xilinx.kintex7 import Kintex7
-from ..component.xilinx.zynq import Zynq
-from ..component.lattice.mach import MachXO2
-from ..component.lattice.ice40 import Ice40SlaveSerial
-from ..component.gowin.gw1n import GowinFpga
+from ..component.model import SramFpga
 from . import memory
 import time
 
 __all__ = []
 
-@model.Target.register(Spartan6, Spartan7, Zynq, MachXO2, Ice40SlaveSerial, Artix7, Series7SlaveSerial, Kintex7, GowinFpga)
+@model.Target.register(SramFpga)
 class FpgaVolatileConfig(model.Target, memory.Loadable):
     """
     A volatile configuration for a FPGA
     """
 
     def __init__(self, comp):
-        model.Target.__init__(self, "Volatile config for " + comp.name)
+        model.Target.__init__(self, "SRAM config of " + comp.name)
         memory.Loadable.__init__(self)
         self.component = comp
 

@@ -159,10 +159,7 @@ class Interface(base.Interface):
 
 
     def child_spawn(self, sub):
-        try:
-            return self.db.call(sub, self)
-        except NoMatch:
-            pass
+        return self.db.call(sub, self)
 
 class Slave(i2c.Slave):
     """

@@ -1,3 +1,4 @@
+from ..model import JtagSramFpga
 from ...model import PortComponent
 from ...part_id import PartId
 from ...protocol import jtag, spi, i2c
@@ -111,6 +112,9 @@ class MachXO2Config(jtag.InstructionRegistry):
     DR_UNKNOWN    = jtag.Dr(None)
     PAGE_ADDRESS  = jtag.Dr(32)
 
+    ER1           = jtag.Instruction(0x32, None)
+    ER2           = jtag.Instruction(0x38, None)
+    
     CLAMP                = jtag.Instruction(0x78, "TAP_BYPASS")
     EXTEST               = jtag.Instruction(0x15, "BOUNDARY")
     HIGHZ                = jtag.Instruction(0x18, "TAP_BYPASS")
@@ -486,7 +490,7 @@ class MachXO2Config(jtag.InstructionRegistry):
             ])
 
 @jtag.Chain.db.register(*set([PartId.from_idcode(p.idcode).drop_revision() for p in parts.PARTS]))
-class MachXO2(jtag.Tap, MachXO2Config):
+class MachXO2(jtag.Tap, MachXO2Config, JtagSramFpga):
     """JTAG-based specialization of Mach-XO2 controller
 
     In addition to non-volatile commands, this also supports loading a
@@ -494,10 +498,13 @@ class MachXO2(jtag.Tap, MachXO2Config):
     """
     irlen = 8
     max_freq = 25e6
-    
+
+    USER_IR = [0x32, 0x38]
+
     def __init__(self, port, index, idcode):
         jtag.Tap.__init__(self, port, index, idcode)
         MachXO2Config.__init__(self)
+        JtagSramFpga.__init__(self, self.name)
 
     def start(self):
         MachXO2Config.start(self)

@@ -15,7 +15,6 @@ parts = {
 
 @jtag.Chain.db.register(*[PartId.from_idcode(c).drop_revision() for c in parts.keys()])
 class Spartan7(series7.Series7, xadc.Xadc):
-    db = Db("S7 applicative firmware")
     config_memory_size = 500*1024
 
     PART_NAMES = {
@@ -55,9 +54,3 @@ class Spartan7(series7.Series7, xadc.Xadc):
     def __init__(self, port, index, idcode):
         series7.Series7.__init__(self, port, index, idcode)
         self.name = "Spartan7-" + parts[int(self.idcode.drop_revision())]
-
-    def child_spawn(self, sub):
-        try:
-            return self.db.call(sub, self)
-        except NoMatch:
-            return series7.Series7.db.call(sub, self)

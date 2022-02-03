@@ -67,10 +67,7 @@ class Interface(base.Interface):
         return IoGet(ios)
 
     def child_spawn(self, sub):
-        try:
-            return self.db.call(sub, self)
-        except NoMatch:
-            return
+        return self.db.call(sub, self)
 
 class Operation(base.Operation):
     pass

@@ -195,3 +195,34 @@ class Cpu(Component):
     def breakpoint_remove(self, breakpoint):
         raise NotImplementedError()
 
+class _sram_fpga_meta(type):
+    def __new__(cls, name, bases, attrs, **kwargs):
+        from ..db import Db
+
+        attrs["application_db"] = Db(f"{name} application")
+
+        new_class = type.__new__(cls, name, bases, attrs, **kwargs)
+        
+        return new_class
+
+class SramFpga(Component, metaclass = _sram_fpga_meta):
+    def __init__(self):
+        Component.__init__(self)
+
+    def child_spawn(self, sub):
+        return self.application_db.call(sub, self)
+        
+    def load(self, program):
+        raise NotImplementedError()
+
+    def stop(self):
+        raise NotImplementedError()
+
+    def reset(self):
+        raise NotImplementedError()
+
+class JtagSramFpga(SramFpga):
+    def __init__(self):
+        SramFpga.__init__(self)
+
+    USER_IR = []

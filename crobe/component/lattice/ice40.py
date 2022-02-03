@@ -1,4 +1,5 @@
 from ...model import PortComponent
+from ..model import SramFpga
 from ...protocol import spi
 import time
 
@@ -8,9 +9,10 @@ __all__ = ["Ice40SlaveSerial"]
 def ice40_slave_probe(target, *args):
     return Ice40SlaveSerial(target)
 
-class Ice40SlaveSerial(PortComponent):
+class Ice40SlaveSerial(PortComponent, SramFpga):
     def __init__(self, port):
         PortComponent.__init__(self, port, "Slave iCE40")
+        SramFpga.__init__(self)
 
     def start(self):
         self.port.freq_cap("iCE40", 15e6)

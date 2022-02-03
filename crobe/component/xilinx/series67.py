@@ -1,14 +1,16 @@
 from ...protocol import jtag
 import struct
 from ... import bitstring
+from ..model import JtagSramFpga
 import datetime
 
-class Series67(jtag.Tap):
+class Series67(jtag.Tap, JtagSramFpga):
     irlen = 6
     max_freq = 50e6
 
     def __init__(self, port, index, idcode):
         jtag.Tap.__init__(self, port, index, idcode)
+        JtagSramFpga.__init__(self)
         self.__can_stop = False
 
     IR_ISC_ENABLE  = 0x10
