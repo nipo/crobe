@@ -115,6 +115,7 @@ class MemAp(ap.Ap, model.Bus):
             base = base & ~0xfff
 
         if base is None and self.port.idr == 0x6ba02477:
+            self.logger.info("No base set, forcing to 0xe00ff000")
             base = 0xe00ff000
         if base is not None:
             self.base = base
