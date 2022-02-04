@@ -46,7 +46,7 @@ class SwDp(dp.Dp):
     @property
     def idr(self):
         op = self.port.cmd_read(False, self.DPIDR)
-        self.port.execute([self.port.cmd_write(False, self.ABORT, 0x1f), op])
+        self.execute([self.port.cmd_write(False, self.ABORT, 0x1f), op])
         if op.ack != swd.Ack.OK:
             raise dp.DpAccessFailure(op.ack)
         return op.data
@@ -67,9 +67,9 @@ class SwDp(dp.Dp):
         op = self.port.cmd_read(False, regno & 0x3)
         if self.version < 1:
             assert regno & ~0x3 == 0
-            self.port.execute([op])
+            self.execute([op])
         else:
-            self.port.execute([self.port.cmd_write(False, self.SELECT, regno >> 2), op])
+            self.execute([self.port.cmd_write(False, self.SELECT, regno >> 2), op])
         if op.ack != swd.Ack.OK:
             raise dp.DpAccessFailure(op.ack)
         return op.data
@@ -78,15 +78,15 @@ class SwDp(dp.Dp):
         op = self.port.cmd_write(False, regno & 0x3, data)
         if self.version < 1:
             assert regno & ~0x3 == 0
-            self.port.execute([op])
+            self.execute([op])
         else:
-            self.port.execute([self.port.cmd_write(False, self.SELECT, regno >> 2), op])
+            self.execute([self.port.cmd_write(False, self.SELECT, regno >> 2), op])
         if op.ack != swd.Ack.OK:
             raise dp.DpAccessFailure(op.ack)
 
     def abort(self, what = 0x1f):
         op = self.port.cmd_write(False, self.ABORT, what)
-        self.port.execute([self.port.cmd_run(48), op])
+        self.execute([self.port.cmd_run(48), op])
         if op.ack != swd.Ack.OK:
             raise dp.DpAccessFailure(op.ack)
 
@@ -139,7 +139,20 @@ class SwDp(dp.Dp):
                 ops.append(self.port.cmd_run(o.cycles))
                 continue
 
-            assert isinstance(o, (dp.ApWrite, dp.ApRead))
+            if isinstance(o, TargetSel):
+                if self.port.current_target == o.target:
+                    continue
+                ops.append(self.port.cmd_wakeup())
+                ops.append(self.port.cmd_write(0, self.port.TARGETSEL, o.target))
+                ops.append(self.port.cmd_read(0, self.port.IDCODE))
+                self.port.current_target = o.target
+                continue
+
+            if isinstance(o, swd.Operation):
+                ops.append(o)
+                continue
+
+            assert isinstance(o, (dp.ApWrite, dp.ApRead)), o
 
             if o.ap != select >> 24:
                 select = (select & 0xff) | (o.ap << 24)
@@ -185,3 +198,21 @@ class SwDp(dp.Dp):
             ops.append(ap_read_pending.__value_op)
 
         return ops
+
+class TargetSel:
+    def __init__(self, target):
+        self.target = target
+
+    def __str__(self):
+        return "<Target sel 0x%08x>" % self.target
+    
+@swd.Interface.multidrop_db.register(*parts)
+class MultidropSwDp(SwDp):
+    version = 2
+
+    def __init__(self, port, targetsel):
+        self.targetsel = targetsel
+        super().__init__(port)
+
+    def execute(self, operations):
+        super().execute([TargetSel(self.targetsel)] + list(operations))

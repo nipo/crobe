@@ -5,7 +5,7 @@ from ..part_id import PartId
 import time
 from enum import IntEnum
 
-__all__ = ["Interface", "Ack"]
+__all__ = ["Interface", "Ack", "BadTarget", "UnknownDp"]
 
 class Ack(IntEnum):
     OK = 1
@@ -29,6 +29,10 @@ class BadSwdio(base.ProtocolError):
 class UnknownDp(base.ProtocolError):
     def message_get(self):
         return "Unknown DP IDR: 0x%08x" % (int(self.args[0]),)
+
+class BadTarget(base.ProtocolError):
+    def message_get(self):
+        return "Target IDR 0x%08x did not respond" % (int(self.args[0]),)
 
 class Interface(base.Interface):
     """
@@ -73,14 +77,19 @@ class Interface(base.Interface):
     """
 
     db = Db("SWD DP IDCODE")
+    targetsel_db = Db("SWD Multidrop enumeration DB")
+    multidrop_db = Db("SWD Multidrop DP IDCODE")
 
     IDCODE = 0
+    TARGETSEL = 3
 
     turnaround_supported = True
 
     def __init__(self, port, name = None):
         base.Interface.__init__(self, port, (name or port.name) + "-SWD")
         self.do_cypress_acquire = False
+        self.do_multidrop_enumeration = False
+        self.current_target = None
         self.turnaround_cycles = 1
 
     def line_reset(self):
@@ -131,9 +140,52 @@ class Interface(base.Interface):
         if opt == "cypress_acquire":
             self.do_cypress_acquire = True
             return
+        if opt == "multidrop":
+            self.do_multidrop_enumeration = True
+            return
         base.Interface.option_set(self, opt)
 
+    def multidrop_enumerate(self):
+        # Limit frequency to 1M for line reset and jtag-to-swd.
+        self.freq_cap("enumeration", 1e6)
+        self.logger.debug("Multidrop enumeration")
+
+        for id, name in self.targetsel_db.registry.items():
+            self.logger.debug("Multidrop probing %s %s", name, id)
+            try:
+                self.multidrop_probe(id)
+            except BadTarget:
+                continue
+
+        self.freq_cap("enumeration", None)
+
+    def multidrop_probe(self, id):
+        self.execute([self.cmd_wakeup(), self.cmd_read(0, self.IDCODE), self.cmd_dormant_to_swd()])
+        idcode = self.target_select(id)
+
+        targetid = self.cmd_read(0, 4)
+        dlpidr = self.cmd_read(0, 4)
+        self.execute([
+            self.cmd_write(0, 2, 2),
+            targetid,
+            self.cmd_write(0, 2, 3),
+            dlpidr,
+        ])
+
+        targetid = PartId.from_idcode(targetid.data)
+        dlpidr = PartId.from_idcode(dlpidr.data)
+        
+        self.logger.info("Found multidrop TargetSel %s, IDCODE %s, DLPIDR %s, TARGETID %s",
+                         id, idcode, dlpidr, targetid)
+
+        self.child_add(self.multidrop_db.call(idcode, self, id))
+
+        self.current_target = None
+        
     def start(self):
+        if self.do_multidrop_enumeration:
+            return self.multidrop_enumerate()
+        
         # Limit frequency to 1M for line reset and jtag-to-swd.
         self.freq_cap("enumeration", 1e6)
 
@@ -238,12 +290,58 @@ class Interface(base.Interface):
         """
         return JtagToSwd()
 
+    def cmd_swd_to_dormant(self):
+        """
+        Returns a SWD-to-Dormant sequence object.
+        """
+        return SwdToDormant()
+
+    def cmd_dormant_to_swd(self):
+        """
+        Returns a Dormant-to-SWD sequence object.
+        """
+        return DormantToSwd()
+
+    def cmd_dormant_to_jtag(self):
+        """
+        Returns a Dormant-to-JTAG sequence object.
+        """
+        return DormantToJtag()
+
+    def cmd_dormant_to_jtagserial(self):
+        """
+        Returns a Dormant-to-JtagSerial sequence object.
+        """
+        return DormantToJtagSerial()
+
     def cmd_wakeup(self, cycles = 50):
         """
         Returns a wakeup object. Will cycle SWCLK with SWDIO high for
         at least 50 cycles.
         """
         return Wakeup(cycles)
+
+    def target_select(self, id):
+        """
+        Select a given multidrop target
+        """
+        if self.current_target == int(id):
+            return
+        id_get = self.cmd_read(0, self.IDCODE)
+        self.execute([self.cmd_wakeup(),
+                self.cmd_write(0, self.TARGETSEL, int(id)),
+#                self.cmd_run(10),
+                id_get,
+        ])
+
+        self.logger.debug("Ack after targetsel %s: %s", id, id_get.ack)
+        
+        if id_get.ack != Ack.OK:
+            self.current_target = None
+            raise BadTarget(id)
+
+        self.current_target = int(id)
+        return PartId.from_idcode(id_get.data)
     
 class Operation(base.Operation):
     pass
@@ -288,11 +386,54 @@ class Write(Operation):
         else:
             return "<Write DP 0x%x 0x%08x>" % (self.addr, self.data)
 
-class JtagToSwd(Operation):
+class SelectionOperation(Operation):
+    out = bitstring.BitString(0, 0)
+
+class JtagToSwd(SelectionOperation):
     def __str__(self):
         return "<JTAG to SWD>"
 
     out = bitstring.BitString(0b1110011110011110, 16)
+
+class JtagToDormant(SelectionOperation):
+    def __str__(self):
+        return "<JTAG to Dormant>"
+
+    out = bitstring.BitString(-1, 5) + bitstring.BitString(0x33bbbbba, 32)
+
+class SwdToDormant(SelectionOperation):
+    def __str__(self):
+        return "<SWD to Dormant>"
+
+    out = bitstring.BitString(-1, 50) + bitstring.BitString(0xe3bc, 16)
+
+class DormantToOther(SelectionOperation):
+    def __init__(self, activation_code):
+        self.out = bitstring.BitString(-1, 50) \
+                   + bitstring.BitString(0x19bc0ea2e3ddafe986852d956209f392, 128) \
+                   + bitstring.BitString(0, 4) \
+                   + activation_code
+
+class DormantToJtagSerial(DormantToOther):
+    def __init__(self):
+        super().__init__(bitstring.BitString(0, 12))
+
+    def __str__(self):
+        return "<Dormant to JtagSerial>"
+
+class DormantToSwd(DormantToOther):
+    def __init__(self):
+        super().__init__(bitstring.BitString(0x1a, 8))
+
+    def __str__(self):
+        return "<Dormant to Swd>"
+
+class DormantToJtag(DormantToOther):
+    def __init__(self):
+        super().__init__(bitstring.BitString(0x0a, 8))
+
+    def __str__(self):
+        return "<Dormant to Jtag>"
 
 class Wakeup(Operation):
     def __init__(self, cycles):
