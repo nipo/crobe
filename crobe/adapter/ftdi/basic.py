@@ -826,7 +826,7 @@ class SwdInterface(EngineInterface, swd.Interface):
                     if left:
                         mpsse_ops.append(mpsse.ShiftBits(0, left))
 
-            elif isinstance(op, swd.JtagToSwd):
+            elif isinstance(op, swd.SelectionOperation):
                 mpsse_ops.append(mpsse.ShiftBits8(bytes(op.out)))
 
             elif isinstance(op, base.Reset):
