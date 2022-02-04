@@ -215,4 +215,4 @@ class MultidropSwDp(SwDp):
         super().__init__(port)
 
     def execute(self, operations):
-        super().execute([TargetSel(self.targetsel)] + list(operations))
+        super().execute([TargetSel(int(self.targetsel))] + list(operations))
