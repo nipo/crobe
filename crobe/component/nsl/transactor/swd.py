@@ -87,6 +87,10 @@ class SwdTransactor(PortComponent):
                     self.__rate_dirty = False
 
                 if isinstance(op, swd.Read):
+                    cmd[cmd_size] = self.CMD_RUN | 2
+                    cmd_size += 1
+                    rsp_size += 1
+
                     addr = op.addr & 0x3
                     ap = int(bool(op.ap))
                     cmd[cmd_size] = self.CMD_READ | (ap << 5) | addr
@@ -106,6 +110,10 @@ class SwdTransactor(PortComponent):
 #                    rsp_size += 1
                     
                 elif isinstance(op, swd.Write):
+                    cmd[cmd_size] = self.CMD_RUN | 2
+                    cmd_size += 1
+                    rsp_size += 1
+
                     addr = op.addr & 0x3
                     ap = int(bool(op.ap))
 
@@ -143,10 +151,13 @@ class SwdTransactor(PortComponent):
                         cmd_size += 1
                         rsp_size += 1
 
-                elif isinstance(op, swd.JtagToSwd):
-                    cmd[cmd_size : cmd_size + 5] = [self.CMD_BITBANG | 15, 0x9e, 0xe7, 0, 0]
-                    cmd_size += 5
-                    rsp_size += 1
+                elif isinstance(op, swd.SelectionOperation):
+                    out = op.out
+                    for off in range(0, len(out), 32):
+                        l = min(len(out) - off, 32)
+                        cmd[cmd_size : cmd_size + 5] = [self.CMD_BITBANG | (l-1)] + list(bytes(out[off : off + l]))
+                        cmd_size += 5
+                        rsp_size += 1
 
                 else:
                     raise base.ProtocolError("Unknown SWD operation %s" % type(op))
