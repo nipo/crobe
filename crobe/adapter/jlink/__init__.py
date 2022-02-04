@@ -323,7 +323,7 @@ class SwdInterface(JLinkInterface, swd.Interface):
                     out_list.append(b'\x00' * c)
                     used += c
 
-                elif isinstance(op, swd.JtagToSwd):
+                elif isinstance(op, swd.SelectionOperation):
                     d = op.out.data
                     out_list.append(d)
                     oe_list.append(b'\xff' * len(d))
