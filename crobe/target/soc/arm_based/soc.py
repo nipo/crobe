@@ -10,7 +10,7 @@ from ....component.arm.jtag_dp import JtagDp
 from ....component.arm.mem_ap import MemAp
 from ... import memory
 from ....puppet import Puppet
-from ....db import Db
+from ....db import Db, NoMatch, DisabledEntry, InitializationFailure
 from ....util.info import TimedLogger
 from .puppet_code import crc32_cm0
 from tqdm import tqdm
@@ -365,7 +365,7 @@ def arm_soc_probe(dp):
     if dp.target_id:
         try:
             return SoC.db.call(dp.target_id, dp, allow_default = False)
-        except Exception:
+        except (NoMatch, InitializationFailure):
             pass
 
     rom_tables = dp.children_of_class(RomTable)

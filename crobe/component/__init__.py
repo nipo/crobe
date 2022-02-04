@@ -27,3 +27,4 @@ from . import bscan_bitbang
 from . import maxim
 from . import idt
 from . import aps
+from . import raspberrypi
