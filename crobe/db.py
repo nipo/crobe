@@ -14,6 +14,10 @@ class InitializationFailure(Exception):
     def message_get(self):
         return "Unable to initialize component"
 
+class DisabledEntry(Exception):
+    def message_get(self):
+        return "Dont initialize this"
+
 class Db(object):
     def __init__(self, db_name, eq_func = operator.eq):
         self.db_name = db_name
@@ -57,8 +61,8 @@ class Db(object):
                 exc.append(e)
             except InitializationFailure as e:
                 exc.append(e)
-            except Exception as e:
-                exc.append(e)
+#            except Exception as e:
+#                exc.append(e)
 
         if self.default is not None and allow_default:
             return self.default(*args, **kwargs)

@@ -1,6 +1,7 @@
 from .. import model
 import operator
 import functools
+from ..db import DisabledEntry
 from ..protocol import swd, jtag
 
 class Explorer(object):
@@ -42,6 +43,8 @@ class Field(model.Component):
                     try:
                         target = explorer(component)
                     except NotImplementedError:
+                        continue
+                    except DisabledEntry:
                         continue
 
                     self.child_add(target)
