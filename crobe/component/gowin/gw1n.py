@@ -33,7 +33,6 @@ class GowinFpga(jtag.Tap, JtagSramFpga):
     BOUNDARY        = jtag.Dr(None)
     ISC_DEFAULT     = jtag.Dr(1)
     ISC_PDATA       = jtag.Dr(None)
-    STATUS_REGISTER = jtag.Dr(32)
 
     BYPASS2              = jtag.Instruction(0x00, "TAP_BYPASS")
 
@@ -87,11 +86,7 @@ class GowinFpga(jtag.Tap, JtagSramFpga):
 
     def start(self):
         super().start()
-        self.logger.info("IR status: %x", self.ir_status_read())
-        self.logger.info("Status: %x", self.READ_STATUS.shift(read_tdo = True))
-
-    def sram_erase(self):
-        raise NotImplementedError()
+        self.logger.info("Status: %s", self.status_read())
 
     def flash_erase(self):
         raise NotImplementedError()
@@ -113,11 +108,10 @@ class GowinFpga(jtag.Tap, JtagSramFpga):
         self.logger.warning("Not implemented")
 
     def status_read(self):
-        c = self.READ_STATUS.cmd(0)
-        self.execute([c])
-        return self.Status(all = int(c.tdo))
+        print("Read status")
+        return self.READ_STATUS.shift(read_tdo = True)
 
-    def sram_erase(self):
+    def _sram_erase(self):
         self.logger.trace("Erasing SRAM")
         self.execute([
             self.ISC_ENABLE.cmd(),
@@ -126,9 +120,7 @@ class GowinFpga(jtag.Tap, JtagSramFpga):
             self.cmd_run(8),
             self.ISC_NOOP.cmd(),
             self.cmd_run(2),
-            ])
-        time.sleep(.01)
-        self.execute([
+            self.cmd_run(10000),
             self.ISC_SRAM_ERASE_DONE.cmd(),
             self.cmd_run(8),
             self.ISC_NOOP.cmd(),
@@ -139,6 +131,14 @@ class GowinFpga(jtag.Tap, JtagSramFpga):
             self.cmd_run(8),
             self.cmd_run(8),
             ])
+
+    def sram_erase(self):
+        for retry in range(3):
+            self._sram_erase()
+            st = self.status_read()
+            if not st.Done:
+                break
+        assert not st.Done, st
 
     def sram_configure(self, program_data):
         self.logger.trace("Loading %d bytes to SRAM", len(program_data))
@@ -159,7 +159,7 @@ class GowinFpga(jtag.Tap, JtagSramFpga):
         
 @jtag.Chain.db.register(*set([PartId(8, 0x0d, p) for (p,n) in parts.items() if n.startswith("GW1")]))
 class Gw1n(GowinFpga):
-    max_freq = 10e6
+    max_freq = 25e6
 
     class Status(bitfield.Bitfield):
         all          = bitfield.Field(0, 32)
@@ -171,6 +171,7 @@ class Gw1n(GowinFpga):
         Done         = bitfield.BooleanField(13)
         Security     = bitfield.BooleanField(14)
         Ready        = bitfield.BooleanField(15)
+    STATUS_REGISTER = jtag.Dr(32, type = Status)
 
     def flash_erase(self):
         raise NotImplementedError()
@@ -190,6 +191,7 @@ class Gw2a(GowinFpga):
         Security     = bitfield.BooleanField(14)
         Encrypted    = bitfield.BooleanField(15)
         KeyOk        = bitfield.BooleanField(16)
+    STATUS_REGISTER = jtag.Dr(32, type = Status)
 
     def flash_erase(self):
         self.logger.trace("Erasing flash")
