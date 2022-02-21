@@ -1,7 +1,7 @@
 import math
 
 class _Field(object):
-    def __init__(self, lsb, width):
+    def __init__(self, lsb, width, doc = None):
         if lsb < 0:
             raise ValueError("LSB cannot be negative")
 
@@ -10,7 +10,12 @@ class _Field(object):
         self.width_mask = (1 << width) - 1
         self.slice = slice(self.lsb, self.lsb + self.width)
         self.value_mask_out = ~(self.width_mask << self.lsb)
+        self.doc = doc
 
+    @property
+    def msb(self):
+        return self.lsb + self.width - 1
+        
     def extract(self, value):
         return (value >> self.lsb) & self.width_mask
 
@@ -33,13 +38,14 @@ class _Field(object):
         register[self.slice] = v
 
     def docstring(self):
-        return f"""
+        addend = f"""
 {self.__class__.__name__} in bit range [{self.lsb+self.width-1}:{self.lsb}] ({self.width} bits)
 """
+        return (self.doc or "") + addend
 
 class Field(_Field):
-    def __init__(self, lsb, width, offset = 0, signed = False):
-        super().__init__(lsb, width)
+    def __init__(self, lsb, width, offset = 0, signed = False, doc = None):
+        super().__init__(lsb, width, doc = doc)
         self.offset = offset
         self.signed = signed
 
@@ -60,8 +66,8 @@ class Field(_Field):
 Integer value""" + (f" with offset of {self.offset}" if self.offset else "")
         
 class Log2Field(Field):
-    def __init__(self, lsb, width, offset = 0, log_offset = 0):
-        super().__init__(lsb, width, offset = offset)
+    def __init__(self, lsb, width, offset = 0, log_offset = 0, doc = None):
+        super().__init__(lsb, width, offset = offset, doc = doc)
         self.log_offset = log_offset
 
     def represent(self, value):
@@ -78,8 +84,8 @@ field = log2(value - {self.offset}) - {self.log_offset}
 """
 
 class EnumField(Field):
-    def __init__(self, lsb, width, enum_class):
-        super().__init__(lsb, width)
+    def __init__(self, lsb, width, enum_class, doc = None):
+        super().__init__(lsb, width, doc = doc)
         self.enum_class = enum_class
 
     def parse(self, value):
@@ -104,8 +110,8 @@ class EnumField(Field):
         """
 
 class MappingField(Field):
-    def __init__(self, lsb, width, mapping):
-        super().__init__(lsb, width)
+    def __init__(self, lsb, width, mapping, doc = None):
+        super().__init__(lsb, width, doc = doc)
         if isinstance(mapping, dict):
             self.raw2display = {i: v for (i, v) in mapping.items()}
         else:
@@ -124,8 +130,8 @@ Mapping value:
 """ + "\n".join([f"- {k}: {v}" for (k, v) in sorted(self.raw2display.items())])
 
 class BooleanField(Field):
-    def __init__(self, bit, *, inverted = False):
-        super().__init__(bit, 1)
+    def __init__(self, bit, *, inverted = False, doc = None):
+        super().__init__(bit, 1, doc = doc)
         self.inverted = bool(inverted)
 
     def parse(self, value):
@@ -139,8 +145,8 @@ class BooleanField(Field):
 Boolean field""" + (", inverted" if self.inverted else "")
 
 class BinaryField(MappingField):
-    def __init__(self, bit, when0, when1):
-        super().__init__(bit, 1, {0: when0, 1: when1})
+    def __init__(self, bit, when0, when1, doc = None):
+        super().__init__(bit, 1, {0: when0, 1: when1}, doc = doc)
 
 class GrayField(Field):
     def parse(self, value):
@@ -175,19 +181,22 @@ class _register_meta(type):
                 fields[item_name] = item
             else:
                 new_attrs[item_name] = item
-                
+
         lsb = min((field.lsb for field in fields.values()), default = 0)
-        msbp1 = max((field.lsb+field.width for field in fields.values()), default = 0)
-        width = msbp1 - lsb
-        
-        if "all" not in fields:
-            fields["all"] = Field(lsb, width)
+        msb = max((field.msb for field in fields.values()), default = 0)
+
+        if "all" in fields:
+            lsb = min(fields["all"].lsb, lsb)
+            msb = max(fields["all"].msb, msb)
+
+        width = msb - lsb + 1
+        fields["all"] = Field(lsb, width, doc = "Automatic field that covers the whole bitfield")
         
         new_attrs["_lsb"] = lsb
         new_attrs["_width"] = width
         new_attrs["_fields"] = fields
         new_attrs["__slots__"] = list(fields.keys()) + ["__value"]
-        new_attrs["__doc__"] = f"""
+        new_attrs["__doc__"] = (attrs.get("__doc__", "") or "") + f"""
 {width}-bit bitfield with {len(fields)} fields.
 """
             
@@ -221,16 +230,47 @@ class Bitfield(object, metaclass = _register_meta):
         return self.__value
 
     def dump_pretty(self, printer):
-        all_width = self._fields["all"].width
-        nibble_count = (all_width + 3) // 4
+        widest = max([v.width for (n, v) in self._fields.items() if n != "all"], default = 1)
+        msb = max([1] + [v.msb+1 for v in self._fields.values()])
+        nibble_count = (msb + 3) // 4
+        val_nibble_count = (widest + 3) // 4
+        val_fmt = "%%0%dx" % val_nibble_count
 
-        for name, f in sorted(self._fields.items(), key = lambda x: (x[1].lsb, -x[1].width)):
-            pad_post = " " * (f.lsb // 4)
-            pad_in = f.lsb % 4
-            hex_aligned_mask = ("%%0%dx" % ((pad_in + f.width + 3) // 4)) % ((((1 << f.width) - 1)) << pad_in)
-            pad_pre = " " * (nibble_count - len(pad_post) - len(hex_aligned_mask))
-            val = ("%% %dx" % ((all_width + 3) // 4)) % (self[f.slice])
-            printer("  % -20s %s%s%s %s %s" % (name, pad_pre, hex_aligned_mask, pad_post, val, f.get_from(self)))
+        def sorter_key(kv):
+            k, v = kv
+            return k != "all", v.lsb, -v.width
+
+        printer(self.__class__.__name__)
+        printer(self.__doc__)
+
+        for name, f in sorted(self._fields.items(), key = sorter_key):
+            aligned_post_nibbles = f.lsb // 4
+            aligned_pre_nibbles = nibble_count - (f.msb + 4) // 4
+            aligned_nibbles = nibble_count - aligned_pre_nibbles - aligned_post_nibbles
+
+            aligned_pad_post = " " * (aligned_post_nibbles)
+            aligned_pad_pre = " " * (aligned_pre_nibbles)
+
+            aligned_fmt = "%%0%dx" % (aligned_nibbles)
+            aligned_val = aligned_fmt % (self[f.slice] << (f.lsb % 4))
+            aligned_mask = aligned_fmt % (((1 << f.width) - 1) << (f.lsb % 4))
+            val = val_fmt % self[f.slice]
+
+            if name == "all":
+                printer("                               %s %s" % (aligned_mask, aligned_val))
+                continue
+            
+            if f.doc:
+                printer("                               %s %s %s %s" % (
+                    " " * nibble_count,
+                    " " * nibble_count,
+                    " " * val_nibble_count,
+                    f.doc))
+            printer(" [%2d:%2d]  % -20s %s%s%s %s%s%s %s %s" % (
+                f.msb, f.lsb, name,
+                aligned_pad_pre, aligned_mask, aligned_pad_post,
+                aligned_pad_pre, aligned_val, aligned_pad_post,
+                val, f.get_from(self)))
 
     def __str__(self):
         values = {
