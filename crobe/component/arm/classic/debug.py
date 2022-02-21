@@ -417,7 +417,7 @@ class IceScan(Op):
 
         ret = []
         cmd = tap.INTEST_ICE.cmd(
-            dr = self.__Ice(write = self.wdata is not None,
+            tdi = self.__Ice(write = self.wdata is not None,
                             addr = self.addr,
                             data = self.wdata or 0),
             read_tdo = False,
@@ -425,7 +425,7 @@ class IceScan(Op):
         ret.append(cmd)
         if self.wdata is None:
             cmd = tap.INTEST_ICE.cmd(
-                dr = self.__Ice(write = False,
+                tdi = self.__Ice(write = False,
                              addr = self.addr,
                              data = 0),
                 read_tdo = True,
@@ -461,7 +461,7 @@ class DebugScan(Op):
 
         ret = []
         cmd = tap.INTEST_DEBUG.cmd(
-            dr = self.__Debug(data = self.wdata or 0,
+            tdi = self.__Debug(data = self.wdata or 0,
                               wptandbkpt = self.wptandbkpt,
                               sysspeed = self.sysspeed,
                               instr = swib_u32(self.instr),
@@ -502,12 +502,12 @@ class Cp15Scan(Op):
                           write = self.wdata is not None,
         )
         
-        ret = [tap.INTEST_CP15.cmd(dr = reg)]
+        ret = [tap.INTEST_CP15.cmd(tdi = reg)]
         ret.append(tap.cmd_run(1))
 
         if self.wdata is None:
             ret += [
-                tap.INTEST_CP15.cmd(dr = self.__Cp15()),
+                tap.INTEST_CP15.cmd(tdi = self.__Cp15()),
                 tap.cmd_run(1),
             ]
             ret[-2].postprocess = self.tdo_handle

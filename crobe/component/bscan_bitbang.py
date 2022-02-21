@@ -136,7 +136,7 @@ class TapBitbang(bitbang.Interface):
                 raise base.ProtocolError("Unknown Bitbang operation %s" % type(op))
 
             cmds.append(self.port.cmd_dr_shift(ir = self.controller.ir_extest,
-                                               dr = self.boundary_control,
+                                               tdi = self.boundary_control,
                                                read_tdo = read,
                                                return_type = BitString))
 

@@ -19,12 +19,12 @@ class JtagDp(dp.Dp):
 
     @property
     def idcode(self):
-        return PartId.from_idcode(self.port.IDCODE.shift(0))
+        return PartId.from_idcode(self.port.IDCODE.shift(0, read_tdo = True))
 
     @property
     def idr(self):
         cmd = self.port.DPACC.cmd(self.__pack(self.DPIDR))
-        rsp = self.port.DPACC.cmd(self.__pack(self.SELECT, 0))
+        rsp = self.port.DPACC.cmd(self.__pack(self.SELECT, 0), read_tdo = True)
 
         self.port.execute([cmd, rsp])
 
@@ -56,10 +56,11 @@ class JtagDp(dp.Dp):
     def banked_reg_read(self, regno):
         sel = self.port.DPACC.cmd(self.__pack(self.SELECT, regno >> 2))
         cmd = self.port.DPACC.cmd(self.__pack(regno))
-        rsp = self.port.DPACC.cmd(self.__pack(self.SELECT, 0))
+        rsp = self.port.DPACC.cmd(self.__pack(self.SELECT, 0), read_tdo = True)
 
         if self.version < 1:
-            assert regno & ~0x3 == 0
+            if regno & ~0x3:
+                raise ValueError(f"Bad register no {regno}")
             self.port.execute([cmd, rsp])
         else:
             self.port.execute([sel, cmd, rsp])
@@ -74,7 +75,7 @@ class JtagDp(dp.Dp):
     def banked_reg_write(self, regno, data):
         sel = self.port.DPACC.cmd(self.__pack(self.SELECT, regno >> 2))
         cmd = self.port.DPACC.cmd(self.__pack(regno, data))
-        rsp = self.port.DPACC.cmd(self.__pack(self.SELECT, 0))
+        rsp = self.port.DPACC.cmd(self.__pack(self.SELECT, 0), read_tdo = True)
 
         if self.version < 1:
             assert regno & ~0x3 == 0
@@ -151,7 +152,7 @@ class JtagDp(dp.Dp):
 
             if select_dirty:
                 if ap_read_pending:
-                    ap_read_pending.__value_op = self.port.DPACC.cmd(self.__pack(self.RDBUFF))
+                    ap_read_pending.__value_op = self.port.DPACC.cmd(self.__pack(self.RDBUFF), read_tdo = True)
                     ops.append(ap_read_pending.__value_op)
                     ap_read_pending = None
 
@@ -160,11 +161,11 @@ class JtagDp(dp.Dp):
 
             if ap_read_pending:
                 if isinstance(o, dp.ApRead):
-                    ap_read_pending.__value_op = self.port.APACC.cmd(self.__pack(o.addr >> 2))
+                    ap_read_pending.__value_op = self.port.APACC.cmd(self.__pack(o.addr >> 2), read_tdo = True)
                     ops.append(ap_read_pending.__value_op)
                     ap_read_pending = o
                 else:
-                    ap_read_pending.__value_op = self.port.DPACC.cmd(self.__pack(self.RDBUFF))
+                    ap_read_pending.__value_op = self.port.DPACC.cmd(self.__pack(self.RDBUFF), read_tdo = True)
                     ops.append(ap_read_pending.__value_op)
                     ap_read_pending = None
                     ops.append(self.port.APACC.cmd(self.__pack(o.addr >> 2, o.data)))
@@ -179,7 +180,7 @@ class JtagDp(dp.Dp):
 
         if ap_read_pending:
             self.port.DPACC.cmd(self.__pack(self.RDBUFF))
-            ap_read_pending.__value_op = self.port.DPACC.cmd(self.__pack(self.CTRLSTAT))
+            ap_read_pending.__value_op = self.port.DPACC.cmd(self.__pack(self.CTRLSTAT), read_tdo = True)
             ops.append(ap_read_pending.__value_op)
         else:
             ops.append(self.port.DPACC.cmd(self.__pack(self.CTRLSTAT)))

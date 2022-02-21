@@ -726,8 +726,8 @@ class MachXO2Serial(PortComponent, MachXO2Config):
 #        self.BYPASS.shift()
         time.sleep(cycles / 1e5)
 
-    def cmd_dr_shift(self, ir, dr, length = None, read_tdo = True, read_ir = False, return_type = None):
-        return jtag.TapDrShift(ir, dr, length, read_tdo, read_ir, return_type)
+    def cmd_dr_shift(self, ir, tdi, length = None, read_tdo = True, read_ir = False, return_type = None):
+        return jtag.TapDrShift(ir, tdi, length, read_tdo, read_ir, return_type)
 
     def cmd_run(self, cycles):
         return jtag.TapRun(cycles)

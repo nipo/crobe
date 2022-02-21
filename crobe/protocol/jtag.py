@@ -1,6 +1,6 @@
 from . import base
 from ..model import PortComponent
-from ..bitstring import BitString
+from ..bitstring import BitString, BitStringBase
 from ..db import Db, NoMatch
 from ..util import pretty
 from ..part_id import PartId
@@ -71,28 +71,19 @@ class Interface(base.Interface):
     STATE_PAUSE = "PAUSE"
 
     def __init__(self, port, name = None):
-        base.Interface.__init__(self, port, (name or port.name) + "-ATE")
-        self.use_icepick = False
-        self.tap7_tap1_switch = False
-        self.child_add(Chain(self))
+        base.Interface.__init__(self, port, name or "ATE")
 
     def start(self):
-        self.logger.trace("starting")
         super().start()
+        if not self.children:
+            self.child_summon("chain")
+
+    def child_spawn(self, sub):
+        if sub in ["chain", "0"]:
+            return Chain(self)
         
     def _execute(self, operation_list):
         raise NotImplementedError()
-
-    def option_set(self, opt):
-        if opt == "icepick":
-            self.use_icepick = True
-            self.tap7_tap1_switch = True
-            return
-        if opt == "tap7":
-            self.tap7_tap1_switch = True
-            return
-
-        base.Interface.option_set(self, opt)
     
     def cmd_shift(self, tdi, read_tdo = True):
         return Shift(tdi, read_tdo)
@@ -132,12 +123,52 @@ class Interface(base.Interface):
 
     def run(self, count):
         self.execute([self.cmd_run(count)])
+        
+    def tap7_control(self, *cps_list):
+        with self.freq_capped("cjtag", 1e5):
+            def drscan(x):
+                if x:
+                    return [CaptureDr(), Shift(BitString(-1, x))]
+                else:
+                    return [CaptureDr()]
+            reset = [Run(1)]
+
+            ops = reset
+            for cps in list(cps_list):
+                self.logger.debug("Adding TAP7 init %s", cps)
+                for cp in cps:
+                    ops += drscan(cp)
+            ops += [Run(1)]
+            self.execute(ops)
+
+    def cmd_tap7_stmc(self, b, x, y):
+        return (0, (b << 2) | (x << 1) | y)
+
+    def cmd_tap7_stc1(self, c, b, v):
+        return (1, (c << 4) | (b << 1) | v)
+
+    def cmd_tap7_stc2(self, c, b, v):
+        return (2, (c << 4) | (b << 2) | v)
+
+    def cmd_tap7_stfmt(self, n):
+        return (3, n)
+
+    def cmd_tap7_mss(self, m):
+        return (4, m)
+
+    def cmd_tap7_cce(self, m):
+        return (7, m)
+
+    def cmd_tap7_scnb(self, y):
+        return (8, y)
+
+    def cmd_tap7_ccl_lock(self):
+        return (0, 0, 1)
 
     def shift_discover(self, max_length = 512, shift_back = False, shift_in = None):
-        self.freq_cap("shift_discover", 1e6)
-        try:
+        with self.freq_capped("shift_discover", 1e6):
             marker = 0xc05a5a03
-            tdo = self.shift(BitString(marker, max_length + 36))
+            tdo = self.shift(BitString(marker, 32) + BitString(0, max_length + 4))
             tdo = tdo[:max_length+32]
 
             if not int(tdo):
@@ -164,8 +195,10 @@ class Interface(base.Interface):
             self.run(1)
 
             return register
-        finally:
-            self.freq_cap("shift_discover", None)
+        
+class Operation(object):
+    def __init__(self):
+        pass
 
     def freq_test(self, fmin, fmax, fstep, ir):
         test = FreqTest(self, fmin, fmax, fstep, ir)
@@ -299,43 +332,44 @@ class Chain(PortComponent):
     """
     JTAG Chain abstraction, handles discovery of the chain and instanciation of TAPs.
 
-    This can handle SWD to JTAG switching or ICEPick initialization.
+    This can handle SWD to JTAG switching or TAP.7 initialization.
     """
 
     """
     TAP Registry, by IDCode.
     """
     db = Db("TAP IDCODE")
-
+    
     def __init__(self, port):
         PortComponent.__init__(self, port, "JTAG Chain")
-        self.name = self.port.port.name + "-Chain"
+        self.name = "Chain"
         self.default_dr_override = []
         self.tap = {}
+        self.total_irlen = 0
+        self.total_drlen = 0
         
     def start(self):
-        self.logger.trace("starting")
         PortComponent.start(self)
 
         import time
 
-        self.port.freq_cap("enumeration", 1e6)
-        
-        self.reset()
+        with self.port.freq_capped("enumeration", 1e6):
 
-        if self.port.tap7_tap1_switch:
-            self.tap7_tap1_en()
-        if self.port.use_icepick:
-            self.icepick_enable()
-        else:
+            self.reset()
+
+            # Do this first, it will issue TLRs
             self.swd_to_jtag()
-            self.port.tap_reset()
+
+            # This is ignored by SWJ-DPs
+            self.port.tap7_control(
+                self.port.cmd_tap7_ccl_lock(),
+                self.port.cmd_tap7_stc2(0, 2, 1),
+                self.port.cmd_tap7_stmc(0, 0, 1),
+            )
+
+            # Last IR is still IDCODE, so blind discovery should
+            # happen nornally even for iCEPicks
             self.discover()
-
-        self.port.freq_cap("enumeration", None)
-
-    def child_add(self, child):
-        PortComponent.child_add(self, child)
 
     def children_changed(self):
         self.port.freq_cap_min(self.children)
@@ -360,36 +394,14 @@ class Chain(PortComponent):
         self.execute(cmds)
 
     def swd_to_jtag(self):
-        cmds = [
+        self.execute([
             self.port.cmd_tap_reset(50),
             self.port.cmd_swd_to_jtag(),
             self.port.cmd_tap_reset(50),
             self.port.cmd_run(50),
-            ]
-        self.execute(cmds)
+            ])
 
-    def tap7_cmd(self, lengths_array):
-        self.port.freq_cap("tap7", 1e5)
-        time.sleep(.001)
-        ops = [CaptureIr(), Shift(BitString(-1, 6)), Run(1), CaptureDr()]
-        for lengths in [(0, 0, 1)] + lengths_array:
-            for l in lengths:
-                ops += [Shift(BitString(0, l)), Run(1), CaptureDr()]
-        ops += [CaptureIr(), Shift(BitString(-1, 16)), Run(1)]
-        self.port.execute(ops)
-        self.port.freq_cap("tap7", None)
-
-    def tap7_tap1_en(self):
-        self.tap7_cmd([(2, 9)])
-        
-    def icepick_enable(self):
-        self.port.freq_cap("icepick", 1e5)
-        time.sleep(.001)
-        self.port.execute([Run(5), CaptureIr(), Shift(BitString(0x4, 6)), Run(3)])
-        self.port.freq_cap("icepick", None)
-        self.discover([PartId(0, 0x17, 0x1ce)])
-            
-    def discover(self, forced_idcodes = None):
+    def discover(self):
         """
         This does a blind discovery of the JTAG Chain.  This can
         reliably identify IDCodes of devices that reply their IDCodes
@@ -403,7 +415,6 @@ class Chain(PortComponent):
         """
         # Get device ID codes
         self.port.execute([
-#            self.port.cmd_tap_reset(50),
             self.port.cmd_run(50),
             self.port.cmd_capture_dr(),
             ])
@@ -430,23 +441,16 @@ class Chain(PortComponent):
         for left, right, idcode in self.default_dr_override:
             reset_dr = reset_dr[:left] + BitString(idcode, 32) + reset_dr[right:]
 
-        if forced_idcodes is not None:
-            if len(forced_idcodes) != device_count:
-                raise ValueError("Bad forced IDCODE length: %d, expected %d"
-                                 % (len(forced_idcodes), device_count))
-
-            id_codes = list(forced_idcodes)
-        else:
-            # Get device ID codes
-            id_codes = []
-            point = 0
-            for i in range(device_count):
-                if reset_dr[point]:
-                    id_codes.append(PartId.from_idcode(int(reset_dr[point : point + 32])))
-                    point += 32
-                else:
-                    id_codes.append(None)
-                    point += 1
+        # Get device ID codes
+        id_codes = []
+        point = 0
+        for i in range(device_count):
+            if reset_dr[point]:
+                id_codes.append(PartId.from_idcode(int(reset_dr[point : point + 32])))
+                point += 32
+            else:
+                id_codes.append(None)
+                point += 1
 
         self.logger.note("IDCodes: %s", id_codes)
 
@@ -471,55 +475,46 @@ class Chain(PortComponent):
                                            [(b-a) for a, b in zip(cutoffs, cutoffs[1:])],
                                            device_count)
 
-        if len(ir_length_possibilities) > 1:
-            self.logger.info("Filtering too many possibities %s with known IDCODEs", ir_length_possibilities)
-
-            # Done
-            for i, idcode in enumerate(id_codes):
-                if not idcode:
-                    continue
-
-                irlen = self.irlen_for(idcode)
-
-                if not irlen:
-                    continue
-
-                ir_length_possibilities = list(filter(lambda x:x[i] == irlen,
-                                                 ir_length_possibilities))
+        
+        self.logger.trace("Found %d devices with IDs %s", len(id_codes), id_codes)
+        ir_len_filter = [(self.irlen_for(idcode) if idcode is not None else None) for idcode in id_codes]
+        self.logger.debug("Known lengths: %s", ir_len_filter)
+        ir_length_possibilities = [x
+                                   for x in ir_length_possibilities
+                                   if all((f is None or f == l) for f, l in zip(ir_len_filter, x))]
             
-        self.logger.info("Found %d devices with IDs %s", len(id_codes), id_codes)
-        self.logger.info("IR length possibilities %s", ir_length_possibilities)
+        self.logger.debug("IR length possibilities %s", ir_length_possibilities)
 
         if len(ir_length_possibilities) != 1:
             self.logger.error("Ambiguous IR lengths")
             raise ValueError("Bad IR length possibilities", ir_length_possibilities)
 
-        self.idcodes = id_codes
-        self.ir_lengths = ir_length_possibilities[0]
+        idcodes = [(self.tap.get(index, None) or idcode) for (index, idcode) in enumerate(id_codes)]
+        ir_lengths = ir_length_possibilities[0]
 
-        for c in self.children[:]:
+        self.taps_set(zip(id_codes, ir_lengths))
+
+    def taps_set(self, id_len):
+        for c in self.children:
             self.child_remove(c)
-        
-        for index, idcode in enumerate(id_codes):
-            try:
-                key = self.tap[index]
-            except KeyError:
-                key = idcode
-            tap = Chain.db.call(key, self, index, key)
-            self.child_add(tap)
-            
-        self.logger.info("Discovered chain:")
-        for i, tap in enumerate(self.children):
-            self.logger.info("- %s", tap)
 
-    def irlen_for(self, idcode):
+        self.total_irlen = 0
+        self.total_drlen = 0
+
+        for idcode, irlen in id_len:
+            self.tap_insert(idcode, irlen, self.total_irlen, self.total_drlen)
+
+        self.dump()
+
+    @classmethod
+    def irlen_for(cls, idcode):
         try:
-            matches = Chain.db.get(idcode)
+            matches = cls.db.get(idcode)
         except NoMatch:
-            return 0
+            return None
 
         if not matches:
-            return 0
+            return None
 
         possibilities = set()
         for m in matches:
@@ -527,7 +522,7 @@ class Chain(PortComponent):
                 possibilities.add(m.irlen)
 
         if len(possibilities) != 1:
-            return 0
+            return None
 
         return possibilities.pop()
 
@@ -547,43 +542,90 @@ class Chain(PortComponent):
 
         super().option_set(opt)
     
-    def idcode_at(self, index):
-        return self.idcodes[index]
-
-    def ir_pre_post(self, index):
-        return sum(self.ir_lengths[:index]), self.ir_lengths[index], sum(self.ir_lengths[index+1:])
-
-    def dr_pre_post(self, index):
-        return index, len(self.ir_lengths) - index - 1
-
     def execute(self, ops):
         self.port.execute(ops)
 
-    def insert(self, index, idcode, irlen = None):
-        if isinstance(idcode, int):
-            idcode = PartId.from_idcode(idcode)
+    def splice(self, ir_pre, irlen, drlen):
+        self.logger.trace("Splicing chain at irpre=%d, irlen%+d, drlen%+d",
+                          ir_pre, irlen, drlen)
+        for t in self.children:
+            if t.ir_pre < ir_pre:
+                t.position_set(t.ir_pre, t.dr_pre,
+                               t.ir_post + irlen, t.dr_post + drlen)
+            else:
+                t.position_set(t.ir_pre + irlen, t.dr_pre + drlen,
+                               t.ir_post, t.dr_post)
+
+        self.total_irlen += irlen
+        self.total_drlen += drlen
+
+        for tap in self.children:
+            if self.total_irlen != tap.ir_pre + tap.irlen + tap.ir_post:
+                self.logger.critical("Bad chain integrity: %s does not match total IRLEN %d", tap, self.total_irlen)
+            if self.total_drlen != tap.dr_pre + 1 + tap.dr_post:
+                self.logger.critical("Bad chain integrity: %s does not match total DRLEN %d", tap, self.total_drlen)
+
+    def tap_add(self, idcode, irlen, ir_pre, dr_pre):
+        self.logger.trace("Adding TAP idcode %s at IR+%d DR+%d, irlen=%s. Current ir=%d, dr=%d",
+                          idcode, ir_pre, dr_pre, irlen,
+                          self.total_irlen, self.total_drlen)
+
+        tap = self.db.call(idcode, self, None, idcode)
+        if isinstance(tap, Tap):
+            if tap.irlen is None:
+                tap.irlen = irlen
+            taps = [tap]
+        elif isinstance(tap, list):
+            taps = tap
+            assert all(isinstance(tap, Tap) for tap in taps)
+        else:
+            raise ValueError(tap)
+
+        if any(tap.irlen != irlen for tap in taps):
+            raise ValueError(f"Not all returned TAPs for {idcode} have expected irlen")
+
+        for tap in taps:
+            self.child_add(tap)
+            tap.position_set(ir_pre, dr_pre)
+
+        return taps
+
+    def tap_insert(self, idcode, irlen, ir_pre, dr_pre):
+        self.logger.debug("Inserting TAP idcode %s at IR+%d DR+%d, irlen=%s. Current ir=%d, dr=%d",
+                          idcode, ir_pre, dr_pre, irlen,
+                          self.total_irlen, self.total_drlen)
 
         if irlen is None:
             irlen = self.irlen_for(idcode)
+        self.splice(ir_pre, irlen, 1)
+        return self.tap_add(idcode, irlen, ir_pre, dr_pre)
 
-        for c in self.children[index:]:
-            c.index += 1
+    def dump(self, header = "Current chain"):
+        self.logger.info("%s:", header)
+        for i, tap in enumerate(self.children):
+            self.logger.info("- %s", tap)
+    
+    def dr_total_len_get(self, irs, max_length = 512):
+        ir = BitString()
+        for l, v in zip(self.ir_lengths, irs):
+            ir += BitString(v, l)
+        dr_shift = Shift(BitString(1, max_length), read_tdo = True)
+        self.port.execute([
+            Run(1),
+            CaptureIr(), Shift(ir),
+            CaptureDr(), dr_shift,
+            CaptureIr(), Shift(BitString(-1, sum(self.ir_lengths))),
+            Run(1),
+        ])
+        total_len = int(math.log(int(dr_shift.tdo), 2))
+        return total_len
 
-        self.idcodes.insert(index, idcode)
-        self.ir_lengths.insert(index, irlen)
-
-        tap = Chain.db.call(idcode, self, index)
-        self.logger.info("Inserting %s at index %d in chain, irlen=%d", idcode, index, irlen)
-
-        self.children.insert(index, tap)
-
-        self.logger.info("New chain:")
-        for t in self.children:
-            self.logger.info("- %s", t)
-
-        #tap.start()
-
-
+    def taps_at(self, ir_offset):
+        return [
+            tap
+            for tap in self.children
+            if tap.ir_pre <= ir_offset < (tap.ir_pre + tap.irlen)
+        ]
         
 class Dr:
     def __init__(self, length = None, type = None):
@@ -615,10 +657,10 @@ class Instruction:
         return TapInstruction(tap, name, self.ir, dr)
 
 class InstructionRegistry:
-    DEVICE_ID = Dr(32)
-    TAP_BYPASS = Dr(1)
+    DEVICE_ID = Dr(32, PartId.from_idcode)
+    BYPASS_REG = Dr(1)
 
-    BYPASS = Instruction(-1, "TAP_BYPASS")
+    BYPASS = Instruction(-1, "BYPASS_REG")
     
     def __init__(self):
         import inspect
@@ -632,7 +674,12 @@ class InstructionRegistry:
             obj = inspect.getattr_static(self, name)
             if isinstance(obj, Instruction):
                 setattr(self, name, obj._spawn(name, self))
-        
+
+    def instructions(self):
+        for k, v in self.__dict__.items():
+            if isinstance(v, TapInstruction):
+                yield v
+                
 class TapDr:
     def __init__(self, tap, name, length = None, type = int):
         """
@@ -653,34 +700,46 @@ class TapInstruction:
         self.ir = ir
         self.dr = dr
 
-    def cmd(self, dr = None, read_tdo = True, read_ir = False, return_type = None):
-        if self.dr is None:
-            dr = None
-            read_tdo = False
-        else:
-            if return_type is None:
-                return_type = self.dr.type
-            if self.dr.type is not None \
-               and isinstance(dr, self.dr.type) \
-               and self.dr.length is not None:
-                dr = int(dr)
+    def cmd(self, tdi = None, read_tdo = None, read_ir = False, return_type = None):
+        if return_type is None and self.dr:
+            return_type = self.dr.type
 
-            if isinstance(dr, BitString) and self.dr.length is not None:
-                if len(dr) != self.dr.length:
-                    raise ValueError("Bad DR length", len(dr))
-        return self.tap.cmd_dr_shift(self.ir, dr, None if dr is None else self.dr.length,
+        if tdi is None:
+            if read_tdo is not None:
+                tdi = 0
+                if not self.dr or self.dr.length is None:
+                    raise ValueError(f"Unknown TDO length for read-only shift")
+            else:
+                read_tdo = False
+        else:
+            read_tdo = bool(read_tdo)
+            if self.dr and self.dr.length is not None:
+                if isinstance(tdi, BitStringBase):
+                    if len(tdi) != self.dr.length:
+                        raise ValueError(f"Bad TDI length: {len(tdi)}, expected {self.dr.length}")
+                else:
+                    tdi = int(tdi)
+
+        if tdi is None and not read_tdo:
+            length = None
+        elif self.dr and self.dr.length:
+            length = self.dr.length
+        elif isinstance(tdi, BitStringBase):
+            length = len(tdi)
+        else:
+            raise ValueError("Cannot determine shift length")
+                    
+        return self.tap.cmd_dr_shift(self.ir,
+                                     tdi = tdi,
+                                     length = length,
                                      read_tdo = read_tdo,
                                      read_ir = read_ir,
                                      return_type = return_type)
 
-    def shift(self, dr = None, read_tdo = True, read_ir = False, return_type = None):
-        op = self.cmd(dr,
-                      read_tdo = read_tdo,
-                      read_ir = read_ir,
-                      return_type = return_type)
+    def shift(self, *args, **kwargs):
+        op = self.cmd(*args, **kwargs)
         self.tap.execute([op])
-        if read_tdo or dr is not None or read_ir:
-            return op.tdo
+        return op.tdo
 
 @Chain.db.register_default
 class Tap(PortComponent, InstructionRegistry):
@@ -703,8 +762,9 @@ class Tap(PortComponent, InstructionRegistry):
     """
 
     """
-    Expected IR length of TAP. Can be used by Chain code when
+    IR length of TAP. Can be used by Chain code when
     discovering chain in order to disambiguify discovered chain.
+    If not set, will be filled by chain enumeration.
     """
     irlen = None
 
@@ -720,62 +780,69 @@ class Tap(PortComponent, InstructionRegistry):
             self.idcode = idcode
         else:
             self.idcode = None
+        self.ir_pre = 0
+        self.ir_post = 0
+        self.dr_pre = 0
+        self.dr_post = 0
 
         if name is None:
             if isinstance(self.idcode, (PartId, int)):
-                name = "TAP#%d[0x%08x]" % (index, int(idcode))
+                name = "TAP[0x%08x]" % (int(idcode),)
             else:
-                name = "TAP#%d[None]" % (index,)
+                name = "TAP[None]"
         PortComponent.__init__(self, port, name)
         InstructionRegistry.__init__(self)
 
-        self.index = index
-        if self.irlen:
-            _, irlen, _ = self.ir_pre_post()
-            assert irlen == self.irlen
-        else:
-            _, irlen, _ = self.ir_pre_post()
-            self.irlen = irlen
-        self.ir = None
-
     def __str__(self):
-        _, irlen, _ = self.ir_pre_post()
-        return "%s (TAP#%d, irlen:%d)" % (
-            self.name, self.index, irlen)
+        return "%s (i=%d/%d/%d, d=%d/%d)" % (
+            self.name,
+            self.ir_pre, self.irlen or 0, self.ir_post,
+            self.dr_pre, self.dr_post)
+
+    def position_set(self, ir_pre, dr_pre, ir_post = None, dr_post = None):
+        if ir_post is None:
+            ir_post = self.port.total_irlen - ir_pre - self.irlen
+        if dr_post is None:
+            dr_post = self.port.total_drlen - dr_pre - 1
+            
+        self.logger.debug("Setting position to i=%d/%d/%d d=%d/%d",
+                          ir_pre, self.irlen or 0, ir_post,
+                          dr_pre, dr_post)
+        self.ir_pre = ir_pre
+        self.dr_pre = dr_pre
+        self.ir_post = ir_post
+        self.dr_post = dr_post
+    
+    def unchain(self, resize = True):
+        chain = self.parent
+        chain.child_remove(self)
+        chain.splice(self.ir_pre, -self.irlen, -1)
 
     def insert_after(self, idcode, irlen = None):
-        self.port.insert(self.index + 1, idcode, irlen)
+        return self.port.tap_insert(idcode, irlen, self.ir_pre + self.irlen, self.dr_pre + 1)
 
     def insert_before(self, idcode, irlen = None):
-        self.port.insert(self.index, idcode, irlen)
-
-    def ir_pre_post(self):
-        return self.port.ir_pre_post(self.index)
-
-    def dr_pre_post(self):
-        return self.port.dr_pre_post(self.index)
+        return self.port.tap_insert(idcode, irlen, self.ir_pre, self.dr_pre)
                 
     def dr_discover(self, ir, max_length = 512, **kwargs):
         """
         """
-        dr_pre, dr_post = self.dr_pre_post()
         self.dr_shift(ir, None)
         self.port.port.capture_dr()
-        max_length += dr_pre + dr_post
+        max_length += self.dr_pre + self.dr_post
         try:
             register = self.port.port.shift_discover(max_length = max_length,
                                                       **kwargs)
         finally:
             self.dr_shift(-1, None)
-        register = register[dr_pre : (-dr_post) or None]
-        self.logger.info("IR %#x: %d bits, capture value: %s",
+        register = register[self.dr_pre : (-self.dr_post) or None]
+        self.logger.debug("IR %#x: %d bits, capture value: %s",
                          ir, len(register), register)
         return register
 
     def dr_discover_all(self, excluded_ir = set()):
-        ir_pre, ir_len, ir_post = self.ir_pre_post()
         ir_lengths = {}
-        for i in range(0, 2 ** ir_len):
+        for i in range(0, 2 ** self.irlen):
             if i in excluded_ir:
                 continue
             try:
@@ -789,27 +856,37 @@ class Tap(PortComponent, InstructionRegistry):
         """
         ops = []
 
-        self.logger.debug("running %s", cmds)
-        ir_pre, ir_len, ir_post = self.ir_pre_post()
-        dr_pre, dr_post = self.dr_pre_post()
-        
+        self.logger.protocol("Running %s", cmds)
+
+        current_ir = None
+
         for c in cmds:
             if isinstance(c, TapDrShift):
-                if c.ir and (self.ir != c.ir or c.read_ir):
-                    c.__op = Shift(BitString(c.ir, ir_len), read_tdo = c.read_ir)
-                    ops += [CaptureIr(),
-                            Shift(BitString(-1, ir_pre)),
+                if c.ir:
+                    if c.read_ir:
+                        c.__op = Shift(BitString(c.ir, self.irlen), read_tdo = True)
+                        ops += [
+                            CaptureIr(),
+                            Shift(BitString(-1, self.ir_pre)),
                             c.__op,
-                            Shift(BitString(-1, ir_post))]
-                    self.ir = c.ir
+                            Shift(BitString(-1, self.ir_post)),
+                        ]
+                    elif current_ir != c.ir:
+                        ops += [
+                            CaptureIr(),
+                            Shift(BitString(-1, self.ir_pre)
+                                  + BitString(c.ir, self.irlen)
+                                  + BitString(-1, self.ir_post)),
+                        ]
+                    current_ir = int(c.ir)
 
                 if c.tdi is not None:
                     ops += [CaptureDr()]
                     if len(c.tdi):
                         c.__op = Shift(c.tdi, read_tdo = c.read_tdo)
-                        ops += [Shift(BitString(0, dr_pre), read_tdo = False),
+                        ops += [Shift(BitString(0, self.dr_pre), read_tdo = False),
                                 c.__op,
-                                Shift(BitString(0, dr_post), read_tdo = False)]
+                                Shift(BitString(0, self.dr_post), read_tdo = False)]
 
             elif isinstance(c, TapRun):
                 ops += [Run(c.cycles)]
@@ -822,16 +899,13 @@ class Tap(PortComponent, InstructionRegistry):
             if isinstance(c, TapDrShift) and (c.read_tdo or c.read_ir):
                 c.tdo = c.postprocess(c.__op.tdo)
 
-    def dr_shift(self, ir, dr, length = None, read_tdo = True, read_ir = False, return_type = None):
+    def dr_shift(self, *args, **kwargs):
         """
         See cmd_dr_shift().
         """
-        op = self.cmd_dr_shift(ir, dr, length, read_tdo, read_ir, return_type)
+        op = self.cmd_dr_shift(*args, **kwargs)
         self.execute([op])
-        if read_tdo or dr is not None:
-            return op.tdo
-        elif read_ir:
-            return op.tdo
+        return op.tdo
 
     def run(self, cycles = 1):
         """
@@ -847,27 +921,30 @@ class Tap(PortComponent, InstructionRegistry):
         self.execute([op])
         return op.tdo
 
+    # Overridable type for IR status
+    IrStatus = int
+
     def cmd_ir_status(self):
         """
         Shift BYPASS to IR and get back IR status.
         """
-        return TapDrShift(-1, None, read_ir = True, return_type = int)
+        return TapDrShift(-1, None, read_ir = True, return_type = self.IrStatus)
 
-    def cmd_dr_shift(self, ir, dr, length = None, read_tdo = True, read_ir = False, return_type = None):
+    def cmd_dr_shift(self, *args, **kwargs):
         """
         Shifts DR having a given IR selected. Will only reload IR if needed.
 
         If read_tdo is True, DR TDO is read back and returned.  If
         read_ir is True, IR is always shifted in and IR captured value is returned.
 
-        dr may be None, in which case only IR is shifted.  Ir read_ir
-        is True, dr must be None.
+        tdi may be None, in which case only IR is shifted.  Ir read_ir
+        is True, tdi must be None.
 
-        dr may be either a BitString object (then length must be None)
+        tdi may be either a BitString object (then length must be None)
         or an integer (in which case it will be used as a
         little-endian value of length bits, then length is mandatory).
         """
-        return TapDrShift(ir, dr, length, read_tdo, read_ir, return_type)
+        return TapDrShift(*args, **kwargs)
 
     def cmd_run(self, cycles = 1):
         """
@@ -886,29 +963,29 @@ class TapOperation(object):
         return str(self)
 
 class TapDrShift(TapOperation):
-    def __init__(self, ir, dr, length = None, read_tdo = True, read_ir = False, return_type = None):
-        self.ir = ir
+    def __init__(self, ir, tdi, length = None, read_tdo = True, read_ir = False, return_type = None):
+        self.ir = int(ir) if ir is not None else None
         self.postprocess = return_type or (lambda x:x)
         self.tdo = 0
         self.read_ir = False
 
-        if dr is None and length is None:
+        if tdi is None and length is None:
             read_tdo = False
             self.read_ir = read_ir
             self.tdi = None
-        elif dr is None:
+        elif tdi is None:
             self.tdi = BitString(0, length)
             self.postprocess = return_type or int
-        elif isinstance(dr, BitString):
-            self.tdi = dr
-        elif isinstance(dr, bytes):
-            self.tdi = BitString(dr, length)
-        elif isinstance(dr, int):
+        elif isinstance(tdi, BitStringBase):
+            self.tdi = tdi
+        elif isinstance(tdi, bytes):
+            self.tdi = BitString(tdi, length)
+        elif isinstance(tdi, int):
             assert isinstance(length, int) and length >= 1
-            self.tdi = BitString(dr, length)
+            self.tdi = BitString(tdi, length)
             self.postprocess = return_type or int
         else:
-            raise RuntimeError("Cannot handle dr", dr)
+            raise RuntimeError("Cannot handle tdi", tdi)
 
         self.read_tdo = read_tdo
 
