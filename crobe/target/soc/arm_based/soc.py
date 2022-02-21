@@ -159,7 +159,6 @@ class StubFlash(BusFlash):
                 code.cleanup()
 
     def puppet_update(self, puppet, pages):
-        write_buffer = puppet.allocate(self.page_size, self.page_size)
         valid = set()
 
         code = puppet.stub(puppet.CRC32)
