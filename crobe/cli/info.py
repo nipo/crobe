@@ -47,7 +47,7 @@ def enumerate(roots, field, cpuid):
         from ..component.arm.cortex import Cortex
         cortexes = field.children_of_class(Cortex)
         for c in cortexes:
-            CpuidDumper(c.scs).dump(click.echo)
+            CpuidDumper(c.scs).dump(print)
 
 @info.command(help = "Check JTAG chain at all possible frequencies")
 @click.option('-r', '--root', help = "JTAG interface", type = base.ROOT, multiple = False)

@@ -30,12 +30,15 @@ class MemoryMappedComponent(model.Bus32Component):
 
         self.use_jep106 = bool(self.pid & 0x80000)
 
+        raw_pid = struct.unpack("<LLLLLLLL", blob[16:12*4])
+        self.logger.info("RAW PID[45670123]s: %s", [hex(p) for p in raw_pid])
+
         self.partid = PartId(jep106_bank = (self.pid >> 32) & 0xf,
                              jep106_id = (self.pid >> 12) & 0x7f,
                              part_no = self.pid & 0xfff,
                              revision = (self.pid >> 20) & 0xf)
 
-        self.logger.info("@0x%08x, ID: %08x %16x %08x (%s) jep106: %s",
+        self.logger.info("@0x%08x, DevID: %08x PID %08x CID %08x PartID %s JEP106 %s",
                          self.base,
                          self.devid, self.pid, self.cid, self.partid,
                          self.use_jep106)

@@ -1,4 +1,4 @@
-from ... import bitfield
+from ...bitfield import *
 
 def implementer_name(cpuid):
     implementer_table = {
@@ -68,6 +68,9 @@ def short_name(cpuid):
             if cno in cortex_table:
                 return cortex_table[cno] % (partno & 0xf)
 
+        if partno & 0xf00 == 0xd00:
+            return "CM%d" % (partno & 0xff)
+
     return "Part_%02x/%03x" % (implementer, partno)
 
 class CpuidDumper(object):
@@ -82,219 +85,341 @@ class CpuidDumper(object):
             else:
                 values = [values]
                 dumpers = [getattr(self, name.upper())]
-            for d, v in zip(dumpers, values):
-                output(repr(d(v)))
+            for i, (d, v) in enumerate(zip(dumpers, values)):
+                reg = d(v)
+                reg.dump_pretty(output)
+                output()
 
-    class PFR0(bitfield.Bitfield):
-        ThumbEE      = bitfield.MappingField(12, 4, {0: "None", 3: "Thumb-2"})
-        Acceleration = bitfield.MappingField(8, 4, {1: "Software", 3: "Thumb-2"})
-        Thumb_ISA    = bitfield.MappingField(4, 4, {0: "None", 1: "Thumb", 3: "Thumb-2"})
-        ARM_ISA      = bitfield.MappingField(0, 4, {0: "None", 1: "ARM"})
+    class PFR0(Bitfield):
+        """Processor features 0"""
 
-    class PFR1(bitfield.Bitfield):
-        MCU_Prog_Model   = bitfield.MappingField(8, 4, {0: "None", 2: "Two stack"})
-        Sec_Ext          = bitfield.MappingField(4, 4, {0: "None"})
-        ARMv4_Prog_Model = bitfield.MappingField(0, 4, {0: "None", 1: "ARMv4"})
+        all = Field(0, 32)
 
-    class DFR(bitfield.Bitfield):
-        MCU       = bitfield.MappingField(20, 4, {0: "None", 1: "Memory mapped"})
-        Trace_MM  = bitfield.MappingField(16, 4, {0: "None", 1: "Memory mapped"})
-        Trace_Cop = bitfield.MappingField(12, 4, {0: "None"})
-        Core_MM   = bitfield.MappingField(8, 4, {0: "None", 1: "ARMv4 MM", 4: "ARMv7 MM"})
-        Secure    = bitfield.MappingField(4, 4, {0: "None"})
-        Core_Cop  = bitfield.MappingField(0, 4, {0: "None"})
+        RAS          = MappingField(28, 4, {0: "None", 3: "V1"})
+        RAS.doc = "Reliability, Availability, and Serviceability Extension"
 
-    class AFR(bitfield.Bitfield):
-        pass
+        ThumbEE      = MappingField(12, 4, {0: "None", 3: "Thumb-2"})
 
-    class MMFR0(bitfield.Bitfield):
-        Innermost_Shareability = bitfield.Field(28, 4)
-        FSCE                   = bitfield.MappingField(24, 4, {0: "None"})
-        Aux_Regs               = bitfield.MappingField(20, 4, {0: "None", 1: "ACR only", 2:"AIFSR, ADFSR"})
-        TCM                    = bitfield.MappingField(16, 4, {0: "None", 1: "implementation-defined control"})
-        Shareability_Levels    = bitfield.MappingField(12, 4, {0: "One level"})
-        Outermost_Shareability = bitfield.MappingField(8, 4, {0: "Non-cacheable", 15: "Ignored"})
-        PMSA                   = bitfield.MappingField(4, 4, {0: "Not supported", 3:"PMSAv7 with subregions"})
-        VMSA                   = bitfield.MappingField(0, 4, {0: "Not supported"})
+        Acceleration = MappingField(8, 4, {0: "None", 1: "Software", 3: "Thumb-2"})
 
-    class MMFR1(bitfield.Bitfield):
-        Branch_Predictor  = bitfield.MappingField(28, 4, {0: "None"})
-        L1_Test_Clean     = bitfield.MappingField(24, 8, {0: "None"})
-        L1_Unified        = bitfield.MappingField(20, 4, {0: "None"})
-        L1_Harvard        = bitfield.MappingField(16, 4, {0: "None"})
-        L1_SetWay_Unified = bitfield.MappingField(12, 4, {0: "None"})
-        L1_SetWay_Harvard = bitfield.MappingField(8, 4, {0: "None"})
-        L1_MVA_Unified    = bitfield.MappingField(4, 4, {0: "None"})
-        L1_MVA_Harvard    = bitfield.MappingField(0, 4, {0: "None"})
+        State1       = MappingField(4, 4, {0: "None", 1: "Thumb", 3: "Thumb-2"},
+                                    doc = "State 1 ISA")
 
-    class MMFR2(bitfield.Bitfield):
-        HW_Access_Flag = bitfield.MappingField(28, 4, {0: "Not supported"})
-        WFI_Stall      = bitfield.MappingField(24, 4, {0: "Not supported", 1: "Supported"})
-        Barriers       = bitfield.MappingField(20, 4, {0: "Not supported", 2: "DSB, ISB, DMB"})
-        TLB_Unified    = bitfield.MappingField(16, 4, {0: "Not supported"})
-        TLB_Harvard    = bitfield.MappingField(12, 4, {0: "Not supported"})
-        L1_Cache       = bitfield.MappingField(8, 4, {0: "Not supported"})
-        L1_Bg_Prefetch = bitfield.MappingField(4, 4, {0: "Not supported"})
-        L1_Fg_Prefetch = bitfield.MappingField(0, 4, {0: "Not supported"})
+        State0       = MappingField(0, 4, {0: "None", 1: "ARM"},
+                                    doc = "State 0 ISA")
 
-    class MMFR3(bitfield.Bitfield):
-        Supersection      = bitfield.MappingField(28, 4, {0: "Not supported"})
-        Coherent_Walk     = bitfield.MappingField(20, 4, {0: "Not supported"})
-        Maint_Bcast       = bitfield.MappingField(12, 4, {0: "Not supported"})
-        Branch_Pred       = bitfield.MappingField(8, 4, {0: "Not supported", 2: "Invalidate by MVA"})
-        Hier_SetWay_Cache = bitfield.MappingField(4, 4, {0: "Not supported", 1:"Invalidate/clean"})
-        Hier_MVA_Cache    = bitfield.MappingField(0, 4, {0: "Not supported", 1:"Invalidate/clean"})
+    class PFR1(Bitfield):
+        """MCU Programmers model"""
 
-    class ISAR0(bitfield.Bitfield):
-        Divide    = bitfield.MappingField(24, 4, {0: "", 1:"SDIV, UDIV"})
-        Debug     = bitfield.MappingField(20, 4, {0: "", 1:"BKPT"})
-        Coproc    = bitfield.MappingField(16, 4, {0: "",
-                                                  1:"CDP, LDC, MCR, MRC, STC",
-                                                  2:"CDP, LDC, MCR, MRC, STC, CDP2, LDC2, MCR2, MRC2, STC2",
-                                                  3:"CDP, LDC, MCR, MRC, STC, CDP2, LDC2, MCR2, MRC2, STC2, MCRR, MRRC",
-                                                  4:"CDP, LDC, MCR, MRC, STC, CDP2, LDC2, MCR2, MRC2, STC2, MCRR, MRRC, MCRR2, MRRC2",
+        all = Field(0, 32)
+
+        MProgMod   = MappingField(8, 4, {0: "None", 2: "Two stack"},
+                                  doc = "M Programmers' model")
+        Security   = MappingField(4, 4, {0: "None", 1: "Implemented", 3: "With state handling"},
+                                  doc = "Security extension implemented")
+        ARMv4_Prog_Model = MappingField(0, 4, {0: "None", 1: "ARMv4"},
+        )
+
+    class DFR(Bitfield):
+
+        all = Field(0, 32)
+
+        UDE       = MappingField(28, 4, {0: "None", 1: "Implemented"},
+                                 doc = "Unprivileged Debug Extension")
+        MCU       = MappingField(20, 4, {0: "None", 1: "Memory mapped", 2:"Halting supported"},
+                                 doc = "M-Profile debug architecture")
+        Trace_MM  = MappingField(16, 4, {0: "None", 1: "Memory mapped"})
+        Trace_Cop = MappingField(12, 4, {0: "None"})
+        Core_MM   = MappingField(8, 4, {0: "None", 1: "ARMv4 MM", 4: "ARMv7 MM"})
+        Secure    = MappingField(4, 4, {0: "None"})
+        Core_Cop  = MappingField(0, 4, {0: "None"})
+
+    class AFR(Bitfield):
+
+        all = Field(0, 32)
+
+        ImpDef0  = Field(0, 4,
+                         doc = "Implementation defined")
+        ImpDef1  = Field(4, 4,
+                         doc = "Implementation defined")
+        ImpDef2  = Field(8, 4,
+                         doc = "Implementation defined")
+        ImpDef3  = Field(12, 4,
+                         doc = "Implementation defined")
+
+    class MMFR0(Bitfield):
+
+        all = Field(0, 32)
+
+        InnerShr = Field(28, 4, doc = "Innermost Shareability")
+        FSCE     = MappingField(24, 4, {0: "None"})
+        AuxReg   = MappingField(20, 4, {0: "None",
+                                        1: "ACR only",
+                                        2:"AIFSR, ADFSR"},
+                                doc = "Auxiliary control registers support")
+        TCM      = MappingField(16, 4, {0: "None",
+                                        1: "implementation-defined control"},
+                                doc = "Tightly coupled memories support")
+        ShareLvl = MappingField(12, 4, {0: "One level",
+                                        1: "Two levels"},
+                                doc            = "Shareability levels")
+        OuterShr = MappingField(8, 4, {0: "Non-cacheable",
+                                       1: "With HW Coherency",
+                                       15: "Ignored"},
+                                doc = "Outermost Shareability")
+        PMSA     = MappingField(4, 4, {0: "Not supported",
+                                       3:"PMSAv7 with subregions"})
+        VMSA     = MappingField(0, 4, {0: "Not supported"})
+
+    class MMFR1(Bitfield):
+
+        all = Field(0, 32)
+
+        Branch_Predictor  = MappingField(28, 4, {0: "None"})
+        L1_Test_Clean     = MappingField(24, 8, {0: "None"})
+        L1_Unified        = MappingField(20, 4, {0: "None"})
+        L1_Harvard        = MappingField(16, 4, {0: "None"})
+        L1_SetWay_Unified = MappingField(12, 4, {0: "None"})
+        L1_SetWay_Harvard = MappingField(8, 4, {0: "None"})
+        L1_MVA_Unified    = MappingField(4, 4, {0: "None"})
+        L1_MVA_Harvard    = MappingField(0, 4, {0: "None"})
+
+    class MMFR2(Bitfield):
+
+        all = Field(0, 32)
+
+        HW_Access_Flag = MappingField(28, 4, {0: "Not supported"})
+        WFI_Stall      = MappingField(24, 4, {0: "Not supported", 1: "Supported"})
+        Barriers       = MappingField(20, 4, {0: "Not supported", 2: "DSB, ISB, DMB"})
+        TLB_Unified    = MappingField(16, 4, {0: "Not supported"})
+        TLB_Harvard    = MappingField(12, 4, {0: "Not supported"})
+        L1_Cache       = MappingField(8, 4, {0: "Not supported"})
+        L1_Bg_Prefetch = MappingField(4, 4, {0: "Not supported"})
+        L1_Fg_Prefetch = MappingField(0, 4, {0: "Not supported"})
+
+    class MMFR3(Bitfield):
+
+        all = Field(0, 32)
+
+        Supersection  = MappingField(28, 4, {0: "Not supported"})
+        Coherent_Walk = MappingField(20, 4, {0: "Not supported"})
+        Maint_Bcast   = MappingField(12, 4, {0: "Not supported"})
+        BPMaint       = MappingField(8, 4, {0: "Not supported",
+                                            1: "Invalidate all",
+                                            2: "Invalidate by MVA"},
+                                     doc = "Branch predictor maintenance")
+        CMaintSW      = MappingField(4, 4, {0: "Not supported",
+                                            1: "Invalidate/clean"},
+                                     doc = "Cache maintenance for set/way")
+        CMaintVA      = MappingField(0, 4, {0: "Not supported",
+                                            1: "Invalidate/clean"},
+                                     doc = "Cache maintenance by address")
+
+    class ISAR0(Bitfield):
+
+        all = Field(0, 32)
+
+        Divide    = MappingField(24, 4, {0: "", 1:"SDIV, UDIV"})
+        Debug     = MappingField(20, 4, {0: "", 1:"BKPT"})
+        Coproc    = MappingField(16, 4, {0: "",
+                                         1:"CDP, LDC, MCR, MRC, STC",
+                                         2:"CDP, LDC, MCR, MRC, STC, CDP2, LDC2, MCR2, MRC2, STC2",
+                                         3:"CDP, LDC, MCR, MRC, STC, CDP2, LDC2, MCR2, MRC2, STC2, MCRR, MRRC",
+                                         4:"CDP, LDC, MCR, MRC, STC, CDP2, LDC2, MCR2, MRC2, STC2, MCRR, MRRC, MCRR2, MRRC2",
         })
-        CmpBranch = bitfield.MappingField(12, 4, {0: "", 1:"CBNZ, CBZ"})
-        Bitfield  = bitfield.MappingField(8, 4, {0: "", 1:"BFC, BFI, SBFX, UBFX"})
-        Bitcount  = bitfield.MappingField(4, 4, {0: "", 1:"CLZ"})
-        Atomics   = bitfield.MappingField(0, 4, {0: "", 1:"SWP, SWPB"})
+        CmpBranch = MappingField(12, 4, {0: "",
+                                         1:"CBNZ, CBZ",
+                                         3:"CBNZ, CBZ and non-predicated + low overhead looping"})
+        Bitfield  = MappingField(8, 4, {0: "", 1:"BFC, BFI, SBFX, UBFX"})
+        Bitcount  = MappingField(4, 4, {0: "", 1:"CLZ"})
+        Atomics   = MappingField(0, 4, {0: "", 1:"SWP, SWPB"})
 
-    class ISAR1(bitfield.Bitfield):
-        Jazelle   = bitfield.MappingField(24, 4, {0: "", 1:"BXJ"}),
-        Interwork = bitfield.MappingField(24, 4, {0: "",
-                                                  1:"BX",
-                                                  2: "BX, BLX",
-                                                  3: "BX, BLX, dp insts"})
-        Immediate = bitfield.MappingField(20, 4, {0: "",
-                                                  1:"ADDW, MOVW, MOVT, SUBW"})
-        If_Then   = bitfield.MappingField(16, 4, {0: "",
-                                                  1: "IT"
-        })
-        Extend    = bitfield.MappingField(12, 4, {0: "",
-                                                  1:"SXTB, SXTH, UXTB, UXTH",
-                                                  2:"SXTB, SXTH, UXTB, UXTH, SXTAB, SXTAB16, SXTAH, SXTB16, UXTAB, UXTAB16, UXTAH, UXTB16"})
-        Except2   = bitfield.MappingField(8, 4, {0: "",
-                                                 1: "RFE, SRS, CPS"
-        })
-        Except1   = bitfield.MappingField(4, 4, {0: "",
-                                                 1: "LDM (exc), STM (user)"
-        })
-        Endian    = bitfield.MappingField(0, 4, {0: "",
-                                                 1: "SETEND"
-        })
+    class ISAR1(Bitfield):
 
-    class ISAR2(bitfield.Bitfield):
-        Reversal       = bitfield.MappingField(28, 4, {0: "",
-                                                       1: "REV, REV16, REVSH",
-                                                       2: "REV, REV16, REVSH, RBIT",
+        all = Field(0, 32)
+
+        Jazelle   = MappingField(24, 4, {0: "", 1:"BXJ"}),
+        Interwork = MappingField(24, 4, {0: "",
+                                         1:"BX",
+                                         2: "BX, BLX",
+                                         3: "BX, BLX, dp insts"})
+        Immediate = MappingField(20, 4, {0: "",
+                                         1:"ADDW, MOVW, MOVT, SUBW"})
+        If_Then   = MappingField(16, 4, {0: "",
+                                         1: "IT"})
+        Extend    = MappingField(12, 4, {0: "",
+                                         1:"SXTB, SXTH, UXTB, UXTH",
+                                         2:"SXTB, SXTH, UXTB, UXTH, SXTAB, SXTAB16, SXTAH, SXTB16, UXTAB, UXTAB16, UXTAH, UXTB16"})
+        Except2   = MappingField(8, 4, {0: "",
+                                        1: "RFE, SRS, CPS"
         })
-        PSR            = bitfield.MappingField(24, 4, {0: "",
-                                                       1: "MSR, MRS",
+        Except1   = MappingField(4, 4, {0: "",
+                                        1: "LDM (exc), STM (user)"
         })
-        MultU          = bitfield.MappingField(20, 4, {0: "",
-                                                       1:"UMULL, UMLAL",
-                                                       2: "UMULL, UMLAL, UMAAL"})
-        MultS          = bitfield.MappingField(16, 4, {0: "",
-                                                       1:"SMULL, SMLAL",
-                                                       2: "SMULL, SMLAL, SMLABB, SMLABT, SMLALBB, SMLALBT, SMLALTB, SMLALTT, SMLATB, SMLATT, SMLAWB, SMLAWT, SMULBB, SMULBT, SMULTB, SMULTT, SMULWB, SMULWT",
-                                                       3: "SMULL, SMLAL, SMLABB, SMLABT, SMLALBB, SMLALBT, SMLALTB, SMLALTT, SMLATB, SMLATT, SMLAWB, SMLAWT, SMULBB, SMULBT, SMULTB, SMULTT, SMULWB, SMULWT, SMLAD, SMLADX, SMLALD, SMLALDX, SMLSD, SMLSDX, SMLSLD, SMLSLDX, SMMLA, SMMLAR, SMMLS, SMMLSR, SMMUL, SMMULR, SMUAD, SMUADX, SMUSD, SMUSDX",
-        })
-        Mult           = bitfield.MappingField(12, 4, {0: "MUL",
-                                                       1:"MUL, MLA",
-                                                       2:"MUL, MLA, MLS",
-        })
-        MultiAccessInt = bitfield.MappingField(8, 4, {0: "",
-                                                      1:"LDM, STM restartable",
-                                                      2:"LDM, STM continuable",
-        })
-        MemHint        = bitfield.MappingField(4, 4, {0: "",
-                                                      1:"PLD",
-                                                      2:"PLD",
-                                                      3:"PLD, PLI",
-                                                      4:"PLD, PLI, PLDW",
-        })
-        LoadStore      = bitfield.MappingField(0, 4, {0: "",
-                                                      1:"LDRD, STRD",
+        Endian    = MappingField(0, 4, {0: "",
+                                        1: "SETEND"
         })
 
-    class ISAR3(bitfield.Bitfield):
-        ThumbEE   = bitfield.MappingField(28, 4, {0: ""})
-        TrueNOP   = bitfield.MappingField(24, 4, {0: "",
-                                                  1:"NOP"})
-        ThumbCopy = bitfield.MappingField(20, 4, {0: "",
-                                                  1:"MOV.t1"})
-        TabBranch = bitfield.MappingField(16, 4, {0: "",
-                                                  1:"TBB, TBH",
+    class ISAR2(Bitfield):
+
+        all = Field(0, 32)
+
+        Reversal       = MappingField(28, 4, {0: "",
+                                              1: "REV, REV16, REVSH",
+                                              2: "REV, REV16, REVSH, RBIT",
         })
-        SynchPrim = bitfield.MappingField(12, 4, {0: "",
-                                                  2: "LDREX[BH], STREX[BH], CLREX"})
-        SVC       = bitfield.MappingField(8, 4, {0: "", 1:"SVC"})
-        SIMD      = bitfield.MappingField(4, 4, {0: "",
-                                                 1:"SSAT, USAT",
-                                                 3: "SSAT, USAT, PKHBT, PKHTB, QADD16, QADD8, QASX, QSUB16, QSUB8, QSAX, SADD16, SADD8, SASX, SEL, SHADD16, SHADD8, SHASX, SHSUB16, SHSUB8, SHSAX, SSAT16, SSUB16, SSUB8, SSAX, SXTAB16, SXTB16, UADD16, UADD8, UASX, UHADD16, UHADD8, UHASX, UHSUB16, UHSUB8, UHSAX, UQADD16, UQADD8, UQASX, UQSUB16, UQSUB8, UQSAX, USAD8, USADA8, USAT16, USUB16, USUB8, USAX, UXTAB16, UXTB16"})
-        Saturate  = bitfield.MappingField(0, 4, {0: "", 1:"QADD, QDADD, QDSUB, QSUB"})
-
-    class ISAR4(bitfield.Bitfield):
-        SWP            = bitfield.MappingField(28, 4, {0: ""})
-        PSR_M          = bitfield.MappingField(24, 4, {0: "",
-                                                       1:"CPS, MRS, MSR"})
-        SynchPrim_frac = bitfield.MappingField(20, 4, {})
-        Barrier        = bitfield.MappingField(16, 4, {0: "",
-                                                       1:"DMB, DSB, ISB",
+        PSR            = MappingField(24, 4, {0: "",
+                                              1: "MSR, MRS",
         })
-        Writeback      = bitfield.MappingField(8, 4, {0: "STM, STM, PUSH, POP only",
-                                                      1:"All v7-M insts"})
-        WithShifts     = bitfield.MappingField(4, 4, {0: "MOV and shift only",
-                                                      1: "MOV, shift, load, store (lsl 0-3)",
-                                                      3: "MOV, shift, load, store (lsl 0-3 & constants)",
-                                                      4: "Full",})
-        Unpriv         = bitfield.MappingField(0, 4, {0: "",
-                                                      1:"LDRBT, LDRT, STRBT, STRT",
-                                                      2:"LDR{SB,B,SH,H}T, STR{B,H}T",
+        MultU          = MappingField(20, 4, {0: "",
+                                              1:"UMULL, UMLAL",
+                                              2: "UMULL, UMLAL, UMAAL"})
+        MultS          = MappingField(16, 4, {0: "",
+                                              1:"SMULL, SMLAL",
+                                              2: "SMULL, SMLAL, SMLABB, SMLABT, SMLALBB, SMLALBT, SMLALTB, SMLALTT, SMLATB, SMLATT, SMLAWB, SMLAWT, SMULBB, SMULBT, SMULTB, SMULTT, SMULWB, SMULWT",
+                                              3: "SMULL, SMLAL, SMLABB, SMLABT, SMLALBB, SMLALBT, SMLALTB, SMLALTT, SMLATB, SMLATT, SMLAWB, SMLAWT, SMULBB, SMULBT, SMULTB, SMULTT, SMULWB, SMULWT, SMLAD, SMLADX, SMLALD, SMLALDX, SMLSD, SMLSDX, SMLSLD, SMLSLDX, SMMLA, SMMLAR, SMMLS, SMMLSR, SMMUL, SMMULR, SMUAD, SMUADX, SMUSD, SMUSDX",
+        })
+        Mult           = MappingField(12, 4, {0: "MUL",
+                                              1:"MUL, MLA",
+                                              2:"MUL, MLA, MLS",
+        })
+        MultiAccessInt = MappingField(8, 4, {0: "",
+                                             1:"LDM, STM restartable",
+                                             2:"LDM, STM continuable",
+        })
+        MemHint        = MappingField(4, 4, {0: "",
+                                             1:"PLD",
+                                             2:"PLD",
+                                             3:"PLD, PLI",
+                                             4:"PLD, PLI, PLDW",
+        })
+        LoadStore      = MappingField(0, 4, {0: "",
+                                             1:"LDRD, STRD",
+                                             2:"Load-Acquire, Store-release, Exclusives",
         })
 
-    class MVFR0(bitfield.Bitfield):
-        FP_rounding_modes     = bitfield.MappingField(28, 4, {1: "All"})
-        Short_vectors         = bitfield.MappingField(24, 4, {0: "No"})
-        Square_root           = bitfield.MappingField(20, 4, {0: "No", 1: "Yes"})
-        Divide                = bitfield.MappingField(16, 4, {0: "No", 1: "Yes"})
-        FP_Exception_Trapping = bitfield.MappingField(12, 4, {0: "No"})
-        Double_precision      = bitfield.MappingField(8, 4, {0: "No", 1:"Yes"})
-        Single_precision      = bitfield.MappingField(4, 4, {0: "No", 1: "Yes", 2:"Yes with restrictions"})
-        A_SIMD_registers      = bitfield.MappingField(0, 4, {1:"16x64 bits"})
+    class ISAR3(Bitfield):
 
-    class MVFR1(bitfield.Bitfield):
-        FP_Fused_MAC = bitfield.MappingField(28, 4, {1: "Yes"})
-        FP_HPFP      = bitfield.MappingField(24, 4, {1: "HP-SP conversion", 2:"DP-HP-SP conversion"})
-        D_NaN_mode   = bitfield.MappingField(4, 4, {0: "No", 1: "NaN propagation"})
-        FtZ_mode     = bitfield.MappingField(0, 4, {1:"Full denormalized support"})
+        all = Field(0, 32)
 
-    class MVFR2(bitfield.Bitfield):
-        VFP_Misc = bitfield.MappingField(4, 4, {0: "No", 4: "Min, max, rounding"})
+        ThumbEE   = MappingField(28, 4, {0: ""})
+        TrueNOP   = MappingField(24, 4, {0: "",
+                                         1:"NOP"})
+        ThumbCopy = MappingField(20, 4, {0: "",
+                                         1:"MOV.t1"})
+        TabBranch = MappingField(16, 4, {0: "",
+                                         1:"TBB, TBH",
+        })
+        SynchPrim = MappingField(12, 4, {0: "",
+                                         2: "LDREX[BH], STREX[BH], CLREX"})
+        SVC       = MappingField(8, 4, {0: "", 1:"SVC"})
+        SIMD      = MappingField(4, 4, {0: "",
+                                        1:"SSAT, USAT",
+                                        3: "SSAT, USAT + GE-bits, DSP only"})
+        Saturate  = MappingField(0, 4, {0: "", 1:"QADD, QDADD, QDSUB, QSUB"})
 
-    class CLIDR(bitfield.Bitfield):
+    class ISAR4(Bitfield):
+
+        all = Field(0, 32)
+
+        SWP            = MappingField(28, 4, {0: ""})
+        PSR_M          = MappingField(24, 4, {0: "",
+                                              1:"CPS, MRS, MSR"})
+        SynchPrim_frac = MappingField(20, 4, {3: "(LDR,STR,CLR)EX[BH]"})
+        Barrier        = MappingField(16, 4, {0: "",
+                                              1:"DMB, DSB, ISB",
+        })
+        Writeback      = MappingField(8, 4, {0: "STM, STM, PUSH, POP only",
+                                             1:"All v7-M insts"})
+        WithShifts     = MappingField(4, 4, {0: "MOV and shift only",
+                                             1: "MOV, shift, load, store (lsl 0-3)",
+                                             3: "MOV, shift, load, store (lsl 0-3 & constants)",
+                                             4: "Full",})
+        Unpriv         = MappingField(0, 4, {0: "",
+                                             1:"LDRBT, LDRT, STRBT, STRT",
+                                             2:"LDR{SB,B,SH,H}T, STR{B,H}T",
+        })
+
+    class ISAR5(Bitfield):
+
+        all = Field(0, 32)
+
+        PACBTI = MappingField(20, 4, {0: "Not implemented",
+                                      1: "QARMA5",
+                                      2: "Implementation defined",
+                                      4: "QARMA3"},
+                              doc = "Pointer authentication algorithm")
+
+    class MVFR0(Bitfield):
+
+        all = Field(0, 32)
+
+        FPRound               = MappingField(28, 4, {1: "All"})
+        Short_vectors         = MappingField(24, 4, {0: "No"})
+        FPSqrt                = MappingField(20, 4, {0: "No", 1: "Yes"})
+        FPDivide              = MappingField(16, 4, {0: "No", 1: "Yes"})
+        FP_Exception_Trapping = MappingField(12, 4, {0: "No"})
+        FPDP                  = MappingField(8, 4, {0: "No", 1:"Yes"})
+        FPSP                  = MappingField(4, 4, {0: "No", 1: "Yes", 2:"Yes with restrictions"})
+        SIMDReg               = MappingField(0, 4, {1:"16x64 bits"})
+
+    class MVFR1(Bitfield):
+
+        all = Field(0, 32)
+
+        FMAC   = MappingField(28, 4, {0: "Not implemented", 1: "Implemented"},
+                              doc = "Fused multiply-accumulate")
+        FPHP   = MappingField(24, 4, {0: "Not implemented", 1: "HP-SP conversion", 2:"DP-HP-SP conversion"},
+                              doc = "Floating-point half-precision")
+        FP16   = MappingField(20, 4, {0: "Not implemented", 1: "Implemented"},
+                              doc = "Half-precision")
+        MVE    = MappingField(8, 4, {0: "Not supported",
+                                     1: "Supported with no FP",
+                                     2: "Supported with single/half-precision FP"},
+                              doc = "M-profile vector extension")
+        FPDNaN = MappingField(4, 4, {0: "None", 1: "Supported"},
+                              doc = "FP NaN propagation")
+        FPFtZ  = MappingField(0, 4, {0: "Not supported",
+                                     1:"Full denormalized support"},
+                              doc = "FP Flush-to-zero support")
+
+    class MVFR2(Bitfield):
+
+        all = Field(0, 32)
+
+        VFPMisc = MappingField(4, 4, {0: "No",
+                                      4: "Min, max, rounding"})
+
+    class CLIDR(Bitfield):
+
+        all = Field(0, 32)
+
         cache_mode = {0: "None",
                       1: "I",
                       2: "D",
                       3: "Separate I+D",
                       4: "Unified I+D",
         }
-        Ctype1 = bitfield.MappingField(0, 3, cache_mode)
-        Ctype2 = bitfield.MappingField(3, 3, cache_mode)
-        Ctype3 = bitfield.MappingField(6, 3, cache_mode)
-        Ctype4 = bitfield.MappingField(9, 3, cache_mode)
-        Ctype5 = bitfield.MappingField(12, 3, cache_mode)
-        Ctype6 = bitfield.MappingField(15, 3, cache_mode)
-        Ctype7 = bitfield.MappingField(18, 3, cache_mode)
-        LoUIS  = bitfield.Field(21, 3, offset = 1)
-        LoC    = bitfield.Field(24, 3, offset = 1)
-        LoUU   = bitfield.Field(27, 7, offset = 1)
+        Ctype1 = MappingField(0, 3, cache_mode)
+        Ctype2 = MappingField(3, 3, cache_mode)
+        Ctype3 = MappingField(6, 3, cache_mode)
+        Ctype4 = MappingField(9, 3, cache_mode)
+        Ctype5 = MappingField(12, 3, cache_mode)
+        Ctype6 = MappingField(15, 3, cache_mode)
+        Ctype7 = MappingField(18, 3, cache_mode)
+        LoUIS  = Field(21, 3, offset = 1)
+        LoC    = Field(24, 3, offset = 1)
+        LoUU   = Field(27, 3, offset = 1)
+        ICB    = Field(30, 2, doc = "Highest inner cache level")
 
-    class CCSIDR(bitfield.Bitfield):
-        WT            = bitfield.BooleanField(31)
-        WB            = bitfield.BooleanField(30)
-        RA            = bitfield.BooleanField(29)
-        WA            = bitfield.BooleanField(28)
-        NumSets       = bitfield.Field(13, 15, offset = 1)
-        Associativity = bitfield.Field(3, 10, offset = 1)
-        LineSize      = bitfield.Log2Field(0, 3, log_offset = 2)
+    class CCSIDR(Bitfield):
+
+        all = Field(0, 32)
+
+        WT            = BooleanField(31)
+        WB            = BooleanField(30)
+        RA            = BooleanField(29)
+        WA            = BooleanField(28)
+        NumSets       = Field(13, 15, offset = 1)
+        Associativity = Field(3, 10, offset = 1)
+        LineSize      = Log2Field(0, 3, log_offset = 2)

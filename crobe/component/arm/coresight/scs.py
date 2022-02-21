@@ -41,7 +41,7 @@ class Scs(MemoryMappedComponent):
         cmds += [self.cmd_reg_read(self.ID_DFR)]
         cmds += [self.cmd_reg_read(self.ID_AFR)]
         cmds += [self.cmd_reg_read(self.ID_MMFR(i)) for i in range(4)]
-        cmds += [self.cmd_reg_read(self.ID_ISAR(i)) for i in range(5)]
+        cmds += [self.cmd_reg_read(self.ID_ISAR(i)) for i in range(6)]
         cmds += [self.cmd_reg_read(self.MVFR(i)) for i in range(3)]
         cmds += [self.cmd_reg_read(self.CLIDR)]
         cmds += [self.cmd_reg_read(self.CCSIDR)]
@@ -51,10 +51,10 @@ class Scs(MemoryMappedComponent):
         self.dfr = cmds[2].data
         self.afr = cmds[3].data
         self.mmfr = [op.data for op in cmds[4:8]]
-        self.isar = [op.data for op in cmds[8:13]]
-        self.mvfr = [op.data for op in cmds[13:16]]
-        self.clidr = cmds[16].data
-        self.ccsidr = cmds[17].data
+        self.isar = [op.data for op in cmds[8:14]]
+        self.mvfr = [op.data for op in cmds[14:17]]
+        self.clidr = cmds[17].data
+        self.ccsidr = cmds[18].data
 
     def __str__(self):
         return "System Control Space for %s" % self.cpu_name

@@ -26,7 +26,7 @@ class Dbg(CoresightComponent):
         cmds += [self.cmd_reg_read(self.ID_DFR)]
         cmds += [self.cmd_reg_read(self.ID_AFR)]
         cmds += [self.cmd_reg_read(self.ID_MMFR(i)) for i in range(4)]
-        cmds += [self.cmd_reg_read(self.ID_ISAR(i)) for i in range(5)]
+        cmds += [self.cmd_reg_read(self.ID_ISAR(i)) for i in range(6)]
         cmds += [self.cmd_reg_read(self.DEVID)]
         cmds += [self.cmd_reg_read(self.DIDR)]
         self.bus.execute(cmds)
@@ -35,12 +35,12 @@ class Dbg(CoresightComponent):
         self.dfr = cmds[2].data
         self.afr = cmds[3].data
         self.mmfr = [op.data for op in cmds[4:8]]
-        self.isar = [op.data for op in cmds[8:13]]
+        self.isar = [op.data for op in cmds[8:14]]
         self.mvfr = [0] * 3
         self.clidr = 0
         self.ccsidr = 0
-        self.devid = cmds[13].data
-        self.didr = cmds[14].data
+        self.devid = cmds[14].data
+        self.didr = cmds[15].data
 
     # Processor Feature Registers
     ID_PFR = staticmethod(lambda x: 0xd20 + 4 * x)
