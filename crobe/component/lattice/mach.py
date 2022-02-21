@@ -503,7 +503,7 @@ class MachXO2(jtag.Tap, MachXO2Config, JtagSramFpga):
     def __init__(self, port, index, idcode):
         jtag.Tap.__init__(self, port, index, idcode)
         MachXO2Config.__init__(self)
-        JtagSramFpga.__init__(self, self.name)
+        JtagSramFpga.__init__(self)
 
     def start(self):
         MachXO2Config.start(self)
