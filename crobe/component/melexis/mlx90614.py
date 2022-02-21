@@ -1,4 +1,4 @@
-from crobe.model import PortComponent
+from ...model import PortComponent
 from ...protocol import smbus
 import struct
 import time

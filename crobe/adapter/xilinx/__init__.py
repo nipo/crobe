@@ -178,7 +178,7 @@ class Adapter(fx2.Adapter):
             return None
 
         if not self.__inited:
-            from crobe.loadable.object import Program
+            from ...loadable.object import Program
             from pkg_resources import resource_filename
             fw_name = self.fw[(self.device.idVendor << 16)
                               | self.device.idProduct]

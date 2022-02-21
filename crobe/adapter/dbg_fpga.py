@@ -222,7 +222,7 @@ class DbgFpgaOpts:
 
 class I2cInterface(i2c.Interface):
     def __init__(self, framed_i2c, base_freq, regs):
-        from crobe.component.nsl.transactor.i2c import I2cTransactor
+        from ..component.nsl.transactor.i2c import I2cTransactor
         self.__i2c_trx = I2cTransactor(framed_i2c, base_freq)
         super().__init__(self.__i2c_trx, "i2c")
         self.child_add(self.__i2c_trx)
@@ -242,7 +242,7 @@ class I2cInterface(i2c.Interface):
 
 class SwdInterface(swd.Interface):
     def __init__(self, framed_swd, base_freq, regs):
-        from crobe.component.nsl.transactor.swd import SwdTransactor
+        from ..component.nsl.transactor.swd import SwdTransactor
         self.swd = SwdTransactor(framed_swd, base_freq)
         super().__init__(self.swd, "swd")
         self.options = DbgFpgaOpts(regs)
@@ -272,7 +272,7 @@ class SwdInterface(swd.Interface):
 
 class JtagInterface(jtag.Interface):
     def __init__(self, framed_jtag, base_freq, regs):
-        from crobe.component.nsl.transactor.jtag import JtagTransactor
+        from ..component.nsl.transactor.jtag import JtagTransactor
         self.jtag = JtagTransactor(framed_jtag, base_freq)
         super().__init__(self.jtag, "jtag")
         self.options = DbgFpgaOpts(regs)
@@ -294,7 +294,7 @@ class JtagInterface(jtag.Interface):
 
 class SpiInterface(spi.Interface):
     def __init__(self, framed_spi, base_freq, regs):
-        from crobe.component.nsl.transactor.spi import SpiTransactor
+        from ..component.nsl.transactor.spi import SpiTransactor
         self.regs = regs
         self.spi = SpiTransactor(framed_spi, base_freq)
         super().__init__(self.spi, "spi")

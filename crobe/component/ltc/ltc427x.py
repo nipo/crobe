@@ -1,4 +1,4 @@
-from crobe.model import PortComponent
+from ...model import PortComponent
 from ...protocol import i2c
 from .ltc4266 import Ltc4266
 import struct

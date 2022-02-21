@@ -1,4 +1,4 @@
-from crobe.model import PortComponent
+from ...model import PortComponent
 from ...protocol import one_wire
 
 @one_wire.Interface.db.register(0x28)

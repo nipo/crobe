@@ -2,7 +2,7 @@ from ..bitstring import BitString
 import math
 import time
 from tqdm import tqdm
-from crobe.target.pin_control import Mode
+from ..target.pin_control import Mode
 
 class Net:
     def __init__(self, *pins, shuffle = True, name = None):

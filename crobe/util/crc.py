@@ -48,7 +48,6 @@ if __name__ == "__main__":
 
     def ble_crc_orig(data, crc):
         crc_poly = 0x100065b
-        from crobe.util.endian import bitswap8
         crc = int.from_bytes(bitswap8(crc.to_bytes(3, "big")), "little")
 
         for b in data:
@@ -57,7 +56,6 @@ if __name__ == "__main__":
                 crc ^= ((1 & (b >> i)) << 24)
                 if crc & 0x1000000:
                     crc ^= crc_poly
-        from crobe.util.endian import bitswap8
         return int.from_bytes(bitswap8(crc.to_bytes(3, "big")), "little")
 
     assert crc32(b"0123456789", 0xdeadbeef) == zlib.crc32(b"0123456789", 0xdeadbeef)
