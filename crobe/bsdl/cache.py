@@ -1,4 +1,8 @@
-from vhsic.bsdl import bsdl
+try:
+    from vhsic.bsdl import bsdl
+except ModuleNotFoundError:
+    bsdl = None
+
 from ..part_id import PartId
 import json
 import os
@@ -57,6 +61,9 @@ class Cache:
                 self.file_add(self, filename)
 
     def file_add(self, filename):
+        if not bsdl:
+            self.logger.error("vhsic.bsdl not loaded, ignoring")
+            return
         self.logger.info("Parsing %s...", filename)
         cache_filename = self.cache_filename(filename)
         entity = None
@@ -90,6 +97,9 @@ class Cache:
         self.by_name_package[(entity.name, entity.package_variant)] = cache_filename
 
     def filter(self, name = None, idcode = None, package = None):
+        if not bsdl:
+            self.logger.error("vhsic.bsdl not loaded, nothing returned")
+            return []
         r = set()
         if idcode is not None:
             for (code, pv), filename in self.by_idcode_package.items():
@@ -108,9 +118,17 @@ class Cache:
                     continue
                 e = bsdl.Entity.load(os.path.join(self.path, filename))
                 r.add(e)
+        if idcode is None and name is None:
+            for (pname, pv), filename in self.by_name_package.items():
+                e = bsdl.Entity.load(os.path.join(self.path, filename))
+                r.add(e)
         return list(sorted(r)) # , key = lambda x:(x.name, x.id_codes)))
 
     def load(self):
+        if not bsdl:
+            self.logger.error("vhsic.bsdl not loaded, nothing done")
+            return
+
         cache = os.path.join(self.path, "index.json")
         obj = json.load(open(cache, "r"))
         for k, v in obj["by_idcode_package"].items():
