@@ -1,5 +1,15 @@
+from ...bitfield import *
+from ...protocol import jtag
 
 class Xadc:
+    class XadcDrp(Bitfield):
+        data = Field(0, 16)
+        address = Field(16, 10)
+        cmd = MappingField(26, 3, ["NOP", "READ", "WRITE"])
+        xx = Field(30, 2)
+
+    XADC_DRP = jtag.Dr(32, XadcDrp)
+    
     XADC_REG_VALUE        = staticmethod(lambda x:x)
     XADC_REG_TEMP_MAX     = 0x20
     XADC_REG_VCCINT_MAX   = 0x21
@@ -73,15 +83,15 @@ class Xadc:
     XADC_CHANNEL_VCCPAUX      = 14
     XADC_CHANNEL_VCCODDR      = 15
     XADC_CHANNEL_VAUX_PN      = staticmethod(lambda x: x+16)
-
+    
     def cmd_xadc_write(self, address, data):
-        return [self.cmd_dr_shift(self.IR_XADC_DRP, 0x08000000 | (address << 16) | data, 32),
+        return [self.IR_XADC_DRP.cmd(self.XadcDrp(cmd = "WRITE", address = address, data = data)),
                 self.cmd_run(10)]
 
     def cmd_xadc_read(self, address):
-        return [self.cmd_dr_shift(self.IR_XADC_DRP, 0x04000000 | (address << 16), 32),
+        return [self.IR_XADC_DRP.cmd(self.XadcDrp(cmd = "READ", address = address)),
                 self.cmd_run(10),
-                self.cmd_dr_shift(self.IR_XADC_DRP, 0, 32),
+                self.IR_XADC_DRP.cmd(self.XadcDrp(cmd = "NOP"), read_tdo = True),
                 self.cmd_run(10)]
 
     def xadc_write(self, address, data):
@@ -100,7 +110,7 @@ class Xadc:
     def xadc_value_read(self, channel):
         cmds = self.cmd_xadc_read(self.XADC_REG_VALUE(channel))
         self.execute(cmds)
-        return min(max(0, int(cmds[-2].tdo) >> 4), 0xfff) / 0xfff
+        return cmds[-2].tdo.data / 0xfff0
 
     def xadc_temperature_read(self):
         return self.xadc_value_read(self.XADC_CHANNEL_TEMP) * 503.975 - 273.15

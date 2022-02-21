@@ -49,4 +49,4 @@ class Zynq(series7.Series7, xadc.Xadc):
         series7.Series7.__init__(self, port, index, idcode)
         self.name = "Zynq-" + parts[int(self.idcode.drop_revision())]
 
-    IR_XADC_DRP    = 0x37
+    IR_XADC_DRP    = jtag.Instruction(0x37, "XADC_DRP")

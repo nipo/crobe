@@ -2,6 +2,7 @@ from ...protocol import jtag
 import struct
 from ... import db
 from ... import bitstring
+from ...bitfield import *
 from ..model import JtagSramFpga
 import datetime
 
@@ -14,20 +15,32 @@ class Series67(jtag.Tap, JtagSramFpga):
         JtagSramFpga.__init__(self)
         self.__can_stop = False
 
-    IR_ISC_ENABLE  = 0x10
-    IR_ISC_PROGRAM = 0x11
-    IR_ISC_DISABLE = 0x16
-    IR_JPROGRAM    = 0x0b
-    IR_JSTART      = 0x0c
-    IR_JSHUTDOWN   = 0x0d
-    IR_CFG_IN      = 0x5
-    IR_CFG_OUT     = 0x4
+    ISC_DEFAULT     = jtag.Dr(1)
+    CONFIG          = jtag.Dr(None)
+    DEVICE_ID       = jtag.Dr(32)
 
-    IR_STATUS_ISC_DONE    = 0x04
-    IR_STATUS_ISC_ENABLED = 0x08
-    IR_STATUS_INIT        = 0x10
-    IR_STATUS_DONE        = 0x20
+    IDCODE       = jtag.Instruction(0x09, "DEVICE_ID")
 
+    BOUNDARY = jtag.Dr(None)
+    SAMPLE       = jtag.Instruction(0x01, "BOUNDARY")
+
+    ISC_ENABLE_REGISTER  = jtag.Dr(5)
+    IR_ISC_ENABLE  = jtag.Instruction(0x10, "ISC_ENABLE_REGISTER")
+    ISC_PROGRAM_REGISTER  = jtag.Dr(32)
+    IR_ISC_PROGRAM = jtag.Instruction(0x11, "ISC_PROGRAM_REGISTER")
+    IR_ISC_DISABLE = jtag.Instruction(0x16, "ISC_DEFAULT")
+    IR_JPROGRAM    = jtag.Instruction(0x0b, "ISC_DEFAULT")
+    IR_JSTART      = jtag.Instruction(0x0c, "ISC_DEFAULT")
+    IR_JSHUTDOWN   = jtag.Instruction(0x0d, "ISC_DEFAULT")
+    IR_CFG_IN      = jtag.Instruction(0x5, "CONFIG")
+    IR_CFG_OUT     = jtag.Instruction(0x4, "CONFIG")
+
+    class IrStatus(Bitfield):
+        isc_done = BooleanField(2)
+        isc_enabled = BooleanField(3)
+        init = BooleanField(4)
+        done = BooleanField(5)
+    
     OP_NOP = 0
     OP_READ = 1
     OP_WRITE = 2
@@ -45,7 +58,7 @@ class Series67(jtag.Tap, JtagSramFpga):
 
         self._cfg_shift(self.IR_CFG_IN, self.CFG_PREFIX + nop + cmd + nop + nop)
         ret = self._cfg_shift(self.IR_CFG_OUT, [0] * count, True)
-        self.dr_shift(-1, None)
+        self.BYPASS.shift()
         return ret
 
     @property
@@ -59,6 +72,7 @@ class Series67(jtag.Tap, JtagSramFpga):
         super().option_set(opt)
 
     def start(self):
+        self.logger.info("Our IDCODE: 0x%08x", self.IDCODE.shift(read_tdo = True))
         self.cfg_status_dump()
             
         if not self.__can_stop and self.done:
@@ -71,16 +85,19 @@ class Series67(jtag.Tap, JtagSramFpga):
 
     @property
     def done(self):
-        return bool(self.ir_status_read() & self.IR_STATUS_DONE)
+        return self.ir_status_read().done
             
-    def send_op_wait(self, ir, expected):
+    def send_op_wait(self, ir, **expected):
+        if isinstance(ir, jtag.TapInstruction):
+            ir = ir.ir
         self.dr_shift(ir, None, read_tdo = False)
 
         for i in range(50):
             self.run(40)
             status = self.ir_status_read()
-            self.logger.info("IR status: 0x%02x", status)
-            if status & expected:
+            self.logger.info("IR status: %s", status)
+            ok = all(getattr(status, k) == v for (k, v) in expected.items())
+            if ok:
                 return True
 
         return False
@@ -98,6 +115,8 @@ class Series67(jtag.Tap, JtagSramFpga):
 
         prog_dr = bitstring.BitString(blob)
 
+        if isinstance(cmd, jtag.TapInstruction):
+            cmd = cmd.ir
         shift = self.cmd_dr_shift(cmd, prog_dr, read_tdo = read_rsp)
 
         self.execute([
@@ -109,8 +128,8 @@ class Series67(jtag.Tap, JtagSramFpga):
             return self._cfg_conv_tdo(bytes(shift.tdo))
 
     def stop(self):
-        ops = [self.cmd_dr_shift(self.IR_JPROGRAM, None),
-               self.cmd_dr_shift(self.IR_ISC_NOP, None),
+        ops = [self.IR_JPROGRAM.cmd(),
+               self.IR_ISC_NOP.cmd(),
                self.cmd_run(20),
                ]
 

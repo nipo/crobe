@@ -3,6 +3,7 @@ from ... import bitstring
 from ... import bitfield
 from ...util.endian import swib_u16
 from ...loadable.object import Program
+from ...protocol import jtag
 import datetime
 from .series67 import Series67
 
@@ -20,22 +21,25 @@ class Series6(Series67):
     ### Config port
     ###
 
-    IR_BYPASS      = 0x3f
-    IR_ISC_DNA     = 0x30 # Doc says 0x31, iMPACT does 0x30
-    IR_ISC_NOP     = 0x14
+    IR_BYPASS      = jtag.Instruction(0x3f, "BYPASS_REG")
 
-    IR_USER1 = 0x02
-    IR_USER2 = 0x03
-    IR_USER3 = 0x1a
-    IR_USER4 = 0x1b
+    DNA_REGISTER = jtag.Dr(57)
+    IR_ISC_DNA     = jtag.Instruction(0x30, "DNA_REGISTER")
+    IR_ISC_NOP     = jtag.Instruction(0x14, "ISC_DEFAULT")
 
-    IR_FUSE_READ   = 0x30 # between isc enable/disable
-    IR_FUSE_UPDATE = 0x3a # Update efuse to fpga
-    IR_FUSE_OPTS   = 0x3c # 16
-    IR_FUSE_KEY    = 0x3b # 256
-    IR_FUSE_CNTL   = 0x34 # 32
+    IR_USER1 = jtag.Instruction(0x02, None)
+    IR_USER2 = jtag.Instruction(0x03, None)
+    IR_USER3 = jtag.Instruction(0x1a, None)
+    IR_USER4 = jtag.Instruction(0x1b, None)
 
-    IR_USERCODE = 0x08
+    IR_FUSE_READ   = jtag.Instruction(0x30, None) # between isc enable/disable
+    IR_FUSE_UPDATE = jtag.Instruction(0x3a, None) # Update efuse to fpga
+    IR_FUSE_OPTS   = jtag.Instruction(0x3c, None) # 16
+    IR_FUSE_KEY    = jtag.Instruction(0x3b, None) # 256
+    IR_FUSE_CNTL   = jtag.Instruction(0x34, None) # 32
+
+    USER_CODE = jtag.Dr(32)
+    IR_USERCODE = jtag.Instruction(0x08, "USER_CODE")
 
     @staticmethod
     def type1(op, addr, count):
@@ -73,16 +77,21 @@ class Series6(Series67):
         return (idcode[0] << 16) | idcode[1]
 
     def dna_read(self):
-        ops = [self.cmd_dr_shift(self.IR_ISC_ENABLE, None),
-               self.cmd_run(20),
-               self.cmd_dr_shift(self.IR_ISC_DNA, 0, 57),
-               self.cmd_run(20),
-               self.cmd_dr_shift(self.IR_ISC_DISABLE, None),
-               ]
+        self.port.port.freq_cap("dna", 1e6)
 
-        self.execute(ops)
+        try:
+            r = self.IR_ISC_DNA.cmd(read_tdo = True)
 
-        return ops[2].tdo
+            self.execute([
+                self.IR_ISC_ENABLE.cmd(),
+                self.cmd_run(100),
+                r,
+                self.IR_ISC_DISABLE.cmd(),
+            ])
+
+            return r.tdo
+        finally:
+            self.port.port.freq_cap("dna", None)
 
     def load(self, program, force_reload = False):
         if len(program) != 1:
@@ -107,16 +116,13 @@ class Series6(Series67):
             # Whether this is because of crappy TCK/TDO routing or actual FPGA
             # thing, it still works when loading bitstream at full speed, so
             # we only want to reduce speed here, not when sending bitstream.
-            intf = self.port.port
-            intf.freq_cap("usercode", 15e6)
-
-            userid = self.dr_shift(self.IR_USERCODE, 0, 32)
-            self.logger.trace("Current UserID=0x%08x", userid)
-            intf.freq_cap("test", None)
+            with self.port.port.freq_capped("usercode", 15e6):
+                userid = self.IR_USERCODE.shift(read_tdo = True)
+            self.logger.debug("Current UserID=0x%08x", userid)
 
             if userid == expected_userid and not force_reload:
                 self.logger.trace("UserID matches, doing nothing")
-                return self.send_op_wait(-1, self.IR_STATUS_DONE)
+                return self.send_op_wait(-1, done = True)
             
         blob = program[0].data
         if len(blob) % 1:
@@ -139,7 +145,7 @@ class Series6(Series67):
         else:
             self.logger.info("Done OK, time taken: %s", end - begin)
 
-        return self.send_op_wait(-1, self.IR_STATUS_DONE)
+        return self.send_op_wait(-1, done = True)
 
     def config_write(self, blob):
         prog_data = struct.unpack(">" + "H" * (len(blob) // 2), blob)
@@ -147,7 +153,7 @@ class Series6(Series67):
         self.logger.trace("Ready to load program, %d config words", len(prog_data))
 
         self.logger.trace("Resetting...")
-        if not self.send_op_wait(self.IR_JPROGRAM, self.IR_STATUS_INIT):
+        if not self.send_op_wait(self.IR_JPROGRAM, init = True):
             raise RuntimeError("Unable to reset FPGA")
 
         self.logger.trace("Loading program data...")
@@ -156,7 +162,8 @@ class Series6(Series67):
         self.run(40)
 
         self.logger.trace("Starting...")
-        return self.send_op_wait(self.IR_JSTART, self.IR_STATUS_DONE)
+        self.logger.info("Starting...")
+        return self.send_op_wait(self.IR_JSTART, done = True)
 
     ###
     ### Status

@@ -1,6 +1,7 @@
 import struct
 from ... import bitstring
 from ... import bitfield
+from ...protocol import jtag
 from ...util.endian import swib_u32
 from ...model import PortComponent
 from ..model import SramFpga
@@ -22,23 +23,43 @@ class Series7(Series67):
     ### Config port
     ###
 
-    IR_BYPASS      = 0x3f
-    IR_USERCODE    = 0x08
-    IR_ISC_READ    = 0x15
-    IR_ISC_NOP     = 0x14
-    IR_JSTART      = 0x0c
-    IR_XSC_DNA     = 0x17
-    IR_PROGRAM_KEY = 0x12
-    IR_FUSE_DNA    = 0x32
-    IR_FUSE_CTS    = 0x30
-    IR_FUSE_USER   = 0x33
-    IR_FUSE_KEY    = 0x31
-    IR_FUSE_CNTL   = 0x34
+    USER_CODE = jtag.Dr(32)
+    IR_USERCODE    = jtag.Instruction(0x08, "USER_CODE")
+    ISC_READ_REG = jtag.Dr(37)
+    IR_ISC_READ    = jtag.Instruction(0x15, "ISC_READ_REG")
+    IR_ISC_NOP     = jtag.Instruction(0x14, None)
+    IR_JSTART      = jtag.Instruction(0x0c, None)
+    DNA_REGISTER = jtag.Dr(57)
+    IR_XSC_DNA     = jtag.Instruction(0x17, "DNA_REGISTER")
+    IR_PROGRAM_KEY = jtag.Instruction(0x12, "ISC_PROGRAM_REGISTER")
 
-    IR_USER1       = 0x02
-    IR_USER2       = 0x03
-    IR_USER3       = 0x22
-    IR_USER4       = 0x23
+    class FuseDNA(bitfield.Bitfield):
+        all          = bitfield.Field(0, 64)
+        Unk0         = bitfield.Field(0, 2)
+        ID1          = bitfield.Field(2, 7)
+        ID2          = bitfield.Field(9, 7)
+        ID0          = bitfield.Field(16, 5)
+        Unk1         = bitfield.Field(21, 2)
+        Code5        = bitfield.MappingField(23, 5, "0123456789ABCDEFGhjTlmnpqrUvwxYz")
+        Code4        = bitfield.MappingField(28, 5, "0123456789ABCDEFGhjTlmnpqrUvwxYz")
+        Code3        = bitfield.MappingField(33, 5, "0123456789ABCDEFGhjTlmnpqrUvwxYz")
+        Code2        = bitfield.MappingField(38, 5, "0123456789ABCDEFGhjTlmnpqrUvwxYz")
+        Code1        = bitfield.MappingField(43, 5, "0123456789ABCDEFGhjTlmnpqrUvwxYz")
+        Code0        = bitfield.MappingField(48, 5, "0123456789ABCDEFGhjTlmnpqrUvwxYz")
+        Unk2         = bitfield.Field(53, 11)
+
+    FUSE_DNA_REGISTER = jtag.Dr(64, FuseDNA)
+    IR_FUSE_DNA    = jtag.Instruction(0x32, "FUSE_DNA_REGISTER")
+    FUSE_CMD_REGISTER = jtag.Dr(64)
+    IR_FUSE_CTS    = jtag.Instruction(0x30, "FUSE_CMD_REGISTER")
+    IR_FUSE_USER   = jtag.Instruction(0x33, None)
+    IR_FUSE_KEY    = jtag.Instruction(0x31, None)
+    IR_FUSE_CNTL   = jtag.Instruction(0x34, None)
+
+    IR_USER1       = jtag.Instruction(0x02, None)
+    IR_USER2       = jtag.Instruction(0x03, None)
+    IR_USER3       = jtag.Instruction(0x22, None)
+    IR_USER4       = jtag.Instruction(0x23, None)
 
     @staticmethod
     def type1(op, addr, count):
@@ -77,47 +98,35 @@ class Series7(Series67):
     @property
     def cfg_idcode(self):
         return self.cfg_read(self.CFG_IDCODE, 1)[0]
-
-    class FuseDNA(bitfield.Bitfield):
-        all          = bitfield.Field(0, 64)
-        Unk0         = bitfield.Field(0, 2)
-        ID1          = bitfield.Field(2, 7)
-        ID2          = bitfield.Field(9, 7)
-        ID0          = bitfield.Field(16, 5)
-        Unk1         = bitfield.Field(21, 2)
-        Code5        = bitfield.MappingField(23, 5, "0123456789ABCDEFG??TT?????UvwxYz")
-        Code4        = bitfield.MappingField(28, 5, "0123456789ABCDEFG??TT?????UvwxYz")
-        Code3        = bitfield.MappingField(33, 5, "0123456789ABCDEFG??TT?????UvwxYz")
-        Code2        = bitfield.MappingField(38, 5, "0123456789ABCDEFG??TT?????UvwxYz")
-        Code1        = bitfield.MappingField(43, 5, "0123456789ABCDEFG??TT?????UvwxYz")
-        Code0        = bitfield.MappingField(48, 5, "0123456789ABCDEFG??TT?????UvwxYz")
-        Unk2         = bitfield.Field(53, 11)
     
     def dna_read(self):
         self.port.port.freq_cap("dna", 1e6)
 
         try:
-            xsc_dna_read = self.cmd_dr_shift(self.IR_XSC_DNA, 0, 56, return_type = bitstring.BitString)
-            fuse_dna_read = self.cmd_dr_shift(self.IR_FUSE_DNA, 0, 64, return_type = bitstring.BitString)
-            self.execute([self.cmd_dr_shift(self.IR_ISC_ENABLE, None), self.cmd_run(20),
-                          xsc_dna_read, fuse_dna_read,
-                          self.cmd_run(20), self.cmd_dr_shift(self.IR_ISC_DISABLE, None)])
+            xsc_dna_read = self.IR_XSC_DNA.cmd(return_type = bitstring.BitString, read_tdo = True)
+            fuse_dna_read = self.IR_FUSE_DNA.cmd(read_tdo = True)
+            self.execute([self.IR_ISC_ENABLE.cmd(),
+                          self.cmd_run(20),
+                          xsc_dna_read,
+                          fuse_dna_read,
+                          self.cmd_run(20),
+                          self.IR_ISC_DISABLE.cmd(),
+            ])
 
             self.xsc_dna_value = xsc_dna_read.tdo
-            self.fuse_dna_value = fuse_dna_read.tdo
+            self.fuse_dna = fuse_dna_read.tdo
 
-            self.fuse_dna = self.FuseDNA(all = int(self.fuse_dna_value))
             self.jtag_dna = "%s%s%s%s%s%s_%d_%d_%d" % (
                 self.fuse_dna.Code0, self.fuse_dna.Code1,
                 self.fuse_dna.Code2, self.fuse_dna.Code3,
                 self.fuse_dna.Code4, self.fuse_dna.Code5,
                 self.fuse_dna.ID0, self.fuse_dna.ID1,
                 self.fuse_dna.ID2)
-            self.logger.info("Fuse DNA: %s %s", self.fuse_dna_value, self.fuse_dna)
+            self.logger.info("Fuse DNA: %s", self.fuse_dna)
             self.logger.info("XSC DNA: %s", self.xsc_dna_value)
             self.logger.info("JTAG DNA: %s", self.jtag_dna)
 
-            return int(self.fuse_dna_value)
+            return int(self.fuse_dna)
         finally:
             self.port.port.freq_cap("dna", None)
 
@@ -140,11 +149,11 @@ class Series7(Series67):
             #    raise ValueError("Bitstream is for a %s, device is a %s" % (target, cur))
 
         if expected_userid:
-            userid = self.dr_shift(self.IR_USERCODE, 0, 32)
+            userid = self.IR_USERCODE.shift()
             self.logger.info("Current UserID=0x%08x", userid)
             if userid == expected_userid and not force_reload:
                 self.logger.info("UserID matches, doing nothing")
-                return self.send_op_wait(-1, self.IR_STATUS_DONE)
+                return self.send_op_wait(-1, done = True)
             
         blob = program[0].data
         if len(blob) & 3:
@@ -167,7 +176,7 @@ class Series7(Series67):
         # This is important, it enables internal CCLK
         self.run(1000)
 
-        return self.send_op_wait(-1, self.IR_STATUS_DONE)
+        return self.send_op_wait(-1, done = True)
 
     def config_write(self, blob):
         prog_data = struct.unpack(">" + "L" * (len(blob) // 4), blob)
@@ -175,10 +184,10 @@ class Series7(Series67):
         self.logger.trace("Ready to load program of %d config words", len(prog_data))
 
         self.logger.info("Resetting...")
-        self.dr_shift(self.IR_JPROGRAM, None)
+        self.IR_JPROGRAM.shift()
         self.run(20)
 
-        self.dr_shift(self.IR_ISC_NOP, None)
+        self.IR_ISC_NOP.shift()
         self.run(20)
 
         self.logger.trace("CFG IDCODE: %08x", self.cfg_idcode)
@@ -192,15 +201,15 @@ class Series7(Series67):
         self.cfg_status_dump()
 
         self.logger.info("Starting...")
-        self.dr_shift(self.IR_JSTART, None)
+        self.IR_JSTART.shift()
         self.run(10000)
-        self.dr_shift(self.IR_BYPASS, None)
+        self.IR_BYPASS.shift()
         self.run(10000)
         self.logger.trace("Start done...")
 
         self.cfg_status_dump()
 
-        return self.send_op_wait(-1, self.IR_STATUS_DONE)
+        return self.send_op_wait(-1, done = True)
 
     ###
     ### Status
@@ -322,6 +331,16 @@ class Series7(Series67):
         assert a == b
         return a
 
+    class FuseCts(bitfield.Bitfield):
+        KEY = 0xa08a28ac
+
+        dma = bitfield.BooleanField(0)
+        program = bitfield.BooleanField(1)
+        data = bitfield.Field(32, 32)
+        row = bitfield.Field(3, 5)
+        bit = bitfield.Field(8, 5)
+        margin_opt = bitfield.Field(13, 2)
+
     @classmethod
     def dr_cts_write(cls, row, bit, margin_opt, program, dma):
         assert 0 <= margin_opt <= 3
@@ -355,18 +374,19 @@ class Series7(Series67):
         Except we do not go through TLR because it causes problems
         with other TAPs. Instead, shift FUSE_CTS with zeroes.
         """
-        cts = self.dr_cts_write(row = row, bit = 0, margin_opt = margin_opt, program = 0, dma = 1)
+        cts = self.FuseCts(row = row, bit = 0, margin_opt = margin_opt,
+                           program = 0, dma = 1, data = self.FuseCts.KEY)
 
-        ops = [self.cmd_dr_shift(self.IR_FUSE_CTS, 0, 64, read_tdo = False),
+        ops = [self.IR_FUSE_CTS.cmd(0),
                self.cmd_run(12),
-               self.cmd_dr_shift(self.IR_FUSE_CTS, cts, 64, read_tdo = False),
-               self.cmd_dr_shift(self.IR_FUSE_CTS, 0, 64, read_tdo = True),
+               self.IR_FUSE_CTS.cmd(cts, read_tdo = False),
+               self.IR_FUSE_CTS.cmd(read_tdo = True),
                self.cmd_run(1),
-               self.cmd_dr_shift(-1, None),
+               self.BYPASS.cmd(),
                ]
         self.execute(ops)
 
-        value = (ops[3].tdo >> 32) & 0x3fffffff
+        value = (ops[3].tdo.data) & 0x3fffffff
 
         return value
 
@@ -387,14 +407,16 @@ class Series7(Series67):
         with other TAPs. Instead, shift FUSE_CTS with zeroes.
         """
         cts = self.dr_cts_write(row = row, bit = bit, margin_opt = 0, program = 1, dma = 1)
+        cts = self.FuseCts(row = row, bit = bit, margin_opt = 0,
+                           program = 1, dma = 1, data = self.FuseCts.KEY)
 
-        return [self.cmd_dr_shift(self.IR_FUSE_CTS, 0, 64, read_tdo = False),
+        return [self.IR_FUSE_CTS.cmd(0),
                 self.cmd_run(1),
-                self.cmd_dr_shift(self.IR_FUSE_CTS, cts, 64, read_tdo = False),
-                self.cmd_dr_shift(self.IR_FUSE_CTS, None, read_tdo = False),
+                self.IR_FUSE_CTS.cmd(cts),
+                self.IR_FUSE_CTS.cmd(None),
                 self.cmd_run(int(self.port.port.freq * 12e-6) or 1),
-                self.cmd_dr_shift(self.IR_FUSE_CTS, 0, 64, read_tdo = False),
-                self.cmd_dr_shift(-1, None),
+                self.IR_FUSE_CTS.cmd(0),
+                self.BYPASS.cmd(),
                 self.cmd_run(1),
                 ]
 
@@ -447,47 +469,63 @@ class Series7(Series67):
     ISC_DR_EN = 0x15
 
     def bbram_key_read(self):
-        self.dr_shift(self.IR_ISC_ENABLE, self.ISC_DR_EN, 5)
-        self.run(12)
-
-        self.dr_shift(self.IR_ISC_READ, -1, 37)
-        self.run(9)
+        cmds = [
+            self.IR_ISC_ENABLE.cmd(self.ISC_DR_EN),
+            self.cmd_run(12),
+            self.IR_ISC_READ.cmd(-1),
+            self.cmd_run(9),
+            ]
 
         parts = []
         for i in range(8):
-            r = self.dr_shift(self.IR_ISC_READ, -1, 37)
-            self.run(9)
-            part = r >> 5
-            status = r & 0x1f
-            self.logger.trace("reading %08x" % part)
-            parts.append(part)
+            r = self.IR_ISC_READ.cmd(-1, read_tdo = True)
+            parts.append(r)
+            cmds += [
+                r,
+                self.cmd_run(9),
+                ]
+        self.execute(cmds)
 
-        return struct.pack(">8L", *parts)
+        d = []
+        for i, p in enumerate(parts):
+            part = p.tdo >> 5
+            status = p.tdo & 0x1f
+            self.logger.debug("bbram[%d] 0x%08x" % (i, part))
+            d.append(part)
+
+        return struct.pack(">8L", *d)
 
     def bbram_key_write(self, key):
         parts = struct.unpack(">8L", key)
-        
-        self.dr_shift(self.IR_ISC_ENABLE, self.ISC_DR_EN, 5)
-        self.run(12)
 
-        self.dr_shift(self.IR_PROGRAM_KEY, 0xffffffff, 32)
-        self.run(9)
-        self.dr_shift(self.IR_ISC_PROGRAM, 0xffffffff, 32)
-        self.run(1)
+        cmds = [
+            self.IR_ISC_ENABLE.cmd(self.ISC_DR_EN),
+            self.cmd_run(12),
+            self.IR_PROGRAM_KEY.cmd(-1),
+            self.cmd_run(9),
+            self.IR_ISC_PROGRAM.cmd(-1),
+            self.cmd_run(1),
+        ]
 
         for part in parts:
-            self.logger.info("writing %08x" % part)
-            self.dr_shift(self.IR_ISC_PROGRAM, part, 32)
-            self.run(1)
+            cmds += [
+                self.IR_ISC_PROGRAM.cmd(part),
+                self.cmd_run(1),
+                ]
+        self.execute(cmds)
 
     def bbram_open(self):
-        self.dr_shift(self.IR_JPROGRAM, None)
-        self.dr_shift(self.IR_ISC_NOP, None)
-        self.run(10000)
+        self.execute([
+            self.IR_JPROGRAM.cmd(),
+            self.IR_ISC_NOP.cmd(),
+            self.cmd_run(10000),
+            ])
 
     def bbram_close(self):
-        self.dr_shift(self.IR_ISC_DISABLE, None)
-        self.run(12)
+        self.execute([
+            self.IR_ISC_DISABLE.cmd(),
+            self.cmd_run(12),
+            ])
 
 @spi.Target.db.register("series7_slave")
 def series7_slave_probe(target, *args):
