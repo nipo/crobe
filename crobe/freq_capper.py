@@ -1,4 +1,5 @@
 from .util.pretty import metric, sci_parse
+from contextlib import contextmanager
 
 class FreqCapper:
     def __init__(self, default_freq = None):
@@ -14,6 +15,14 @@ class FreqCapper:
         for c in collection:
             self.freq_cap(c, c.max_freq)
 
+    @contextmanager
+    def freq_capped(self, key, freq):
+        f = self.freq_cap(key, freq)
+        try:
+            yield f
+        finally:
+            self.freq_cap(key)
+            
     def freq_cap(self, key, freq = None):
         if freq is None:
             self.__constraints.pop(key, None)
