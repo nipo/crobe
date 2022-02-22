@@ -85,6 +85,20 @@ class MachXO2Config(jtag.InstructionRegistry):
         Boots2   = bitfield.BooleanField(61)
         Rsvd     = bitfield.Field(62, 2)
 
+    class FeaBits(bitfield.Bitfield):
+        all = bitfield.Field(0, 16)
+        Boot = bitfield.MappingField(12, 2, ["Internal", "None", "Unk2", "Unk3"])
+        SpiMaster = bitfield.BooleanField(11, inverted = True)
+        I2c = bitfield.BooleanField(10, inverted = True)
+        SpiSlave = bitfield.BooleanField(9, inverted = True)
+        Jtag = bitfield.BooleanField(8, inverted = True)
+        Done = bitfield.BooleanField(7)
+        Initn = bitfield.BooleanField(6)
+        Programn = bitfield.BooleanField(5)
+        MyAssp = bitfield.BooleanField(4)
+        PassProtectAll = bitfield.BooleanField(3)
+        PassProtect = bitfield.BooleanField(2)
+
     class TraceId(bitfield.Bitfield):
         User  = bitfield.Field(56, 8)
         Lot   = bitfield.Field(24, 32)
@@ -104,10 +118,10 @@ class MachXO2Config(jtag.InstructionRegistry):
     BOUNDARY      = jtag.Dr(208)
     MANUFACTURING = jtag.Dr(128)
     PASSWORD      = jtag.Dr(64)
-    STATUS        = jtag.Dr(32)
-    CTRL0         = jtag.Dr(32)
-    FEATURE       = jtag.Dr(64)
-    FEABITS       = jtag.Dr(16)
+    STATUS        = jtag.Dr(32, Status)
+    CTRL0         = jtag.Dr(32, Ctrl0)
+    FEATURE       = jtag.Dr(64, Feature)
+    FEABITS       = jtag.Dr(16, FeaBits)
     BITSTREAM     = jtag.Dr(None)
     DR_UNKNOWN    = jtag.Dr(None)
     PAGE_ADDRESS  = jtag.Dr(32)
@@ -171,6 +185,9 @@ class MachXO2Config(jtag.InstructionRegistry):
     LSC_UIDCODE_PUB      = jtag.Instruction(0x19, "DEVICE_ID")
     LSC_MANUFACTURING    = jtag.Instruction(0x90, "MANUFACTURING")
     LSC_SHIFT_PASSWORD   = jtag.Instruction(0xbc, "PASSWORD")
+
+    LSC_PROG_SPI         = jtag.Instruction(0x3a, None)
+    # Key: 0x68fe
     
     def __init__(self):
         jtag.InstructionRegistry.__init__(self)
@@ -222,7 +239,7 @@ class MachXO2Config(jtag.InstructionRegistry):
             self._isc_enable(True)
             self.logger.info(repr(self.Feature(self.feature_get())))
             self._isc_disable()
-        except RuntimeError:
+        except ValueError:
             self.logger.warning("Unable to background enable")
 
     TARGET_SRAM    = 0
@@ -238,7 +255,7 @@ class MachXO2Config(jtag.InstructionRegistry):
         self.execute([cmd.cmd(target), self.cmd_run(1)])
 
         self.wait_no_fail()
-        self.status_check(0, 0x0200)
+        #self.status_check(ISC = True)
         self.__bg_enable = background
 
     def _isc_disable(self):
@@ -290,23 +307,22 @@ class MachXO2Config(jtag.InstructionRegistry):
         self._isc_disable()
 
     def status_get(self):
-        return self.LSC_READ_STATUS.shift(0)
+        return self.LSC_READ_STATUS.shift(read_tdo = True)
 
     def feature_get(self):
-        return self.LSC_READ_FEATURE.shift(0)
+        return self.LSC_READ_FEATURE.shift(read_tdo = True)
 
     def busy_get(self):
 #        return self.Status(self.status_get()).Busy
-        return self.LSC_CHECK_BUSY.shift(0) & 1
+        return self.LSC_CHECK_BUSY.shift(read_tdo = True) & 1
 
-    def status_check(self, expect_clear, expect_set):
-        mask = expect_set | expect_clear
+    def status_check(self, **crit):
         status = self.status_get()
-        if status & mask == expect_set:
+        ok = all(getattr(status, k) == v for (k, v) in crit.items())
+        if ok:
             return
         self.logger.warning(repr(self.Status(status)))
-        raise ValueError("Expected status with 0x%08x set, 0x%08x clear, got 0x%08x" %
-                         (expect_set, expect_clear, status))
+        raise ValueError("Expected status with %s, got %s" % (crit, status))
 
     def wait_idle(self, timeout = 1.):
         step = .01
@@ -322,7 +338,7 @@ class MachXO2Config(jtag.InstructionRegistry):
 
     def wait_no_fail(self, timeout = 1.):
         self.wait_idle(timeout)
-        self.status_check(3 << 12, 0)
+        self.status_check(Busy = False, Fail = False)
 
     def _flash_erase(self):
         assert self.__bg_enable is not None
@@ -345,7 +361,7 @@ class MachXO2Config(jtag.InstructionRegistry):
     def _mem_read(self, offset, size, addr_init_op, offset_base):
         assert self.__bg_enable is not None
         self._isc_enable(self.TARGET_FLASH, True)
-        self.status_check(0, 0xa00)
+        self.status_check(ISC = True, Read = True)
 
         addr_init_op.shift(offset_base >> 28)
         self.wait_no_fail()
@@ -375,7 +391,7 @@ class MachXO2Config(jtag.InstructionRegistry):
         return data[offset & 0xf : (offset & 0xf) + size]
 
     def _mem_write(self, offset, data, addr_init_op, offset_base):
-        self.status_check(0, 0x600)
+        self.status_check(ISC = True, Write = True)
 
         if offset % 16:
             prelen = (-offset % 16)
@@ -468,10 +484,10 @@ class MachXO2Config(jtag.InstructionRegistry):
         return ret
 
     def _feature_read(self):
-        return self.LSC_READ_FEATURE.shift(0, return_type = bytes)
+        return self.LSC_READ_FEATURE.shift(read_tdo = True, return_type = bytes)
 
     def _feabits_read(self):
-        return self.LSC_READ_FEABITS.shift(0, return_type = bytes)
+        return self.LSC_READ_FEABITS.shift(read_tdo = True, return_type = bytes)
 
     def _feature_write(self, feature):
         self._isc_enable(self.TARGET_FLASH, True)
@@ -680,7 +696,7 @@ class MachXO2Serial(PortComponent, MachXO2Config):
         MachXO2Config.start(self)
 
     def busy_get(self):
-        return not not (self.LSC_READ_STATUS.shift(0) & 0x1000)
+        return self.LSC_READ_STATUS.shift(read_tdo = True).Busy
 
     _reg_map = {
         0xe0: SerIrMap("read"),
@@ -743,7 +759,7 @@ class MachXO2Serial(PortComponent, MachXO2Config):
         time.sleep(.1)
 
     def _mem_read(self, offset, size, addr_init_op, offset_base):
-        self.status_check(0, 0xa00)
+        self.status_check(ISC = True, Read = True)
 
         addr_init_op.shift(offset_base >> 28)
         self.wait_no_fail()
