@@ -33,11 +33,12 @@ class Pin:
         if oc is not None:
             safe_bit = oc.safe_bit
         
-        return cls(board, name, ic_idx, oc_idx, cc_idx, disable_value, safe_bit)
+        return cls(board, name, pin.label, ic_idx, oc_idx, cc_idx, disable_value, safe_bit)
         
-    def __init__(self, board, name, ic_idx, oc_idx, cc_idx, cc_disable, oc_safe):
+    def __init__(self, board, name, label, ic_idx, oc_idx, cc_idx, cc_disable, oc_safe):
         self.board = board
         self.name = name
+        self.label = label
         self.ic_idx = ic_idx
         self.oc_idx = oc_idx
         self.cc_idx = cc_idx

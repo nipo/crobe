@@ -45,6 +45,12 @@ class Interface(base.Interface):
         """
         return {}
 
+    def io(self, **crit):
+        """
+        Retrieve IO definition by some criteria
+        """
+        raise KeyError(str(crit))
+
     def set(self, *io_ops):
         """
         See cmd_set()

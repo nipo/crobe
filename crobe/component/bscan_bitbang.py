@@ -7,6 +7,7 @@ from ..util.pretty import metric
 class IoInfo(bitbang.IoInfo):
     def __init__(self, name, pin):
         self.name = name
+        self.label = pin.label
         self.pin = pin
         self.mode = None
         self.output = None
@@ -101,10 +102,12 @@ class TapBitbang(bitbang.Interface):
         self.boundary_control = BitString(-1, self.controller.boundary_len)
         self.boundary_status = BitString(-1, self.controller.boundary_len)
 
-        self.pins = {}
+        self.by_name = {}
+        self.by_label = {}
         for name, pin in self.controller.pins.items():
-            name = name.lower()
-            self.pins[name] = IoInfo(name, pin)
+            ioi = IoInfo(name.lower(), pin)
+            self.by_name[ioi.name] = ioi
+            self.by_label[ioi.label] = ioi
 
         self.controller.disable()
         self.scanned_once = False
@@ -117,7 +120,7 @@ class TapBitbang(bitbang.Interface):
         if not self.scanned_once:
             cmds.append(self.port.cmd_dr_shift(
                 ir = self.controller.ir_preload,
-                dr = self.boundary_control,
+                tdi = self.boundary_control,
                 read_tdo = False))
             self.scanned_once = True
 
@@ -125,7 +128,7 @@ class TapBitbang(bitbang.Interface):
             read = False
             if isinstance(op, bitbang.IoSet):
                 for iop in op.ops:
-                    io = self.pins[iop.io]
+                    io = self.by_name[iop.io]
                     io.set(mode = iop.mode, value = iop.value)
                     io.bs_scatter()
             elif isinstance(op, bitbang.IoGet):
@@ -151,4 +154,11 @@ class TapBitbang(bitbang.Interface):
                 op.values = self.controller.pin_get_many(op.ios)
 
     def io_info(self):
-        return self.pins
+        return self.by_name
+
+    def io(self, **crit):
+        if "name" in crit:
+            return self.by_name[crit["name"]]
+        if "label" in crit:
+            return self.by_label[crit["label"]]
+        raise KeyError(str(crit))
