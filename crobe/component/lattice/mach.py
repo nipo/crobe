@@ -115,9 +115,9 @@ class MachXO2Config(jtag.InstructionRegistry):
     ER1           = jtag.Instruction(0x32, None)
     ER2           = jtag.Instruction(0x38, None)
     
-    CLAMP                = jtag.Instruction(0x78, "TAP_BYPASS")
+    CLAMP                = jtag.Instruction(0x78, "BYPASS_REG")
     EXTEST               = jtag.Instruction(0x15, "BOUNDARY")
-    HIGHZ                = jtag.Instruction(0x18, "TAP_BYPASS")
+    HIGHZ                = jtag.Instruction(0x18, "BYPASS_REG")
     IDCODE               = jtag.Instruction(0xe0, "DEVICE_ID")
     IDCODE_PRIV          = jtag.Instruction(0x16, "DEVICE_ID")
     ISC_ADDRESS_SHIFT    = jtag.Instruction(0x42, "ISC_ADDRESS")
