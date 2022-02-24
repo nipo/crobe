@@ -64,7 +64,7 @@ class Cache:
         if not bsdl:
             self.logger.error("vhsic.bsdl not loaded, ignoring")
             return
-        self.logger.info("Parsing %s...", filename)
+        self.logger.trace("Parsing %s...", filename)
         cache_filename = self.cache_filename(filename)
         entity = None
 

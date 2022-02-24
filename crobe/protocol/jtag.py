@@ -77,7 +77,7 @@ class Interface(base.Interface):
         self.child_add(Chain(self))
 
     def start(self):
-        self.logger.info("starting")
+        self.logger.trace("starting")
         super().start()
         
     def _execute(self, operation_list):
@@ -150,7 +150,7 @@ class Interface(base.Interface):
             register = tdo[:length - 32]
             rx_marker = tdo[length - 32 : length]
 
-            self.logger.info("After %d bit shift, tdo = %s, probable length = %d, register = %s, rx_marker = %x (expected %x)", len(tdo), tdo, len(register), register, int(rx_marker), marker)
+            self.logger.debug("After %d bit shift, tdo = %s, probable length = %d, register = %s, rx_marker = %x (expected %x)", len(tdo), tdo, len(register), register, int(rx_marker), marker)
             if int(tdo[length - 32 : length]) != marker:
                 raise OpenChain("TDO changed, but never got TDI back. Bad TDI/TDO connection ?")
 
@@ -314,7 +314,7 @@ class Chain(PortComponent):
         self.tap = {}
         
     def start(self):
-        self.logger.info("starting")
+        self.logger.trace("starting")
         PortComponent.start(self)
 
         import time
@@ -407,7 +407,7 @@ class Chain(PortComponent):
             self.port.cmd_run(50),
             self.port.cmd_capture_dr(),
             ])
-        self.logger.debug("Discovering DR after reset")
+        self.logger.trace("Discovering DR after reset")
         reset_dr = self.port.shift_discover()
             
         if len(reset_dr) == 0:
@@ -415,17 +415,17 @@ class Chain(PortComponent):
 
         # Get default IR, load bypass
         self.port.capture_ir()
-        self.logger.debug("Discovering IR")
+        self.logger.trace("Discovering IR")
         captured_ir = self.port.shift_discover(shift_in = -1)
         captured_ir_length = len(captured_ir)
 
         # Discover device count
         self.port.capture_dr()
-        self.logger.debug("Discovering Bypass DR")
+        self.logger.trace("Discovering Bypass DR")
         bypass_dr = self.port.shift_discover(max_length = len(captured_ir) // 2)
         device_count = len(bypass_dr)
 
-        self.logger.info("DR at TAP reset: %s", reset_dr)
+        self.logger.note("DR at TAP reset: %s", reset_dr)
 
         for left, right, idcode in self.default_dr_override:
             reset_dr = reset_dr[:left] + BitString(idcode, 32) + reset_dr[right:]
@@ -448,7 +448,7 @@ class Chain(PortComponent):
                     id_codes.append(None)
                     point += 1
 
-        self.logger.info("IDCodes: %s", id_codes)
+        self.logger.note("IDCodes: %s", id_codes)
 
                     
         # Determine possible IR lengths

@@ -27,7 +27,7 @@ class W25x(SpiFlash):
     def erase_sector(self, addr, si):
         self.unprotect()
         self.write_enable(True)
-        self.logger.info("Erasing %d bytes at %08x (%02x)", si["size"], addr, si["erase_cmd"][0])
+        self.logger.trace("Erasing %d bytes at %08x (%02x)", si["size"], addr, si["erase_cmd"][0])
         self.command(si["erase_cmd"], arg = self.addr(addr))
         time.sleep(si["time"])
         while self.status & self.STATUS_WIP:

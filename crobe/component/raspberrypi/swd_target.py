@@ -23,7 +23,7 @@ class Rp2040RescueDp(MultidropSwDp):
                       self.port.cmd_write(0, 1, 0),
                       self.port.cmd_run(32),
         ])
-        self.logger.info("Ctrlstat: %08x", rd.data)
+        self.logger.debug("Ctrlstat: %08x", rd.data)
 
         for t in [0, 1]:
             self.port.multidrop_probe(PartId(9, 0x13, 0x1002, t))

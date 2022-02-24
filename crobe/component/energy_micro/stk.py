@@ -106,7 +106,7 @@ class EfmStk(object):
         blob = self.interface.emucom_read(self.COM_CHANNEL_ENERGY_MONITOR_FAST, 2048)
 
         if not any(blob[96:]):
-            self.logger.info("Calibrating...")
+            self.logger.trace("Calibrating...")
             return
 
         voltage, = struct.unpack("<f", blob[64:68])

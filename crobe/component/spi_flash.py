@@ -143,12 +143,12 @@ class SpiMemory(PortComponent, Bus):
             rsp = self.port.cmd_shift(rsize)
             cmds.append(rsp)
         cmds += [self.port.cmd_cs(False)]
-        self.logger.debug("<< %s %s %s %d", cmd.hex(), arg.hex(), wdata.hex(), rsize)
+        self.logger.protocol("<< %s %s %s %d", cmd.hex(), arg.hex(), wdata.hex(), rsize)
         self.port.execute(cmds)
         if rsize:
-            self.logger.debug(">> %s", rsp.miso.hex())
+            self.logger.protocol(">> %s", rsp.miso.hex())
             return rsp.miso
-        self.logger.debug(">> -")
+        self.logger.protocol(">> -")
         return b''
         
     def idr_get(self):
@@ -184,23 +184,23 @@ class SpiFlash(SpiMemory):
 
     def info(self):
         self.logger.info("Total size: %s (%s)", base2(self.total_size, "B"), base2(self.total_size * 8, "b"))
-        self.logger.info("%d bytes address, %d-byte write buffer", self.ADDRESS_SIZE, self.write_buffer_size)
-        self.logger.info("Fast read: %02x, Page program: %02x, erase commands:", self.CMD_FAST_READ[0], self.CMD_PAGE_PROGRAM[0])
+        self.logger.note("%d bytes address, %d-byte write buffer", self.ADDRESS_SIZE, self.write_buffer_size)
+        self.logger.note("Fast read: %02x, Page program: %02x, erase commands:", self.CMD_FAST_READ[0], self.CMD_PAGE_PROGRAM[0])
         for s in self.SECTOR_INFO:
-            self.logger.info("- type %d: %d x %s sectors, erase command: %s",
+            self.logger.note("- type %d: %d x %s sectors, erase command: %s",
                              s["type"], self.total_size / s["size"], base2(s["size"], 'B'),
                              ("0x%02x" % s["erase_cmd"][0]) if s["erase_cmd"] else "-")
         if self.CMD_WRITE_VOLATILE_STATUS:
-            self.logger.info("Volatile status write op: 0x%02x", self.CMD_WRITE_VOLATILE_STATUS[0])
+            self.logger.note("Volatile status write op: 0x%02x", self.CMD_WRITE_VOLATILE_STATUS[0])
 
     def write_enable(self, enable):
         retries = 0
         while bool(self.status & self.STATUS_WEL) != enable:
             if enable:
-                self.logger.debug("Write enable (%02x)", self.CMD_WRITE_ENABLE[0])
+                self.logger.trace("Write enable (%02x)", self.CMD_WRITE_ENABLE[0])
                 self.command(self.CMD_WRITE_ENABLE)
             else:
-                self.logger.debug("Write disable (%02x)", self.CMD_WRITE_DISABLE[0])
+                self.logger.trace("Write disable (%02x)", self.CMD_WRITE_DISABLE[0])
                 self.command(self.CMD_WRITE_DISABLE)
             retries += 1
 
@@ -210,7 +210,7 @@ class SpiFlash(SpiMemory):
     @property
     def status(self):
         st = self.command(self.CMD_READ_STATUS, rsize = 1)[0]
-#        self.logger.debug("Status: %02x", st)
+#        self.logger.trace("Status: %02x", st)
         return st
 
     def status_write(self, *values):
@@ -225,15 +225,15 @@ class SpiFlash(SpiMemory):
     def erase_all(self):
         self.unprotect()
         self.write_enable(True)
-        self.logger.debug("Chip erase (%02x)", self.CMD_CHIP_ERASE[0])
+        self.logger.trace("Chip erase (%02x)", self.CMD_CHIP_ERASE[0])
         self.command(self.CMD_CHIP_ERASE)
-        self.logger.debug("Waiting for erase to complete")
+        self.logger.trace("Waiting for erase to complete")
         while self.status & self.STATUS_WIP:
             time.sleep(.1)
         self.write_enable(False)
     
     def erase(self, base, size):
-        self.logger.info("Erasing %08x, %s", base, base2(base+size, 'B'))
+        self.logger.trace("Erasing %08x, %s", base, base2(base+size, 'B'))
 
         chosen = None
         while size > 0:
@@ -262,7 +262,7 @@ class SpiFlash(SpiMemory):
     def erase_sector(self, addr, si):
         self.unprotect()
         self.write_enable(True)
-        self.logger.info("Erasing %d bytes at %08x (%02x)", si["size"], addr, si["erase_cmd"][0])
+        self.logger.trace("Erasing %d bytes at %08x (%02x)", si["size"], addr, si["erase_cmd"][0])
         self.command(si["erase_cmd"], arg = self.addr(addr))
         while self.status & self.STATUS_WIP:
             pass
@@ -291,7 +291,7 @@ class SpiFlash(SpiMemory):
         offset = 0
 
         while offset < len(data):
-            self.logger.info("Writing chunk at 0x%08x... (%02x)", base + offset, self.CMD_PAGE_PROGRAM[0])
+            self.logger.trace("Writing chunk at 0x%08x... (%02x)", base + offset, self.CMD_PAGE_PROGRAM[0])
 
             alignment = (base + offset) % write_chunk_size
             size = write_chunk_size - alignment
@@ -411,7 +411,7 @@ class SfdpFlash(SelfDescriptiveFlash):
                         four_byte = data
                         continue
 
-                self.logger.info("    Data: %s", binascii.b2a_hex(data))
+                self.logger.debug("    Data: %s", binascii.b2a_hex(data))
                 continue
 
             self.logger.info("    Vendor data: %s", name_get((jid >> 8) - 1, jid & 0x7f))
@@ -448,21 +448,21 @@ class SfdpFlash(SelfDescriptiveFlash):
             map_desc = bool(chunk[0] & 2)
             last = bool(chunk[0] & 1)
 
-            self.logger.debug("  - Command/Map %s", binascii.b2a_hex(chunk))
+            self.logger.note("  - Command/Map %s", binascii.b2a_hex(chunk))
 
             if map_desc:
                 _, cmd_instr, len_lat, mask, address = struct.unpack("<BBBBL", chunk)
                 length = len_lat >> 6
                 lat = len_lat & 0xf
 
-                self.logger.debug("  - Command descriptor mask %02x len %x lat %x cmd %02x, addr %08x",
+                self.logger.note("  - Command descriptor mask %02x len %x lat %x cmd %02x, addr %08x",
                                  mask, length, lat, cmd_instr, address)
             else:
                 _, cid, rcount, _, etype_size = struct.unpack("<BBBBL", chunk)
                 etype = etype_size & 0xf
                 size = etype_size >> 8
 
-                self.logger.debug("  - Map descriptor id %d rcount %d erase %x size %d",
+                self.logger.note("  - Map descriptor id %d rcount %d erase %x size %d",
                                  cid, rcount + 1, etype, size)
 
             if last:
@@ -481,7 +481,7 @@ class SfdpFlash(SelfDescriptiveFlash):
         for i in [x["type"] for x in self.SECTOR_INFO]:
             mask |= 1 << (8 + i) #type is 1-based
 
-        self.logger.debug("  - 4-byte address command info support %06x, expecting %06x", support, mask)
+        self.logger.note("  - 4-byte address command info support %06x, expecting %06x", support, mask)
 
         if (support & mask) == mask:
             self.ADDRESS_SIZE = 4

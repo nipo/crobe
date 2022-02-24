@@ -4,7 +4,6 @@ from enum import Enum
 from ..util.pretty import base2
 import binascii
 import time
-from tqdm import tqdm
 
 __all__ = ["Region", "Flash", "NandFlash", "NorFlash", "Eeprom", "Ram", "Peripheral", "Loadable", "Flag", "Type"]
 
@@ -78,27 +77,28 @@ class Flash(Region):
     
     def verify(self, program):
         pages = program.paged(self.page_size)
-        for s in tqdm(pages, desc = "Checking"):
-            flash_data = self.read(s.address - self.address, len(s))
-            diffs = 0
-            for orig, found in zip(s.data, flash_data):
-                diffs += int(orig != found)
+        with self.logger.progress("Checking", len(pages)) as progress:
+            for s in progress.iterate(pages):
+                flash_data = self.read(s.address - self.address, len(s))
+                diffs = 0
+                for orig, found in zip(s.data, flash_data):
+                    diffs += int(orig != found)
 
-            if diffs:
-                self.logger.error("Comparison for %s failed: %d/%d bytes differ", s, diffs, len(s))
-                dumped = 0
-                for off in range(0, len(s.data), 16):
-                    a = s.data[off:off+16]
-                    b = flash_data[off:off+16]
-                    if a == b:
-                        continue
-                    self.logger.error("Expect 0x%08x %s", s.address + off, binascii.b2a_hex(a))
-                    self.logger.error("Memory 0x%08x %s", s.address + off, binascii.b2a_hex(b))
+                if diffs:
+                    self.logger.error("Comparison for %s failed: %d/%d bytes differ", s, diffs, len(s))
+                    dumped = 0
+                    for off in range(0, len(s.data), 16):
+                        a = s.data[off:off+16]
+                        b = flash_data[off:off+16]
+                        if a == b:
+                            continue
+                        self.logger.error("Expect 0x%08x %s", s.address + off, binascii.b2a_hex(a))
+                        self.logger.error("Memory 0x%08x %s", s.address + off, binascii.b2a_hex(b))
 
-                    dumped += 1
-                    if dumped >= 10:
-                        break
-                return False
+                        dumped += 1
+                        if dumped >= 10:
+                            break
+                    return False
         return True
     
     def __str__(self):
@@ -132,7 +132,7 @@ class Eeprom(Region):
 
     def verify(self, program):
         for s in program:
-            self.logger.debug("Checking range 0x%08x-0x%08x", s.address, s.address + len(s))
+            self.logger.trace("Checking range 0x%08x-0x%08x", s.address, s.address + len(s))
             flash_data = self.read(s.address - self.address, len(s))
             diffs = 0
             for orig, found in zip(s.data, flash_data):
@@ -201,24 +201,23 @@ class Loadable:
                 continue
             total_size += rsize
             to_read.append((region, roff, rsize))
-            
-        pb = tqdm(total = total_size, desc = "Reading...")
-        p = Program()
-        for region, off, s in to_read:
-            try:
-                cs = region.page_size
-            except AttributeError:
-                cs = 1024
 
-            blob = bytearray()
-            for offset in range(0, s, cs):
-                chunk = region.read(off + offset, min(cs, s - offset))
-                blob += chunk
+        with self.logger.progress("Reading", total_size) as progress:
+            p = Program()
+            for region, off, s in to_read:
+                try:
+                    cs = region.page_size
+                except AttributeError:
+                    cs = 1024
 
-                pb.update(len(chunk))
+                blob = bytearray()
+                for offset in range(0, s, cs):
+                    chunk = region.read(off + offset, min(cs, s - offset))
+                    blob += chunk
 
-            p.append(Segment(region.address + off, blob))
-        pb.close()
+                    progress.step(len(chunk))
+
+                p.append(Segment(region.address + off, blob))
         return p
 
     def attach(self):
@@ -283,11 +282,13 @@ class Loadable:
             for p in region_program:
                 to_flash.append((r, p.address - r.address, p.data))
 
-        for r, addr, size in tqdm(to_erase, desc = "Erasing"):
-            r.erase(addr, size)
+        with self.logger.progress("Erasing", len(to_erase)) as progress:
+            for r, addr, size in progress.iterate(to_erase):
+                r.erase(addr, size)
 
-        for r, offset, data in tqdm(to_flash, desc = "Writing"):
-            r.write(offset, data)
+        with self.logger.progress("Writing", len(to_flash)) as progress:
+            for r, offset, data in progress.iterate(to_flash):
+                r.write(offset, data)
 
         success = True
         if do_verify:
@@ -307,28 +308,29 @@ class Loadable:
 
         count = 0
 
-        for region, programmed in tqdm(to_check, desc = "Checking"):
-            spb = tqdm(total = programmed.size, desc = region.name)
-            for segment in programmed:
-                for off in range(0, len(segment), 4096):
-                    ssize = min(len(segment) - off, 4096)
+        with self.logger.progress("Checking", len(to_check)) as progress:
+            for region, programmed in progress.iterate(to_check):
+                with self.logger.progress(region.name, programmed.size) as rprogress:
+                    for segment in programmed:
+                        for off in range(0, len(segment), 4096):
+                            ssize = min(len(segment) - off, 4096)
 
-                    self.logger.debug("Reading 0x%x +0x%x", segment.address + off, ssize)
-                    actual = region.read(segment.address - region.address + off, ssize)
-                    spb.update(ssize)
-                    if actual != segment.data[off : off + ssize]:
-                        self.logger.error("Mismatch in %s", segment)
-                        for off2 in range(0, ssize, 16):
-                            orig = segment.data[off + off2 : off + off2 + 16]
-                            rb = actual[off2 : off2 + 16]
-                            if orig == rb:
-                                continue
-                            self.logger.error("Expected %08x: %s",
-                                              segment.address + off + off2,
-                                              str(binascii.b2a_hex(orig), "ascii"))
-                            self.logger.error("Readback         : %s",
-                                              str(binascii.b2a_hex(rb), "ascii"))
-                            count += 1
-                            if count > 3:
-                                return False
+                            self.logger.trace("Reading 0x%x +0x%x", segment.address + off, ssize)
+                            actual = region.read(segment.address - region.address + off, ssize)
+                            rprogress.step(ssize)
+                            if actual != segment.data[off : off + ssize]:
+                                self.logger.error("Mismatch in %s", segment)
+                                for off2 in range(0, ssize, 16):
+                                    orig = segment.data[off + off2 : off + off2 + 16]
+                                    rb = actual[off2 : off2 + 16]
+                                    if orig == rb:
+                                        continue
+                                    self.logger.error("Expected %08x: %s",
+                                                      segment.address + off + off2,
+                                                      str(binascii.b2a_hex(orig), "ascii"))
+                                    self.logger.error("Readback         : %s",
+                                                      str(binascii.b2a_hex(rb), "ascii"))
+                                    count += 1
+                                    if count > 3:
+                                        return False
         return True

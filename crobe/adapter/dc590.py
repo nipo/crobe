@@ -149,12 +149,12 @@ class Dc590Adapter(basic.Adapter):
         basic.Adapter.__init__(self, enumerator, device)
 
     def _run(self, commands):
-        self.logger.info("<< %s" % (commands,))
+        self.logger.protocol("<< %s" % (commands,))
         cmd = CMD_LF.join(commands)
         self.handle.write(cmd)
         rsp = self._read()
         responses = rsp.split(b'\n')
-        self.logger.info(">> %s" % (responses,))
+        self.logger.protocol(">> %s" % (responses,))
         return responses
 
     def _read(self, to = 1):

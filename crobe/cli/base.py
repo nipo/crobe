@@ -1,59 +1,33 @@
 import binascii
 from datetime import timedelta, datetime
 import logging
+from .. import logger
 import click
 import os
 from functools import update_wrapper
 import re
-
-class DomainFilter(logging.Filter):
-    silent = set()
-
-    def __init__(self, off, silent_re = None, only_re = None):
-        logging.Filter.__init__(self)
-        self.silent = set(off)
-        self.silent_re = None
-        self.only_re = None
-        if only_re is not None:
-            self.only_re = re.compile(only_re)
-        if silent_re is not None:
-            self.silent_re = re.compile(silent_re)
-
-    def filter(self, record):
-        if record.name in self.silent:
-            return False
-        if self.silent_re is not None and self.silent_re.match(record.name):
-            return False
-        if self.only_re is not None:
-            if self.only_re.match(record.name) or record.name == "cli":
-                return True
-            return False
-        return True
-
-class RelativeFormatter(logging.Formatter):
-    def __init__(self):
-        logging.Formatter.__init__(self,
-                                   '\x1b[G\x1b[2K%(asctime)-15s %(name)-15s %(message)s',
-                                   None, "%")
-        self.start = datetime.now()
-
-    def formatTime(self, record, datefmt = None):
-        elapsed = datetime.now() - self.start
-        return str(elapsed)
-
+        
 @click.group()
 @click.option('-v', '--verbose', count = True, help = "More verbosity")
 @click.option('-e', '--raw-error', is_flag = True, help = "Do not mangle exceptions")
 @click.option('-q', '--quiet', count = True, help = "Less verbosity")
+@click.option('-t', '--timestamp', is_flag = True, help = "Add timestamps to log")
+@click.option('-b', '--no-color', is_flag = True, help = "Dont color log")
 @click.option('--silent', multiple = True, type = str, help = "Silent one component by name")
 @click.option('--silent-re', type = str, help = "Silent one component by regex")
 @click.option('--only-re', type = str, help = "Only components by regex", default = None)
 @click.pass_context
-def cli(ctx, verbose, raw_error, quiet, silent, silent_re, only_re):
-    formatter = RelativeFormatter()
-    f = DomainFilter(silent, silent_re, only_re)
+def cli(ctx, verbose, raw_error, quiet, silent, silent_re, only_re, timestamp, no_color):
+    formatter = logger.Formatter(timestamp = timestamp, color = not no_color)
+    f = logger.DomainFilter(silent, silent_re, only_re)
     ctx.obj["log_filter"] = f
     ctx.obj["raw_error"] = raw_error
+
+    base_level = "ERROR"
+    base_level_int = logging._nameToLevel[base_level]
+    levels = list(sorted(set(logging._levelToName.keys())))
+    current = levels.index(base_level_int)
+    target = min(max(0, current + quiet - verbose), len(levels)-1)
 
     handler = logging.StreamHandler()
     handler.setFormatter(formatter)
@@ -61,8 +35,12 @@ def cli(ctx, verbose, raw_error, quiet, silent, silent_re, only_re):
 
     root = logging.getLogger('')
     root.addHandler(handler)
-    root.setLevel(10 * (4 + quiet - verbose))
-    root.info("Starting at %s, pid %d", formatter.start, os.getpid())
+    root.setLevel(levels[target])
+    if quiet - verbose:
+        root.critical("Logging level set to %s", logging.getLevelName(levels[target]))
+        for level in levels:
+            root.log(level, "Sample for level %s", logging._levelToName[level])
+#    root.info("Starting at %s, pid %d", formatter.start, os.getpid())
 
 ##
 ## Custom CLI types

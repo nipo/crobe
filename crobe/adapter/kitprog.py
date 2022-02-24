@@ -83,7 +83,7 @@ class Adapter(model.Adapter):
     SWD_CMD_SPECIAL               = 0x43
 
     def ctrl_out(self, op, value, index, data = b''):
-        self.logger.debug("CTRL OUT %02x v %04x i %04x %s",
+        self.logger.protocol("CTRL OUT %02x v %04x i %04x %s",
                           op, value, index,
                           binascii.b2a_hex(data))
 
@@ -92,24 +92,24 @@ class Adapter(model.Adapter):
                                   data_or_wLength = data)
 
     def ctrl_in(self, op, value, index, length = 0):
-        self.logger.debug("CTRL IN %02x v %04x i %04x s %d",
+        self.logger.protocol("CTRL IN %02x v %04x i %04x s %d",
                           op, value, index, length)
 
         data = self.device.ctrl_transfer(0xc0, bRequest = op,
                                          wValue = value,
                                          wIndex = index,
                                          data_or_wLength = length)
-        self.logger.debug("-> %s", binascii.b2a_hex(data))
+        self.logger.protocol("-> %s", binascii.b2a_hex(data))
         return data
 
     def bulk_out(self, ep, data, timeout = None):
-        self.logger.debug("BULK OUT %02x %s", ep, binascii.b2a_hex(data))
+        self.logger.protocol("BULK OUT %02x %s", ep, binascii.b2a_hex(data))
         self.device.write(ep, data, int((timeout or 1.) * 1000))
 
     def bulk_in(self, ep, size, timeout = None):
-        self.logger.debug("BULK IN %02x %d", ep, size)
+        self.logger.protocol("BULK IN %02x %d", ep, size)
         data = self.device.read(0x80 | ep, size, int((timeout or 1.) * 1000))
-        self.logger.debug("-> %s", binascii.b2a_hex(data))
+        self.logger.protocol("-> %s", binascii.b2a_hex(data))
         return data
 
     @classmethod
@@ -132,7 +132,7 @@ class Adapter(model.Adapter):
         command = bytes([control, length]) + args
         self.bulk_out(self.EP_I2USB_OUT, command)
         data = self.bulk_in(self.EP_I2USB_IN, 64)[:rsize]
-        self.logger.debug("-> %s", binascii.b2a_hex(data))
+        self.logger.protocol("-> %s", binascii.b2a_hex(data))
         return data
 
     def i2usb_freq_set(self, speed):
@@ -172,7 +172,7 @@ class Adapter(model.Adapter):
             cmd |= self.I2USB_TXN_DIRECTION_WRITE
             data = bytes([slave_addr]) + data_or_size
             size = len(data_or_size)
-        self.logger.info("i2c cmd %02x size %d data %s rsize %d",
+        self.logger.debug("i2c cmd %02x size %d data %s rsize %d",
                          cmd, size, binascii.b2a_hex(data), size + 1)
         rdata = self.i2usb_comm(cmd, size, data, rsize = size + 1)
         saddr_ack = bool(rdata[0])
@@ -389,7 +389,7 @@ class I2cInterface(i2c.Interface):
 
             as_prev = bool(prev) and isinstance(prev, i2c.Read) == isinstance(cur, i2c.Read)
 
-            self.logger.info("op: %s", cur)
+            self.logger.trace("op: %s", cur)
 
             if isinstance(cur, i2c.Read):
                 cur.data = b''

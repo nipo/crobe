@@ -164,7 +164,7 @@ class MemAp(ap.Ap, model.Bus):
             csw_dirty = True
             csw = 0x012
 
-            self.logger.debug("Executing %s", transfers)
+            self.logger.trace("Executing %s", transfers)
 
 
             for i, t in enumerate(transfers):

@@ -9,7 +9,6 @@ from ... import memory, model
 from .soc import SoC, BusRam
 import time
 import binascii
-from tqdm import tqdm
 
 class PSoC4Flash(memory.Flash):
     def __init__(self, name, address, size, page_size, soc):
@@ -20,7 +19,7 @@ class PSoC4Flash(memory.Flash):
         return self.soc.bus.mem_read(self.address + offset, size)
 
     def erase(self, offset, size):
-        self.logger.warn("Cannot blank region")
+        self.logger.warning("Cannot blank region")
 
     def write(self, offset, data):
         macro_size = self.soc.FLASH_ROW_SIZE * self.soc.FLASH_ROW_COUNT
@@ -151,7 +150,7 @@ class PSoC4Srom(PortComponent):
 
         self.state_dump("State once resumed")
 
-        self.soc.logger.info("SROM call req 0x%02x arg %08x",
+        self.soc.logger.debug("SROM call req 0x%02x arg %08x",
                              no, arg)
         cmds = [
             self.bus.cmd_u32_write(self.soc.CPUSS_SYSARG, arg),
@@ -170,7 +169,7 @@ class PSoC4Srom(PortComponent):
         return arg, req
 
     def keyed_call(self, no, args = 0):
-        self.logger.info("Keyed Call to %02x", no)
+        self.logger.protocol("Keyed Call to %02x", no)
         if isinstance(args, list):
             args = args[:]
             args[0] = (args[0] << 16) | (self.CPUSS_SROM_KEY + (no << 8))
@@ -179,7 +178,7 @@ class PSoC4Srom(PortComponent):
             z = self.allocate(len(blob), 4)
             z.write(blob)
 
-            self.soc.logger.info("SROM arg blob at %08x: %s",
+            self.soc.logger.debug("SROM arg blob at %08x: %s",
                                  z.address, binascii.b2a_hex(blob))
 
             arg = z.address
@@ -214,7 +213,7 @@ class PSoC4Srom(PortComponent):
         args = [(macro << 8) | byte_offset, len(blob)-1] + [
             int.from_bytes(blob[x:x+4], "little")
             for x in range(0, len(blob), 4)]
-        self.soc.logger.info("Loading %d bytes to macro %d, row %d offset %d",
+        self.soc.logger.trace("Loading %d bytes to macro %d, row %d offset %d",
                              len(blob), macro, rowid, byte_offset)
         self.keyed_call(self.Load_Flash_Bytes, args)
         self.keyed_call(self.Program_Row, [rowid])
@@ -324,7 +323,7 @@ class PSoC4(SoC):
             return SoC.reset(self)
 
     def attach(self):
-        self.logger.info("psoc4 attach, %s", self.attached)
+        self.logger.trace("psoc4 attach, %s", self.attached)
 
         if self.attached:
             return

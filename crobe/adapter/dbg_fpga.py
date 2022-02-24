@@ -35,17 +35,17 @@ class Adapter(model.Adapter):
     supported_interfaces = ["spi"]
 
     def bulk_out(self, data, timeout = None):
-        self.logger.debug("BULK OUT %s", binascii.b2a_hex(data))
+        self.logger.protocol("BULK OUT %s", binascii.b2a_hex(data))
         self.handle.write(self.EP_OUT, data, int((timeout or 1.) * 1000))
 
     def bulk_in(self, size, timeout = None):
-        self.logger.debug("BULK IN %d", size)
+        self.logger.protocol("BULK IN %d", size)
         data = self.handle.read(self.EP_IN, size, int((timeout or 1.) * 1000))
-        self.logger.debug("-> %s", binascii.b2a_hex(data))
+        self.logger.protocol("-> %s", binascii.b2a_hex(data))
         return data
 
     def execute(self, blob, read_size = 0):
-        self.logger.debug("Execute, %d out, %d in", len(blob), read_size)
+        self.logger.trace("Execute, %d out, %d in", len(blob), read_size)
         self.bulk_out(blob)
         rbuf = b''
         while len(rbuf) < read_size:
@@ -229,7 +229,7 @@ class I2cInterface(i2c.Interface):
         self.options = DbgFpgaOpts(regs)
 
     def execute(self, op_list):
-        self.logger.info(op_list)
+        self.logger.trace("%s", op_list)
         self.__i2c_trx.execute(op_list)
 
     def freq_update(self, freq):
@@ -334,17 +334,17 @@ class Adapter(model.Adapter):
     supported_interfaces = ["cs", "jtag", "swd", "spi", "spi-inv", "i2c", "i2c-int", "i2c-ext"]
 
     def bulk_out(self, data, timeout = None):
-        self.logger.debug("BULK OUT %s", binascii.b2a_hex(data))
+        self.logger.protocol("BULK OUT %s", binascii.b2a_hex(data))
         self.handle.write(self.EP_OUT, data, int((timeout or 1.) * 1000))
 
     def bulk_in(self, size, timeout = None):
-        self.logger.debug("BULK IN %d", size)
+        self.logger.protocol("BULK IN %d", size)
         data = self.handle.read(self.EP_IN, size, int((timeout or 1.) * 1000))
-        self.logger.debug("-> %s", binascii.b2a_hex(data))
+        self.logger.protocol("-> %s", binascii.b2a_hex(data))
         return data
 
     def execute(self, blob, read_size = 0):
-        self.logger.debug("Execute, %d out, %d in", len(blob), read_size)
+        self.logger.protocol("Execute, %d out, %d in", len(blob), read_size)
         self.bulk_out(blob)
         rbuf = b''
         while len(rbuf) < read_size:
@@ -391,7 +391,7 @@ class Adapter(model.Adapter):
         self.EP_IN = self.ep_in.bEndpointAddress
         self.EP_OUT = self.ep_out.bEndpointAddress
 
-        self.logger.info("Using interface %d, EP_IN: %02x, EP_OUT: %02x",
+        self.logger.debug("Using interface %d, EP_IN: %02x, EP_OUT: %02x",
                          self.intf.index, self.EP_IN, self.EP_OUT)
 
     def write(self, data):

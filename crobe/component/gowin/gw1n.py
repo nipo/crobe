@@ -103,11 +103,11 @@ class GowinFpga(jtag.Tap, JtagSramFpga):
         self.sram_erase()
         data = program[0].data
         self.sram_configure(data)
-        self.logger.info(self.status_read())
+        self.logger.debug(self.status_read())
 
     def stop(self):
         self.sram_erase()
-        self.logger.info(self.status_read())
+        self.logger.debug(self.status_read())
 
     def reset(self):
         self.logger.warning("Not implemented")
@@ -118,7 +118,7 @@ class GowinFpga(jtag.Tap, JtagSramFpga):
         return self.Status(all = int(c.tdo))
 
     def sram_erase(self):
-        self.logger.info("Erasing SRAM")
+        self.logger.trace("Erasing SRAM")
         self.execute([
             self.ISC_ENABLE.cmd(),
             self.cmd_run(8),
@@ -141,7 +141,7 @@ class GowinFpga(jtag.Tap, JtagSramFpga):
             ])
 
     def sram_configure(self, program_data):
-        self.logger.info("Loading %d bytes to SRAM", len(program_data))
+        self.logger.trace("Loading %d bytes to SRAM", len(program_data))
         program_data = bitswap8(program_data)
         program_data = b'\xff'*60 + program_data + b'\xff'*60
         self.execute([
@@ -192,7 +192,7 @@ class Gw2a(GowinFpga):
         KeyOk        = bitfield.BooleanField(16)
 
     def flash_erase(self):
-        self.logger.info("Erasing flash")
+        self.logger.trace("Erasing flash")
         self.execute([
             self.ISC_ENABLE.cmd(),
             self.cmd_run(10),

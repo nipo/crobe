@@ -33,7 +33,7 @@ class Ice40SlaveSerial(PortComponent, SramFpga):
 
         self.port.execute([self.port.cmd_shift(b'\x00'*32, read_miso = False)])
         blob = program.simplified().segment_at(0).data
-        self.logger.info("Loading %d bytes bitstream", len(blob))
+        self.logger.trace("Loading %d bytes bitstream", len(blob))
         for off in range(0, len(blob), 1024):
             chunk = blob[off : off + 1024]
             self.port.execute([self.port.cmd_shift(chunk, read_miso = False)])

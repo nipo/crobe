@@ -39,7 +39,7 @@ class SpiTransactor(PortComponent):
         rsp_size = 0
         mode = 0
 
-        self.logger.debug("Running %s", operation_list)
+        self.logger.trace("Running %s", operation_list)
         
         for op in operation_list:
             if self.__rate_dirty:

@@ -121,7 +121,7 @@ class Cdcm6208(i2c.Slave):
         value = int.from_bytes(rdata, "big")
         pretty = reg_class(all = value)
 
-        self.logger.debug("Reg read %d %s: %s", reg, rdata.hex(), pretty)
+        self.logger.trace("Reg read %d %s: %s", reg, rdata.hex(), pretty)
 
         return pretty
 
@@ -135,7 +135,7 @@ class Cdcm6208(i2c.Slave):
         pretty = reg_class(all = int(value))
         data = int(value).to_bytes(reg_size, "big")
 
-        self.logger.debug("Reg write %s %s: %s", reg, data.hex(), pretty)
+        self.logger.trace("Reg write %s %s: %s", reg, data.hex(), pretty)
 
         self.write(addr + data)
 

@@ -409,7 +409,7 @@ class JtagInterface(EngineInterface, jtag.Interface):
         jtag.Interface.start(self)
         
     def _execute(self, operation_list):
-        self.logger.debug("Running %s", operation_list)
+        self.logger.trace("Running %s", operation_list)
         mpsse_ops = []
         tdos = {}
 
@@ -659,7 +659,7 @@ class I2cInterface(BaseInterface, i2c.Interface):
         for idx, op in enumerate(ops):
             as_prev = bool(prev) and isinstance(prev, i2c.Read) == isinstance(op, i2c.Read)
 
-            self.logger.debug("op: %s", op)
+            self.logger.trace("op: %s", op)
 
             if isinstance(op, i2c.Read):
                 is_last = idx == len(ops)-1 or not isinstance(ops[idx], i2c.Read)
@@ -730,7 +730,7 @@ class SwdInterface(EngineInterface, swd.Interface):
         swd.Interface.start(self)
 
     def _execute(self, operation_list):
-        self.logger.debug("Running %s", operation_list)
+        self.logger.trace("Running %s", operation_list)
         mpsse_ops = []
         tdos = {}
 
@@ -935,7 +935,7 @@ class SpiInterface(EngineInterface, spi.Interface):
         spi.Interface.start(self)
         
     def _execute(self, operation_list):
-        self.logger.debug("Running %s", operation_list)
+        self.logger.trace("Running %s", operation_list)
         mpsse_ops = []
         tdos = {}
         write_pol = '-'
@@ -1170,7 +1170,7 @@ class OneWireInterface(EngineInterface, one_wire.Interface):
     tLOW1 = 10e-6
     
     def _execute(self, operation_list):
-        self.logger.debug("Running %s", operation_list)
+        self.logger.trace("Running %s", operation_list)
         mpsse_ops = []
         tdos = []
 
@@ -1264,7 +1264,7 @@ class SmiInterface(EngineInterface, smi.Interface):
         smi.Interface.start(self)
     
     def _execute(self, operation_list):
-        self.logger.debug("Running %s", operation_list)
+        self.logger.trace("Running %s", operation_list)
         mpsse_ops = []
         tdos = {}
 

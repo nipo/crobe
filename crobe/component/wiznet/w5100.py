@@ -143,33 +143,33 @@ class W5100(PortComponent):
             return f"RxMem[{reg-RegisterAddress.RxMemBase:#06x}]"
 
     def mem_write(self, base, data):
-        self.logger.debug("Writing %s: %s", self.reg_name(base), data.hex())
+        self.logger.trace("Writing %s: %s", self.reg_name(base), data.hex())
         self.multi_write(base, data)
 
     def mem_read(self, base, size):
-        self.logger.debug("Reading %s", self.reg_name(base))
+        self.logger.trace("Reading %s", self.reg_name(base))
         r = self.multi_read(base, size)
-        self.logger.debug("-> %s", r.hex())
+        self.logger.trace("-> %s", r.hex())
         return r
         
     def reg8_write(self, reg, val):
-        self.logger.debug("Writing %s: %s (0x%02x)", self.reg_name(reg), val, val)
+        self.logger.trace("Writing %s: %s (0x%02x)", self.reg_name(reg), val, val)
         self.multi_write(reg, bytes([val]))
 
     def reg8_read(self, reg):
-        self.logger.debug("Reading %s", self.reg_name(reg))
+        self.logger.trace("Reading %s", self.reg_name(reg))
         r = self.multi_read(reg, 1)[0]
-        self.logger.debug("-> 0x%02x", r)
+        self.logger.trace("-> 0x%02x", r)
         return r
 
     def reg16_write(self, reg, val):
-        self.logger.debug("Writing %s: %s (0x%02x)", self.reg_name(reg), val, val)
+        self.logger.trace("Writing %s: %s (0x%02x)", self.reg_name(reg), val, val)
         self.multi_write(reg, int(val).to_bytes(2, "big"))
 
     def reg16_read(self, reg):
-        self.logger.debug("Reading %s", self.reg_name(reg))
+        self.logger.trace("Reading %s", self.reg_name(reg))
         r = int.from_bytes(self.multi_read(reg, 2), "big")
-        self.logger.debug("-> 0x%02x", r)
+        self.logger.trace("-> 0x%02x", r)
         return r
 
     @classmethod
@@ -190,23 +190,23 @@ class W5100(PortComponent):
         return ':'.join(f'{b:02x}' for b in data)
     
     def ip_write(self, reg, val):
-        self.logger.debug("Writing %s: '%s'", self.reg_name(reg), val)
+        self.logger.trace("Writing %s: '%s'", self.reg_name(reg), val)
         self.multi_write(reg, self.ip_to_data(val))
 
     def ip_read(self, reg):
-        self.logger.debug("Reading %s", self.reg_name(reg))
+        self.logger.trace("Reading %s", self.reg_name(reg))
         r = self.ip_from_data(self.multi_read(reg, 4))
-        self.logger.debug("-> '%s'", r)
+        self.logger.trace("-> '%s'", r)
         return r
 
     def mac_write(self, reg, val):
-        self.logger.debug("Writing %s: '%s'", self.reg_name(reg), val)
+        self.logger.trace("Writing %s: '%s'", self.reg_name(reg), val)
         self.multi_write(reg, self.mac_to_data(val))
 
     def mac_read(self, reg):
-        self.logger.debug("Reading %s", self.reg_name(reg))
+        self.logger.trace("Reading %s", self.reg_name(reg))
         r = self.mac_from_data(self.multi_read(reg, 6))
-        self.logger.debug("-> '%s'", r)
+        self.logger.trace("-> '%s'", r)
         return r
 
     def irq_get(self):

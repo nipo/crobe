@@ -130,7 +130,7 @@ class Series7(Series67):
             expected_userid = None
 
         if expected_userid:
-            self.logger.info("Expected UserID=0x%08x", expected_userid)
+            self.logger.trace("Expected UserID=0x%08x", expected_userid)
         
         if "device" in program.info:
             target = program.info["device"].lower()
@@ -155,7 +155,7 @@ class Series7(Series67):
         ok = self.config_write(blob)
 
         status = self.ir_status_read()
-        self.logger.info("IR Status: %04x", status)
+        self.logger.debug("IR Status: %04x", status)
         
         end = datetime.datetime.now()
 
@@ -172,7 +172,7 @@ class Series7(Series67):
     def config_write(self, blob):
         prog_data = struct.unpack(">" + "L" * (len(blob) // 4), blob)
 
-        self.logger.info("Ready to load program of %d config words", len(prog_data))
+        self.logger.trace("Ready to load program of %d config words", len(prog_data))
 
         self.logger.info("Resetting...")
         self.dr_shift(self.IR_JPROGRAM, None)
@@ -181,14 +181,14 @@ class Series7(Series67):
         self.dr_shift(self.IR_ISC_NOP, None)
         self.run(20)
 
-        self.logger.info("CFG IDCODE: %08x", self.cfg_idcode)
+        self.logger.trace("CFG IDCODE: %08x", self.cfg_idcode)
         self.cfg_status_dump()
 
-        self.logger.info("Loading program data...")
+        self.logger.trace("Loading program data...")
         self._cfg_shift(self.IR_CFG_IN, prog_data)
         self.run(100000)
 
-        self.logger.info("Loading done...")
+        self.logger.trace("Loading done...")
         self.cfg_status_dump()
 
         self.logger.info("Starting...")
@@ -196,7 +196,7 @@ class Series7(Series67):
         self.run(10000)
         self.dr_shift(self.IR_BYPASS, None)
         self.run(10000)
-        self.logger.info("Start done...")
+        self.logger.trace("Start done...")
 
         self.cfg_status_dump()
 
@@ -459,7 +459,7 @@ class Series7(Series67):
             self.run(9)
             part = r >> 5
             status = r & 0x1f
-            self.logger.info("reading %08x" % part)
+            self.logger.trace("reading %08x" % part)
             parts.append(part)
 
         return struct.pack(">8L", *parts)
@@ -513,7 +513,7 @@ class Series7SlaveSerial(PortComponent, SramFpga):
         self.port.port.reset(False)
 
         blob = program[0].data
-        self.logger.info("Loading %d bytes bitstream", len(blob))
+        self.logger.trace("Loading %d bytes bitstream", len(blob))
         self.port.execute([self.port.cmd_cs(True)])
         for off in range(0, len(blob), 1024):
             chunk = blob[off : off + 1024]

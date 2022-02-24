@@ -59,7 +59,7 @@ class Adapter(model.Adapter):
     EP_OUT = 0x02
 
     def ctrl_out(self, op, value, index, data = b''):
-        self.logger.debug("CTRL OUT %02x v %04x i %04x %s",
+        self.logger.protocol("CTRL OUT %02x v %04x i %04x %s",
                           op, value, index,
                           binascii.b2a_hex(data))
 
@@ -68,14 +68,14 @@ class Adapter(model.Adapter):
                                   data_or_wLength = data)
 
     def ctrl_in(self, op, value, index, length = 0):
-        self.logger.debug("CTRL IN %02x v %04x i %04x s %d",
+        self.logger.protocol("CTRL IN %02x v %04x i %04x s %d",
                           op, value, index, length)
 
         data = self.device.ctrl_transfer(0xc0, bRequest = op,
                                          wValue = value,
                                          wIndex = index,
                                          data_or_wLength = length)
-        self.logger.debug("-> %s", binascii.b2a_hex(data))
+        self.logger.protocol("-> %s", binascii.b2a_hex(data))
         return data
 
     def version_get(self):
@@ -85,13 +85,13 @@ class Adapter(model.Adapter):
         self.ctrl_out(self.VENDOR_BUFFER_CLEAR, 0, 0, b'')
 
     def bulk_out(self, data, timeout = None):
-        self.logger.debug("BULK OUT %s", binascii.b2a_hex(data))
+        self.logger.protocol("BULK OUT %s", binascii.b2a_hex(data))
         self.device.write(self.EP_OUT, data, int((timeout or 1.) * 1000))
 
     def bulk_in(self, size, timeout = None):
-        self.logger.debug("BULK IN %d", size)
+        self.logger.protocol("BULK IN %d", size)
         data = self.device.read(self.EP_IN, size, int((timeout or 1.) * 1000))
-        self.logger.debug("-> %s", binascii.b2a_hex(data))
+        self.logger.protocol("-> %s", binascii.b2a_hex(data))
         return data
 
     def do_io(self, blob, read_size = 0):
@@ -275,7 +275,7 @@ class I2cInterface(i2c.Interface):
         for idx, op in enumerate(ops):
             as_prev = bool(prev) and isinstance(prev, i2c.Read) == isinstance(op, i2c.Read)
 
-            self.logger.info("op: %s", op)
+            self.logger.trace("op: %s", op)
 
             if isinstance(op, i2c.Read):
                 is_last = idx == len(ops)-1 or not isinstance(ops[idx], i2c.Read)

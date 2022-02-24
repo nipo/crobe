@@ -48,14 +48,14 @@ class Interface(base.Interface):
         """
         op = self.cmd_read(addr, size)
         self.execute([op])
-        self.logger.debug("> @%02x %s", addr, op.data.hex())
+        self.logger.protocol("> @%02x %s", addr, op.data.hex())
         return op.data
 
     def write(self, addr, data):
         """
         See cmd_write()
         """
-        self.logger.debug("< @%02x %s", addr, data.hex())
+        self.logger.protocol("< @%02x %s", addr, data.hex())
         self.execute([self.cmd_write(addr, data)])
 
     def write_read(self, addr, data, size):
@@ -63,9 +63,9 @@ class Interface(base.Interface):
         See cmd_write() and cmd_read()
         """
         op = self.cmd_read(addr, size)
-        self.logger.debug("< @%02x %s", addr, data.hex())
+        self.logger.protocol("< @%02x %s", addr, data.hex())
         self.execute([self.cmd_write(addr, data), op])
-        self.logger.debug(">     %s", op.data.hex())
+        self.logger.protocol(">     %s", op.data.hex())
         return op.data
 
     def cmd_read(self, addr, size):

@@ -31,7 +31,7 @@ class MemoryMappedComponent(model.Bus32Component):
         self.use_jep106 = bool(self.pid & 0x80000)
 
         raw_pid = struct.unpack("<LLLLLLLL", blob[16:12*4])
-        self.logger.info("RAW PID[45670123]s: %s", [hex(p) for p in raw_pid])
+        self.logger.debug("RAW PID[45670123]s: %s", [hex(p) for p in raw_pid])
 
         self.partid = PartId(jep106_bank = (self.pid >> 32) & 0xf,
                              jep106_id = (self.pid >> 12) & 0x7f,
@@ -89,7 +89,7 @@ class MemoryMappedComponent(model.Bus32Component):
             except NoMatch:
                 pass
 
-        self.logger.info("No specific handler for %s class 0x%02x type 0x%02x %s",
+        self.logger.warning("No specific handler for %s class 0x%02x type 0x%02x %s",
                          self.partid,
                          self.component_class, self.dev_type,
                          self.name)

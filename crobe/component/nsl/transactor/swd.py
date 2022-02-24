@@ -49,7 +49,7 @@ class SwdTransactor(PortComponent):
 
     @turnaround_cycles.setter
     def turnaround_cycles(self, cycles):
-        self.logger.debug("Changing turnaround_cycles from %d to %d", self.__turnaround_cycles, cycles)
+        self.logger.trace("Changing turnaround_cycles from %d to %d", self.__turnaround_cycles, cycles)
         if cycles != self.__turnaround_cycles:
             self.__turnaround_dirty = True
             self.__turnaround_cycles = cycles
@@ -58,7 +58,7 @@ class SwdTransactor(PortComponent):
         ops = deque(operation_list)
         max_size = 512
         
-        self.logger.debug("Running %s", operation_list)
+        self.logger.trace("Running %s", operation_list)
 
         while ops:
             cmd = bytearray([0] * max_size)

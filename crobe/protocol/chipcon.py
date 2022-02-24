@@ -170,7 +170,7 @@ class Interface(base.Interface):
 
     @pc.setter
     def pc(self, value):
-        self.logger.debug("Setting PC to 0x%04x", value)
+        self.logger.trace("Setting PC to 0x%04x", value)
         self.execute([self.cmd_set_pc(value)])
         assert self.pc == value
 

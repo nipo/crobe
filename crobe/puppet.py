@@ -62,7 +62,7 @@ class Puppet(Component):
         self.ram_allocator.free(zone.range)
 
     def prepare(self, pc, *args):
-        self.logger.debug("Preparing 0x%08x(%s)", pc, ', '.join(hex(a) for a in args))
+        self.logger.trace("Preparing 0x%08x(%s)", pc, ', '.join(hex(a) for a in args))
 
         assert self.cpu.state != self.cpu.State.RUN
         assert len(args) <= len(self.arg_regs)
@@ -81,7 +81,7 @@ class Puppet(Component):
 
     def run(self):
         self.cpu.resume(allow_interrupts = False)
-        self.logger.debug("...started !")
+        self.logger.trace("...started !")
 
     def step(self):
         self.cpu.step()

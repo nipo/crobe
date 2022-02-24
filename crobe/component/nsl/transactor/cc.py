@@ -27,7 +27,7 @@ class CcTransactor(PortComponent):
             return
 
         if self.__reset and not value:
-            self.logger.info("toggling reset pin")
+            self.logger.trace("toggling reset pin")
             cmds = bytes([self.CMD_DIV(0x40), self.CMD_RESET])
             self.port.execute(cmds, 2)
 

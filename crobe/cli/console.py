@@ -46,6 +46,7 @@ def cli():
     try:
         ctx = base.cli.make_context("crobe", sys.argv[1:])
         ctx.obj = {}
+
         base.cli.invoke(ctx)
 
     except click.exceptions.Exit as e:

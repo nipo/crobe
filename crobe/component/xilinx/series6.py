@@ -93,7 +93,7 @@ class Series6(Series67):
             expected_userid = None
 
         if expected_userid:
-            self.logger.info("Expected UserID=0x%08x", expected_userid)
+            self.logger.trace("Expected UserID=0x%08x", expected_userid)
         
         if "device" in program.info:
             target = program.info["device"].lower()
@@ -111,11 +111,11 @@ class Series6(Series67):
             intf.freq_cap("usercode", 15e6)
 
             userid = self.dr_shift(self.IR_USERCODE, 0, 32)
-            self.logger.info("Current UserID=0x%08x", userid)
+            self.logger.trace("Current UserID=0x%08x", userid)
             intf.freq_cap("test", None)
 
             if userid == expected_userid and not force_reload:
-                self.logger.info("UserID matches, doing nothing")
+                self.logger.trace("UserID matches, doing nothing")
                 return self.send_op_wait(-1, self.IR_STATUS_DONE)
             
         blob = program[0].data
@@ -129,7 +129,7 @@ class Series6(Series67):
         # This is important, it enables internal CCLK
         self.run(10000)
 
-        self.logger.info("Status: %04x", self.cfg_status)
+        self.logger.debug("Status: %04x", self.cfg_status)
         self.cfg_status_dump()
 
         end = datetime.datetime.now()
@@ -144,18 +144,18 @@ class Series6(Series67):
     def config_write(self, blob):
         prog_data = struct.unpack(">" + "H" * (len(blob) // 2), blob)
 
-        self.logger.info("Ready to load program, %d config words", len(prog_data))
+        self.logger.trace("Ready to load program, %d config words", len(prog_data))
 
-        self.logger.info("Resetting...")
+        self.logger.trace("Resetting...")
         if not self.send_op_wait(self.IR_JPROGRAM, self.IR_STATUS_INIT):
             raise RuntimeError("Unable to reset FPGA")
 
-        self.logger.info("Loading program data...")
+        self.logger.trace("Loading program data...")
 
         self._cfg_shift(self.IR_CFG_IN, prog_data)
         self.run(40)
 
-        self.logger.info("Starting...")
+        self.logger.trace("Starting...")
         return self.send_op_wait(self.IR_JSTART, self.IR_STATUS_DONE)
 
     ###

@@ -40,7 +40,7 @@ class Engine(Handle):
         self.__divisor = 1
 
     def execute(self, operation_list):
-        self.logger.debug("Running %s", operation_list)
+        self.logger.trace("Running %s", operation_list)
         cmd_parts = []
         cmd_len = 0
         rsp_len = 0

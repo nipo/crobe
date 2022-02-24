@@ -62,7 +62,7 @@ class Series67(jtag.Tap, JtagSramFpga):
         self.cfg_status_dump()
             
         if not self.__can_stop and self.done:
-            self.logger.info("Device is running, cannot get DNA")
+            self.logger.warning("Device is running, cannot get DNA")
         else:
             self.stop()
             self.dna = self.dna_read()

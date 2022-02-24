@@ -33,7 +33,7 @@ class JLinkInterface(object):
 
     @power.setter
     def power(self, power):
-        self.logger.info("%s target power", ["disabling", "enabling"][int(power)])
+        self.logger.trace("%s target power", ["disabling", "enabling"][int(power)])
         self.handle.power = power
 
     def emucom_read(self, channel, size):
@@ -205,7 +205,7 @@ class JtagInterface(JLinkInterface, jtag.Interface):
                     op.tdo = tdo_buf[op.__offset : op.__offset + len(op.tdi)]
 
             if reset_op:
-                self.logger.info("%s", op)
+                self.logger.trace("%s", op)
                 self.handle.resetn = not op.asserted
 
         assert self.__state in (self.STATE_RTI, self.STATE_RESET, self.STATE_PAUSE), self.__state
@@ -354,7 +354,7 @@ class SwdInterface(JLinkInterface, swd.Interface):
                         op.data, = struct.unpack("<L", in_blob[byte + 1 : byte + 5])
 
             if reset_op:
-                self.logger.info("%s", op)
+                self.logger.trace("%s", op)
                 self.handle.resetn = not op.asserted
 
 class SpiInterface(JLinkInterface, spi.Interface):
@@ -416,7 +416,7 @@ class SpiInterface(JLinkInterface, spi.Interface):
                     op.miso = bitswap8(in_blob[op.__offset : op.__offset + cl])
 
             if reset_op:
-                self.logger.info("%s", op)
+                self.logger.trace("%s", op)
                 self.handle.resetn = not op.asserted
     
 PIDS = [0x0101, 0x0102, 0x0103, 0x0104, 0x0105, 0x0107, 0x0108,
@@ -455,11 +455,11 @@ class JLink(model.Adapter):
         if handle is None:
             import gc
             gc.collect()
-            self.logger.info("Getting handle, as new")
+            self.logger.trace("Getting handle, as new")
             handle = backend.Handle(self._device)
             self.__weak_handle = lambda: handle
         else:
-            self.logger.info("Getting handle, got %x from ref", id(handle))
+            self.logger.trace("Getting handle, got %x from ref", id(handle))
             
         return handle
 
@@ -487,7 +487,7 @@ class JLink(model.Adapter):
                     self.interfaces.append(v)
 
         except Exception as e:
-            self.logger.debug("Exception when enumerating JLink device: %s", str(e))
+            self.logger.error("Exception when enumerating JLink device: %s", str(e))
         finally:
             handle.close()
 

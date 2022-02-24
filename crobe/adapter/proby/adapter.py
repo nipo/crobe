@@ -32,7 +32,7 @@ class ProbyAdapter(basic.Adapter):
         """
         from ...component.xilinx.spartan6 import Spartan6
 
-        self.logger.info("Reprogramming FPGA to use mode %s", mode)
+        self.logger.trace("Reprogramming FPGA to use mode %s", mode)
 
         from pkg_resources import resource_filename
         fw_name = "fw/" + mode + ".bit.gz"
@@ -40,7 +40,7 @@ class ProbyAdapter(basic.Adapter):
 
         obj = Program.from_xilinx_bit(fd)
                  
-        self.logger.info("Using internal chain of Proby, starting discovery")
+        self.logger.trace("Using internal chain of Proby, starting discovery")
 
         jtag_intf = basic.Adapter.open(self, "jtag", channel = "B", resetn_pin = 9, name = "pint-"+self.serial_number,
                                        gpio_output = 0, gpio_value = 0)
@@ -50,7 +50,7 @@ class ProbyAdapter(basic.Adapter):
         chain.start()
         fpga = chain.child_summon("0")
 
-        self.logger.info("Got FPGA in chain: %s", fpga)
+        self.logger.debug("Got FPGA in chain: %s", fpga)
 
         fpga.load(obj)
 

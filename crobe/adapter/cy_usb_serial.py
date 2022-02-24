@@ -22,17 +22,17 @@ class Adapter(model.Adapter):
     supported_interfaces = ["jtag"]
     def ctrl(self, op, value, index, data_or_size = b''):
         if isinstance(data_or_size, int):
-            self.logger.debug("CTRL IN %02x v %04x i %04x s %d",
+            self.logger.protocol("CTRL IN %02x v %04x i %04x s %d",
                               op, value, index, data_or_size)
 
             data = self.device.ctrl_transfer(0xc0, bRequest = op,
                                              wValue = value,
                                              wIndex = index,
                                              data_or_wLength = data_or_size)
-            self.logger.debug("-> %s", data.hex())
+            self.logger.protocol("-> %s", data.hex())
             return data
         else:
-            self.logger.debug("CTRL OUT %02x v %04x i %04x %s",
+            self.logger.protocol("CTRL OUT %02x v %04x i %04x %s",
                               op, value, index,
                               data_or_size.hex())
 
@@ -41,14 +41,14 @@ class Adapter(model.Adapter):
                                       data_or_wLength = data_or_size)
 
     def bulk_out(self, ep, data, timeout = None):
-        self.logger.debug("Bulk %02x OUT << %s", ep, data.hex())
+        self.logger.protocol("Bulk %02x OUT << %s", ep, data.hex())
         self.device.write(ep, data, int((timeout or 1.) * 1000))
 
     def bulk_in(self, ep, size, timeout = None):
-        self.logger.debug("Bulk %02x IN %d", ep, size)
+        self.logger.protocol("Bulk %02x IN %d", ep, size)
         data = self.device.read(ep, size, int((timeout or 1.) * 1000))
         data = bytes(data)
-        self.logger.debug(">> %s", data.hex())
+        self.logger.protocol(">> %s", data.hex())
         return data
 
     @classmethod

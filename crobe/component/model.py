@@ -2,7 +2,6 @@ from ..model import *
 import struct
 from enum import Enum
 from collections import deque
-from ..util.info import TimedLogger
 
 class Bus(object):
     def __init__(self, name):
@@ -214,7 +213,7 @@ class SramFpga(Component, metaclass = _sram_fpga_meta):
 
         for clas in self.__class__.__mro__:
             if issubclass(clas, SramFpga):
-                self.logger.debug("Looking up %s in application db of %s",
+                self.logger.trace("Looking up %s in application db of %s",
                                   sub, clas)
                 try:
                     return clas.application_db.call(sub, self)

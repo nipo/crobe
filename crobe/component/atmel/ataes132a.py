@@ -180,12 +180,12 @@ class AtAes132A(i2c.Slave):
     def _read(self, addr, rsize):
         a = addr.to_bytes(2, "big")
         r = self.write_read(a, rsize)
-        self.logger.debug("> %04x %d %s", addr, rsize, r.hex())
+        self.logger.protocol("> %04x %d %s", addr, rsize, r.hex())
         return r
 
     def _write(self, addr, blob):
         a = addr.to_bytes(2, "big")
-        self.logger.debug("< %04x %s", addr, blob.hex())
+        self.logger.protocol("< %04x %s", addr, blob.hex())
         return self.write(a + blob)
 
     def block_send(self, data):

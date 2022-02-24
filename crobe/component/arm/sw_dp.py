@@ -27,7 +27,7 @@ class SwDp(dp.Dp):
         dp.Dp.start(self)
 
     def freq_update(self, freq):
-        self.logger.info("Max AP freq changed to %s", metric(freq, "Hz"))
+        self.logger.debug("Max AP freq changed to %s", metric(freq, "Hz"))
         self.port.freq_cap("APs", freq)
         return freq
         

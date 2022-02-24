@@ -127,7 +127,7 @@ class nRF5(SoC, pin_control.Controller):
                 variant = self.CONFIGID_HW[configid_hw][2]
             else:
                 v, = struct.unpack("<L", partinfo[4:8])
-                self.logger.info("Cannot get package variant, variant: %08x, configid: %08x",
+                self.logger.warning("Cannot get package variant, variant: %08x, configid: %08x",
                                  v, configid)
 
         elif configid_hw in self.CONFIGID_HW:
@@ -142,7 +142,7 @@ class nRF5(SoC, pin_control.Controller):
 
         else:
             a, b, c, d, e = struct.unpack("<5L", partinfo)
-            self.logger.info("Cannot get package info, partinfo: %08x/%08x/%08x/%08x/%08x, configid: %08x",
+            self.logger.warning("Cannot get package info, partinfo: %08x/%08x/%08x/%08x/%08x, configid: %08x",
                              a, b, c, d, e, configid)
             return
 
@@ -240,13 +240,13 @@ class nRF5(SoC, pin_control.Controller):
         bank, pin = self.gpio_map[name]
         reg = self.GPIO_IN(bank)
         v = self.buses[0].u32_read(reg)
-        self.logger.info("Getting %s, reg %08x = %08x", name, reg, v)
+        self.logger.trace("Getting %s, reg %08x = %08x", name, reg, v)
         return (v >> pin) & 1
 
     def pin_set(self, name, value):
         bank, pin = self.gpio_map[name]
         reg = self.GPIO_OUTSET(bank) if value else self.GPIO_OUTCLR(bank)
-        self.logger.info("Setting %s to %d, reg %08x", name, int(value), reg)
+        self.logger.trace("Setting %s to %d, reg %08x", name, int(value), reg)
         self.buses[0].u32_write(reg, 1 << pin)
 
     def pin_config(self, name, mode):
@@ -269,7 +269,7 @@ class nRF5(SoC, pin_control.Controller):
             else:
                 value &= ~self.GPIO_PIN_CNF_DIR_OUTPUT
             
-        self.logger.info("Setting mode for %s, reg %08x = %08x", name, reg, value)
+        self.logger.trace("Setting mode for %s, reg %08x = %08x", name, reg, value)
         self.buses[0].u32_write(reg, value)
 
 class nRF51(nRF5):

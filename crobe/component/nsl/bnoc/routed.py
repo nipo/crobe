@@ -17,7 +17,7 @@ class Router(PortComponent):
         assert len(data) < (1 << 16) - 2
         route = dst | (src << 4)
         frame = bytes([route]) + data
-        self.logger.debug("< %s", frame.hex())
+        self.logger.protocol("< %s", frame.hex())
         self.port.frame_send(frame)
 
     def msg_recv_all(self, dst, src, timeout = None):
@@ -46,9 +46,9 @@ class Router(PortComponent):
                 try:
                     frame = self.port.frame_recv()
                     if frame is None:
-                        self.logger.debug("> / (%s, %s)", timeout ,deadline)
+                        self.logger.protocol("> / (%s, %s)", timeout ,deadline)
                         continue
-                    self.logger.debug("> %s", frame.hex())
+                    self.logger.protocol("> %s", frame.hex())
                     if not frame:
                         continue
                     data = frame[1:]
@@ -75,12 +75,12 @@ class Route(PortComponent):
         self.waiting = []
         
     def send(self, data):
-        self.logger.debug("< %s", data.hex())
+        self.logger.protocol("< %s", data.hex())
         self.port.msg_send(self.remote_id, self.local_id, data)
 
     def _wait(self, timeout = None):
         messages = self.port.msg_recv_all(self.local_id, self.remote_id, timeout = timeout)
-        self.logger.debug("wait > %s", messages)
+        self.logger.protocol("wait > %s", messages)
         if messages:
             self.waiting += messages
     
@@ -91,7 +91,7 @@ class Route(PortComponent):
         while True:
             if deadline is not None:
                 if time.time() >= deadline:
-                    self.logger.debug("_pop timeout")
+                    self.logger.protocol("_pop timeout")
                     return
             try:
                 return self.waiting.pop()
@@ -102,7 +102,7 @@ class Route(PortComponent):
     def recv(self, timeout = None):
         r = self._pop(timeout)
         if r:
-            self.logger.debug("> %s", r.hex())
+            self.logger.protocol("> %s", r.hex())
         return r
             
     def framed_endpoint(self):

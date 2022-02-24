@@ -12,7 +12,7 @@ class JtagDp(dp.Dp):
         dp.Dp.__init__(self, "JTAG-DP", port)
 
     def freq_update(self, freq):
-        self.logger.info("Max AP freq changed to %s", metric(freq, "Hz"))
+        self.logger.debug("Max AP freq changed to %s", metric(freq, "Hz"))
         self.port.max_freq = freq
         self.port.port.children_changed()
         return freq
@@ -99,14 +99,14 @@ class JtagDp(dp.Dp):
             ack, ctrlstat = self.__unpack(ops[-1])
             has_error = bool(ctrlstat & 0x20)
 
-            self.logger.debug("Done:")
+            self.logger.trace("Done:")
             for i, o in enumerate(operations):
                 if not isinstance(o, dp.ApRead):
-                    self.logger.debug("- %d, %s", i, o)
+                    self.logger.trace("- %d, %s", i, o)
                     continue
 
                 ack, data = self.__unpack(o.__value_op)
-                self.logger.debug("- %d, %s -> %s %s 0x%08x", i, o, o.__value_op, ack, data)
+                self.logger.trace("- %d, %s -> %s %s 0x%08x", i, o, o.__value_op, ack, data)
 
                 if ack == self.Ack.OK:
                     o.data = data
@@ -117,7 +117,7 @@ class JtagDp(dp.Dp):
                     self.ctrlstat = self.ctrlstat | 2
                     must_restart = True
                     insert_run += 1
-                    self.logger.info("Delaying subsequent operations by %d", insert_run)
+                    self.logger.trace("Delaying subsequent operations by %d", insert_run)
                     break
 
                 self.abort()

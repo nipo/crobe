@@ -11,9 +11,7 @@ from ....component.arm.mem_ap import MemAp
 from ... import memory
 from ....puppet import Puppet
 from ....db import Db, NoMatch, DisabledEntry, InitializationFailure
-from ....util.info import TimedLogger
 from .puppet_code import crc32_cm0
-from tqdm import tqdm
 from ....util.crc import crc32
 
 __all__ = ["SoC", 'ArmMPuppet', 'StubFlash']
@@ -132,25 +130,26 @@ class StubFlash(BusFlash):
                 other_buffer = None
 
             running = False
-            for i, (address, data) in enumerate(tqdm(sorted(pages.items()), desc = self.name)):
-                write_buffer.write(data)
+            with self.logger.progress(self.name, len(pages)) as progress:
+                for address, data in progress.iterate(sorted(pages.items())):
+                    write_buffer.write(data)
+
+                    if running:
+                        code.wait(1)
+                        running = False
+
+                    code.prepare(address, write_buffer.address, self.page_size)
+                    code.run()
+                    running = True
+
+                    if other_buffer:
+                        other_buffer, write_buffer = write_buffer, other_buffer
+                    else:
+                        code.wait(1)
+                        running = False
 
                 if running:
                     code.wait(1)
-                    running = False
-
-                code.prepare(address, write_buffer.address, self.page_size)
-                code.run()
-                running = True
-
-                if other_buffer:
-                    other_buffer, write_buffer = write_buffer, other_buffer
-                else:
-                    code.wait(1)
-                    running = False
-
-            if running:
-                code.wait(1)
         finally:
             if write_buffer:
                 puppet.unallocate(write_buffer)
@@ -164,17 +163,18 @@ class StubFlash(BusFlash):
         valid = set()
 
         code = puppet.stub(puppet.CRC32)
-        for i, (address, data) in enumerate(tqdm(sorted(pages.items()), desc = "Scanning")):
-            from_mem = code.call(address, self.page_size)
-            crc = crc32(data)
-            self.logger.info("Page at 0x%08x, CRC32=%08x, in mem=%08x",
-                             address, crc, from_mem)
-            if from_mem == crc:
-                valid.add(address)
-        code.cleanup()
+        with self.logger.progress("Scanning", len(pages)) as progress:
+            for address, data in progress.iterate(sorted(pages.items())):
+                from_mem = code.call(address, self.page_size)
+                crc = crc32(data)
+                self.logger.info("Page at 0x%08x, CRC32=%08x, in mem=%08x",
+                                 address, crc, from_mem)
+                if from_mem == crc:
+                    valid.add(address)
+            code.cleanup()
 
-        for a in valid:
-            pages.pop(a)
+            for a in valid:
+                pages.pop(a)
 
         return self.puppet_write(puppet, pages)
 
@@ -303,44 +303,48 @@ class SoC(model.SoC):
         puppet = self.puppet()
 
         if not do_erase and update:
-            for f in tqdm(flashs, desc = "Updating"):
-                mp = program\
-                     .within(f.address, f.address + f.size)\
-                     .paged(f.page_size, fill = b'\xff')
+            with self.logger.progress("Updating", len(flashs)) as flash_progress:
+                for f in flash_progress.iterate(flashs):
+                    mp = program\
+                         .within(f.address, f.address + f.size)\
+                         .paged(f.page_size, fill = b'\xff')
 
-                pages = {}
-                for p in mp:
-                    pages[p.address] = p.data
+                    pages = {}
+                    for p in mp:
+                        pages[p.address] = p.data
 
-                f.puppet_update(puppet, pages)
+                    f.puppet_update(puppet, pages)
         else:
-            for f in tqdm(flashs, desc = "Flashing"):
-                blank = f.is_blank
+            with self.logger.progress("Flashing", len(flashs)) as flash_progress:
+                for f in flash_progress.iterate(flashs):
+                    blank = f.is_blank
 
-                mp = program\
-                     .within(f.address, f.address + f.size)\
-                     .paged(f.page_size, fill = b'\xff')
+                    mp = program\
+                         .within(f.address, f.address + f.size)\
+                         .paged(f.page_size, fill = b'\xff')
 
+                    if not blank:
+                        f.erase(mp.address - f.address, mp.end - mp.address)
+
+                    pages = {}
+                    for p in mp:
+                        pages[p.address] = p.data
+
+                    f.puppet_write(puppet, pages)
+
+        with self.logger.progress("Writing", len(others)) as other_progress:
+            for r in other_progress.iterate(others):
+                if isinstance(r, memory.Ram):
+                    continue
+                blank = r.is_blank
+
+                pages = program.within(r.address, r.address + r.size)
                 if not blank:
-                    f.erase(mp.address - f.address, mp.end - mp.address)
+                    r.erase(pages.address - r.address, pages.end - pages.address)
 
-                pages = {}
-                for p in mp:
-                    pages[p.address] = p.data
-
-                f.puppet_write(puppet, pages)
-
-        for r in tqdm(others, desc = "Writing"):
-            if isinstance(r, memory.Ram):
-                continue
-            blank = r.is_blank
-
-            pages = program.within(r.address, r.address + r.size)
-            if not blank:
-                r.erase(pages.address - r.address, pages.end - pages.address)
-
-            for p in tqdm(pages, desc = "Writing %-8s" % r.name):
-                r.write(p.address - r.address, p.data)
+                with self.logger.progress("Writing %-8s" % r.name, len(pages)) as pprogress:
+                    for p in pprogress.iterate(pages):
+                        r.write(p.address - r.address, p.data)
 
         success = True
         if do_verify:

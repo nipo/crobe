@@ -21,17 +21,17 @@ class Adapter(model.Adapter):
     supported_interfaces = ["i2c"]
     def ctrl(self, op, value, index, data_or_size = b''):
         if isinstance(data_or_size, int):
-            self.logger.debug("CTRL IN %02x v %04x i %04x s %d",
+            self.logger.protocol("CTRL IN %02x v %04x i %04x s %d",
                               op, value, index, data_or_size)
 
             data = self.device.ctrl_transfer(0xc0, bRequest = op,
                                              wValue = value,
                                              wIndex = index,
                                              data_or_wLength = data_or_size)
-            self.logger.debug("-> %s", binascii.b2a_hex(data))
+            self.logger.protocol("-> %s", binascii.b2a_hex(data))
             return data
         else:
-            self.logger.debug("CTRL OUT %02x v %04x i %04x %s",
+            self.logger.protocol("CTRL OUT %02x v %04x i %04x %s",
                               op, value, index,
                               binascii.b2a_hex(data))
 
@@ -104,7 +104,7 @@ class I2cInterface(i2c.Interface):
             as_prev = bool(prev) and isinstance(prev, i2c.Read) == isinstance(op, i2c.Read)
             last = idx == len(ops) - 1
 
-            self.logger.info("op: %s", op)
+            self.logger.trace("op: %s", op)
 
             if isinstance(op, i2c.Read):
                 is_last = idx == len(ops)-1 or not isinstance(ops[idx], i2c.Read)

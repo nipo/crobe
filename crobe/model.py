@@ -1,4 +1,5 @@
 import logging
+from . import logger
 
 class BadInvocation(Exception):
     def __init__(self, message):
@@ -121,7 +122,7 @@ class Component(object):
         obj.__parent = self
         self.__children.append(obj)
 
-        self.logger.info("child_add %s %s %s", obj, self.__started, obj.__started)
+        self.logger.trace("child_add %s %s %s", obj, self.__started, obj.__started)
         self.children_changed()
 
     def __start(self, recurse = True):
@@ -162,7 +163,7 @@ class Component(object):
     def __child_summon(self, crit = None, *invocation):
         options = []
 
-        self.logger.info("Summon %s %s", crit, invocation)
+        self.logger.trace("Summon %s %s", crit, invocation)
 
         if crit and crit.endswith(')'):
             try:
@@ -187,7 +188,7 @@ class Component(object):
             child.__options_apply(options)
             self.child_add(child)
 
-        self.logger.info("Had %s", child)
+        self.logger.trace("Had %s", child)
 
         if self.__started:
             child.__start(False)

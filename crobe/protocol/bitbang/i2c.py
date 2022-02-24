@@ -48,13 +48,13 @@ class I2cInterface(i2c.Interface):
         return self.port.get(self.scl, self.sda)
 
     def _start(self):
-        self.logger.debug("Start")
+        self.logger.trace("Start")
         self._set(1, 1)
         self._set(1, 0)
         self._set(0, 0)
 
     def _stop(self):
-        self.logger.debug("Stop")
+        self.logger.trace("Stop")
         self._set(0, 0)
         self._set(1, 0)
         self._set(1, 1)
@@ -67,13 +67,13 @@ class I2cInterface(i2c.Interface):
         return d
 
     def _shift_byte(self, data = 0xff, nack = 1):
-        self.logger.debug("Shift byte 0x%02x, nack %d", data, int(nack))
+        self.logger.protocol("Shift byte 0x%02x, nack %d", data, int(nack))
         d = 0
         for i in range(7, -1, -1):
             d <<= 1
             d |= self._shift_bit((data >> i) & 1)
         a = self._shift_bit(nack)
-        self.logger.debug(" -> 0x%02x, nack %d", d, int(a))
+        self.logger.protocol(" -> 0x%02x, nack %d", d, int(a))
         return d, a
     
     def _execute(self, operation_list):

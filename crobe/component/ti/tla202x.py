@@ -17,7 +17,7 @@ class Tla202x(i2c.Slave):
         rdata = self.write_read(addr, 2)
         value = int.from_bytes(rdata, "big", signed = signed)
 
-        self.logger.debug("Reg read %d: 0x%04x", reg, value)
+        self.logger.trace("Reg read %d: 0x%04x", reg, value)
 
         return value
 
@@ -26,7 +26,7 @@ class Tla202x(i2c.Slave):
         addr = bytes([reg])
         data = int(value).to_bytes(2, "big")
 
-        self.logger.debug("Reg write %s: 0x%04x", reg, int(value))
+        self.logger.trace("Reg write %s: 0x%04x", reg, int(value))
 
         self.write(addr + data)
 

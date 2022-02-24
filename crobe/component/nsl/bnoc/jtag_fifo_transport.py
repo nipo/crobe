@@ -51,12 +51,12 @@ class JtagFifoTransport(PortComponent):
         ready, valid, d = self.extract(din)
 
         if ready and self.tx_buf:
-            self.logger.debug("< 0x%02x", self.rx_buf[0])
+            self.logger.protocol("< 0x%02x", self.rx_buf[0])
             self.tx_buf.popleft()
             ok = True
 
         if valid:
-            self.logger.debug("> 0x%02x", d)
+            self.logger.protocol("> 0x%02x", d)
             self.rx_buf.append(d)
             self.total_rx += 1
             ok = True
@@ -89,7 +89,7 @@ class JtagFifoTransport(PortComponent):
                 
         while self.tx_buf and len(commands) < out_free:
             word = self.tx_buf.popleft()
-            self.logger.debug("< 0x%02x", word)
+            self.logger.protocol("< 0x%02x", word)
             commands.append(self.port.cmd_dr_shift(self.data_ir, self.VALID | self.READY | word, self.width + 2, read_tdo = True))
             ok = True
             word_out += 1
@@ -114,7 +114,7 @@ class JtagFifoTransport(PortComponent):
                 raise RuntimeError(f"Bad handshake at index {i}")
 
             if recv_valid:
-                self.logger.debug("> 0x%02x", recv_data)
+                self.logger.protocol("> 0x%02x", recv_data)
                 self.rx_buf.append(recv_data)
                 self.total_rx += 1
                 ok = True

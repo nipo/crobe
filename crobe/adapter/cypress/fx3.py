@@ -22,7 +22,7 @@ class Adapter(fx.Adapter):
         self.mem_write(address, b'')
 
     def firmware_load(self, program):
-        self.logger.debug("Loading %s", program)
+        self.logger.trace("Loading %s", program)
 #        self.jump_to(0)
 
         fx.Adapter.firmware_load(self, program)

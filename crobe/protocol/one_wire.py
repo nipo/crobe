@@ -137,7 +137,7 @@ class Interface(base.Interface):
 
         r = self.cmd_reset()
         self.execute([r])
-        self.logger.info('Presence: %s', r.presence)
+        self.logger.debug('Presence: %s', r.presence)
         if not r.presence:
             return []
 
@@ -146,10 +146,10 @@ class Interface(base.Interface):
         while collision or to_do:
             if not to_do:
                 to_do.add(bitstring.BitString(0, 64))
-            self.logger.debug("Collision search, to_do: %s", to_do)
+            self.logger.trace("Collision search, to_do: %s", to_do)
             collision = False
             enumerated_address, collision_bit = self._do_search_rom(to_do.pop())
-            self.logger.debug("Found %s, had collision at %s", enumerated_address, collision_bit)
+            self.logger.trace("Found %s, had collision at %s", enumerated_address, collision_bit)
             if not enumerated_address:
                 continue
             try:

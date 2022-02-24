@@ -34,7 +34,7 @@ class Interface(base.Interface):
             self.execute([id0, id1])
             id = (id0.data << 16) | id1.data
             if id != 0xffffffff and id != 0:
-                self.logger.debug("Found phy at address 0x%x: IDR=%08x", i, id)
+                self.logger.trace("Found phy at address 0x%x: IDR=%08x", i, id)
                 self.child_add(self.db.call(id, self, phyad = i))
         
     def _execute(self, operation_list):
@@ -56,7 +56,7 @@ class Interface(base.Interface):
         """
         op = self.cmd_c22_read(phyad, addr)
         self.execute([op])
-        self.logger.debug("> C22 Phy 0x%02x Reg 0x%20x: %04x", phyad, addr, op.data)
+        self.logger.protocol("> C22 Phy 0x%02x Reg 0x%20x: %04x", phyad, addr, op.data)
         return op.data
 
     def c22_write(self, phyad, addr, data):
@@ -64,7 +64,7 @@ class Interface(base.Interface):
         See cmd_c22_write()
         """
         op = self.cmd_c22_write(phyad, addr, data)
-        self.logger.debug("< C22 Prt 0x%02x Dev 0x%20x: %04x", phyad, addr, data)
+        self.logger.protocol("< C22 Prt 0x%02x Dev 0x%20x: %04x", phyad, addr, data)
         self.execute([op])
 
     def c45_read(self, prtad, devad):
@@ -73,7 +73,7 @@ class Interface(base.Interface):
         """
         op = self.cmd_c45_read(prtad, devad)
         self.execute([op])
-        self.logger.debug("> C45 Prt 0x%02x Dev 0x%20x: %04x", prtad, devad, op.data)
+        self.logger.protocol("> C45 Prt 0x%02x Dev 0x%20x: %04x", prtad, devad, op.data)
         return op.data
 
     def c45_read_inc(self, prtad, devad):
@@ -82,7 +82,7 @@ class Interface(base.Interface):
         """
         op = self.cmd_c45_read_inc(prtad, devad)
         self.execute([op])
-        self.logger.debug("> C45+ Prt 0x%02x Dev 0x%20x: %04x", prtad, devad, op.data)
+        self.logger.protocol("> C45+ Prt 0x%02x Dev 0x%20x: %04x", prtad, devad, op.data)
         return op.data
 
     def c45_addr(self, prtad, devad, addr):
@@ -90,7 +90,7 @@ class Interface(base.Interface):
         See cmd_c45_addr()
         """
         op = self.cmd_c45_addr(prtad, devad, addr)
-        self.logger.debug("< C45 Prt 0x%02x Dev 0x%20x @%04x", prtad, devad, addr)
+        self.logger.protocol("< C45 Prt 0x%02x Dev 0x%20x @%04x", prtad, devad, addr)
         self.execute([op])
 
     def c45_write(self, prtad, devad, data):
@@ -98,7 +98,7 @@ class Interface(base.Interface):
         See cmd_c45_write()
         """
         op = self.cmd_c45_addr(prtad, devad, data)
-        self.logger.debug("< C45 Prt 0x%02x Dev 0x%20x: %04x", prtad, devad, data)
+        self.logger.protocol("< C45 Prt 0x%02x Dev 0x%20x: %04x", prtad, devad, data)
         self.execute([op])
 
     def cmd_c22_read(self, phyad, addr):

@@ -13,15 +13,15 @@ class CCFlash(memory.Flash):
         for addr in range(offset & ~(self.cc.info.page_size - 1),
                           offset + size,
                           self.cc.info.page_size):
-            self.logger.debug("Erasing page at 0x%05x", offset)
+            self.logger.trace("Erasing page at 0x%05x", offset)
             self.cc.flash_page_erase(addr)
 
     def write(self, offset, data):
-        self.logger.debug("Writing page at 0x%05x", offset)
+        self.logger.trace("Writing page at 0x%05x", offset)
         self.cc.flash_write(offset, data)
 
     def read(self, offset, size):
-        self.logger.debug("Reading %d bytes at 0x%05x", size, offset)
+        self.logger.trace("Reading %d bytes at 0x%05x", size, offset)
         start = offset & ~(self.cc.info.page_size - 1)
         data = b""
         for addr in range(start, offset + size, self.cc.info.page_size):

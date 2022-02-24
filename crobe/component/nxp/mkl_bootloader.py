@@ -105,13 +105,13 @@ class MklBootloader(PortComponent):
         }
 
     def txn_write(self, tag, params, rsp_tag, rsp_frame_size):
-        self.logger.debug("txn write %02x %s %02x", tag, params, rsp_tag)
+        self.logger.protocol("txn write %02x %s %02x", tag, params, rsp_tag)
         self.frame_send(tag, params)
         time.sleep(self.DELAYS.get(tag, .1))
         return self.frame_receive(rsp_tag, rsp_frame_size)
 
     def txn_read(self, tag, size):
-        self.logger.debug("txn read %02x", tag)
+        self.logger.protocol("txn read %02x", tag)
         time.sleep(.1)
         r = self.frame_receive(tag, size)
         self.frame_send(self.FRAME_ACK)
@@ -119,7 +119,7 @@ class MklBootloader(PortComponent):
 
     def ping(self):
         time.sleep(.1)
-        self.logger.info("ping")
+        self.logger.trace("ping")
         return self.txn_write(self.FRAME_PING, b'', self.FRAME_PING_RESPONSE, 10)
 
     def abort(self):
@@ -143,7 +143,7 @@ class MklBootloader(PortComponent):
                 raise
 
     def _command(self, cmd, arg = [], data_pkts = []):
-        self.logger.info("command %02x %s %d", cmd, arg, len(data_pkts))
+        self.logger.protocol("command %02x %s %d", cmd, arg, len(data_pkts))
         header = bytes([cmd, 0, 0, len(arg)])
         data = b''.join(a.to_bytes(4, "little") for a in arg)
 
@@ -154,7 +154,7 @@ class MklBootloader(PortComponent):
         response = [int.from_bytes(r[i:i+4], "little") for i in range(4, len(r), 4)]
         assert hdr[3] == len(response)
 
-        self.logger.info(" rsp %02x %s", r[1], response)
+        self.logger.protocol(" rsp %02x %s", r[1], response)
         
         if not data_pkts:
             return response

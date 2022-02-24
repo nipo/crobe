@@ -148,10 +148,10 @@ class Interface(base.Interface):
     def multidrop_enumerate(self):
         # Limit frequency to 1M for line reset and jtag-to-swd.
         self.freq_cap("enumeration", 1e6)
-        self.logger.debug("Multidrop enumeration")
+        self.logger.trace("Multidrop enumeration")
 
         for id, name in self.targetsel_db.registry.items():
-            self.logger.debug("Multidrop probing %s %s", name, id)
+            self.logger.trace("Multidrop probing %s %s", name, id)
             try:
                 self.multidrop_probe(id)
             except BadTarget:
@@ -334,7 +334,7 @@ class Interface(base.Interface):
                 id_get,
         ])
 
-        self.logger.debug("Ack after targetsel %s: %s", id, id_get.ack)
+        self.logger.trace("Ack after targetsel %s: %s", id, id_get.ack)
         
         if id_get.ack != Ack.OK:
             self.current_target = None

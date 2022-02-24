@@ -113,13 +113,13 @@ class AtSec(i2c.Slave):
 
     def command_send(self, opcode, param1 = 0, param2 = 0, data = b''):
         self.wake()
-        self.logger.debug("< Command %s 0x%04x 0x%04x %s", opcode, param1, param2, data.hex())
+        self.logger.protocol("< Command %s 0x%04x 0x%04x %s", opcode, param1, param2, data.hex())
         header = struct.pack("<BBH", opcode, param1, param2)
         self.io_group_send(header + data)
 
     def response_receive(self):
         data = self.io_group_recv()
-        self.logger.debug("> Response %s", data.hex())
+        self.logger.protocol("> Response %s", data.hex())
         if len(data) == 1:
             rc = self.Status(data[0])
             if rc.is_error():

@@ -443,11 +443,11 @@ class Si5332(i2c.Slave):
     def read(self, base, size):
         rdata = self.write_read([base], size)
         regs = list(rdata)
-        self.logger.debug("Reg read @0x%02x: %s", base, [f"{x:#4x}" for x in regs])
+        self.logger.trace("Reg read @0x%02x: %s", base, [f"{x:#4x}" for x in regs])
         return regs
 
     def write(self, base, values):
-        self.logger.debug("Reg write @0x%02x: %s", base, [f"{x:#4x}" for x in values])
+        self.logger.trace("Reg write @0x%02x: %s", base, [f"{x:#4x}" for x in values])
         super().write(bytes([base]) + bytes(values))
 
     def start(self):

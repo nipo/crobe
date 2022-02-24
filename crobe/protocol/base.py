@@ -60,19 +60,19 @@ class Interface(model.PortComponent, FreqCapper):
             self.power = self.__do_power
 
         if self.__reset == "hold":
-            self.logger.info("Holding reset")
+            self.logger.trace("Holding reset")
             self.reset(True)
         elif isinstance(self.__reset, float):
-            self.logger.info("Holding reset for %d sec", self.__reset)
+            self.logger.trace("Holding reset for %d sec", self.__reset)
             self.reset(True)
             time.sleep(self.__reset)
             self.reset(False)
         elif self.__reset is True:
-            self.logger.info("Cycling reset")
+            self.logger.trace("Cycling reset")
             self.execute([self.cmd_reset(True), self.cmd_reset(False)])
 
         if self.__wait:
-            self.logger.info("Waiting for %d sec", self.__wait)
+            self.logger.trace("Waiting for %d sec", self.__wait)
             time.sleep(self.__wait)
 
         super().start()

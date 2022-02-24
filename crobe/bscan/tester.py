@@ -1,8 +1,8 @@
 from ..bitstring import BitString
 import math
 import time
-from tqdm import tqdm
 from ..target.pin_control import Mode
+from ..model import PortComponent
 
 class Net:
     def __init__(self, *pins, shuffle = True, name = None):
@@ -24,8 +24,9 @@ class Net:
         return len(self.pins)
 
 class TestPhase:
-    def __init__(self, board, nets, constants):
-        self.board = board
+    def __init__(self, tester, nets, constants):
+        self.tester = tester
+        self.board = tester.board
 
         scanned_pins = set()
         self.equipots = {}
@@ -102,18 +103,19 @@ class TestPhase:
         self.enable()
         self.board.extest()
 
-        for idx in range(self.count + 1):
-            time.sleep(.01)
-            if idx < self.count:
-                self.scatter(idx)
-            else:
-                self.disable()
-            self.board.extest()
-            if pb:
-                pb.update()
-            if idx:
-                for observer, value in self.gather().items():
-                    observed[observer] |= int(bool(value)) << (idx - 1)
+        with self.tester.logger.progress("phase", self.count) as progress:
+            for idx in progress.iterate(range(self.count + 1)):
+                time.sleep(.01)
+                if idx < self.count:
+                    self.scatter(idx)
+                else:
+                    self.disable()
+                self.board.extest()
+                if pb:
+                    pb.step()
+                if idx:
+                    for observer, value in self.gather().items():
+                        observed[observer] |= int(bool(value)) << (idx - 1)
 
         ret = {}
         for observer, observed_pattern in observed.items():
@@ -128,8 +130,9 @@ class TestPhase:
     def driver_by_pattern(self, pattern):
         return self.rpattern.get(int(pattern), None)
             
-class BoardTester:
+class BoardTester(PortComponent):
     def __init__(self, board, nets, constants):
+        super().__init__(board, "bs tester")
         self.board = board
         self.nets = nets
         self.constants = constants
@@ -144,21 +147,19 @@ class BoardTester:
                 except ValueError:
                     continue
                 phase_nets.append(n)
-            self.phase.append(TestPhase(board, phase_nets, constants))
+            self.phase.append(TestPhase(self, phase_nets, constants))
 
     def test(self):
         bad_observations = {}
-        pb = tqdm(total = sum((p.count for p in self.phase), 0),
-                  desc = "Boundary scan")
+        with self.logger.progress("Boundary scan", len(self.phase)) as progress:
+            for phase in progress.iterate(self.phase):
+                phase_bad_obs = phase.test()
 
-        for phase in self.phase:
-            phase_bad_obs = phase.test(pb)
-
-            for observer, data in phase_bad_obs.items():
-                try:
-                    bad_observations[observer].append(driver, data)
-                except:
-                    bad_observations[observer] = [data]
+                for observer, data in phase_bad_obs.items():
+                    try:
+                        bad_observations[observer].append(driver, data)
+                    except:
+                        bad_observations[observer] = [data]
         return bad_observations
             
             

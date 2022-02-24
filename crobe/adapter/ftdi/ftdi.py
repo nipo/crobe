@@ -284,7 +284,7 @@ class Handle(Context):
             blob = self.write_queue.get()
             if blob is None:
                 break
-            self.logger.debug("<< %s", binascii.b2a_hex(blob))
+            self.logger.protocol("<< %s", binascii.b2a_hex(blob))
             raw = (ctypes.c_ubyte * len(blob)).from_buffer_copy(blob)
             self.check(api.write_data(self.context, raw, len(blob)))
             self.write_queue.task_done()
@@ -314,7 +314,7 @@ class Handle(Context):
             if time.time() > deadline:
                 print(">> %s" % binascii.b2a_hex(ret))
                 raise base.CommunicationError("Short read, expected %d bytes, had %d" % (rsize, len(ret)))
-        self.logger.debug(">> %s", binascii.b2a_hex(ret))
+        self.logger.protocol(">> %s", binascii.b2a_hex(ret))
         return ret
     
     def execute(self, blob, rsize = None, timeout = 1.):
@@ -367,7 +367,7 @@ class Ft245SyncFifo(Handle):
         return ret
 
     def stream_data(self, buf):
-        self.logger.debug(">> %s", binascii.b2a_hex(buf))
+        self.logger.protocol(">> %s", binascii.b2a_hex(buf))
         self.stream_rx_queue.put(buf)
 
     def stream_progress(self, progress):

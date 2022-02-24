@@ -242,7 +242,7 @@ class Debug(PortComponent):
 
         data = b''
 
-        self.logger.info("Reading at %#10x: %d bytes", addr, size)
+        self.logger.trace("Reading at %#10x: %d bytes", addr, size)
 
         self.debug_control(dbgack = False)
 
@@ -257,7 +257,7 @@ class Debug(PortComponent):
                 reg_count = 14
             mask = (1 << reg_count) - 1
 
-            self.logger.debug("Loading %d regs at 0x%08x", reg_count, base)
+            self.logger.trace("Loading %d regs at 0x%08x", reg_count, base)
 
             self.asm_run([
                 armv5.ldmia(14, mask, update = True),
@@ -276,7 +276,7 @@ class Debug(PortComponent):
         # Drop initial alignment
         data = data[offset:size]
         
-        self.logger.debug("-> %s", data.hex())
+        self.logger.trace("-> %s", data.hex())
 
         return data
             
@@ -287,8 +287,8 @@ class Debug(PortComponent):
         if len(data) & 0x3:
             raise ValueError(f"Unaligned blob")
 
-        self.logger.info("Writing %d bytes at %#10x", len(data), addr)
-        self.logger.debug("<- %s", data.hex())
+        self.logger.trace("Writing %d bytes at %#10x", len(data), addr)
+        self.logger.trace("<- %s", data.hex())
         
         self.debug_control(dbgack = False)
 
@@ -322,7 +322,7 @@ class Debug(PortComponent):
                dbgack = False,
                disable = False,
                monitor = False):
-        self.logger.info("Resuming execution at %#10x", pc)
+        self.logger.trace("Resuming execution at %#10x", pc)
         self.debug_control(dbgack = dbgack,
                            intdis = intdis,
                            monitor = monitor,
@@ -346,10 +346,10 @@ class Debug(PortComponent):
         return rsp
 
     def dcc_pop(self, count):
-        self.logger.debug("Popping %d DCC items", count)
+        self.logger.trace("Popping %d DCC items", count)
         rsp = []
         for i in range(count):
-            self.logger.debug("Popping DCC value")
+            self.logger.trace("Popping DCC value")
             filled = False
             for i in range(100):
                 rd = IceScan(Register.CommCtrl)
@@ -361,28 +361,28 @@ class Debug(PortComponent):
                 raise RuntimeError("DCC Register never filled")
             rd = IceScan(Register.CommData)
             self.execute([rd])
-            self.logger.debug("-> %#10x", rd.rdata)
+            self.logger.trace("-> %#10x", rd.rdata)
             rsp.append(int(rd.rdata))
         return rsp
 
     def dcc_flush(self, count = 15):
-        self.logger.debug("Clearing DCC")
+        self.logger.trace("Clearing DCC")
         cmds = [IceScan(Register.CommData) for x in range(count)]
         self.execute(cmds)
         count = 0
         for r in cmds:
             if r.rdata_valid:
                 count += 1
-        self.logger.debug("-> %d entries cleared", count)
+        self.logger.trace("-> %d entries cleared", count)
 
     def dcc_push_nohs(self, data_list):
-#        self.logger.debug("Pushing DCC items: %s", ', '.join(hex(d) for d in data_list))
+#        self.logger.trace("Pushing DCC items: %s", ', '.join(hex(d) for d in data_list))
         cmds = [IceScan(Register.CommData, x) for x in data_list]
         self.execute(cmds)
 
     def dcc_push(self, data_list):
         for d in data_list:
-            self.logger.debug("Pushing DCC value: %#10x", d)
+            self.logger.trace("Pushing DCC value: %#10x", d)
             free = False
             for i in range(100):
                 rd = IceScan(Register.CommCtrl)

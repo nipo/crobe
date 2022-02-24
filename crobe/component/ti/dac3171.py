@@ -24,7 +24,7 @@ class Dac3171(PortComponent):
 
         value = int.from_bytes(data.miso, "big")
 
-        self.logger.info("Read reg %d: 0x%04x", int(reg), int(value))
+        self.logger.trace("Read reg %d: 0x%04x", int(reg), int(value))
 
         return value
 
@@ -39,7 +39,7 @@ class Dac3171(PortComponent):
 
         cmd = self.port.cmd_shift(bytes([int(reg)]) + blob, read_miso = False)
 
-        self.logger.info("Write reg %d: 0x%04x", int(reg), int(value))
+        self.logger.trace("Write reg %d: 0x%04x", int(reg), int(value))
         
         self.port.execute([self.port.cmd_cs(True), cmd, self.port.cmd_cs(False)])
         

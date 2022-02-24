@@ -64,7 +64,7 @@ class TapBitbang(bitbang.Interface):
         self.padding_cycles = int(max(1, target_slot_cycles - slot_cycles))
         new_freq = jtag_freq / (slot_cycles + self.padding_cycles)
 
-        self.logger.info("Now inserting %d run cycles over boundary len of %d for capping freq to %s from JTAG freq of %s",
+        self.logger.trace("Now inserting %d run cycles over boundary len of %d for capping freq to %s from JTAG freq of %s",
                          self.padding_cycles,
                          self.controller.boundary_len,
                          metric(new_freq, "Hz"),

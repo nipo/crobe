@@ -211,7 +211,7 @@ class MachXO2Config(jtag.InstructionRegistry):
         self.config_memory_size = self.info.row_count * self.info.col_bit_count // 8
         self.flash_size = (self.info.flash_page_count + self.info.ufm_page_count) * 16
 
-        self.logger.info("Found %s", self.info.name)
+        self.logger.trace("Found %s", self.info.name)
 
         self.uid = self.LSC_UIDCODE_PUB.shift(0)
 
@@ -223,8 +223,7 @@ class MachXO2Config(jtag.InstructionRegistry):
             self.logger.info(repr(self.Feature(self.feature_get())))
             self._isc_disable()
         except RuntimeError:
-            self.logger.info("Unable to background enable")
-            pass
+            self.logger.warning("Unable to background enable")
 
     TARGET_SRAM    = 0
     TARGET_EFUSE   = 2
@@ -305,7 +304,7 @@ class MachXO2Config(jtag.InstructionRegistry):
         status = self.status_get()
         if status & mask == expect_set:
             return
-        self.logger.info(repr(self.Status(status)))
+        self.logger.warning(repr(self.Status(status)))
         raise ValueError("Expected status with 0x%08x set, 0x%08x clear, got 0x%08x" %
                          (expect_set, expect_clear, status))
 
@@ -380,13 +379,13 @@ class MachXO2Config(jtag.InstructionRegistry):
 
         if offset % 16:
             prelen = (-offset % 16)
-            self.logger.info("Pre len %d", prelen)
+            self.logger.debug("Pre len %d", prelen)
             data = b'\x00' * prelen + data
             offset = offset & ~0xf
 
         if len(data) % 16:
             postlen = (-len(data) % 16)
-            self.logger.info("Post len %d", postlen)
+            self.logger.debug("Post len %d", postlen)
             data += b'\x00' * postlen
 
         self.execute([

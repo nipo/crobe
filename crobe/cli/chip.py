@@ -5,7 +5,6 @@ from ..component.model import Cpu
 from ..component.arm import dp, mem_ap
 from ..component.arm.coresight import fpb
 from ..util.pretty import metric
-from ..util.info import TimedLogger
 from ..target import memory
 from ..loadable.object import Program, Segment
 import logging

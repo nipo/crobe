@@ -203,20 +203,20 @@ class Handle(Component):
         cmd = bytes([op.cmd]) + op.cmd_args
         variable, rsp_size = op.rsp_size
 
-        self.logger.debug("< %s", cmd.hex())
+        self.logger.protocol("< %s", cmd.hex())
         self.out_ep.write(cmd)
         if not rsp_size:
             return
 
         rsp = self.in_ep.read(2048)
         rsp = bytes(rsp)
-        self.logger.debug("> %s", rsp.hex())
+        self.logger.protocol("> %s", rsp.hex())
 
         if variable:
             rs = op.response_size_parse(rsp)
             if rs:
                 rsp = bytes(self.in_ep.read(rs))
-                self.logger.debug("> %s", rsp.hex())
+                self.logger.protocol("> %s", rsp.hex())
             else:
                 rsp = b''
 
@@ -243,7 +243,7 @@ class Handle(Component):
             raise NotImplementedError("Incapable hardware")
 
         value = bytes(value)
-        self.logger.info("Writing configuration blob: %r", value.hex())
+        self.logger.trace("Writing configuration blob: %r", value.hex())
 
         self.execute([WriteConfig(value)])
 

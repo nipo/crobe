@@ -377,7 +377,7 @@ class Si5351(i2c.Slave):
         value = int.from_bytes(rdata, reg_class._endian)
         pretty = reg_class(value)
 
-        self.logger.debug("Reg read %d %s: %s", reg, rdata.hex(), pretty)
+        self.logger.trace("Reg read %d %s: %s", reg, rdata.hex(), pretty)
 
         return pretty
 
@@ -395,7 +395,7 @@ class Si5351(i2c.Slave):
     def reg_write(self, reg, value):
         reg, addr, data = self.reg_write_data(reg, value)
         pretty = reg_class(int(value))
-        self.logger.debug("Reg write %s %s: %s", addr, data.hex(), pretty)
+        self.logger.trace("Reg write %s %s: %s", addr, data.hex(), pretty)
         self.write(addr + data)
 
     #def start(self):

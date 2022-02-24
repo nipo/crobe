@@ -92,7 +92,7 @@ class Target(PortComponent, FreqCapper):
         return self.port.freq_cap(self, freq)
 
     def execute(self, ops):
-        self.logger.debug("execute %s", self.__freq)
+        self.logger.trace("execute %s", self.__freq)
         self.port.freq_cap("target", self.__freq)
         r = self.port.execute(ops)
         self.port.freq_cap("target")

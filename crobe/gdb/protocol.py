@@ -55,7 +55,7 @@ class Responder(Session):
         }
 
     def handle_interrupt(self):
-        self.logger.debug("Interrupt requested")
+        self.logger.trace("Interrupt requested")
 
     remapped = {
         '?': 'question',
@@ -65,7 +65,7 @@ class Responder(Session):
     def handle(self, command):
         assert isinstance(command, Command)
 
-        self.logger.debug("Command: %s", command.data)
+        self.logger.protocol("Command: %s", command.data)
 
         cmd = str(command.data[:1], 'ascii')
         cmd = self.remapped.get(cmd, cmd)
@@ -79,7 +79,7 @@ class Responder(Session):
             self.respond(Error(42))
 
     def respond(self, response):
-        self.logger.debug("Response: %s", response.data)
+        self.logger.protocol("Response: %s", response.data)
         Session.respond(self, response)
             
     def handle_unknown(self, command, *args):
@@ -373,11 +373,11 @@ class Responder(Session):
         pass
 
     def flash(self, program):
-        self.logger.info("Loading program to flash")
-        program.pprint(self.logger.info)
+        self.logger.trace("Loading program to flash")
+        program.pprint(self.logger.trace)
 
     def flash_erase(self, address, size):
-        self.logger.info("Flash erase 0x%08x-0x%08x", address, address + size)
+        self.logger.trace("Flash erase 0x%08x-0x%08x", address, address + size)
         
     def memory_map_xml(self):
         return b''

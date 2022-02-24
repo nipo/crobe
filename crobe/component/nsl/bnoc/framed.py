@@ -13,7 +13,7 @@ class Framed(PortComponent):
         self.rx_buf = []
 
     def frame_send(self, frame):
-        self.logger.debug("< %s", frame.hex())
+        self.logger.protocol("< %s", frame.hex())
         enc = list(frame)
         enc[-1] |= 0x100
         self.port.write(enc)
@@ -23,7 +23,7 @@ class Framed(PortComponent):
         while True:
             more_data = self.port.read()
 
-            self.logger.debug("read %d %s", retries, more_data)
+            self.logger.protocol("read %d %s", retries, more_data)
 
             self.rx_buf += more_data
 
@@ -31,8 +31,8 @@ class Framed(PortComponent):
                 if word & 0x100:
                     frame = bytes([x & 0xff for x in self.rx_buf[:i+1]])
                     self.rx_buf = self.rx_buf[i+1:]
-                    self.logger.debug("> %s", frame.hex())
-                    self.logger.debug("pending %s", ' '.join(hex(x) for x in self.rx_buf))
+                    self.logger.protocol("> %s", frame.hex())
+                    self.logger.protocol("pending %s", ' '.join(hex(x) for x in self.rx_buf))
                     return frame
 
             if more_data:

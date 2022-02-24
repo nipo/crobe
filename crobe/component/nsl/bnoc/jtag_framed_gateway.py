@@ -19,7 +19,7 @@ class JtagFramedGateway(PortComponent):
         cmds = []
         for index, word in enumerate(frame):
             last = int(index == (len(frame) - 1))
-            self.logger.debug("< 0x%02x, %s", word, "last" if last else "-")
+            self.logger.protocol("< 0x%02x, %s", word, "last" if last else "-")
             cmds += [
                 self.port.cmd_dr_shift(self.ir_send, (last << 8) | word, 9, read_tdo = False),
                 ]
@@ -53,7 +53,7 @@ class JtagFramedGateway(PortComponent):
             last = bool(poll.tdo & 0x100)
             d = poll.tdo & 0xff
 
-            self.logger.debug("> 0x%02x, %s, %s", d, "last" if last else "-", "valid" if valid else "-")
+            self.logger.protocol("> 0x%02x, %s, %s", d, "last" if last else "-", "valid" if valid else "-")
 
             if valid:
                 self.left.append((last, d))

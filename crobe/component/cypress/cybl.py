@@ -79,7 +79,7 @@ class CyBl(i2c.Slave):
         chk = self.checksum(blob)
         blob += bytes([chk & 0xff, chk >> 8, self.FRAME_END])
 
-        self.logger.debug("frame send %s", blob.hex())
+        self.logger.protocol("frame send %s", blob.hex())
 
         self.write(blob)
 
@@ -103,7 +103,7 @@ class CyBl(i2c.Slave):
 
             data = data[st:]
             
-            self.logger.debug("frame recv %s", data.hex())
+            self.logger.protocol("frame recv %s", data.hex())
 
             length = int.from_bytes(data[2:4], "little")
             chk_ext = int.from_bytes(data[length+4:length+6], "little")
