@@ -517,7 +517,7 @@ class MachXO2(jtag.Tap, MachXO2Config, JtagSramFpga):
     USER_IR = [0x32, 0x38]
 
     def __init__(self, port, index, idcode):
-        jtag.Tap.__init__(self, port, index, idcode)
+        jtag.Tap.__init__(self, port, index, idcode, name = "LCMX")
         MachXO2Config.__init__(self)
         JtagSramFpga.__init__(self)
 
