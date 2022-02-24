@@ -40,11 +40,11 @@ class InstructionRegistry(jtag.InstructionRegistry):
     CP15 = jtag.Dr(Ice._width, type = Cp15)
 
     IDCODE               = jtag.Instruction(0xe, "DEVICE_ID")
-    EXTEST               = jtag.Instruction(0x0, "TAP_BYPASS")
+    EXTEST               = jtag.Instruction(0x0, "BYPASS_REG")
     SCAN_N               = jtag.Instruction(0x2, "SCAN_PATH_SELECT")
     PRELOAD_ICE          = jtag.Instruction(0x3, "ICE")
     PRELOAD_DEBUG        = jtag.Instruction(0x3, "DEBUG")
-    RESTART              = jtag.Instruction(0x4, "TAP_BYPASS")
+    RESTART              = jtag.Instruction(0x4, "BYPASS_REG")
     INTEST_ICE           = jtag.Instruction(0xc, "ICE")
     INTEST_DEBUG         = jtag.Instruction(0xc, "DEBUG")
     INTEST_CP15          = jtag.Instruction(0xc, "CP15")
