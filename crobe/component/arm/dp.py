@@ -54,13 +54,12 @@ class Dp(PortComponent, FreqCapper):
 
         self.target_id = None
 
-        if self.version >= 2:
-            try:
-                self.target_id = PartId.from_idcode(self.banked_reg_read(self.TARGETID))
-            except Exception:
-                pass
+        try:
+            self.target_id = PartId.from_idcode(self.banked_reg_read(self.TARGETID))
+        except (DpAccessFailure, ValueError):
+            self.target_id = None
 
-            self.logger.info("DP Target ID %s", self.target_id)
+        self.logger.info("DP Target ID: %s", self.target_id)
 
         for i in range(16):
             self.__ap_discover(i)
