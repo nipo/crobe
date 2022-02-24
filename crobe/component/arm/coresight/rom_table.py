@@ -16,8 +16,8 @@ class RomTable(MemoryMappedComponent):
         return "RomTable for %s" % self.partid.pretty()
 
     def start(self):
-        for i in range(0, 960):
-            e = self.reg_read(i * 4)
+        for addr in range(0, 0xf00, 4):
+            e = self.reg_read(addr)
 
             if not e:
                 break
@@ -30,7 +30,7 @@ class RomTable(MemoryMappedComponent):
                 c = MemoryMappedComponent(self.bus, (self.base + address_offset) & 0xffffffff).cast()
             except:
                 c = FailedComponent(self.bus, (self.base + address_offset) & 0xffffffff)
-            self.logger.info("- %d: %s", i, c)
+            self.logger.debug("Entry at %03x: %s", addr, c)
             self.child_add(c)
 
         MemoryMappedComponent.start(self)
