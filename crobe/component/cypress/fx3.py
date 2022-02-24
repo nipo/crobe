@@ -10,5 +10,7 @@ class FX3(Tap):
     EXTEST_REG = jtag.Dr(5)
     EXTEST = jtag.Instruction(0x0, "EXTEST_REG")
 
+    irlen = 4
+    
     def __init__(self, port, index, idcode):
         super().__init__(port, index, idcode, "FX3")
