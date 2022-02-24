@@ -236,7 +236,7 @@ class MachXO2Config(jtag.InstructionRegistry):
         self.logger.info(repr(self.Status(self.status_get())))
 
         try:
-            self._isc_enable(True)
+            self._isc_enable(self.TARGET_FLASH, True)
             self.logger.info(repr(self.Feature(self.feature_get())))
             self._isc_disable()
         except ValueError:
