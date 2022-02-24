@@ -34,7 +34,7 @@ class GowinFpga(jtag.Tap, JtagSramFpga):
     ISC_DEFAULT     = jtag.Dr(1)
     ISC_PDATA       = jtag.Dr(None)
 
-    BYPASS2              = jtag.Instruction(0x00, "TAP_BYPASS")
+    BYPASS2              = jtag.Instruction(0x00, "BYPASS_REG")
 
     ISC_DISABLE          = jtag.Instruction(0x3a, "ISC_DEFAULT")
     ISC_NOOP             = jtag.Instruction(0x02, "ISC_DEFAULT")
@@ -48,8 +48,8 @@ class GowinFpga(jtag.Tap, JtagSramFpga):
     ISC_ADDRESS_INIT     = jtag.Instruction(0x12, "ISC_DEFAULT")
     ISC_TRANSFER_CONFIG  = jtag.Instruction(0x17, "ISC_PDATA")
 
-    HIGHZ                = jtag.Instruction(0x0c, "TAP_BYPASS")
-    CLAMP                = jtag.Instruction(0x07, "TAP_BYPASS")
+    HIGHZ                = jtag.Instruction(0x0c, "BYPASS_REG")
+    CLAMP                = jtag.Instruction(0x07, "BYPASS_REG")
 
     IDCODE               = jtag.Instruction(0x11, "DEVICE_ID")
     IDCODE_PRIV          = jtag.Instruction(0x19, "DEVICE_ID")
