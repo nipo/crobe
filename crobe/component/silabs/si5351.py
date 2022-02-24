@@ -173,7 +173,7 @@ class Ms(Bitfield):
 
         self.divby4 = False
          
-        if not (8 <= ratio <= 2048):
+        if not (6 <= ratio <= 2048):
             raise ValueError("Ratio out of bounds")
 
         bratio = (ratio - 4) * 128
