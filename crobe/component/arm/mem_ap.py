@@ -29,9 +29,22 @@ class Csw(bitfield.Bitfield):
 )
 class MemAp(ap.Ap, model.Bus):
     CSW               = 0x00
-    CSW_DBGSWEN       = (1 << 31)
-    CSW_SPIDEN        = (1 << 23)
-    CSW_DEVICEEN      = (1 << 6)
+
+    class Csw(bitfield.Bitfield):
+        size          = bitfield.Field(0, 3)
+        addrinc       = bitfield.Field(4, 2)
+        device_en     = bitfield.BooleanField(6)
+        trn_in_prog   = bitfield.BooleanField(7)
+        mode          = bitfield.Field(8, 4)
+        type          = bitfield.Field(12, 4)
+        mte           = bitfield.BooleanField(15)
+        spiden        = bitfield.BooleanField(23)
+        cache         = bitfield.Field(24, 4)
+        prot_priv     = bitfield.BooleanField(28)
+        prot_nonsec   = bitfield.BooleanField(29)
+        prot_ins      = bitfield.BooleanField(30)
+        dbgsw_en      = bitfield.BooleanField(31)
+
     TAR               = 0x04
     TAR_MSB           = 0x08
     DRW               = 0x0c
@@ -59,14 +72,37 @@ class MemAp(ap.Ap, model.Bus):
         self.base = None
 
     def enable(self, enable = True):
+        csw = self.csw_get()
+        self.logger.debug("CSW enable, r%d: CSW before %s", self.rev, csw)
+
         if enable:
             if self.rev == 8:
-                self.csw = self.csw | 0x6f000000
+                csw.prot_ins = True
+                csw.prot_nonsec = True
+                csw.prot_priv = False
+                csw.cache = 0xf
+                csw.device_en = True
             else:
-                while not (self.csw & (self.CSW_DEVICEEN | self.CSW_DBGSWEN)):
-                    self.csw = self.csw | self.CSW_SPIDEN
+                mode = 1
+
+                while not (csw.device_en | csw.dbgsw_en):
+                    csw.device_en = True
+                    self.csw_set(csw)
+                    csw = self.csw_get()
+
+                self.logger.trace("Setting CSW MODE to %d", mode)
+                csw.mode = mode
+
+                self.logger.trace("Setting CSW PROT")
+                csw.prot_ins = True
+                csw.prot_nonsec = True
+                csw.prot_priv = False
+            self.csw_set(csw)
+
         else:
-            self.csw = self.csw & ~self.CSW_SPIDEN & ~self.CSW_DBGSWEN
+            self.csw_update(spiden = False, dbgsw_en = False)
+
+        self.logger.trace("CSW after %s", self.csw_get())
 
     def option_set(self, opt):
         if opt.startswith("base="):
@@ -84,14 +120,22 @@ class MemAp(ap.Ap, model.Bus):
         self.large_data = bool(cfg & self.CFG_LARGE_DATA)
         self.large_address = bool(cfg & self.CFG_LARGE_ADDRESS)
 
-        self.logger.info("CSW before enable: %8x", self.csw)
+        self.logger.trace("CSW before enable: %s", self.csw_get())
 
         self.enable()
-        self.csw_base = self.csw & ~0x00000f37
-        if self.rev == 8:
-            self.csw_base |= 0x6f000000
 
-        self.logger.info("CSW default: %8x", self.csw_base)
+        self.csw_base = self.csw_get()
+        self.csw_base.size = 0
+        self.csw_base.addrinc = 0
+        self.csw_base.mode = 0
+        if self.rev == 8:
+            self.csw_base.prot_priv = False
+            self.csw_base.cache = 0xf
+            self.csw_base.device_en = True
+            self.csw_base.prot_ins = True
+            self.csw_base.prot_nonsec = True
+
+        self.logger.trace("CSW base: %s %08x", self.csw_base, self.csw_base.all)
 
         if self.large_address and self.large_data:
             self.name = self.name + " LP64"
@@ -115,7 +159,7 @@ class MemAp(ap.Ap, model.Bus):
             base = base & ~0xfff
 
         if base is None and self.port.idr == 0x6ba02477:
-            self.logger.info("No base set, forcing to 0xe00ff000")
+            self.logger.warning("No base set, forcing to 0xe00ff000")
             base = 0xe00ff000
         if base is not None:
             self.base = base
@@ -129,24 +173,24 @@ class MemAp(ap.Ap, model.Bus):
         csw_get_8 = self.cmd_read(MemAp.CSW)
         csw_get_16 = self.cmd_read(MemAp.CSW)
         self.port.execute([
-            self.cmd_write(MemAp.CSW, self.csw_base | 0),
+            self.cmd_csw(size = 0),
             csw_get_8,
-            self.cmd_write(MemAp.CSW, self.csw_base | 1),
+            self.cmd_csw(size = 1),
             csw_get_16,
         ])
 
         if csw_get_8.data & 3 == 2 or csw_get_16.data & 3 == 2:
-            self.logger.info("This Mem-AP does not support single/dual byte accesses")
+            self.logger.note("This Mem-AP does not support single/dual byte accesses")
         
-        self.logger.info("starting")
-        while self.base is not None:
+        self.logger.trace("starting")
+
+        if self.base is not None:
             try:
                 comp = MemoryMappedComponent(self, self.base)
                 comp = comp.cast()
-            except Exception:
-                break
-            self.child_add(comp)
-            break
+                self.child_add(comp)
+            except dp.DpAccessFailure:
+                self.logger.warning("Accessing memory behind this AP failed")
 
         ap.Ap.start(self)
 
@@ -162,7 +206,7 @@ class MemAp(ap.Ap, model.Bus):
 
             address = None
             csw_dirty = True
-            csw = 0x012
+            csw_params = dict(mode = 0, size = 2, addrinc = 1)
 
             self.logger.trace("Executing %s", transfers)
 
@@ -172,8 +216,8 @@ class MemAp(ap.Ap, model.Bus):
                     address_dirty = True
                     address = t.address
 
-                if (csw & 0x7) != t.size_l2:
-                    csw = (csw & 0xff0) | t.size_l2
+                if csw_params["size"] != t.size_l2:
+                    csw_params["size"] = t.size_l2
                     csw_dirty = True
 
                 reg = MemAp.DRW
@@ -187,10 +231,10 @@ class MemAp(ap.Ap, model.Bus):
                     if len(transfers) > i+1:
                         nt = transfers[i+1]
                         if nt.size_l2 == t.size_l2 and nt.address == t.address + (1 << t.size_l2):
-                            csw = (csw & ~0x030) | 0x10
+                            csw_params["addrinc"] = 1
                             csw_dirty = True
                         elif nt.address == t.address:
-                            csw = (csw & ~0x030)
+                            csw_params["addrinc"] = 0
                             csw_dirty = True
 
                 else:
@@ -207,18 +251,18 @@ class MemAp(ap.Ap, model.Bus):
                         if nt.size_l2 != 2:
                             break
 
-                    if csw & 0x030 == 0x000:
+                    if csw_params["addrinc"] == 0:
                         if incrementing > in_16:
                             csw_dirty = True
-                            csw = (csw & ~0x030) | 0x010
+                            csw_params["addrinc"] = 1
                     else:
                         if incrementing < in_16:
                             csw_dirty = True
-                            csw = csw & ~0x030
+                            csw_params["addrinc"] = 0
 
                     if address == t.address \
                        and (i >= len(transfers) - 1 \
-                            or (csw & 0x030 == 0x010 and transfers[i + 1].address == address + 4)):
+                            or (csw_params["addrinc"] == 1 and transfers[i + 1].address == address + 4)):
                         reg = MemAp.DRW
                     elif address <= t.address < address + 16:
                         offset = t.address - (address & ~0xf)
@@ -235,7 +279,7 @@ class MemAp(ap.Ap, model.Bus):
 
                 if csw_dirty:
                     csw_dirty = False
-                    operations.append(self.cmd_write(MemAp.CSW, self.csw_base | csw))
+                    operations.append(self.cmd_csw(**csw_params))
 
                 if isinstance(t, ReadAccess):
                     t.__op = self.cmd_read(reg)
@@ -244,7 +288,7 @@ class MemAp(ap.Ap, model.Bus):
                     operations.append(self.cmd_write(reg, t.data << ((t.address & 3) * 8),
                                                      t.interval))
 
-                if (csw & 0x030) == 0x010 and reg == MemAp.DRW:
+                if csw_params["addrinc"] == 1 and reg == MemAp.DRW:
                     address += 1 << t.size_l2
                     if address & self.wrap_mask == 0:
                         address_dirty = True
@@ -257,29 +301,39 @@ class MemAp(ap.Ap, model.Bus):
                 if isinstance(t, ReadAccess):
                     t.data = (t.__op.data >> ((t.address & 3) * 8)) & ((1 << (8 << t.size_l2)) - 1)
 
-    @property
-    def csw(self):
-        return self.reg_read(self.CSW)
+    def csw_get(self):
+        return self.Csw(all = self.reg_read(self.CSW))
 
-    @csw.setter
-    def csw(self, data):
-        self.reg_write(self.CSW, data)
+    def csw_set(self, value):
+        return self.reg_write(self.CSW, int(value))
 
-    @property
-    def tar(self):
-        if self.large_address:
-            return self.reg_read(self.TAR) | (self.reg_read(self.TAR_MSB) << 32)
-        return self.reg_read(self.TAR)
+    def csw_update(self, **kwargs):
+        csw = self.csw_get()
+        for k, v in kwargs.items():
+            setattr(csw, k, v)
+        self.csw_set(csw)
 
-    @tar.setter
-    def tar(self, data):
-        if self.large_address:
-            self.reg_write(self.TAR_MSB, data >> 32)
-        self.reg_write(self.TAR, data & 0xffffffff)
+    def cmd_csw(self, **kwargs):
+        csw = self.Csw(all = self.csw_base.all)
+        for k, v in kwargs.items():
+            setattr(csw, k, v)
+        return self.cmd_write(MemAp.CSW, int(csw))
 
-    @property
-    def cfg(self):
-        return self.reg_read(self.CFG)
+#    @property
+#    def tar(self):
+#        if self.large_address:
+#            return self.reg_read(self.TAR) | (self.reg_read(self.TAR_MSB) << 32)
+#        return self.reg_read(self.TAR)
+#
+#    @tar.setter
+#    def tar(self, data):
+#        if self.large_address:
+#            self.reg_write(self.TAR_MSB, data >> 32)
+#        self.reg_write(self.TAR, data & 0xffffffff)
+#
+#    @property
+#    def cfg(self):
+#        return self.reg_read(self.CFG)
 
     def cmd_u8_read(self, address):
         return Read8(address)
