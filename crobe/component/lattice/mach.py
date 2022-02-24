@@ -1,7 +1,7 @@
 from ..model import JtagSramFpga
 from ...model import PortComponent
 from ...part_id import PartId
-from ...protocol import jtag, spi, i2c
+from ...protocol import jtag, spi, i2c, base
 from ... import bitfield
 from ...util.endian import bitswap8
 from ... import bitstring
@@ -595,6 +595,10 @@ class MachXO2(jtag.Tap, MachXO2Config, JtagSramFpga):
             tmp += bitswap8(data[offset : offset + 16])
         return tmp
 
+    def child_spawn(self, crit):
+        if crit == "spi":
+            return SpiPassthrough(self)
+    
 class SerIrMap:
     """Holds the definition betzeen a given JTAG commands and I2C/SPI
     transport.
@@ -844,7 +848,53 @@ class MachXO2I2c(i2c.Slave, MachXO2Serial):
 
     def do_write(self, wdata):
         return i2c.Slave.write(self, wdata)
-            
+
+class SpiPassthrough(spi.Interface):
+    def __init__(self, port):
+        super().__init__(port, port.name + "-SPI")
+        self.child_add(spi.Target(self, "cs0", 0, 0))
+
+    def freq_update(self, freq):
+        with self.port.port.port.freq_capped("spi", freq):
+            return self.port.port.port.freq
+        
+    def start(self):
+        super().start()
+        self.port.stop()
+
+    def _execute(self, operation_list):
+        io = {}
+        lower = []
+        for op in operation_list:
+            if isinstance(op, base.Reset):
+                self.logger.warning("Reset operation ignored")
+            elif isinstance(op, spi.Cs):
+                if op.value is None:
+                    lower.append(self.port.BYPASS.cmd())
+                    lower.append(self.port.cmd_run(1))
+                else:
+                    lower.append(self.port.BYPASS.cmd())
+                    lower.append(self.port.cmd_run(1))
+                    lower.append(self.port.LSC_PROG_SPI.cmd(tdi = bitstring.BitString(0x68fe, 16)))
+                    lower.append(self.port.cmd_run(1))
+            elif isinstance(op, spi.Shift):
+                if isinstance(op.mosi, int):
+                    tdi = bitstring.BitString(0, op.mosi * 8)
+                elif isinstance(op.mosi, bytes):
+                    tdi = bitstring.BitString(bitswap8(op.mosi), len(op.mosi) * 8)
+                else:
+                    raise ValueError(op.mosi)
+                shift = self.port.LSC_PROG_SPI.cmd(tdi = tdi, read_tdo = op.read_miso)
+                if op.read_miso:
+                    io[op] = shift
+                lower.append(shift)
+            else:
+                raise ValueError(op)
+        with self.port.port.port.freq_capped("spi", self.freq):
+            self.port.execute(lower)
+        for op, shift in io.items():
+            op.miso = bitswap8(bytes(shift.tdo))
+
 @spi.Target.db.register("machxo2")
 class MachXO2Spi(MachXO2Serial):
     """
