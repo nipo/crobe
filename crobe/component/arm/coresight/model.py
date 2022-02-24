@@ -6,6 +6,7 @@ from ....db import Db, NoMatch
 __all__ = ["MemoryMappedComponent"]
 
 class MemoryMappedComponent(model.Bus32Component):
+    AUTHSTATUS = 0xfb8
     DEVARCH = 0xfbc
     DEVID = 0xfc0
     PID1 = 0xfd0
@@ -44,6 +45,10 @@ class MemoryMappedComponent(model.Bus32Component):
                          self.use_jep106)
 
         self.logger.info("Devarch: %s", self.devarch)
+
+        blob = bus.mem_read(self.base | self.AUTHSTATUS, 4)
+        self.authstatus = int.from_bytes(blob, "little")
+        self.logger.note("Authstatus: %08x", self.authstatus)
 
         self.component_class = (self.cid >> 12) & 0xf
         self.dev_type = self.devid >> 24
