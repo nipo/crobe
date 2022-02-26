@@ -79,8 +79,8 @@ class GowinFpga(jtag.Tap, JtagSramFpga):
     # 32-bit unknown IRs
     # 0x10, 0x50, 0x70, 0x71, 0x73, 0x76, 0x80
     
-    def __init__(self, port, index, idcode):
-        jtag.Tap.__init__(self, port, index, idcode)
+    def __init__(self, port, idcode):
+        jtag.Tap.__init__(self, port, idcode)
         JtagSramFpga.__init__(self)
         self.name = parts[idcode.part_no]
 

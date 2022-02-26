@@ -16,6 +16,6 @@ class Kintex7(series7.Series7, xadc.Xadc):
     class Efuse0(bitfield.Bitfield):
         all = bitfield.Field(0, 32)
 
-    def __init__(self, port, index, idcode):
-        series7.Series7.__init__(self, port, index, idcode)
+    def __init__(self, port, idcode):
+        series7.Series7.__init__(self, port, idcode)
         self.name = "Kintex7-" + parts[int(self.idcode.drop_revision())]

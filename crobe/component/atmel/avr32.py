@@ -9,6 +9,6 @@ parts = {
 class Avr32(jtag.Tap):
     irlen = 5
 
-    def __init__(self, port, index, idcode):
-        jtag.Tap.__init__(self, port, index, idcode)
+    def __init__(self, port, idcode):
+        jtag.Tap.__init__(self, port, idcode)
         self.name = parts.get(self.idcode.part_no, "AVR32")

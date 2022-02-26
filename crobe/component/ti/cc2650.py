@@ -20,8 +20,8 @@ class DebugTap(jtag.Tap):
 class DftTap(jtag.Tap):
     irlen = 4
 
-    def __init__(self, port, index, idcode):
-        jtag.Tap.__init__(self, port, index, idcode)
+    def __init__(self, port, idcode):
+        jtag.Tap.__init__(self, port, idcode)
         self.name = "Ti CC2650 DFT"
 
     def start(self):
@@ -45,8 +45,8 @@ class DftTap(jtag.Tap):
 class EfuseTap(jtag.Tap):
     irlen = 4
 
-    def __init__(self, port, index, idcode):
-        jtag.Tap.__init__(self, port, index, idcode)
+    def __init__(self, port, idcode):
+        jtag.Tap.__init__(self, port, idcode)
         self.name = "Ti CC2650 Efuse"
 
     def start(self):
@@ -74,8 +74,8 @@ class EfuseTap(jtag.Tap):
 class AonTap(jtag.Tap):
     irlen = 4
 
-    def __init__(self, port, index, idcode):
-        jtag.Tap.__init__(self, port, index, idcode)
+    def __init__(self, port, idcode):
+        jtag.Tap.__init__(self, port, idcode)
         self.name = "Ti CC2650 AON"
 
     def start(self):

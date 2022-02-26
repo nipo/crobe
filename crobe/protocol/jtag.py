@@ -570,7 +570,7 @@ class Chain(PortComponent):
                           idcode, ir_pre, dr_pre, irlen,
                           self.total_irlen, self.total_drlen)
 
-        tap = self.db.call(idcode, self, None, idcode)
+        tap = self.db.call(idcode, self, idcode)
         if isinstance(tap, Tap):
             if tap.irlen is None:
                 tap.irlen = irlen
@@ -775,7 +775,7 @@ class Tap(PortComponent, InstructionRegistry):
     """
     db = Db("TAP subprotocol")
 
-    def __init__(self, port, index, idcode, name = None):
+    def __init__(self, port, idcode, name = None):
         if isinstance(idcode, (PartId, int)):
             self.idcode = idcode
         else:

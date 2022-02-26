@@ -13,8 +13,8 @@ class Series7(Series67):
     irlen = 6
     max_freq = 50e6
 
-    def __init__(self, port, index, idcode):
-        Series67.__init__(self, port, index, idcode)
+    def __init__(self, port, idcode):
+        Series67.__init__(self, port, idcode)
 
     # JtagSramFpga
     USER_IR = [0x02, 0x03, 0x22, 0x23]

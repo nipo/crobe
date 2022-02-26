@@ -50,10 +50,10 @@ class InstructionRegistry(jtag.InstructionRegistry):
     INTEST_CP15          = jtag.Instruction(0xc, "CP15")
 
 class Tap(jtag.Tap, InstructionRegistry):
-    def __init__(self, port, index, idcode, name):
+    def __init__(self, port, idcode, name):
         from . import debug
 
-        super().__init__(port, index, idcode)
+        super().__init__(port, idcode)
         self.name = name
 
         self.dbg = debug.Debug(self)

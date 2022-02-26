@@ -12,5 +12,5 @@ class FX3(Tap):
 
     irlen = 4
     
-    def __init__(self, port, index, idcode):
-        super().__init__(port, index, idcode, "FX3")
+    def __init__(self, port, idcode):
+        super().__init__(port, idcode, "FX3")

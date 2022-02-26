@@ -61,8 +61,8 @@ class ZupPsTap(jtag.Tap):
     ## Undoc
     JTAG_STATUS1 = jtag.Instruction(0x0d, "JTAG_STATUS_REG")
 
-    def __init__(self, port, index, idcode):
-        jtag.Tap.__init__(self, port, index, idcode)
+    def __init__(self, port, idcode):
+        jtag.Tap.__init__(self, port, idcode)
         self.name = parts[int(idcode.drop_revision())] + "-PSTap"
         for instruction in self.instructions():
             instruction.ir = (instruction.ir << 6) | 0x3f
@@ -77,8 +77,8 @@ class ZupPlTap(series7.Series7):
     irlen = 12
     max_freq = 66e6
 
-    def __init__(self, port, index, idcode):
-        series7.Series7.__init__(self, port, index, idcode)
+    def __init__(self, port, idcode):
+        series7.Series7.__init__(self, port, idcode)
         self.name = parts[int(idcode.drop_revision())] + "-PLTap"
         for instruction in self.instructions():
             if instruction.dr and instruction.dr.name in ["BOUNDARY", "BYPASS_REG"]:
@@ -90,6 +90,6 @@ class ZupPlTap(series7.Series7):
         super().start()
 
 @jtag.Chain.db.register(*[PartId.from_idcode(c).drop_revision() for c in parts.keys()])
-def zup_meta(port, index, idcode):
-    return [ZupPlTap(port, index, idcode), ZupPsTap(port, index, idcode)]
+def zup_meta(port, idcode):
+    return [ZupPlTap(port, idcode), ZupPsTap(port, idcode)]
 zup_meta.irlen = 12

@@ -45,8 +45,8 @@ class Zynq(series7.Series7, xadc.Xadc):
         Repeat_JtagTAP                 = bitfield.BooleanField(14+9, inverted = True)
         Repeat_BBRAMKey                = bitfield.BooleanField(14+10, inverted = True)
 
-    def __init__(self, port, index, idcode):
-        series7.Series7.__init__(self, port, index, idcode)
+    def __init__(self, port, idcode):
+        series7.Series7.__init__(self, port, idcode)
         self.name = "Zynq-" + parts[int(self.idcode.drop_revision())]
 
     IR_XADC_DRP    = jtag.Instruction(0x37, "XADC_DRP")

@@ -22,8 +22,8 @@ class EjtagTap(jtag.Tap):
     TCBCONTROLC = 0x13
     PCSAMPLE    = 0x14
 
-    def __init__(self, port, index, idcode):
-        jtag.Tap.__init__(self, port, index, idcode)
+    def __init__(self, port, idcode):
+        jtag.Tap.__init__(self, port, idcode)
         self.name = "EJTAG TAP"
 
     def start(self):

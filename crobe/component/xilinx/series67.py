@@ -10,8 +10,8 @@ class Series67(jtag.Tap, JtagSramFpga):
     irlen = 6
     max_freq = 50e6
 
-    def __init__(self, port, index, idcode):
-        jtag.Tap.__init__(self, port, index, idcode)
+    def __init__(self, port, idcode):
+        jtag.Tap.__init__(self, port, idcode)
         JtagSramFpga.__init__(self)
         self.__can_stop = False
 

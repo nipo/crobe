@@ -268,5 +268,5 @@ class GenesisTap(jtag.Tap):
     PRELOAD = jtag.Instruction(0x2, "BOUNDARY")
     TESTMODE = jtag.Instruction(0x4, "TEST")
 
-    def __init__(self, port, index, idcode):
-        super().__init__(port, index, idcode, "DP83867")
+    def __init__(self, port, idcode):
+        super().__init__(port, idcode, "DP83867")

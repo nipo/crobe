@@ -51,6 +51,6 @@ class Spartan7(series7.Series7, xadc.Xadc):
         Repeat_Unsup3                  = bitfield.BooleanField(14+9)
         Repeat_BBRAMKey                = bitfield.BooleanField(14+10, inverted = True)
 
-    def __init__(self, port, index, idcode):
-        series7.Series7.__init__(self, port, index, idcode)
+    def __init__(self, port, idcode):
+        series7.Series7.__init__(self, port, idcode)
         self.name = "Spartan7-" + parts[int(self.idcode.drop_revision())]

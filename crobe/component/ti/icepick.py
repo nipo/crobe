@@ -70,8 +70,8 @@ class IcePick(jtag.Tap):
     
     TAPS = {}
 
-    def __init__(self, port, index, idcode):
-        jtag.Tap.__init__(self, port, index, idcode)
+    def __init__(self, port, idcode):
+        jtag.Tap.__init__(self, port, idcode)
         self.name = "Ti ICE-Pick"
         self.taps = {}
         self.disabled = {}

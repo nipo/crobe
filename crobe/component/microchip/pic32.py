@@ -276,8 +276,8 @@ class Pic32Tap(EjtagTap):
     MTAP_FLASH_ENABLE  = 0xFE
     MTAP_FLASH_DISABLE = 0xFD
 
-    def __init__(self, port, index, idcode):
-        EjtagTap.__init__(self, port, index, idcode)
+    def __init__(self, port, idcode):
+        EjtagTap.__init__(self, port, idcode)
         self.__mode = None
 
     def start(self):
@@ -311,6 +311,6 @@ class Pic32Tap(EjtagTap):
 
 @jtag.Chain.db.register(*[PartId(0, 0x29, p) for p in parts.keys()])
 class Pic32MZTap(Pic32Tap):
-    def __init__(self, port, index, idcode):
-        Pic32Tap.__init__(self, port, index, idcode)
+    def __init__(self, port, idcode):
+        Pic32Tap.__init__(self, port, idcode)
         self.name = parts.get(self.idcode.part_no, "PIC32")

@@ -35,6 +35,6 @@ class IspPac(jtag.Tap):
     UES_PROGRAM                 = 0b00011010 # Program UES bits into E2
     UES_READ                    = 0b00010111 # Read contents of UES register from E2 (32 bits)
 
-    def __init__(self, port, index, idcode):
-        jtag.Tap.__init__(self, port, index, idcode)
+    def __init__(self, port, idcode):
+        jtag.Tap.__init__(self, port, idcode)
         self.name = parts.get(int(self.idcode.drop_revision()), "ispPAC")
