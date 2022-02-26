@@ -113,6 +113,8 @@ class Dp(PortComponent, FreqCapper):
                     raise RuntimeError("Unable to enable debugger on DP, CTRL/STAT = 0x%08x" % self.ctrlstat)
                 count += 1
             self.ctrlstat = 0x50000021
+        self.logger.note("After setting debug enable to %s, CTRL/STAT = %08x",
+                         enabled, self.ctrlstat)
 
     @property
     def ctrlstat(self):
