@@ -18,13 +18,9 @@ class Cc26xx(SoC):
 
 @target_model.Target.register(JtagDpTap, precedence = 300)
 def cc26taps_probe(tap):
-    try:
-        icepick, = tap.port.children_of_class(IcePick)
-    except Exception:
-        raise NotImplementedError("Not my soc")
-    if icepick.index != tap.index + 1:
-        raise NotImplementedError("Not my soc")
-
-    name = names.get(icepick.idcode.drop_revision(), "CC13/26xx")
-
-    return Cc26xx(name, tap.children[0])
+    icepicks = tap.port.children_of_class(IcePick)
+    for icepick in icepicks:
+        if icepick.ir_pre == tap.ir_pre + tap.irlen:
+            name = names.get(icepick.idcode.drop_revision(), "CC13/26xx")
+            return Cc26xx(name, tap.children[0])
+    raise NotImplementedError("Not my soc")
