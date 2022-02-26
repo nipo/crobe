@@ -32,6 +32,9 @@ class JtagTransactor(PortComponent):
         self.__divisor = int(self.base_freq / 1e6) - 1
         self.__rate_dirty = True
         
+    def option_set(self, opt):
+        return False
+
     def context_force_refresh(self):
         self.__rate_dirty = True
         
