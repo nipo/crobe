@@ -14,6 +14,7 @@ class PartId(object):
         """
         Parses an IDCode (as seen in JTAG, etc.).
         """
+        idcode = int(idcode)
         if not (idcode & 1):
             raise ValueError("LSB of IDCODE must be 1")
 
