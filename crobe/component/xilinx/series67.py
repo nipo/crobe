@@ -72,7 +72,7 @@ class Series67(jtag.Tap, JtagSramFpga):
         super().option_set(opt)
 
     def start(self):
-        self.logger.info("Our IDCODE: 0x%08x", self.IDCODE.shift(read_tdo = True))
+        self.logger.note("Our IDCODE: 0x%08x", self.IDCODE.shift(read_tdo = True))
         self.cfg_status_dump()
             
         if not self.__can_stop and self.done:
@@ -80,7 +80,7 @@ class Series67(jtag.Tap, JtagSramFpga):
         else:
             self.stop()
             self.dna = self.dna_read()
-            self.logger.info("Device DNA: %x", self.dna)
+            self.logger.note("Device DNA: %x", self.dna)
         jtag.Tap.start(self)
 
     @property
@@ -95,7 +95,7 @@ class Series67(jtag.Tap, JtagSramFpga):
         for i in range(50):
             self.run(40)
             status = self.ir_status_read()
-            self.logger.info("IR status: %s", status)
+            self.logger.debug("IR status: %s", status)
             ok = all(getattr(status, k) == v for (k, v) in expected.items())
             if ok:
                 return True
@@ -146,8 +146,8 @@ class Series67(jtag.Tap, JtagSramFpga):
     def cfg_status_dump(self):
         cs = self.Status(self.cfg_status)
         cbs = self.BootStatus(self.cfg_boot_status)
-        self.logger.info("Config status %r %08x", cs, cs.all)
-        self.logger.info("Config boot status %r %08x", cbs, cbs.all)
+        self.logger.note("Config status %r %08x", cs, cs.all)
+        self.logger.note("Config boot status %r %08x", cbs, cbs.all)
 
 @Series67.application_db.register("spi")
 def spi_interface(tap):

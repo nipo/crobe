@@ -108,7 +108,7 @@ class Adapter(model.Adapter):
         return self.ctrl_in(self.CMD_RW_INTERNAL, addr & 0xffff, addr >> 16, size)
 
     def reopen(self):
-        self.logger.info("Reopening %s", self.original_persistent_id)
+        self.logger.trace("Reopening %s", self.original_persistent_id)
         del self.device
 
         for retry in range(3):

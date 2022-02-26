@@ -125,7 +125,7 @@ class Stm(SoC, pin_control.Controller):
         try:
             uid_blob = self.info.uid_read(self)
             self.uid = int.from_bytes(uid_blob, byteorder = "little")
-            self.logger.info("MCU UID: %024x", self.uid)
+            self.logger.note("MCU UID: %024x", self.uid)
         except:
             self.logger.warning("Unable to read UID")
 
@@ -141,8 +141,8 @@ class Stm(SoC, pin_control.Controller):
         if self.info.uid_blob_is_coords:
             x, y, no, self.lot_number = struct.unpack("<HHB7s", uid_blob)
             self.wafer_pos = no, x, y
-            self.logger.info("Wafer no %d, position %d,%d", *self.wafer_pos)
-            self.logger.info("Lot number: %s", self.lot_number)
+            self.logger.note("Wafer no %d, position %d,%d", *self.wafer_pos)
+            self.logger.note("Lot number: %s", self.lot_number)
 
         if self.info.gpio:
             base, banks = self.info.gpio

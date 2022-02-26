@@ -10,7 +10,7 @@ class ZynqPs(SoC):
         SoC.start(self)
         fuse = self.efuse_read()
         for i in range(0, len(fuse), 8):
-            self.logger.info("Fuse %02x: %s", i, str(binascii.b2a_hex(fuse[i:i+8]), "ascii"))
+            self.logger.note("Fuse %02x: %s", i, str(binascii.b2a_hex(fuse[i:i+8]), "ascii"))
 
     def efuse_read(self):
         b = self.buses[0]

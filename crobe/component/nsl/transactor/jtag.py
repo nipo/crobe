@@ -27,7 +27,7 @@ class JtagTransactor(PortComponent):
 
         super().__init__(route, "jtag")
 
-        self.logger.info("NSL JTAG Transactor with internal clock of %s", metric(self.base_freq, "Hz"))
+        self.logger.note("NSL JTAG Transactor with internal clock of %s", metric(self.base_freq, "Hz"))
 
         self.__divisor = int(self.base_freq / 1e6) - 1
         self.__rate_dirty = True

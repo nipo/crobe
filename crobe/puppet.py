@@ -105,10 +105,10 @@ class Puppet(Component):
             dump = True
 
         if dump:
-            self.logger.info("State %s reason %s", st, hc)
+            self.logger.debug("State %s reason %s", st, hc)
             regs = self.cpu.reg_read(self.cpu.registers)
             for r, v in sorted(regs.items()):
-                self.logger.info("After stop %s: 0x%08x", r.name, v)
+                self.logger.debug("After stop %s: 0x%08x", r.name, v)
 
         r0 = self.arg_regs[0]
         return self.cpu.reg_read([r0])[r0]

@@ -118,7 +118,7 @@ class JtagInterface(jtag.Interface):
             else:
                 ops.append(o)
 
-        self.logger.trace("running %s", operation_list)
+        self.logger.protocol("running %s", operation_list)
 
         assert self.__state in (self.STATE_RESET, self.STATE_PAUSE, self.STATE_RTI, None)
         

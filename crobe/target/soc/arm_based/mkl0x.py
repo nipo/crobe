@@ -37,8 +37,8 @@ class MKL0x(SoC):
         self.mdm_ap, = dp.children_of_class(MdmAp)
 
         st = self.mdm_ap.status
-        self.logger.info("MDM-AP control: %08x", self.mdm_ap.control)
-        self.logger.info("MDM-AP status: %08x", st)
+        self.logger.debug("MDM-AP control: %08x", self.mdm_ap.control)
+        self.logger.debug("MDM-AP status: %08x", st)
 
         if not (st & self.mdm_ap.STATUS_SYSTEM_SECURITY):
             self.info_update()
@@ -62,7 +62,7 @@ class MKL0x(SoC):
 
         self.package, self.pins = self.PINS[pinid]
         if self.pins:
-            self.logger.info("Package has %d pins", self.pins)
+            self.logger.note("Package has %d pins", self.pins)
         
         size_id = (fcfg1 >> 24) & 0xf
         if size_id == 0:
@@ -74,9 +74,9 @@ class MKL0x(SoC):
         self.ram_size = 512 << sramsize
         self.uid = ((uidmh & 0xffff) << 64) | (uidml << 32) | uidl
 
-        self.logger.info("MCU UID: %020x", self.uid)
+        self.logger.note("MCU UID: %020x", self.uid)
 
-        self.logger.info("Flash: %s, RAM: %s", base2(self.flash_size, "B"), base2(self.ram_size, "B"))
+        self.logger.note("Flash: %s, RAM: %s", base2(self.flash_size, "B"), base2(self.ram_size, "B"))
 
         self.child_add(BusRam("ram", 0x20000000, self.ram_size * 3 // 4, self.bus))
         self.child_add(BusRam("sraml", 0x20000000 - self.ram_size // 4, self.ram_size // 4, self.bus))
@@ -92,8 +92,8 @@ class MKL0x(SoC):
             cpu_code = "Z"
         self.name = "MK%s%d%d%s%dV%s" % (series, family, subfamily, cpu_code,
                                          self.flash_size // 1024, self.package)
-        self.logger.info("Kinetis %s rev. %d", self.name, revid)
-        self.logger.info("DIE id %d", dieid)
+        self.logger.note("Kinetis %s rev. %d", self.name, revid)
+        self.logger.note("DIE id %d", dieid)
 
     def erase_all(self):
         st = self.mdm_ap.status

@@ -12,13 +12,13 @@ class Dbg(CoresightComponent):
 
         self.__cpuid_read()
 
-        self.logger.info("PFR: %s", ', '.join(["0x%08x" % x for x in self.pfr]))
-        self.logger.info("DFR: 0x%08x", self.dfr)
-        self.logger.info("AFR: 0x%08x", self.afr)
-        self.logger.info("MMFR: %s", ', '.join(["0x%08x" % x for x in self.mmfr]))
-        self.logger.info("ISAR: %s", ', '.join(["0x%08x" % x for x in self.isar]))
-        self.logger.info("DEVID: 0x%08x", self.devid)
-        self.logger.info("DIDR: 0x%08x", self.didr)
+        self.logger.note("PFR: %s", ', '.join(["0x%08x" % x for x in self.pfr]))
+        self.logger.note("DFR: 0x%08x", self.dfr)
+        self.logger.note("AFR: 0x%08x", self.afr)
+        self.logger.note("MMFR: %s", ', '.join(["0x%08x" % x for x in self.mmfr]))
+        self.logger.note("ISAR: %s", ', '.join(["0x%08x" % x for x in self.isar]))
+        self.logger.note("DEVID: 0x%08x", self.devid)
+        self.logger.note("DIDR: 0x%08x", self.didr)
 
     def __cpuid_read(self):
         cmds = []

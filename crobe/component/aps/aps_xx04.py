@@ -18,7 +18,7 @@ class APSxx04(SpiPSRam):
         self.max_freq = info["fmax"] * 1e6
 
         SpiPSRam.__init__(self, port, int.from_bytes(mideid[:3], "big") & 0xffffe0, "APS%02d04" % mbits)
-        self.logger.info("EID: %s", self.eid.hex())
+        self.logger.note("EID: %s", self.eid.hex())
         
 
 @SpiPSRam.db.register(0xfffffe)

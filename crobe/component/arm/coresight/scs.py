@@ -26,14 +26,14 @@ class Scs(MemoryMappedComponent):
 
         self.__cpuid_read()
 
-        self.logger.info("PFR: %s", ', '.join(["0x%08x" % x for x in self.pfr]))
-        self.logger.info("DFR: 0x%08x", self.dfr)
-        self.logger.info("AFR: 0x%08x", self.afr)
-        self.logger.info("MMFR: %s", ', '.join(["0x%08x" % x for x in self.mmfr]))
-        self.logger.info("ISAR: %s", ', '.join(["0x%08x" % x for x in self.isar]))
-        self.logger.info("MVFR: %s", ', '.join(["0x%08x" % x for x in self.mvfr]))
-        self.logger.info("CLIDR: 0x%08x", self.clidr)
-        self.logger.info("CCSIDR: 0x%08x", self.ccsidr)
+        self.logger.note("PFR: %s", ', '.join(["0x%08x" % x for x in self.pfr]))
+        self.logger.note("DFR: 0x%08x", self.dfr)
+        self.logger.note("AFR: 0x%08x", self.afr)
+        self.logger.note("MMFR: %s", ', '.join(["0x%08x" % x for x in self.mmfr]))
+        self.logger.note("ISAR: %s", ', '.join(["0x%08x" % x for x in self.isar]))
+        self.logger.note("MVFR: %s", ', '.join(["0x%08x" % x for x in self.mvfr]))
+        self.logger.note("CLIDR: 0x%08x", self.clidr)
+        self.logger.note("CCSIDR: 0x%08x", self.ccsidr)
 
     def __cpuid_read(self):
         cmds = []

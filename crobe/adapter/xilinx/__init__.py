@@ -215,7 +215,7 @@ class JtagInterface(jtag.Interface):
     def __init__(self, port):
         jtag.Interface.__init__(self, port)
 
-        self.logger.info("Versions: %s", self.port.firmware_info)
+        self.logger.note("Versions: %s", self.port.firmware_info)
         self.__div = 0x11
         self.port.div_set(0x11)
         self.port.output_enable(1)

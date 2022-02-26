@@ -9,7 +9,7 @@ class JtagDp(dp.Dp):
     Adapter between DP operations and JTAG Tap.
     """
     def __init__(self, port):
-        dp.Dp.__init__(self, "JTAG-DP", port)
+        dp.Dp.__init__(self, "DAP", port)
 
     def freq_update(self, freq):
         self.logger.debug("Max AP freq changed to %s", metric(freq, "Hz"))
@@ -100,14 +100,11 @@ class JtagDp(dp.Dp):
             ack, ctrlstat = self.__unpack(ops[-1])
             has_error = bool(ctrlstat & 0x20)
 
-            self.logger.trace("Done:")
             for i, o in enumerate(operations):
                 if not isinstance(o, dp.ApRead):
-                    self.logger.trace("- %d, %s", i, o)
                     continue
 
                 ack, data = self.__unpack(o.__value_op)
-                self.logger.trace("- %d, %s -> %s %s 0x%08x", i, o, o.__value_op, ack, data)
 
                 if ack == self.Ack.OK:
                     o.data = data
@@ -118,7 +115,7 @@ class JtagDp(dp.Dp):
                     self.ctrlstat = self.ctrlstat | 2
                     must_restart = True
                     insert_run += 1
-                    self.logger.trace("Delaying subsequent operations by %d", insert_run)
+                    self.logger.protocol("Delaying subsequent operations by %d", insert_run)
                     break
 
                 self.abort()
@@ -211,5 +208,5 @@ class JtagDpTap(jtag.Tap):
 
     def __init__(self, port, index, idcode):
         jtag.Tap.__init__(self, port, index, idcode)
-        self.name = "JTAG-DP Tap"
+        self.name = "JTAG-DP"
         self.child_add(JtagDp(self))

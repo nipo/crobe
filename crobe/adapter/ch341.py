@@ -187,7 +187,7 @@ class I2cInterface(i2c.Interface):
     def __init__(self, port):
         i2c.Interface.__init__(self, port)
 
-        self.logger.info("Version: 0x%04x", self.port.version)
+        self.logger.debug("Version: 0x%04x", self.port.version)
         self.__freq_index = 0
         self.__freq_dirty = True
 

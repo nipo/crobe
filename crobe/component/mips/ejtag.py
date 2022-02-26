@@ -27,6 +27,6 @@ class EjtagTap(jtag.Tap):
         self.name = "EJTAG TAP"
 
     def start(self):
-        self.logger.info("Implementer code: 0x%08x", self.dr_shift(self.IMPCODE, 0, 32))
+        self.logger.note("Implementer code: 0x%08x", self.dr_shift(self.IMPCODE, 0, 32))
 
         jtag.Tap.start(self)

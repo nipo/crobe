@@ -122,9 +122,9 @@ class Series7(Series67):
                 self.fuse_dna.Code4, self.fuse_dna.Code5,
                 self.fuse_dna.ID0, self.fuse_dna.ID1,
                 self.fuse_dna.ID2)
-            self.logger.info("Fuse DNA: %s", self.fuse_dna)
-            self.logger.info("XSC DNA: %s", self.xsc_dna_value)
-            self.logger.info("JTAG DNA: %s", self.jtag_dna)
+            self.logger.note("Fuse DNA: %s", self.fuse_dna)
+            self.logger.note("XSC DNA: %s", self.xsc_dna_value)
+            self.logger.note("JTAG DNA: %s", self.jtag_dna)
 
             return int(self.fuse_dna)
         finally:
@@ -150,7 +150,7 @@ class Series7(Series67):
 
         if expected_userid:
             userid = self.IR_USERCODE.shift()
-            self.logger.info("Current UserID=0x%08x", userid)
+            self.logger.note("Current UserID=0x%08x", userid)
             if userid == expected_userid and not force_reload:
                 self.logger.info("UserID matches, doing nothing")
                 return self.send_op_wait(-1, done = True)
@@ -159,22 +159,17 @@ class Series7(Series67):
         if len(blob) & 3:
             raise ValueError("Odd data length in bitstream")
 
-        begin = datetime.datetime.now()
+        with self.logger.timed("Programming"):
+            ok = self.config_write(blob)
 
-        ok = self.config_write(blob)
+            status = self.ir_status_read()
+            self.logger.debug("IR Status: %04x", status)
 
-        status = self.ir_status_read()
-        self.logger.debug("IR Status: %04x", status)
-        
-        end = datetime.datetime.now()
+            # This is important, it enables internal CCLK
+            self.run(1000)
 
-        if not ok:
-            raise RuntimeError("Unable to start FPGA")
-        else:
-            self.logger.info("Done OK, time taken: %s", end - begin)
-
-        # This is important, it enables internal CCLK
-        self.run(1000)
+            if not ok:
+                raise RuntimeError("Unable to start FPGA")
 
         return self.send_op_wait(-1, done = True)
 
@@ -183,7 +178,7 @@ class Series7(Series67):
 
         self.logger.trace("Ready to load program of %d config words", len(prog_data))
 
-        self.logger.info("Resetting...")
+        self.logger.trace("Resetting...")
         self.IR_JPROGRAM.shift()
         self.run(20)
 
@@ -200,7 +195,7 @@ class Series7(Series67):
         self.logger.trace("Loading done...")
         self.cfg_status_dump()
 
-        self.logger.info("Starting...")
+        self.logger.trace("Starting...")
         self.IR_JSTART.shift()
         self.run(10000)
         self.IR_BYPASS.shift()

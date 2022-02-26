@@ -33,42 +33,40 @@ class Dp(PortComponent, FreqCapper):
     def start(self):
         from ...part_id import PartId
 
-        self.freq_cap("discovery", 1e6)
+        with self.freq_capped("discovery", 1e6):
+            idr = self.idr
+            self.logger.info("Got IDR: %08x", idr)
 
-        idr = self.idr
-        self.logger.info("Got IDR: %08x", idr)
-        try:
-            ver = PartId.from_idcode(idr)
-        except ValueError:
-            ver = self.idcode
-            self.logger.info("Bad IDR, falling back to IDCODE")
+            try:
+                ver = PartId.from_idcode(idr)
+            except ValueError:
+                ver = self.idcode
+                self.logger.warning("Bad IDR, falling back to IDCODE")
 
-        self.idr_or_idcode = ver
-        self.minimal = bool(ver.part_no & 0x10)
-        self.version = ver.part_no & 0x3
+            self.idr_or_idcode = ver
+            self.minimal = bool(ver.part_no & 0x10)
+            self.version = ver.part_no & 0x3
 
-        self.logger.info("DP IDR %s v.%dr%d%s", ver, self.version, ver.revision,
-                         ", minimal implementation" if self.minimal else "")
+            self.logger.info("DP IDR %s v.%dr%d%s", ver, self.version, ver.revision,
+                             ", minimal implementation" if self.minimal else "")
 
-        self.debug_enable(True)
+            self.debug_enable(True)
 
-        self.target_id = None
-
-        try:
-            self.target_id = PartId.from_idcode(self.banked_reg_read(self.TARGETID))
-        except (DpAccessFailure, ValueError):
             self.target_id = None
 
-        self.logger.info("DP Target ID: %s", self.target_id)
+            try:
+                self.target_id = PartId.from_idcode(self.banked_reg_read(self.TARGETID))
+            except (DpAccessFailure, ValueError):
+                self.target_id = None
 
-        for i in range(16):
-            self.__ap_discover(i)
-        for i in range(240, 256):
-            self.__ap_discover(i)
+            self.logger.info("DP Target ID: %s", self.target_id)
 
-        PortComponent.start(self)
+            for i in range(16):
+                self.__ap_discover(i)
+            for i in range(240, 256):
+                self.__ap_discover(i)
 
-        self.freq_cap("discovery", None)
+            PortComponent.start(self)
 
     def __ap_discover(self, no):
         from .ap import Ap

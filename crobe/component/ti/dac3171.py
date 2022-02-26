@@ -53,4 +53,4 @@ class Dac3171(PortComponent):
             die_id |= self.reg_read(i)
 
         self.die_id = die_id
-        self.logger.info("Dac3171, Die ID: 0x%16x", die_id)
+        self.logger.note("Dac3171, Die ID: 0x%16x", die_id)

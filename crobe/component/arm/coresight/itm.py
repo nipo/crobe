@@ -41,6 +41,6 @@ class Itm(CoresightComponent):
                            )
             self.reg_write(self.ER, 0xffffffff);
             self.reg_write(self.SCR, 0xff);
-            self.logger.info("CR: 0x%08x", self.reg_read(self.CR))
-            self.logger.info("SCR: 0x%08x", self.reg_read(self.SCR))
-            self.logger.info("ER: 0x%08x", self.reg_read(self.ER))
+            self.logger.note("CR: 0x%08x", self.reg_read(self.CR))
+            self.logger.note("SCR: 0x%08x", self.reg_read(self.SCR))
+            self.logger.note("ER: 0x%08x", self.reg_read(self.ER))

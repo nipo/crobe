@@ -187,7 +187,7 @@ class Gecko(SoC):
 
         self.device_identify()
 
-        self.logger.info("MCU UID: %016x", self.uid)
+        self.logger.note("MCU UID: %016x", self.uid)
 
     def erase_all(self):
         flash, = self.children_of_class(EfmFlash)
@@ -203,13 +203,13 @@ class Gecko(SoC):
             struct.unpack("<BBBB", self.di_data[self.DI_MEMINFO:self.DI_MEMINFO+4])
         pkgtype = chr(pkgtype)
 
-        self.logger.info("Family: %d", family)
+        self.logger.note("Family: %d", family)
         self.info = PARTS.get(family, DEFAULT_PART)
 
         flash_page_size = 2 ** ((flash_page_size + 10) & 0xff)
         if self.info.flash_page_size is not None \
            and flash_page_size != self.info.flash_page_size:
-            self.logger.info("Part advertises wrong flash page size %d", flash_page_size)
+            self.logger.warning("Part advertises wrong flash page size %d", flash_page_size)
             flash_page_size = self.info.flash_page_size
 
         self.flash_size = flash_size * 1024
@@ -224,10 +224,10 @@ class Gecko(SoC):
 
         if name.startswith("EFR"):
             self.mac = self.di_data[self.DI_EUI48+5:self.DI_EUI48-1:-1]
-            self.logger.info("EUI48 HWADDR: %s", ':'.join(["%02x"%x for x in self.mac]))
+            self.logger.note("EUI48 HWADDR: %s", ':'.join(["%02x"%x for x in self.mac]))
 
         if pincount:
-            self.logger.info("Package: %s%d", self.PACKAGE_NAMES.get(pkgtype, pkgtype), pincount)
+            self.logger.note("Package: %s%d", self.PACKAGE_NAMES.get(pkgtype, pkgtype), pincount)
 
         if self.info.flash_class:
             self.child_add(self.info.flash_class("code", 0, flash_size * 1024, flash_page_size, self))

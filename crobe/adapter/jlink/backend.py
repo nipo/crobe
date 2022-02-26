@@ -262,7 +262,7 @@ class Handle(Component):
 
     @nickname.setter
     def nickname(self, nickname):
-        self.logger.info("Setting probe nickname: %s", nickname)
+        self.logger.trace("Setting probe nickname: %s", nickname)
         if nickname:
             tmp = nickname.encode("utf-8")[:31] + b'\x00'
         else:

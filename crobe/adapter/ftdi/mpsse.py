@@ -25,7 +25,7 @@ class Engine(Handle):
     def __init__(self, device, interface):
         Handle.__init__(self, device.connection_id, interface, "MPSSE")
 
-        self.logger.info("Using MPSSE with a %s device, MPS: %d", self.type,
+        self.logger.note("Using MPSSE with a %s device, MPS: %d", self.type,
                          self.max_packet_size)
 
         self.base_freq = 12e6 if self.type == "2232C" else 60e6
@@ -40,7 +40,7 @@ class Engine(Handle):
         self.__divisor = 1
 
     def execute(self, operation_list):
-        self.logger.trace("Running %s", operation_list)
+        self.logger.protocol("Running %s", operation_list)
         cmd_parts = []
         cmd_len = 0
         rsp_len = 0

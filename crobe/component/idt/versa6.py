@@ -251,7 +251,7 @@ class Versa6(i2c.Slave):
     def start(self):
         for no, klass in self.reg_map.items():
             value = self.reg_read(no)
-            self.logger.info("[%d, %r]", no, value)
+            self.logger.debug("[%d, %r]", no, value)
             
     def state_dump(self, clkin = 1e6, xtalin = 1e6):
         power = self.reg_read(0x10)

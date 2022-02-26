@@ -166,7 +166,7 @@ class StubFlash(BusFlash):
             for address, data in progress.iterate(sorted(pages.items())):
                 from_mem = code.call(address, self.page_size)
                 crc = crc32(data)
-                self.logger.info("Page at 0x%08x, CRC32=%08x, in mem=%08x",
+                self.logger.trace("Page at 0x%08x, CRC32=%08x, in mem=%08x",
                                  address, crc, from_mem)
                 if from_mem == crc:
                     valid.add(address)

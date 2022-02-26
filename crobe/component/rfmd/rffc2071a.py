@@ -119,4 +119,4 @@ class Rffc2071a(PortComponent):
         self.reg_write(Register.DEV_CTRL, 0x0)
         devid = self.reg_read(Register.READBACK)
 
-        self.logger.info("Rffc2071a devid 0x%04x", devid);
+        self.logger.note("Rffc2071a devid 0x%04x", devid);

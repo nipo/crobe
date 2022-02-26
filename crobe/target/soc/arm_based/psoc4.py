@@ -125,7 +125,7 @@ class PSoC4Srom(PortComponent):
             self.bus.cmd_u32_read(self.soc.CPUSS_SYSARG),
             ]
         self.bus.execute(cmds)
-        self.soc.logger.info("%s Req: %08x, Arg: %08x, cpu: %s, PC %08x", pfx,
+        self.soc.logger.trace("%s Req: %08x, Arg: %08x, cpu: %s, PC %08x", pfx,
                              cmds[0].data, cmds[1].data, self.cpu.state,
                              self.cpu.reg_read([self.pc])[self.pc])
 
@@ -240,7 +240,7 @@ class PSoC4Srom(PortComponent):
 
         self.state_dump("State once resumed")
 
-        self.soc.logger.info("SROM call req 0x%02x arg %08x",
+        self.soc.logger.trace("SROM call req 0x%02x arg %08x",
                              no, arg)
         cmds = [
             self.bus.cmd_u32_write(self.soc.CPUSS_SYSARG, arg),
@@ -269,14 +269,14 @@ class PSoC4(SoC):
                 raise
 
         family, sid, major, minor, prot = self.srom.silicon_id_get()
-        self.logger.info("MCU Family %02x SiliconID: %4x r%d.%d, prot: %x",
+        self.logger.note("MCU Family %02x SiliconID: %4x r%d.%d, prot: %x",
                          family, sid, major, minor, prot)
         SoC.start(self)
 
     def erase_all(self):
         self.attach()
         pl = self.protection_level
-        self.logger.info("Protection level: %d", pl)
+        self.logger.note("Protection level: %d", pl)
         if pl > 1:
             self.srom.protection_open()
         else:

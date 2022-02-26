@@ -388,7 +388,7 @@ class Mpsse(Handle):
         else:
             h_commands = b''
 
-        self.logger.info("Using MPSSE with a %s device, MPS: %d", self.type,
+        self.logger.note("Using MPSSE with a %s device, MPS: %d", self.type,
                          self.max_packet_size)
         self.execute(h_commands
                      + self.cmd_gpio_mask_set(0xffff, gpio_oe, gpio_val))

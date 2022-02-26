@@ -13,7 +13,7 @@ class CcTransactor(PortComponent):
 
         super().__init__(route, "cc")
 
-        self.logger.info("NSL CC transactor with internal clock of %s", metric(self.base_freq, "Hz"))
+        self.logger.note("NSL CC transactor with internal clock of %s", metric(self.base_freq, "Hz"))
         self.__reset = False
         self.__div = 16
 
@@ -39,7 +39,7 @@ class CcTransactor(PortComponent):
         if not freq:
             freq = self.base_freq
         self.__div = max(1, min(0x40, int(self.base_freq / float(freq) / 2 / 4)))
-        self.logger.info("Divisor now %d", self.__div)
+        self.logger.debug("Divisor now %d", self.__div)
 
         return self.base_freq / self.__div / 2 / 4
 

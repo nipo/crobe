@@ -370,7 +370,7 @@ class I2cInterface(i2c.Interface):
     def __init__(self, port):
         i2c.Interface.__init__(self, port)
 
-        self.logger.info("Version: %s", self.port.firmware_info)
+        self.logger.debug("Version: %s", self.port.firmware_info)
 
         self.port.mgmt_interface_set(self.port.MGMT_INTERFACE_I2C)
         self.port.i2usb_freq_set(50e3)

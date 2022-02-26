@@ -225,12 +225,12 @@ class CyBl(i2c.Slave):
 
     def info_dump(self):
         silicon_id, silicon_rev, bootloader_version = self.enter_bootloader()
-        self.logger.info("Silicon ID: %x", silicon_id)
-        self.logger.info("Silicon Revision: %x", silicon_rev)
-        self.logger.info("Bootloader version: %x", bootloader_version)
+        self.logger.note("Silicon ID: %x", silicon_id)
+        self.logger.note("Silicon Revision: %x", silicon_rev)
+        self.logger.note("Bootloader version: %x", bootloader_version)
 
         first, last = self.get_flash_size(array_id = 0)
-        self.logger.info("Flash range: 0x%04x-0x%04x", first, last)
+        self.logger.note("Flash range: 0x%04x-0x%04x", first, last)
 
     def row_program(self, *, array_id, row_number, data):
         assert len(data) == self.row_size

@@ -68,7 +68,7 @@ class MemAp(ap.Ap, model.Bus):
         name = {1: "AHB-AP", 2: "APB-AP", 4: "AXI-AP"}.get(self.idr & 0xf, "Mem-AP")
 
         self.rev = self.idr >> 28
-        model.Bus.__init__(self, name)
+        model.Bus.__init__(self, name + "@%d" % index)
         self.base = None
 
     def enable(self, enable = True):
@@ -182,8 +182,6 @@ class MemAp(ap.Ap, model.Bus):
         if csw_get_8.data & 3 == 2 or csw_get_16.data & 3 == 2:
             self.logger.note("This Mem-AP does not support single/dual byte accesses")
         
-        self.logger.trace("starting")
-
         if self.base is not None:
             try:
                 comp = MemoryMappedComponent(self, self.base)
@@ -208,7 +206,7 @@ class MemAp(ap.Ap, model.Bus):
             csw_dirty = True
             csw_params = dict(mode = 0, size = 2, addrinc = 1)
 
-            self.logger.trace("Executing %s", transfers)
+            self.logger.protocol("Executing %s", transfers)
 
 
             for i, t in enumerate(transfers):

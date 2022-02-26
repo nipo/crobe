@@ -83,7 +83,7 @@ class Adapter(model.Adapter):
 class I2cInterface(i2c.Interface):
     def __init__(self, port):
         i2c.Interface.__init__(self, port)
-        self.logger.info("Version: %s", self.port.fw_version)
+        self.logger.debug("Version: %s", self.port.fw_version)
         self.__delay = 0
         self.port.i2c_delay_set(0)
 

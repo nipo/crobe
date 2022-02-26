@@ -283,8 +283,8 @@ class Pic32Tap(EjtagTap):
     def start(self):
         st = self.mtap_shift(self.MTAP_STATUS, 0, 8)
 
-        self.logger.info("MTAP Status: 0x%02x", st)
-        self.logger.info("Implementer code: 0x%08x", self.dr_shift(self.IMPCODE, 0, 32))
+        self.logger.note("MTAP Status: 0x%02x", st)
+        self.logger.note("Implementer code: 0x%08x", self.dr_shift(self.IMPCODE, 0, 32))
 
         jtag.Tap.start(self)
 

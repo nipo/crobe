@@ -55,5 +55,5 @@ class Dacx0508(PortComponent):
 
         variant = "Z" if devid & 0x80 else "M"
 
-        self.logger.info("DACx0508, %s-bit resolution, %d channels, Variant %s",
+        self.logger.note("DACx0508, %s-bit resolution, %d channels, Variant %s",
                          resolution_bits.get(resolution, "?"), channels, variant);

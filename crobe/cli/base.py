@@ -37,7 +37,7 @@ def cli(ctx, verbose, raw_error, quiet, silent, silent_re, only_re, timestamp, n
     root.addHandler(handler)
     root.setLevel(levels[target])
     if quiet - verbose:
-        root.critical("Logging level set to %s", logging.getLevelName(levels[target]))
+        root.log(levels[target], "Logging level set to %s", logging.getLevelName(levels[target]))
         for level in levels:
             root.log(level, "Sample for level %s", logging._levelToName[level])
 #    root.info("Starting at %s, pid %d", formatter.start, os.getpid())

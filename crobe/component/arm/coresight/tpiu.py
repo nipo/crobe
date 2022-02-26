@@ -20,11 +20,11 @@ class Tpiu(CoresightComponent):
         if self.nrz_supported: formats.append("NRZ")
         if self.manchester_supported: formats.append("Manchester")
         if self.tracedata_supported: formats.append("Parallel")
-        self.logger.info("Supports trace formats: %s", ', '.join(formats))
-        self.logger.info("FIFO size: %d entries", self.fifo_size)
-        self.logger.info("ATCLK is %s", "asynchronous" if self.atclk_async else "synchronous")
-        self.logger.info("MUX level: %d", self.mux_level)
-        self.logger.info("Supported parallel widths: %s",
+        self.logger.note("Supports trace formats: %s", ', '.join(formats))
+        self.logger.note("FIFO size: %d entries", self.fifo_size)
+        self.logger.note("ATCLK is %s", "asynchronous" if self.atclk_async else "synchronous")
+        self.logger.note("MUX level: %d", self.mux_level)
+        self.logger.note("Supported parallel widths: %s",
                          ",".join(map(str, self.supported_widths)))
 
         self.formatted = False
@@ -66,11 +66,11 @@ class Tpiu(CoresightComponent):
                   == self.FFSR_FT_STOPPED:
             pass
 
-        self.logger.info("CPSR: 0x%08x", self.reg_read(self.CPSR))
-        self.logger.info("CODR: 0x%08x", self.reg_read(self.CODR))
-        self.logger.info("SPPR: 0x%08x", self.reg_read(self.SPPR))
-        self.logger.info("FFCR: 0x%08x", self.reg_read(self.FFCR))
-        self.logger.info("FFSR: 0x%08x", self.reg_read(self.FFSR))
+        self.logger.note("CPSR: 0x%08x", self.reg_read(self.CPSR))
+        self.logger.note("CODR: 0x%08x", self.reg_read(self.CODR))
+        self.logger.note("SPPR: 0x%08x", self.reg_read(self.SPPR))
+        self.logger.note("FFCR: 0x%08x", self.reg_read(self.FFCR))
+        self.logger.note("FFSR: 0x%08x", self.reg_read(self.FFSR))
 
     def __str__(self):
         return "Trace Port Interface Unit"

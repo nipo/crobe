@@ -122,7 +122,7 @@ class Component(object):
         obj.__parent = self
         self.__children.append(obj)
 
-        self.logger.trace("child_add %s %s %s", obj, self.__started, obj.__started)
+        self.logger.debug("child_add %s %s %s", obj, self.__started, obj.__started)
         self.children_changed()
 
     def __start(self, recurse = True):
@@ -163,7 +163,7 @@ class Component(object):
     def __child_summon(self, crit = None, *invocation):
         options = []
 
-        self.logger.trace("Summon %s %s", crit, invocation)
+        self.logger.debug("Summon %s %s", crit, invocation)
 
         if crit and crit.endswith(')'):
             try:

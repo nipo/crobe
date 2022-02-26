@@ -92,13 +92,13 @@ class AtAes132A(i2c.Slave):
     def start(self):
         i2c.Slave.start(self)
         self.__nonce = None
-        self.logger.info("%s", self.command(2, 2))
-        self.logger.info("%04x %04x %04x %04x",
+        self.logger.note("%s", self.command(2, 2))
+        self.logger.note("%04x %04x %04x %04x",
                          self.info(0), self.info(5),
                          self.info(6), self.info(0xc))
         self.manufacturing_id = self.block_read(0xf02b, 2)
         self.serial = self.block_read(0xf000, 8)
-        self.logger.info("ManufacturingID: %s", self.manufacturing_id.hex())
+        self.logger.note("ManufacturingID: %s", self.manufacturing_id.hex())
         self.logger.info("Serial: %s", self.serial.hex())
         key_config = self.block_read(0xf080, 4 * 8)
         key_config2 = self.block_read(0xf0a0, 4 * 8)
@@ -110,12 +110,12 @@ class AtAes132A(i2c.Slave):
         counters = counters + counters2 + counters3 + counters4
         self.counters = [int.from_bytes(counters[x:x+8], "little") for x in range(0, 128, 8)]
 
-        self.logger.info("Key config: %s", ', '.join(map(hex, self.key_config)))
-        self.logger.info("Counters: %s", ', '.join(map(hex, self.counters)))
+        self.logger.note("Key config: %s", ', '.join(map(hex, self.key_config)))
+        self.logger.note("Counters: %s", ', '.join(map(hex, self.counters)))
 
         for i in range(16):
             try:
-                self.logger.info("Key %d: %s", i, self.block_read(0xf200 + i * 16, 16))
+                self.logger.note("Key %d: %s", i, self.block_read(0xf200 + i * 16, 16))
             except:
                 pass
             

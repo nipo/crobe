@@ -141,7 +141,7 @@ class Registers(ControlStatus):
         self.reg_update(self.REG_MODE, 0x1f, m)
 
     def reset_assert(self, asserted):
-        self.logger.info("%s reset", "Holding" if asserted else "Releasing")
+        self.logger.trace("%s reset", "Holding" if asserted else "Releasing")
         self.reg_update(self.REG_MODE, 0x10, -int(bool(asserted)))
 
     def target_voltage_get(self):
@@ -198,24 +198,24 @@ class DbgFpgaOpts:
         if self.baudrate is not None:
             self.regs.baudrate_set(self.baudrate)
             br = self.regs.baudrate_get()
-            self.regs.logger.info("Setting baud rate to %s, got %s",
+            self.regs.logger.note("Setting baud rate to %s, got %s",
                                   metric(self.baudrate, "baud"),
                                   metric(br, "baud"))
 
         if self.cycle:
-            self.regs.logger.info("Cycling target")
+            self.regs.logger.note("Cycling target")
             self.regs.target_voltage_set(supply = True, voltage = 0)
             time.sleep(.2)
 
         mode, value = self.power
         if mode == "track":
-            self.regs.logger.info("Tracking target voltage")
+            self.regs.logger.note("Tracking target voltage")
             self.regs.target_voltage_set()
         elif mode == "supply":
-            self.regs.logger.info("Setting target voltage as %1.1fV", value)
+            self.regs.logger.note("Setting target voltage as %1.1fV", value)
             self.regs.target_voltage_set(supply = True, voltage = value+.025)
         else:
-            self.regs.logger.info("Setting reference voltage to %1.1fV", value)
+            self.regs.logger.note("Setting reference voltage to %1.1fV", value)
             self.regs.target_voltage_set(voltage = value+.025)
         time.sleep(.2)
         self.regs.logger.info("Current target voltage: %1.3f", self.regs.target_voltage_get())
@@ -229,7 +229,7 @@ class I2cInterface(i2c.Interface):
         self.options = DbgFpgaOpts(regs)
 
     def execute(self, op_list):
-        self.logger.trace("%s", op_list)
+        self.logger.protocol("%s", op_list)
         self.__i2c_trx.execute(op_list)
 
     def freq_update(self, freq):
@@ -365,7 +365,7 @@ class Adapter(model.Adapter):
             self.handle.set_configuration(1)
             cfg = self.handle.get_active_configuration()
         for intf in cfg:
-            self.logger.info("Has interface %d, %02x:%02x:%02x",
+            self.logger.debug("Has interface %d, %02x:%02x:%02x",
                   intf.index,
                   intf.bInterfaceClass,
                   intf.bInterfaceSubClass,

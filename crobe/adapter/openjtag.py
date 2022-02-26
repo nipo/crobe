@@ -206,7 +206,7 @@ class OpenJtag(model.PortComponent):
     def openjtag_execute(self, commands):
         pending = deque(commands)
 
-        self.logger.trace("Running commands %s", commands)
+        self.logger.protocol("Running commands %s", commands)
         
         while pending:
             cmd = []
@@ -223,7 +223,7 @@ class OpenJtag(model.PortComponent):
                 rsp_size += op.response_size
 
             cmd_blob = b''.join(cmd)
-            self.logger.trace("OpenJTAG stream: %s rsp %d", cmd_blob.hex(), rsp_size)
+            self.logger.protocol("OpenJTAG stream: %s rsp %d", cmd_blob.hex(), rsp_size)
             self.port.write(cmd_blob)
             rsp = self.port.read(rsp_size)
             assert len(rsp) == rsp_size

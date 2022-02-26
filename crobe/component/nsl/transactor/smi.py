@@ -13,7 +13,7 @@ class SmiTransactor(PortComponent):
     def __init__(self, route):
         super().__init__(route, "smi")
 
-        self.logger.info("NSL SMI Transactor")
+        self.logger.note("NSL SMI Transactor")
         
     def execute(self, operation_list):
         ops = deque(operation_list)

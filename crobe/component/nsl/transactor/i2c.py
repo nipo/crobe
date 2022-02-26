@@ -18,7 +18,7 @@ class I2cTransactor(PortComponent):
 
         super().__init__(route, "i2c")
 
-        self.logger.info("NSL i2c transactor with internal clock of %s", metric(self.base_freq, "Hz"))
+        self.logger.note("NSL i2c transactor with internal clock of %s", metric(self.base_freq, "Hz"))
         self.__div = 4
 
     def freq_update(self, freq):
@@ -87,7 +87,7 @@ class I2cTransactor(PortComponent):
         cmd.append(self.CMD_STOP)
         rsp_size += 1
 
-        #self.logger.info("Running %s", bytes(cmd).hex())
+        #self.logger.protocol("Running %s", bytes(cmd).hex())
         rsp += self.port.execute(bytes(cmd), rsp_size)
 
         for op, s in starts:

@@ -19,7 +19,7 @@ class Max31820(one_wire.Device):
         self.execute([convert, self.cmd_wait(self.tCONV_12)])
         self.execute([read])
 
-        self.logger.info("Current scratchpad: %s %02x",
+        self.logger.debug("Current scratchpad: %s %02x",
                          read.data.hex(), one_wire.crc8(read.data[:-1]))
 
         temp = int.from_bytes(read.data[:2], 'little', signed = True)

@@ -86,7 +86,7 @@ class GowinFpga(jtag.Tap, JtagSramFpga):
 
     def start(self):
         super().start()
-        self.logger.info("Status: %s", self.status_read())
+        self.logger.debug("Status: %s", self.status_read())
 
     def flash_erase(self):
         raise NotImplementedError()

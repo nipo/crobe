@@ -17,7 +17,7 @@ class SpiTransactor(PortComponent):
 
         super().__init__(route, "spi")
 
-        self.logger.info("NSL SPI Transactor with internal clock of %s", metric(self.base_freq, "Hz"))
+        self.logger.note("NSL SPI Transactor with internal clock of %s", metric(self.base_freq, "Hz"))
 
         self.__divisor = int(self.base_freq / 1e6) - 1
         self.__rate_dirty = True
@@ -39,7 +39,7 @@ class SpiTransactor(PortComponent):
         rsp_size = 0
         mode = 0
 
-        self.logger.trace("Running %s", operation_list)
+        self.logger.protocol("Running %s", operation_list)
         
         for op in operation_list:
             if self.__rate_dirty:

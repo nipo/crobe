@@ -31,7 +31,7 @@ class Lpc11u(SoC):
         uid = self.puppet().iap_call(58)
         self.uid = sum([uid[i] << (i * 32) for i in range(4)])
 
-        self.logger.info("MCU UID: %032x", self.uid)
+        self.logger.note("MCU UID: %032x", self.uid)
         
     def puppet(self):
         return LpcPuppet(self)
@@ -49,7 +49,7 @@ class Lpc43(SoC):
         uid = self.puppet().iap_call(58)
         self.uid = sum([uid[i] << (i * 32) for i in range(4)])
 
-        self.logger.info("MCU UID: %032x", self.uid)
+        self.logger.note("MCU UID: %032x", self.uid)
         
     def puppet(self):
         return LpcPuppet(self)
@@ -134,7 +134,7 @@ def lcp_ducktyping(dp):
             dp.logger.info("LPC Part ID register 0x%08x matching %s", partid, info.name)
             return info.spawn(dp)
         else:
-            dp.logger.info("LPC Part ID at 0x%08x value 0x%08x unknown", addr, partid)
+            dp.logger.debug("LPC Part ID at 0x%08x value 0x%08x unknown", addr, partid)
 
     dp.logger.info("LPC Part ID not matched")
 

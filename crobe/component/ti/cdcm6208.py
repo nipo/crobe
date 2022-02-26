@@ -142,7 +142,7 @@ class Cdcm6208(i2c.Slave):
     def start(self):
         for no, klass in self.reg_map.items():
             value = self.reg_read(no)
-            self.logger.info("[%d, %r]", no, value)
+            self.logger.debug("[%d, %r]", no, value)
             
     def state_dump(self, pri = 1e6, sec = 1e6):
         status = self.reg_read(21)

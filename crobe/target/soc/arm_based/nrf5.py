@@ -18,7 +18,7 @@ class UicrFlash(StubFlash):
     UICR_ADDRESS = 0x10001000
 
     def erase(self, offset, size):
-        self.soc.logger.info("Erasing UICR")
+        self.soc.logger.trace("Erasing UICR")
         
         self.bus.u32_write(nRF5.NVMC_CONFIG, nRF5.NVMC_CONFIG_EEN)
         while not (self.bus.u32_read(nRF5.NVMC_READY) & nRF5.NVMC_READY_READY):
@@ -54,8 +54,8 @@ class nRF5(SoC, pin_control.Controller):
                 self.gpio_map["P1.%02d" % i] = 1, i
 
 
-        self.logger.info("MCU UID: %016x", self.uid)
-        self.logger.info("BLE Address: %s %s",
+        self.logger.note("MCU UID: %016x", self.uid)
+        self.logger.note("BLE Address: %s %s",
                          self.ble_address[0],
                          ":".join(map("%02x".__mod__, self.ble_address[1])))
 
@@ -146,7 +146,7 @@ class nRF5(SoC, pin_control.Controller):
                              a, b, c, d, e, configid)
             return
 
-        self.logger.info("nRF%05x%s%s, %s, %d gpios" % (
+        self.logger.note("nRF%05x%s%s, %s, %d gpios" % (
             part, package_code, variant, package_name, gpio_count))
 
     def id_probe(self):

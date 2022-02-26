@@ -19,7 +19,7 @@ class Fpb(MemoryMappedComponent):
         self.lit_count = (ctrl >> 8) & 0xf
         self.code_count = ((ctrl >> 4) & 0xf) | ((ctrl >> 12) & 0x3)
 
-        self.logger.info("%d litteral, %d code", self.lit_count, self.code_count)
+        self.logger.note("%d litteral, %d code", self.lit_count, self.code_count)
 
     def enable(self, enable = True):
         self.reg_write(self.CTRL, 0x3 if enable else 0)

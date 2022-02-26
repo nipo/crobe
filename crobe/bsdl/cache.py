@@ -72,7 +72,7 @@ class Cache:
            and os.path.getmtime(cache_filename) > os.path.getmtime(filename):
             try:
                 entity = bsdl.Entity.load(cache_filename)
-                self.logger.info("Loaded from preparsed file")
+                self.logger.trace("Loaded from preparsed file")
             except Exception:
                 pass
 
@@ -89,7 +89,7 @@ class Cache:
         #    print("no ID Codes")
         #    return
 
-        self.logger.info("Found %s/%s: %s", entity.name, entity.package_variant,
+        self.logger.note("Found %s/%s: %s", entity.name, entity.package_variant,
                          [PartId.from_idcode(c.value).pretty() for c in entity.id_codes])
 
         for code in entity.id_codes:

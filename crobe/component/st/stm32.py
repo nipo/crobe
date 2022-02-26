@@ -29,7 +29,7 @@ class Info:
     def from_soc(cls, soc):
         for addr in cls.DBGMCU_IDCODE:
             mcu_id = soc.buses[0].u32_read(addr)
-            soc.logger.info("DBGMCU_IDCODE at 0x%08x: 0x%08x", addr, mcu_id)
+            soc.logger.note("DBGMCU_IDCODE at 0x%08x: 0x%08x", addr, mcu_id)
             if mcu_id:
                 break
 

@@ -128,22 +128,19 @@ class Series6(Series67):
         if len(blob) % 1:
             raise ValueError("Odd data length in bitstream")
 
-        begin = datetime.datetime.now()
+        with self.logger.timed("Programming"):
+            begin = datetime.datetime.now()
 
-        ok = self.config_write(blob)
+            ok = self.config_write(blob)
 
-        # This is important, it enables internal CCLK
-        self.run(10000)
+            # This is important, it enables internal CCLK
+            self.run(10000)
 
-        self.logger.debug("Status: %04x", self.cfg_status)
-        self.cfg_status_dump()
+            self.logger.debug("Status: %04x", self.cfg_status)
+            self.cfg_status_dump()
 
-        end = datetime.datetime.now()
-
-        if not ok:
-            raise RuntimeError("Unable to start FPGA")
-        else:
-            self.logger.info("Done OK, time taken: %s", end - begin)
+            if not ok:
+                raise RuntimeError("Unable to start FPGA")
 
         return self.send_op_wait(-1, done = True)
 
@@ -162,7 +159,6 @@ class Series6(Series67):
         self.run(40)
 
         self.logger.trace("Starting...")
-        self.logger.info("Starting...")
         return self.send_op_wait(self.IR_JSTART, done = True)
 
     ###

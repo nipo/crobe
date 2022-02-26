@@ -37,16 +37,16 @@ class Dumper:
             d = cache.filter(name = tap.name.lower() if tap.idcode is None else None,
                              idcode = int(tap.idcode) if tap.idcode is not None else None,
                              package = pkg)
-            self.logger.info("For TAP #%d, %s %s %s: %s",
+            self.logger.note("For TAP #%d, %s %s %s: %s",
                              index,
                              tap.name.lower() if tap.idcode is None else None,
                              hex(int(tap.idcode)) if tap.idcode is not None else None,
                              pkg, d)
             for e in d:
-                self.logger.info("%s %s %s %s", e.name, e.id_codes, e.package_variant, e.user_codes)
+                self.logger.note("%s %s %s %s", e.name, e.id_codes, e.package_variant, e.user_codes)
 
             if not d:
-                self.logger.warn("No BSDL entry for %s", tap.idcode)
+                self.logger.warning("No BSDL entry for %s", tap.idcode)
 
             if not d or pkg == "ign" or (only is not None and only is not tap):
                 self.definitions.append((None, tap))

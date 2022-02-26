@@ -20,7 +20,7 @@ class SwDp(dp.Dp):
     max_freq = 15e6
 
     def __init__(self, port):
-        dp.Dp.__init__(self, "SW-DP", port)
+        dp.Dp.__init__(self, "DAP", port)
         self.freq_cap("default", 30e6)
 
     def start(self):

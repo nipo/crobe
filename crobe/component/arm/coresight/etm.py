@@ -13,11 +13,11 @@ class Etm(CoresightComponent):
         self.ccr = self.reg_read(self.CCR)
         self.scr = self.reg_read(self.SCR)
 
-        self.logger.info("CPU stall %s, %s",
+        self.logger.note("CPU stall %s, %s",
                          "present" if self.CCR_FIFOFULL_PRESENT(self.ccr) else "absent",
                          "supported" if self.SCR_FIFOFULL_SUPPORTED(self.scr) else "unsupported",
                          )
-        self.logger.info("Max port size: %d", self.SCR_MAX_PORT_SIZE(self.scr))
+        self.logger.note("Max port size: %d", self.SCR_MAX_PORT_SIZE(self.scr))
 
     def __str__(self):
         return "Embedded Trace Macrocell"
@@ -48,8 +48,8 @@ class Etm(CoresightComponent):
             while self.reg_read(self.SR) & self.SR_PROGBIT:
                 pass
 
-            self.logger.info("CR: 0x%08x", self.reg_read(self.CR))
-            self.logger.info("SR: 0x%08x", self.reg_read(self.SR))
+            self.logger.note("CR: 0x%08x", self.reg_read(self.CR))
+            self.logger.note("SR: 0x%08x", self.reg_read(self.SR))
 
     CR = 0x000
     CR_PROG          = 1 << 10

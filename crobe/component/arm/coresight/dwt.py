@@ -43,7 +43,7 @@ class Dwt(MemoryMappedComponent):
         self.comparator_count = ctrl >> 28
         self.trigger_available = not (ctrl & 0x0f000000)
 
-        self.logger.info("%d comparators%s", 
+        self.logger.note("%d comparators%s", 
                          self.comparator_count,
                          ["", ", triggers"][self.trigger_available])
 
@@ -59,4 +59,4 @@ class Dwt(MemoryMappedComponent):
                        | self.CTRL_POSTCNT(0)
                        | self.CTRL_EXCTRCENA
                        )
-        self.logger.info("CTRL: 0x%08x", self.reg_read(self.CTRL))
+        self.logger.note("CTRL: 0x%08x", self.reg_read(self.CTRL))

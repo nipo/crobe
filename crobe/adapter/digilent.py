@@ -229,7 +229,7 @@ class Enumerator(basic.AdapterEnumerator):
     adapter_class = Hs2Adapter
 
     def __init__(self):
-        basic.AdapterEnumerator.__init__(self, "Digilent HS2",
+        basic.AdapterEnumerator.__init__(self, "HS2",
                                        short_name = "hs2",
                                        vid = 0x0403, pid = 0x6014,
                                        channel = "A")
@@ -241,7 +241,7 @@ class Enumerator(basic.AdapterEnumerator):
     adapter_class = Smt2Adapter
 
     def __init__(self):
-        basic.AdapterEnumerator.__init__(self, "Digilent Board",
+        basic.AdapterEnumerator.__init__(self, "Digilent",
                                        short_name = "dig",
                                        vid = 0x0403, pid = 0x6010,
                                        channel = "A")

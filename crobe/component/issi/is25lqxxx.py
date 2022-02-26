@@ -10,4 +10,4 @@ class Is25Lq(SfdpFlash):
     def __init__(self, port, idr):
         SfdpFlash.__init__(self, port, idr, "IS25LQ")
         self.uid = self.command(self.CMD_READ_UID, arg = b"\x00\x00\x00\x00", rsize = 16)
-        self.logger.info("Device UID: %s", binascii.b2a_hex(self.uid))
+        self.logger.note("Device UID: %s", binascii.b2a_hex(self.uid))

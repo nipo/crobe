@@ -24,7 +24,7 @@ class SwdTransactor(PortComponent):
         self.__turnaround_dirty = True
         super().__init__(route, 'swd')
 
-        self.logger.info("NSL SWD Transactor with internal clock of %s", metric(self.base_freq, "Hz"))
+        self.logger.note("NSL SWD Transactor with internal clock of %s", metric(self.base_freq, "Hz"))
         
         self.__divisor = int(self.base_freq / 1e6) - 1
         self.__rate_dirty = True
@@ -58,7 +58,7 @@ class SwdTransactor(PortComponent):
         ops = deque(operation_list)
         max_size = 512
         
-        self.logger.trace("Running %s", operation_list)
+        self.logger.protocol("Running %s", operation_list)
 
         while ops:
             cmd = bytearray([0] * max_size)

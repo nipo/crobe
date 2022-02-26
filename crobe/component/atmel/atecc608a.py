@@ -93,7 +93,7 @@ class AtEcc(atsec.AtSec):
     def config_dump(self, printer = print):
         config = self.read_all_config()
         for i in range(0, len(config), 16):
-            self.logger.info("Config %02x: %s", i, config[i:i+16].hex())
+            self.logger.note("Config %02x: %s", i, config[i:i+16].hex())
 
         sn = config[0:4] + config[8:13]
         printer("SN:", sn.hex())
@@ -133,7 +133,7 @@ class AtEcc(atsec.AtSec):
         config = self.read_all_config()
         self.config = config
         for i in range(0, len(config), 16):
-            self.logger.info("Config %02x: %s", i, config[i:i+16].hex())
+            self.logger.note("Config %02x: %s", i, config[i:i+16].hex())
 
     def info_key_valid(self, no):
         return self.command_info(1, no)[0] == 1

@@ -37,7 +37,7 @@ class SpiMemory(PortComponent, Bus):
         if not idr:
             idr = self.idr_get()
         self.idr = idr
-        self.logger.info("SPI flash with IDR=%06x", self.idr)
+        self.logger.note("SPI flash with IDR=%06x", self.idr)
 
     @property
     def page_size(self):
@@ -97,8 +97,8 @@ class SpiMemory(PortComponent, Bus):
         sfdp = sfdp.miso
         id_cfi = idr.miso[0x10:0x13]
         idr = int.from_bytes(idr.miso[:3], "big")
-        port.logger.info("IDR: 0x%06x", idr)
-        port.logger.info("SFDP: %s", sfdp)
+        port.logger.note("IDR: 0x%06x", idr)
+        port.logger.note("SFDP: %s", sfdp)
         
         if idr in [0, 0xffffff, 0x9f0000, 0x9fffff]:
             raise InitializationFailure("Bad SPI IDR: 0x%06x" % idr)
@@ -320,7 +320,7 @@ class SpiPSRam(SpiMemory):
     CMD_WRITE = b"\x02"
 
     def info(self):
-        self.logger.info("Fast read: %02x, Write: %02x", self.CMD_FAST_READ[0], self.CMD_WRITE[0])
+        self.logger.note("Fast read: %02x, Write: %02x", self.CMD_FAST_READ[0], self.CMD_WRITE[0])
 
     def erase(self, base, size):
         self.write(base, b"\xff" * size)
@@ -336,13 +336,13 @@ class SelfDescriptiveFlash(SpiFlash):
 
     def _id_cfi_parse(self, data):
         for off in range(0, len(data), 16):
-            self.logger.info("ID-CFI %04x %s", off, binascii.b2a_hex(data[off:off+16]))
+            self.logger.note("ID-CFI %04x %s", off, binascii.b2a_hex(data[off:off+16]))
         assert data[0x10:0x13] == b"QRY"
 
         si = []
         self.total_size = 1 << data[0x27]
         wbs_l2 = int.from_bytes(data[0x2a:0x2c], "little")
-        self.logger.info("WBS l2: %d", wbs_l2)
+        self.logger.note("WBS l2: %d", wbs_l2)
         if wbs_l2 == 0:
             self.write_buffer_size = 256
         else:
@@ -379,7 +379,7 @@ class SfdpFlash(SelfDescriptiveFlash):
             raise ValueError("Bad SFDP header", sfdp_header)
         header_count = sfdp_header[6] + 1
 
-        self.logger.info("SFDP v%d.%d header found, %d NPH", sfdp_header[5], sfdp_header[4], header_count)
+        self.logger.note("SFDP v%d.%d header found, %d NPH", sfdp_header[5], sfdp_header[4], header_count)
 
         headers = self.sfdp_read(8, header_count * 8)
 
@@ -391,7 +391,7 @@ class SfdpFlash(SelfDescriptiveFlash):
             jid, minor, major, length, ptp = struct.unpack("<BBBBL", headers[i * 8: (i+1)*8])
             jid |= (ptp & 0xff000000) >> 16
             ptp = ptp & 0xffffff
-            self.logger.info("- %d ID 0x%04x v%d.%d at %08x, %d bytes",
+            self.logger.note("- %d ID 0x%04x v%d.%d at %08x, %d bytes",
                              i, jid, major, minor, ptp, length * 4)
 
             data = self.sfdp_read(ptp, length * 4)
@@ -414,13 +414,13 @@ class SfdpFlash(SelfDescriptiveFlash):
                 self.logger.debug("    Data: %s", binascii.b2a_hex(data))
                 continue
 
-            self.logger.info("    Vendor data: %s", name_get((jid >> 8) - 1, jid & 0x7f))
+            self.logger.note("    Vendor data: %s", name_get((jid >> 8) - 1, jid & 0x7f))
 
             if jid == 0x0101:
                 if major == 1 and minor == 1:
                     id_cfi = data
             else:
-                self.logger.info("    Data: %s", binascii.b2a_hex(data))
+                self.logger.note("    Data: %s", binascii.b2a_hex(data))
 
         if sfdp_desc[0] is not None:
             (major, minor), data = sfdp_desc
@@ -489,7 +489,7 @@ class SfdpFlash(SelfDescriptiveFlash):
             self.CMD_PAGE_PROGRAM = b"\x12"
             for si in self.SECTOR_INFO:
                 si["erase_cmd"] = erase_cmd[si["type"] - 1:si["type"]]
-            self.logger.info("  - Successful discovery of 4-byte address commands")
+            self.logger.note("  - Successful discovery of 4-byte address commands")
 
     def _sfdp_1_5_parse(self, data):
         if data[0] & 3 == 1:
@@ -521,7 +521,7 @@ class SfdpFlash(SelfDescriptiveFlash):
 
     def _sfdp_1_6_parse(self, data):
         self._sfdp_1_5_parse(data)
-        self.logger.info("SFDP1.6 WBS: 0x%02x", data[0x28])
+        self.logger.note("SFDP1.6 WBS: 0x%02x", data[0x28])
         self.write_buffer_size = 2**(data[0x28]>>4)
         
     def sfdp_read(self, offset, size):

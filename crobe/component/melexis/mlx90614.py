@@ -17,10 +17,10 @@ class Mlx90614(smbus.Slave):
         for i in range(4):
             idr |= self.read_word(self.REG_ID0 + i) << (i * 16)
         self.idr = idr
-        self.logger.info("IDR: %x" % idr)
+        self.logger.note("IDR: %x" % idr)
         self.config = self.read_word(self.REG_CONFIG1)
         self.dual = bool(self.config & self.CONFIG1_IR_DUAL)
-        self.logger.info("MLX90614, config 0x%04x, %s spot",
+        self.logger.note("MLX90614, config 0x%04x, %s spot",
                          self.config, "dual" if self.dual else "single")
 
     def address_change(self, next_addr):

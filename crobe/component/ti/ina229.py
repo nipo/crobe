@@ -77,6 +77,6 @@ class Ina229(PortComponent):
         manufid = self.reg_read(Register.ManufId)
         devid = self.reg_read(Register.DeviceId)
 
-        self.logger.info("Device manufacturer code: %04x (%s), device ID: %04x",
+        self.logger.note("Device manufacturer code: %04x (%s), device ID: %04x",
                          manufid, manufid.to_bytes(2, "big"),
                          devid)

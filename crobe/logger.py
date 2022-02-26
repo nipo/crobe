@@ -4,8 +4,8 @@ import logging
 # CRITICAL = 50
 # ERROR = 40
 # WARNING = 30
-NOTE = 25
 # INFO = 20
+NOTE = 17
 TRACE = 15
 # DEBUG = 10
 PROTOCOL = 5
@@ -20,10 +20,10 @@ LEVEL_COLOR = {
     'ERROR': '31',
     'WARNING': '33',
     'NOTE': '32',
-    'INFO': '',
-    'TRACE': '94',
-    'DEBUG': '34',
-    'PROTOCOL': '96',
+    'INFO': '97',
+    'TRACE': '96',
+    'DEBUG': '94',
+    'PROTOCOL': '36',
     'NOTSET': '90',
 }
 
@@ -38,7 +38,9 @@ class TimedContext:
 
     def __exit__(self, exc_type, exc_value, traceback):
         duration = time.time() - self.begin
-        self.logger.trace("Done %s, took %.3f seconds", self.message, duration)
+        self.logger.trace("%s %s, took %.3f seconds",
+                          "Error" if exc_type else "Done",
+                          self.message, duration)
 
 class Progresser:
     def __init__(self, logger, label, count):
@@ -142,9 +144,10 @@ class Formatter(logging.Formatter):
         line = '\x1b[G\x1b[2K'
         if timestamp:
             line += '{relativeCreatedSec:5.3f} '
+        line += '{name}: '
         if color:
             line += '\x1b[{color}m'
-        line += '{name}: {message}'
+        line += '{message}'
         if color:
             line += '\x1b[m'
 

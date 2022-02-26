@@ -454,17 +454,17 @@ class Si5332(i2c.Slave):
         self.regs.reload()
         r = self.regs
 
-        self.logger.info("Design ID: %02x%02x%02x",
+        self.logger.note("Design ID: %02x%02x%02x",
                          r.design_id0,
                          r.design_id1,
                          r.design_id2)
 
-        self.logger.info("Device PN: %02x, Grade: %02x, Rev: %02x",
+        self.logger.note("Device PN: %02x, Grade: %02x, Rev: %02x",
                          r.device_pn_base,
                          r.device_grade,
                          r.device_rev)
 
-        self.logger.info("Factory ID: %02x%02x%02x%02x%02x rev %02x",
+        self.logger.note("Factory ID: %02x%02x%02x%02x%02x rev %02x",
                          r.factory_opn_id0,
                          r.factory_opn_id1,
                          r.factory_opn_id2,

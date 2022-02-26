@@ -215,7 +215,7 @@ class MachXO2Config(jtag.InstructionRegistry):
             self._isc_enable(self.TARGET_FLASH, True)
             idcode = self.IDCODE_PRIV.shift(0)
             ni = self.chip_info(idcode)
-            self.logger.info("IDCode priv: 0x%x", idcode)
+            self.logger.note("IDCode priv: 0x%x", idcode)
 
         assert ni
 
@@ -232,12 +232,12 @@ class MachXO2Config(jtag.InstructionRegistry):
 
         self.uid = self.LSC_UIDCODE_PUB.shift(0)
 
-        self.logger.info(repr(self.TraceId(self.uid)))
-        self.logger.info(repr(self.Status(self.status_get())))
+        self.logger.debug(repr(self.TraceId(self.uid)))
+        self.logger.debug(repr(self.Status(self.status_get())))
 
         try:
             self._isc_enable(self.TARGET_FLASH, True)
-            self.logger.info(repr(self.Feature(self.feature_get())))
+            self.logger.debug(repr(self.Feature(self.feature_get())))
             self._isc_disable()
         except ValueError:
             self.logger.warning("Unable to background enable")
@@ -663,11 +663,11 @@ class SerIrMap:
 
             in_data_byte_count = (io_len + 7) // 8
 
-            mach.logger.info("i2c < %s, %d", out_data.hex(), in_data_byte_count)
+            mach.logger.protocol("i2c < %s, %d", out_data.hex(), in_data_byte_count)
             
             r = mach.do_write_read(out_data, in_data_byte_count)
 
-            mach.logger.info("i2c > %s", r.hex())
+            mach.logger.protocol("i2c > %s", r.hex())
 
             if io_len == 1:
                 tdo = bitstring.BitString(r[0] >> 7, 1)
@@ -680,7 +680,7 @@ class SerIrMap:
         if self.data_direction == "write":
             out_data += bytes(op.tdi)[::-1]
         
-        mach.logger.info("i2c < %s", out_data.hex())
+        mach.logger.protocol("i2c < %s", out_data.hex())
         mach.do_write(out_data)
 
         if self.post_wait:

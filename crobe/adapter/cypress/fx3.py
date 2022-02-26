@@ -8,7 +8,7 @@ __all__ = ["Adapter"]
 class Adapter(fx.Adapter):
     def is_in_bootloader(self):
         ret = self.ctrl_in(0xf3, index = 0, value = 0, length = 1)
-        self.logger.info("Bootloader mode: %s", ret)
+        self.logger.debug("Bootloader mode: %s", ret)
         return ret[0] == 1
 
     def reenumerate(self):

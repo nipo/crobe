@@ -7,6 +7,6 @@ class At25sl(SfdpFlash):
 
     def start(self):
         super().start()
-        print("Status: %02x %02x" % (self.status, self.command(b'\x35', rsize = 1)[0]))
+        self.logger.debug("Status: %02x %02x" % (self.status, self.command(b'\x35', rsize = 1)[0]))
         self.uid = self.command(self.CMD_READ_UID, rsize = 8, dummy_words = 4)
-        self.logger.info("Device UID: %s", self.uid.hex())
+        self.logger.note("Device UID: %s", self.uid.hex())
