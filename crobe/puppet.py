@@ -1,4 +1,4 @@
-from .model import Component
+from .model import Component, PortComponent
 from .component.model import Cpu, Register
 from .loadable.object import Program, Segment
 from .util.allocator import Allocator
@@ -38,7 +38,7 @@ class Puppet(Component):
                  pc_reg, sp_reg,
                  arg_regs, trampoline_code,
                  stack_size = 128, stack_direction = -1):
-        Component.__init__(self, "puppet")
+        super().__init__("puppet")
         self.cpu = cpu
         self.ram = ram
         self.ram_allocator = Allocator(ram.address, ram.size)
