@@ -196,13 +196,13 @@ class Interface(base.Interface):
 
             return register
         
-class Operation(object):
-    def __init__(self):
-        pass
-
     def freq_test(self, fmin, fmax, fstep, ir):
         test = FreqTest(self, fmin, fmax, fstep, ir)
         return test.results()
+
+class Operation(object):
+    def __init__(self):
+        pass
             
 class FreqTest:
     marker = BitString(0x8d09476592d845109b94f6dd0d97d835, 128)
