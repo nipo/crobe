@@ -17,3 +17,4 @@ from . import dbg_fpga
 from . import sipeed
 from . import efinix
 from . import cy_usb_serial
+from . import xds110
