@@ -90,7 +90,7 @@ class JtagHandler(object):
         if not tdo_parts:
             return tdi
 
-        logging.protocol("Running %s", self.pending)
+        logging.debug("Running %s", self.pending)
         self.interface.execute(self.pending)
 
         tdo = BitString()
