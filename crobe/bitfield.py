@@ -43,6 +43,11 @@ class _Field(object):
 """
         return (self.doc or "") + addend
 
+    def pretty(self, v):
+        if isinstance(v, int) and v is not True and v is not False:
+            return hex(v)
+        return str(v)
+
 class Field(_Field):
     def __init__(self, lsb, width, offset = 0, signed = False, doc = None):
         super().__init__(lsb, width, doc = doc)
@@ -100,7 +105,7 @@ class EnumField(Field):
 
     def represent(self, value):
         try:
-            return self.enum_class(value)
+            return self.enum_class(int(value))
         except ValueError:
             return value
 
@@ -108,6 +113,11 @@ class EnumField(Field):
         return _Field.docstring(self) + f"""
         Enumeration value from {self.enum_class}
         """
+
+    def pretty(self, v):
+        if isinstance(v, self.enum_class):
+            return v.name
+        return v
 
 class MappingField(Field):
     def __init__(self, lsb, width, mapping, doc = None):
@@ -128,6 +138,9 @@ class MappingField(Field):
         return _Field.docstring(self) + f"""
 Mapping value:
 """ + "\n".join([f"- {k}: {v}" for (k, v) in sorted(self.raw2display.items())])
+
+    def pretty(self, v):
+        return v
 
 class BooleanField(Field):
     def __init__(self, bit, *, inverted = False, doc = None):
@@ -274,28 +287,20 @@ class Bitfield(object, metaclass = _register_meta):
 
     def __str__(self):
         values = {
-            name: f.get_from(self)
+            name: f.pretty(f.get_from(self))
             for name, f in self._fields.items()
             if name != "all"
         }
-        def pretty(x):
-            if isinstance(x, int) and x is not True and x is not False:
-                return hex(x)
-            return str(x)
-        fields = ", ".join(f"{name} = {pretty(value)}" for name, value in sorted(values.items()))
+        fields = ", ".join(f"{name} = {value}" for name, value in sorted(values.items()))
         return f"<{self.__class__.__name__}: {fields}>"
 
     def __repr__(self):
         values = {
-            name: f.get_from(self)
+            name: f.pretty(f.get_from(self))
             for name, f in self._fields.items()
             if name != "all"
         }
-        def pretty(x):
-            if isinstance(x, int) and x is not True and x is not False:
-                return hex(x)
-            return repr(x)
-        fields = ", ".join(f"{name} = {pretty(value)}" for name, value in sorted(values.items()))
+        fields = ", ".join(f"{name} = {value}" for name, value in sorted(values.items()))
         return f"{self.__class__.__name__}({fields})"
 
     def set(self, value):
