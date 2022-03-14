@@ -83,20 +83,24 @@ class MemAp(ap.Ap, model.Bus):
                 csw.cache = 0xf
                 csw.device_en = True
             else:
-                mode = 1
+                mode = 0
 
-                while not (csw.device_en | csw.dbgsw_en):
-                    csw.device_en = True
+                for retry in range(3):
+                    csw.dbgsw_en = True
                     self.csw_set(csw)
                     csw = self.csw_get()
-
-                self.logger.trace("Setting CSW MODE to %d", mode)
-                csw.mode = mode
-
-                self.logger.trace("Setting CSW PROT")
-                csw.prot_ins = True
-                csw.prot_nonsec = True
-                csw.prot_priv = False
+                    if csw.device_en or csw.dbgsw_en:
+                        break
+ 
+#                self.logger.trace("Setting CSW MODE to %d", mode)
+#                csw.mode = mode
+#
+#                self.logger.trace("Setting CSW PROT")
+#                csw.prot_ins = False
+#                csw.prot_nonsec = False
+#                csw.prot_priv = False
+#
+#                csw.cache = 0
             self.csw_set(csw)
 
         else:
@@ -130,7 +134,7 @@ class MemAp(ap.Ap, model.Bus):
         self.csw_base.mode = 0
         if self.rev == 8:
             self.csw_base.prot_priv = False
-            self.csw_base.cache = 0xf
+#            self.csw_base.cache = 0xf
             self.csw_base.device_en = True
             self.csw_base.prot_ins = True
             self.csw_base.prot_nonsec = True
