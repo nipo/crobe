@@ -39,14 +39,13 @@ class MemoryMappedComponent(model.Bus32Component):
                              part_no = self.pid & 0xfff,
                              revision = (self.pid >> 20) & 0xf)
 
-        self.logger.info("@0x%08x, DevID: %08x PID %08x CID %08x PartID %s JEP106 %s Devarch %s",
-                         self.base,
-                         self.devid, self.pid, self.cid, self.partid,
-                         self.use_jep106, self.devarch)
-
         blob = bus.mem_read(self.base | self.AUTHSTATUS, 4)
         self.authstatus = int.from_bytes(blob, "little")
-        self.logger.note("Authstatus: %08x", self.authstatus)
+
+        self.logger.info("@0x%08x, DevID: %08x PID %08x CID %08x PartID %s JEP106 %s Devarch %s Authstatus %08x",
+                         self.base,
+                         self.devid, self.pid, self.cid, self.partid,
+                         self.use_jep106, self.devarch, self.authstatus)
 
         self.component_class = (self.cid >> 12) & 0xf
         self.dev_type = self.devid >> 24
