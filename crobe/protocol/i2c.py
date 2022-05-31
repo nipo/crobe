@@ -1,5 +1,6 @@
 from . import base
 from .. import bitstring
+from ..component.model import Bus
 from enum import IntEnum
 from ..db import Db, NoMatch
 from ..model import PortComponent
@@ -116,6 +117,80 @@ class Slave(PortComponent):
         op = self.port.cmd_read(self.saddr, size)
         self.port.execute([self.port.cmd_write(self.saddr, data), op])
         return op.data
+
+class AddressedSlave(Slave, Bus):
+    def __init__(self, bus, name, saddr = None, addr_bytes = 1, page_size = None, saddr_bits = 0):
+        Slave.__init__(self, bus, "I2cMem", saddr)
+        Bus.__init__(self, self.name)
+        self.addr_bytes = addr_bytes
+        self.saddr_bits = saddr_bits
+        self.page_size = page_size
+
+    def start(self):
+        super().start()
+        self.size = 1 << (self.addr_bytes * 8 + self.saddr_bits)
+        if self.page_size is None:
+            self.page_size = 16
+        
+    def _addr(self, addr):
+        baddr = (addr & ((1 << (self.addr_bytes * 8)) - 1)).to_bytes(self.addr_bytes, 'big')
+        saddr = self.saddr + (addr >> (self.addr_bytes * 8))
+        return saddr, baddr
+
+    def read(self, addr, size):
+        assert addr + size <= self.size, (addr, size, self.size)
+
+        read_by = min(self.page_size, size, 32)
+
+        cmds = []
+        reads = []
+        
+        r = b''
+        for off in range(addr, addr + size, read_by):
+            saddr, baddr = self._addr(off)
+            saddr_old = self.saddr
+
+            write = self.port.cmd_write(saddr, baddr)
+            read = self.port.cmd_read(saddr, read_by)
+
+            cmds += [write, read]
+            reads.append(read)
+        self.port.execute(cmds)
+        return b''.join([op.data for op in reads])
+
+    def write(self, addr, data):
+        assert addr + len(data) <= self.size
+
+        cmds = []
+
+        off = 0
+        while off < len(data):
+            chunk_size = min(len(data) - off, (-(addr + off)) % self.page_size, self.page_size)
+            chunk = data[off : off + chunk_size]
+            saddr, baddr = self._addr(addr + off)
+            write = self.port.cmd_write(saddr, baddr + chunk)
+            cmds.append(write)
+            off += chunk_size
+        self.port.execute(cmds)
+
+    def mem_read(self, address, size):
+        return self.read(address, size)
+
+    def mem_write(self, address, data):
+        return self.write(address, data)
+
+    def option_set(self, opt):
+        k, v = opt.split('=', 1)
+        if k == 'saddr_bits':
+            self.saddr_bits = int(v, 16)
+            return
+        if k == 'addr_bytes':
+            self.addr_bytes = int(v)
+            return
+        if k == 'page_size':
+            self.page_size = int(v)
+            return
+        return super().option_set(opt)
 
 class Operation(base.Operation):
     pass
