@@ -559,6 +559,8 @@ class I2cInterface(BaseInterface, i2c.Interface):
                  has_scl_in = False,
                  use_open_collector = False,
                  name = None,
+                 pullup_en_pin = None,
+                 pullup_en_n_pin = None,
                  **args):
         """
         use_open_collector is only available for FT232HL (not FT4232H, not FT2232H)
@@ -587,10 +589,18 @@ class I2cInterface(BaseInterface, i2c.Interface):
         self.__adaptive_on = bytes([api.MPSSE_ADAPTIVE_ENABLE]) if has_scl_in and self.handle.can_adaptive else b''
         self.__adaptive_off = bytes([api.MPSSE_ADAPTIVE_DISABLE]) if has_scl_in and self.handle.can_adaptive else b''
 
+        self.__pullup_en = PinControl(self,
+                                      pin = pullup_en_pin,
+                                      n_pin = pullup_en_n_pin)
+
         cmd_init = bytes([api.MPSSE_3_PHASE_ENABLE])
         if use_open_collector and self.handle.can_opendrain:
             cmd_init += bytes([api.MPSSE_DRIVE_OPEN_COLLECTOR, 0x03, 0x00])
         self.handle.execute(cmd_init)
+
+    def option_set(self, opt):
+        if opt == "pullups":
+            self.pullup_enable = True
 
     def _cmd_read(self, size, ack_last):
         cmd_ack = bytes([

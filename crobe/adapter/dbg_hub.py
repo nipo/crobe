@@ -76,6 +76,7 @@ class DbgV2(basic.Adapter):
             return basic.Adapter.open(self, interface_name,
                                       has_scl_in = True,
                                       gpio_output = 0, gpio_value = 0,
+                                      pullup_en_n_pin = 5,
                                       channel = "B")
 
 @model.HwRoot.register
