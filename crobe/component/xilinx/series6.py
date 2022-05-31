@@ -21,8 +21,6 @@ class Series6(Series67):
     ### Config port
     ###
 
-    IR_BYPASS      = jtag.Instruction(0x3f, "BYPASS_REG")
-
     DNA_REGISTER = jtag.Dr(57)
     IR_ISC_DNA     = jtag.Instruction(0x30, "DNA_REGISTER")
     IR_ISC_NOP     = jtag.Instruction(0x14, "ISC_DEFAULT")
@@ -62,6 +60,7 @@ class Series6(Series67):
     CFG_FLR    = 0x0d
     CFG_BOOTSTS= 0x20
 
+    CFG_CMD_IPROG    = 0x0e
 
     @staticmethod
     def _cfg_conv_tdi(words):

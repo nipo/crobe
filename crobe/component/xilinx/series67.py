@@ -19,6 +19,8 @@ class Series67(jtag.Tap, JtagSramFpga):
     CONFIG          = jtag.Dr(None)
     DEVICE_ID       = jtag.Dr(32)
 
+    IR_BYPASS      = jtag.Instruction(0x3f, "BYPASS_REG")
+
     IDCODE       = jtag.Instruction(0x09, "DEVICE_ID")
 
     BOUNDARY = jtag.Dr(None)
@@ -60,6 +62,13 @@ class Series67(jtag.Tap, JtagSramFpga):
         ret = self._cfg_shift(self.IR_CFG_OUT, [0] * count, True)
         self.BYPASS.shift()
         return ret
+
+    def cfg_cmd(self, cmd):
+        nop = self.type1(self.OP_NOP, 0, 0)
+        cmd_write = self.type1(self.OP_WRITE, self.CFG_CMD, 1)
+
+        self._cfg_shift(self.IR_CFG_IN, self.CFG_PREFIX + nop + cmd_write + [cmd] + nop)
+        self.BYPASS.shift()
 
     @property
     def cfg_status(self):
@@ -149,6 +158,13 @@ class Series67(jtag.Tap, JtagSramFpga):
         self.logger.note("Config status %r %08x", cs, cs.all)
         self.logger.note("Config boot status %r %08x", cbs, cbs.all)
 
+    def reset(self):
+        #self.cfg_cmd(self.CFG_CMD_IPROG)
+        from ...protocol import base
+        adapter = self.parent_of_class(base.Interface)
+        adapter.reset(True)
+        adapter.reset(False)
+        
 @Series67.application_db.register("spi")
 def spi_interface(tap):
     from ...loadable.object import Program
