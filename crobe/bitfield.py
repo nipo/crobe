@@ -88,6 +88,25 @@ value = {self.offset} + 2 ** ({self.log_offset} + field)
 field = log2(value - {self.offset}) - {self.log_offset}
 """
 
+class ScaledField(Field):
+    def __init__(self, lsb, width, scale = 1, offset = 0, scale_offset = 0, doc = None):
+        super().__init__(lsb, width, offset = offset, doc = doc)
+        self.scale = scale
+        self.scale_offset = scale_offset
+
+    def represent(self, value):
+        return super().represent(self.scale * (value + self.scale_offset))
+
+    def parse(self, value):
+        return super().parse((int(value) - self.scale_offset) // self.scale)
+
+    def docstring(self):
+        return _Field.docstring(self) + f"""
+Scaled value by {self.scale} with integer offset of {self.offset} and scale offset of {self.scale_offset}
+value = {self.offset} + {self.scale} * ({self.scale_offset} + field)
+field = (value - {self.offset}) // {self.scale} - {self.scale_offset}
+"""
+
 class EnumField(Field):
     def __init__(self, lsb, width, enum_class, doc = None):
         super().__init__(lsb, width, doc = doc)
