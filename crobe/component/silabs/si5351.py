@@ -122,11 +122,10 @@ class Ms(Bitfield):
 
     @property
     def p3(self):
-        return ((self.p3h << 16) | self.p3l) + 1
+        return (self.p3h << 16) | self.p3l
 
     @p3.setter
     def p3(self, value):
-        value -= 1
         self.p3l = value & 0xffff
         self.p3h = value >> 16
     
@@ -173,7 +172,7 @@ class Ms(Bitfield):
 
         self.divby4 = False
          
-        if not (6 <= ratio <= 2048):
+        if not (4 <= ratio <= 2048):
             raise ValueError("Ratio out of bounds")
 
         bratio = (ratio - 4) * 128
@@ -394,6 +393,7 @@ class Si5351(i2c.Slave):
         
     def reg_write(self, reg, value):
         reg, addr, data = self.reg_write_data(reg, value)
+        reg_class = self.reg_map[reg]
         pretty = reg_class(int(value))
         self.logger.trace("Reg write %s %s: %s", addr, data.hex(), pretty)
         self.write(addr + data)
@@ -456,7 +456,7 @@ class Si5351(i2c.Slave):
             print(f"Channel{i}")
 
             ratio = float(ms)
-            int_only = ((i % 2 == 0) and control.ms_int) or i >= 6
+            int_only = control.ms_int or i >= 6
             if int_only:
                 ratio = int(ratio)
             output = ms_input / (ratio or 1)
