@@ -8,6 +8,7 @@ parts = {
     0x0362e093: "XC7A15T",
     0x0362d093: "XC7A35T",
     0x0362c093: "XC7A50T",
+    0x03631093: "XC7A100T",
 }
 
 @jtag.Chain.db.register(*[PartId.from_idcode(c).drop_revision() for c in parts.keys()])
