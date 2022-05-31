@@ -28,3 +28,5 @@ from . import maxim
 from . import idt
 from . import aps
 from . import raspberrypi
+from . import realtek
+from . import usb
