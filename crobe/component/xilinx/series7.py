@@ -85,6 +85,7 @@ class Series7(Series67):
     CFG_BOOTSTS= 0x16
 
     CFG_CMD_RCAP     = 0x06
+    CFG_CMD_IPROG    = 0x0f
 
 
     @staticmethod
@@ -140,6 +141,9 @@ class Series7(Series67):
 
         if expected_userid:
             self.logger.trace("Expected UserID=0x%08x", expected_userid)
+        else:
+            self.logger.warning("Cannot get UserID from bitsrteam")
+
         
         if "device" in program.info:
             target = program.info["device"].lower()
@@ -149,7 +153,7 @@ class Series7(Series67):
             #    raise ValueError("Bitstream is for a %s, device is a %s" % (target, cur))
 
         if expected_userid:
-            userid = self.IR_USERCODE.shift()
+            userid = self.IR_USERCODE.shift(read_tdo = True)
             self.logger.note("Current UserID=0x%08x", userid)
             if userid == expected_userid and not force_reload:
                 self.logger.info("UserID matches, doing nothing")
@@ -381,7 +385,7 @@ class Series7(Series67):
                ]
         self.execute(ops)
 
-        value = (ops[3].tdo.data) & 0x3fffffff
+        value = int(ops[3].tdo) & 0x3fffffff
 
         return value
 
