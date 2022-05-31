@@ -84,6 +84,9 @@ class Interface(base.Interface):
     TARGETSEL = 3
 
     turnaround_supported = True
+    # May also be "register" if AP reads are synchronous (delayed read
+    # is handled in probe)
+    access_method = "raw"
 
     def __init__(self, port, name = None):
         base.Interface.__init__(self, port, (name or port.name) + "-SWD")

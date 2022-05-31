@@ -129,6 +129,8 @@ class SwDp(dp.Dp):
     def lower(self, operations, insert_run = 0):
         ops = deque()
 
+        method = self.port.access_method
+        
         ap_read_pending = None
         select = 0
         select_dirty = True
@@ -184,7 +186,12 @@ class SwDp(dp.Dp):
                     ops.append(ap_read_pending.__value_op)
 
             if isinstance(o, dp.ApRead):
-                ap_read_pending = o
+                if method == "raw":
+                    ap_read_pending = o
+                elif method == "register":
+                    o.__value_op = o.__op
+                else:
+                    raise RuntimeError("Unknown SWD access method: "+method)
             else:
                 ap_read_pending = None
             ops.append(o.__op)
