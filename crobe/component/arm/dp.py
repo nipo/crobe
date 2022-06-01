@@ -128,7 +128,10 @@ class Dp(PortComponent, FreqCapper):
 
     @dlcr.setter
     def dlcr(self, data):
-        self.banked_reg_write(self.DLCR, data)
+        try:
+            self.banked_reg_write(self.DLCR, data)
+        except DpAccessFailure:
+            pass
 
     def cmd_ap_read(self, ap, addr, interval = 0):
         return ApRead(ap, addr, interval)

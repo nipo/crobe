@@ -12,62 +12,6 @@ import threading
 import weakref
 
 __all__ = []
-
-class BackgroundReader(threading.Thread):
-    def __init__(self, owner, ep):
-        super().__init__()
-        self.logger = owner.logger
-        self.device = owner.device
-        self.ep = ep
-        self.running = 3
-        self.rx_buffer = b''
-        self.data_exclusive = threading.Condition()
-        self.start()
-        weakref.finalize(owner, self.stop)
-
-    def stop(self):
-        self.running = False
-        self.join()
-        
-    def run(self):
-        while self.running:
-            try:
-                data = self.device.read(self.ep.bEndpointAddress, self.ep.wMaxPacketSize, 500)
-            except usb.core.USBTimeoutError:
-                self.running -= 1
-                data = None
-            self.rx_handle(data)
-
-    def rx_handle(self, data):
-        if data is None:
-            self.logger.protocol("RX/async --")
-            return
-        with self.data_exclusive:
-            data = bytes(data)
-            self.logger.protocol("RX/async > %s", data.hex())
-            self.rx_buffer += data
-            self.data_exclusive.notify_all()
-
-    def flush(self):
-        with self.data_exclusive:
-            self.rx_buffer = b''
-
-    def read(self, size = None, timeout = None):
-        while True:
-            with self.data_exclusive:
-                self.running = 3
-                self.logger.protocol("CD > %s %s...", size, timeout)
-                if size is None and self.rx_buffer:
-                    t = self.rx_buffer
-                    self.rx_buffer = b''
-                    self.logger.protocol("> %s", t.hex())
-                    return t
-                if len(self.rx_buffer) >= size:
-                    t = self.rx_buffer[:size]
-                    self.rx_buffer = self.rx_buffer[size:]
-                    self.logger.protocol("> %s", t.hex())
-                    return t
-                self.data_exclusive.wait(timeout = timeout)
                 
 @model.UsbEnumerator.db.register(model.UsbInfo(idVendor = 0x0483, idProduct = 0x572a))
 class Adapter(model.Adapter):
@@ -104,12 +48,12 @@ class Adapter(model.Adapter):
         self.logger.protocol("CD < %s", data.hex())
         self.device.write(self.cmsis_dap_ep_out.bEndpointAddress, data, int((timeout or 1.) * 1000))
 
-#    def cmsis_dap_in(self, size, timeout = None):
-#        self.logger.protocol("CD > %d", size)
-#        data = self.device.read(self.cmsis_dap_ep_in.bEndpointAddress, size, int((timeout or 1.) * 1000))
-#        data = bytes(data)
-#        self.logger.protocol("-> %s", data.hex())
-#        return data
+    def cmsis_dap_in(self, timeout = None):
+        self.logger.protocol("CD > ...")
+        data = self.device.read(self.cmsis_dap_ep_in.bEndpointAddress, self.cmsis_dap_ep_in.wMaxPacketSize, int((timeout or 1.) * 1000))
+        data = bytes(data)
+        self.logger.protocol("-> %s", data.hex())
+        return data
 
     def open(self, interface_name):
         if interface_name.lower() not in self.supported_interfaces:
@@ -141,22 +85,34 @@ class Adapter(model.Adapter):
                 custom_match = lambda e:
                 usb.util.endpoint_direction(e.bEndpointAddress) ==
                 usb.util.ENDPOINT_OUT)
-
-            self.cmsis_dap_reader = BackgroundReader(self, self.cmsis_dap_ep_in)
+            try:
+                self.cmsis_dap_in(timeout = .1)
+            except usb.core.USBTimeoutError:
+                pass
         
         if interface_name.lower() == "swd":
             return SwdInterface(self)
 
-    def dap_cmd_execute(self, tx_data, rx_size = None, timeout = None):
-        self.cmsis_dap_reader.flush()
+    def dap_cmd_execute(self, tx_data, rx_arg_len = 0, timeout = None):
         self.cmsis_dap_out(tx_data)
-        return self.cmsis_dap_reader.read(rx_size, timeout = timeout)
+        time.sleep(.001)
+        if rx_arg_len == 0:
+            return
+        for retry in range(3, -1, -1):
+            rx_data = self.cmsis_dap_in(timeout = timeout)
+            rx_op = rx_data[0]
+            if rx_op == tx_data[0]:
+                break
+            if retry:
+                continue
+            raise RuntimeError("Bad response")
+        if rx_arg_len is None:
+            rx_len = rx_data[1]
+            return rx_data[2 : 2 + rx_len]
+        return rx_data[1 : 1 + rx_arg_len]
 
     def dap_info(self, identifier):
-        rsp, len = self.dap_cmd_execute(bytes([0x00, identifier]), rx_size = 2)
-        if rsp != 0:
-            raise RuntimeError("Bad response")
-        return self.cmsis_dap_reader.read(len)
+        return self.dap_cmd_execute(bytes([0x00, identifier]), rx_arg_len = None)
 
     def dap_info_string(self, no):
         return str(self.dap_info(no).rstrip(b'\x00'), "utf-8")
@@ -199,50 +155,38 @@ class Adapter(model.Adapter):
         return self.dap_info_int(0xff)
 
     def dap_host_status(self, type, status):
-        rsp = self.dap_cmd_execute(bytes([0x01, type, status]), 2)
-        if rsp != b'\x01\x00':
+        rsp = self.dap_cmd_execute(bytes([0x01, type, status]), rx_arg_len = 1)
+        if rsp[0] != 0x00:
             raise ValueError(rsp)
 
     def dap_connect(self, port):
-        rsp = self.dap_cmd_execute(bytes([0x02, port]), 2)
-        if rsp[0] != 0x02 or rsp[1] != port:
+        rsp = self.dap_cmd_execute(bytes([0x02, port]), rx_arg_len = 1)
+        if rsp[0] != port:
             raise ValueError(rsp)
 
     def dap_disconnect(self):
-        rsp = self.dap_cmd_execute(bytes([0x03]), 2)
-        if rsp[0] != 0x03:
-            raise ValueError(rsp)
-        return rsp[1]
+        rsp = self.dap_cmd_execute(bytes([0x03]), rx_arg_len = 1)
+        return rsp[0]
 
     def dap_write_abort(self, dap, abort):
-        rsp = self.dap_cmd_execute(bytes([0x08, dap]) + abort.to_bytes(4, "little"), 2)
-        if rsp[0] != 0x08:
-            raise ValueError(rsp)
-        return rsp[1]
+        rsp = self.dap_cmd_execute(bytes([0x08, dap]) + abort.to_bytes(4, "little"), rx_arg_len = 1)
+        return rsp[0]
 
     def dap_delay(self, us):
-        rsp = self.dap_cmd_execute(bytes([0x09]) + delay.to_bytes(2, "little"), 2)
-        if rsp[0] != 0x09:
-            raise ValueError(rsp)
-        return rsp[1]
+        rsp = self.dap_cmd_execute(bytes([0x09]) + delay.to_bytes(2, "little"), rx_arg_len = 1)
+        return rsp[0]
 
     def dap_reset_target(self):
-        rsp = self.dap_cmd_execute(bytes([0x0a]), 3)
-        if rsp[0] != 0x0a:
-            raise ValueError(rsp)
-        return rsp[1], rsp[2]
+        rsp = self.dap_cmd_execute(bytes([0x0a]), rx_arg_len = 2)
+        return rsp[0], rsp[1]
 
     def dap_swj_pins(self, output, select, wait):
-        rsp = self.dap_cmd_execute(bytes([0x10, output, select]) + wait.to_bytes(4, "little"), 2)
-        if rsp[0] != 0x10:
-            raise ValueError(rsp)
-        return rsp[1]
+        rsp = self.dap_cmd_execute(bytes([0x10, output, select]) + wait.to_bytes(4, "little"), rx_arg_len = 1)
+        return rsp[0]
 
     def dap_swj_clock(self, clock):
-        rsp = self.dap_cmd_execute(bytes([0x11]) + wait.to_bytes(4, "little"), 2)
-        if rsp[0] != 0x11:
-            raise ValueError(rsp)
-        return rsp[1]
+        rsp = self.dap_cmd_execute(bytes([0x11]) + clock.to_bytes(4, "little"), rx_arg_len = 1)
+        return rsp[0]
 
     def dap_swj_sequence(self, bs):
         assert len(bs) <= 256
@@ -251,21 +195,17 @@ class Adapter(model.Adapter):
         l = len(bs)
         if l == 256:
             l = 0
-        rsp = self.dap_cmd_execute(bytes([0x12, l]) + bytes(bs), 2)
-        if rsp[0] != 0x12:
-            raise ValueError(rsp)
-        return rsp[1]
+        rsp = self.dap_cmd_execute(bytes([0x12, l]) + bytes(bs), rx_arg_len = 1)
+        return rsp[0]
 
     def dap_swd_configure(self, configuration):
-        rsp = self.dap_cmd_execute(bytes([0x13, configuration]), 2)
-        if rsp[0] != 0x13:
-            raise ValueError(rsp)
-        return rsp[1]
+        rsp = self.dap_cmd_execute(bytes([0x13, configuration]), rx_arg_len = 1)
+        return rsp[0]
 
     def dap_swd_sequence(self, count_or_bs):
         blob = b""
         count = 0
-        rx_size = 2
+        rx_size = 1
 
         for o in count_or_bs:
             if isinstance(o, int):
@@ -278,11 +218,9 @@ class Adapter(model.Adapter):
                 count += 1
                 blob += bytes([len(o) & 0x3f]) + bytes(o)
 
-        rsp = self.dap_cmd_execute(bytes([0x1d, count]) + blob, rx_size)
-        if rsp[0] != 0x1d:
-            raise ValueError(rsp)
+        rsp = self.dap_cmd_execute(bytes([0x1d, count]) + blob, rx_arg_len = rx_size)
         rx_data = []
-        point = 2
+        point = 1
         for o in count_or_bs:
             if isinstance(o, int):
                 size = (o + 7) // 8
@@ -290,7 +228,7 @@ class Adapter(model.Adapter):
                 point += size
             else:
                 rx_data.append(None)
-        return rsp[1], rx_data
+        return rsp[0], rx_data
 
     def dap_jtag_sequence(self, sequences):
         raise NotImplementedError()
@@ -302,52 +240,53 @@ class Adapter(model.Adapter):
         raise NotImplementedError()
 
     def dap_transfer_configure(self, idle_cycles, wait_retry, match_retry):
-        rsp = self.dap_cmd_execute(bytes([0x04, idle_cycles]) + wait_retry.to_bytes(2, "little") + match_retry.to_bytes(2, "little"), 2)
-        if rsp[0] != 0x04:
-            raise ValueError(rsp)
-        return rsp[1]
+        rsp = self.dap_cmd_execute(bytes([0x04, idle_cycles]) + wait_retry.to_bytes(2, "little") + match_retry.to_bytes(2, "little"), rx_arg_len = 1)
+        return rsp[0]
 
-    def dap_transfer(self, dap_index, req_data):
-        cmd = []
+    def _dap_transfer(self, dap_index, transfers):
         count = 0
+        commands = []
+        rx_arg_len = 2
+
+        for tr in transfers:
+            count += 1
+            c, r = tr.to_cmd_rsp()
+            tr.__point = rx_arg_len
+            tr.__len = r
+            rx_arg_len += r
+            commands.append(c)
+
+        cmd_blob = b''.join(commands)
+        rsp = self.dap_cmd_execute(bytes([0x05, dap_index, count]) + cmd_blob, rx_arg_len = rx_arg_len)
+
+        ack = rsp[1]
+        if ack & 0x4:
+            ack = swd.Ack.PARITY_ERR
+        else:
+            ack = swd.Ack(ack & 0x7)
+
+        for tr in transfers:
+            response = rsp[tr.__point : tr.__point + tr.__len]
+            tr.handle_rsp(ack, response)
+    
+    def dap_transfer(self, dap_index, transfers):
+        max_size = self.cmsis_dap_ep_in.wMaxPacketSize - 3 - 5
+
+        pending = []
+        tx_size = 0
         rx_size = 0
-        for r in req_data:
-            count += 1
-            request = r[0]
-            if request & 0x30 or (request & 0x2) == 0:
-                cmd.append(bytes([request]) + r[1].to_bytes(4, "little"))
-            else:
-                cmd.append(bytes([request]))
-            rx_size += 1
-            if request & 0x02:
-                rx_size += 4
-            if request & 0x80:
-                rx_size += 4
-        blob = b''.join(cmd)
+        for i, tr in enumerate(transfers):
+            last = i == len(transfers) - 1
 
-        rsp = self.dap_cmd_execute(bytes([0x05, dap_index, count]) + blob, 2 + rx_size)
-        if rsp[0] != 0x05:
-            raise ValueError(rsp)
-        #if rsp[1] != count:
-        #    raise ValueError(rsp)
+            pending.append(tr)
+            c, r = tr.cmd_rsp_size()
+            tx_size += c
+            rx_size += c
+            if tx_size >= max_size or rx_size >= max_size or last:
+                self._dap_transfer(dap_index, pending)
+                pending = []
 
-        responses = []
-        point = 2
-        for r in req_data:
-            count += 1
-            request = r[0]
-            response = rsp[point]
-            point += 1
-            ts = None
-            data = None
-            if request & 0x80:
-                ts = int.from_bytes(rsp[point : point + 4], "little")
-                point += 4
-            if request & 0x02:
-                data = int.from_bytes(rsp[point : point + 4], "little")
-                point += 4
-            responses.append((response, data, ts))
-        return responses
+        assert not pending
 
     def dap_transfer_block(self):
         raise NotImplementedError()
@@ -355,60 +294,103 @@ class Adapter(model.Adapter):
     def dap_transfer_abort(self):
         self.cmsis_dap_out(b"\x07")
         
+class DapTransfer:
+    def __init__(self, op):
+        self.op = op
+
+    def cmd_rsp_size(self):
+        if isinstance(self.op, swd.Read):
+            return 1, 4
+        else:
+            return 5, 0
+        
+    def to_cmd_rsp(self):
+        if isinstance(self.op, swd.Read):
+            cmd = bytes([self.op.ap | 2 | ((self.op.addr & 3) << 2)])
+            return cmd, 4
+        else:
+            cmd = bytes([self.op.ap | ((self.op.addr & 3) << 2)]) + int(self.op.data).to_bytes(4, "little")
+            return cmd, 0
+
+    def handle_rsp(self, ack, blob):
+        self.op.ack = ack
+        if isinstance(self.op, swd.Read):
+            self.op.data = int.from_bytes(blob, "little")
+
 class SwdInterface(swd.Interface):
     access_method = "register"
 
     def __init__(self, port):
+        self.__frequency = 1e6
+        self.__frequency_dirty = True
+        self.__turnaround = 1
+        self.__turnaround_dirty = True
         super().__init__(port)
         self.port.dap_connect(1)
+        self.freq_cap("user", 1e6)
 
-    turnaround_supported = False
-        
     @property
     def turnaround_cycles(self):
-        return 1
+        return self.__turnaround
 
     @turnaround_cycles.setter
     def turnaround_cycles(self, cycles):
-        pass
+        if self.__turnaround == cycles:
+            return
+        self.__turnaround_dirty = True
+        self.__turnaround = cycles
 
     def freq_update(self, freq):
-        return freq or 1e3
+        self.__frequency = freq or 1e6
+        self.__frequency_dirty = True
+        return self.__frequency
 
     def _execute(self, operation_list):
+        transfer_queue = []
+
+        if self.__frequency_dirty:
+            self.__frequency_dirty = False
+            self.port.dap_swj_clock(int(self.__frequency))
+
+        if self.__turnaround_dirty:
+            self.__turnaround_dirty = False
+            self.port.dap_swd_configure(((self.__turnaround - 1) & 3) | 4)
+        
         for i, op in enumerate(operation_list):
             if isinstance(op, swd.Wakeup):
+                if transfer_queue:
+                    self.port.dap_transfer(0, transfer_queue)
+                    transfer_queue = []
+
                 self.port.dap_swd_sequence([bitstring.BitString(-1, 64)])
 
             elif isinstance(op, swd.SelectionOperation):
+                if transfer_queue:
+                    self.port.dap_transfer(0, transfer_queue)
+                    transfer_queue = []
+
                 parts = []
                 for off in range(0, len(op.out), 64):
                     parts.append(op.out[off : min(len(op.out), off + 64)])
                 self.port.dap_swd_sequence(parts)
 
             elif isinstance(op, swd.Run):
+                if transfer_queue:
+                    self.port.dap_transfer(0, transfer_queue)
+                    transfer_queue = []
+
                 parts = []
                 c = op.cycles + 1
                 for off in range(0, c, 64):
                     parts.append(bitstring.BitString(0, min(c - off, 64)))
                 self.port.dap_swd_sequence(parts)
 
-            elif isinstance(op, swd.Read):
-                rsp = self.port.dap_transfer(0, [(op.ap | 2 | ((op.addr & 3) << 2), None)])
-                ack, data, ts = rsp[0]
-                op.data = data
-                if ack & 0x4:
-                    op.ack = swd.Ack.PARITY_ERR
-                else:
-                    op.ack = swd.Ack(ack & 0x7)
-            elif isinstance(op, swd.Write):
-                rsp = self.port.dap_transfer(0, [(op.ap | ((op.addr & 3) << 2), op.data)])
-                ack, data, ts = rsp[0]
-                op.data = data
-                if ack & 0x4:
-                    op.ack = swd.Ack.PARITY_ERR
-                else:
-                    op.ack = swd.Ack(ack & 0x7)
+            elif isinstance(op, (swd.Read, swd.Write)):
+                transfer_queue.append(DapTransfer(op))
 
             else:
                 raise base.ProtocolError("Unknown SWD operation %s" % type(op))
+
+        if transfer_queue:
+            self.port.dap_transfer(0, transfer_queue)
+            transfer_queue = []
