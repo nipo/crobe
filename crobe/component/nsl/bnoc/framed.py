@@ -48,5 +48,5 @@ class Framed(PortComponent):
     def execute(self, cmd, rsp_size = None):
         self.frame_send(cmd)
         if rsp_size == 0:
-            return
+            return b''
         return self.frame_recv()
