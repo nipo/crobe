@@ -8,19 +8,19 @@ from ...util.endian import bitswap8
 import time
 
 parts = {
-    0x0000: "GW2A[R]-18/18C",
+    0x0000: "GW2A-18/18C",
     0x0002: "GW2A-55/55C",
-    0x1001: "GW1N[R]-4",
-    0x1003: "GW1N[R]-4[BC]",
-    0x1004: "GW1N-UV9",
-    0x1005: "GW1N[R]-9[C]",
+    0x1001: "GW1N-4",
+    0x1003: "GW1N-4[BC]",
+    0x1004: "GW1N-9C",
+    0x1005: "GW1N-9",
     0x1006: "GW1NZ-1",
-    0x1009: "GW1NS[ER]-4C",
+    0x1009: "GW1NS-4C",
     0x3000: "GW1NS-2",
-    0x3001: "GW1NS[RE]-2C",
+    0x3001: "GW1NS-2C",
     0x9002: "GW1N-1",
     0x9003: "GW1N-1S",
-    0x1206: "GW1-2[B]/1P5",
+    0x1206: "GW1-1P5/2[B]",
 }
 
 # Reference: UG290-2.3E
