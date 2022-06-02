@@ -84,3 +84,19 @@ def i2c_scan(root, first, last, addr, write):
         except AddressNack:
             continue
         click.echo("Slave on address %02x" % addr)
+
+@info.command(help = "List plugins")
+def plugins():
+    import traceback
+    from ..plugin import plugins
+    from io import StringIO
+
+    for plugin in plugins:
+        print("%s at '%s' (%s)" % (plugin.name, plugin.path, "OK" if plugin.module else "Error"))
+        if not plugin.module:
+            print(" loading error:")
+
+            fout = StringIO()
+            traceback.print_exception(*plugin.loading_exc_info, file = fout)
+            for line in fout.getvalue().split("\n"):
+                print("   %s" % (line,))
