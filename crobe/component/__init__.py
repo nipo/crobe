@@ -30,3 +30,5 @@ from . import aps
 from . import raspberrypi
 from . import realtek
 from . import usb
+from . import riscv
+from . import neorv32
