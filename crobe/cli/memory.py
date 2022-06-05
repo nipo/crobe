@@ -59,3 +59,17 @@ def peek(ctx, address, size):
 
     data = bus.mem_read(address, size)
     click.echo(hex(address) + " " + str(binascii.b2a_hex(data), "ascii"))
+
+@memory.command(help = "Longer arbitrary getter")
+@click.argument('address', metavar = 'ADDRESS', type = str)
+@click.argument('size', metavar = 'size', type = str, default = "4")
+@click.pass_context
+def hexdump(ctx, address, size):
+    bus = ctx.obj["bus"]
+    address = int(address, 16)
+    size = int(size, 0)
+
+    data = bus.mem_read(address, size)
+    from ..util.hexdump import hexdump
+
+    hexdump(address, data, printer = print)
