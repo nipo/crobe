@@ -79,7 +79,7 @@ class Log2Field(Field):
         return super().represent(2 ** (value + self.log_offset))
 
     def parse(self, value):
-        return super().parse(int(math.log2(int(value) - self.log_offset)))
+        return super().parse(int(math.log2(int(value)) - self.log_offset))
 
     def docstring(self):
         return _Field.docstring(self) + f"""
