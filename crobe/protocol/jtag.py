@@ -997,12 +997,14 @@ class TapDrShift(TapOperation):
 
     def __str__(self):
         if self.ir:
-            return "<DrShift %s %s %s>" % (self.ir,
+            return "<DrShift %s %s %s%s>" % (self.ir,
                                              self.tdi,
-                                             BitString(self.tdo, len(self.tdi or [])))
+                                             BitString(self.tdo, len(self.tdi or [])),
+                                             " rir" if self.read_ir else "")
         else:
-            return "<DrShift - %s %s>" % (self.tdi,
-                                             BitString(self.tdo, len(self.tdi or [])))
+            return "<DrShift - %s %s %s>" % (self.tdi,
+                                             BitString(self.tdo, len(self.tdi or [])),
+                                             " rir" if self.read_ir else "")
         
 class TapRun(TapOperation):
     def __init__(self, cycles):
