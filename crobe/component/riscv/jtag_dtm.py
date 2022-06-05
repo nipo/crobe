@@ -38,16 +38,18 @@ class Tap(IrReg):
                 dmi = self.Dmi(address = o.address,
                                data = 0,
                                op = 1)
-                cmd = self.DMI.cmd(dmi, read_tdo = last_read is not None)
+                cmd = self.DMI.cmd(dmi, read_tdo = last_read is not None,
+                                   pre_dr_run = 30)
                 lower.append(cmd)
                 if last_read:
                     reads[last_read] = cmd
                 last_read = o
             elif isinstance(o, dm.Write):
                 dmi = self.Dmi(address = o.address,
-                                    data = o.data,
+                                    data = int(o.data),
                                     op = 2)
-                cmd = self.DMI.cmd(dmi, read_tdo = last_read is not None)
+                cmd = self.DMI.cmd(dmi, read_tdo = last_read is not None,
+                                   pre_dr_run = 30)
                 lower.append(cmd)
                 if last_read:
                     reads[last_read] = cmd
@@ -69,7 +71,8 @@ class Tap(IrReg):
             o.success = read.tdo.op == 0
 
     def start(self):
-        dtmcs = self.DTMCS.shift(0, read_tdo = True)
+        dtmcs = self.DTMCS.shift(0, read_tdo = True,
+                                 pre_dr_run = 30)
         self.abits = dtmcs.abits
 
         self.logger.note("Risc-V DTM CS: %#010x %s",

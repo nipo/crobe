@@ -1,5 +1,5 @@
 from ...db import Db, NoMatch
-from ...model import PortComponent, BusComponent
+from ...model import PortComponent
 
 class AccessFailure(Exception):
     pass
@@ -17,7 +17,10 @@ class Write:
             status = "?"
         else:
             status = "Fail"
-        return f"<Wr {self.address:#010x}: {self.data:#010x} {status}>"
+        if isinstance(self.data, int):
+            return f"<Wr {self.address:#010x}: {self.data:#010x} {status}>"
+        else:
+            return f"<Wr {self.address:#010x}: {self.data} {status}>"
 
 class Read:
     def __init__(self, address):
@@ -103,13 +106,6 @@ class DebugModule(PortComponent):
 @DebugModule.version_db.register(1)
 class DebugModule011(DebugModule):
     version = 0.11
-
-class SystemBusAccess(BusComponent):
-    def __init__(self, dm):
-        super().__init__(dm, "SystemBus")
-
-    def start(self):
-        self.logger.warning("Implement me")
         
 @DebugModule.version_db.register(2)
 class DebugModule013(DebugModule):
@@ -121,13 +117,30 @@ class DebugModule013(DebugModule):
                          index = index)
 
     def start(self):
-        status = self.read(self.REG_DMSTATUS)
+        status = self.cmd_read(self.REG_DMSTATUS)
+        hartinfo = self.cmd_read(self.REG_HARTINFO)
+        sbcs = self.cmd_read(self.REG_SBCS)
+        dmcontrol_before = self.cmd_read(self.REG_DMCONTROL)
+        enable = self.cmd_write(self.REG_DMCONTROL, 1)
+        dmcontrol = self.cmd_read(self.REG_DMCONTROL)
+
+        self.execute([status, hartinfo, sbcs, dmcontrol_before, enable, dmcontrol])
+
+        status = status.data
+        hartinfo = hartinfo.data
+        sbcs = sbcs.data
+
+        self.logger.info("Ctrl before: %#010x", dmcontrol_before.data)
         self.logger.info("Status: %#010x", status)
-        self.logger.info("HartInfo: %#010x", self.read(self.REG_HARTINFO))
-        sbcs = self.read(self.REG_SBCS)
+        self.logger.info("HartInfo: %#010x", hartinfo)
+        self.logger.info("SBCS: %#010x", sbcs)
+
+        self.logger.trace("Enabling DM Active...")
+        self.logger.info("Ctrl: %#010x", dmcontrol.data)
 
         self.bus = None
         if sbcs & 0xfff:
+            from .system_bus import SystemBusAccess
             self.bus = SystemBusAccess(self)
             self.child_add(self.bus)
 
