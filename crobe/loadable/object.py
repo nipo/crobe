@@ -9,10 +9,11 @@ __doc__ = """Program memory"""
 class Segment:
     """A blob with a base address"""
 
-    def __init__(self, address = 0, data = b"", source = None):
+    def __init__(self, address = 0, data = b"", source = None, name = None):
         self.data = bytearray(data)
         self.address = address
         self.source = source
+        self.name = name
 
     def __setitem__(self, index, data):
         self.data[index] = data
@@ -37,7 +38,8 @@ class Segment:
         return self.address <= other.address
 
     def __str__(self):
-        return "<0x%08x:0x%08x (%d bytes)>" % (self.address, self.end, len(self))
+        return "<0x%08x:0x%08x (%d bytes)%s>" % (self.address, self.end, len(self),
+                                                 (" '%s'" % self.name) if self.name else "")
     
     def indexof(self, blob):
         return self.data.index(blob)
@@ -246,7 +248,12 @@ class Program:
             if seg["p_type"] != "PT_LOAD":
                 continue
 
-            self.append(Segment(seg["p_paddr"], seg.data().ljust(seg['p_memsz'], b'\x00'), filename))
+            sections = []
+            for section in elf.iter_sections():
+                if seg.section_in_segment(section):
+                    sections.append(section.name)
+            
+            self.append(Segment(seg["p_paddr"], seg.data().ljust(seg['p_memsz'], b'\x00'), filename, name = ' '.join(sections)))
 
         self.info["device"] = elf.get_machine_arch()
         self.info["entry"] = elf.header["e_entry"]
