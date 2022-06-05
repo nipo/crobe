@@ -128,7 +128,7 @@ class Interface(base.Interface):
         with self.freq_capped("cjtag", 1e5):
             def drscan(x):
                 if x:
-                    return [CaptureDr(), Shift(BitString(-1, x))]
+                    return [CaptureDr(), Shift(BitString(-1, x), read_tdo = False)]
                 else:
                     return [CaptureDr()]
             reset = [Run(1)]
