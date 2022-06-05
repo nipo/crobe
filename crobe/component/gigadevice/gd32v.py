@@ -7,7 +7,7 @@ class Gd103vRv32Tap(jtag.Tap, jtag_dtm.Tap):
     irlen = 5
 
     def __init__(self, port, idcode):
-        jtag.Tap.__init__(self, port, idcode, name = "GD32V103 Dbg")
+        jtag.Tap.__init__(self, port, idcode, name = "GD32V103 Dbg Tap")
         jtag_dtm.Tap.__init__(self)
 
     def start(self):
@@ -19,4 +19,4 @@ class Gd103vBsTap(jtag.Tap):
     irlen = 5
 
     def __init__(self, port, idcode):
-        jtag.Tap.__init__(self, port, idcode, name = "GD32V103 Bscan")
+        jtag.Tap.__init__(self, port, idcode, name = "GD32V103 Bscan Tap")
