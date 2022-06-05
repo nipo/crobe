@@ -19,3 +19,7 @@ from . import efinix
 from . import cy_usb_serial
 from . import xds110
 from . import cmsis_dap
+from . import neorv32_test
+from . import esp_usb_jtag
+
+
