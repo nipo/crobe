@@ -7,7 +7,7 @@ class NeoRv32Tap(jtag.Tap, jtag_dtm.Tap):
     irlen = 5
 
     def __init__(self, port, idcode):
-        jtag.Tap.__init__(self, port, idcode, name = "NeoRV32-Demo")
+        jtag.Tap.__init__(self, port, idcode, name = "NeoRV32-Demo Tap")
         jtag_dtm.Tap.__init__(self)
 
     def start(self):
