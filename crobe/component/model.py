@@ -3,6 +3,15 @@ import struct
 from enum import Enum
 from collections import deque
 
+class MemoryAccessFailure(Exception):
+    def __init__(self, address = None):
+        self.address = address
+
+    def __str__(self):
+        if self.address is not None:
+            return f"Memory access failure at {self.address:#010x}"
+        return "Memory access failure (imprecise)"
+
 class Bus(object):
     def __init__(self, name):
         self.name = name
