@@ -700,7 +700,8 @@ class TapInstruction:
         self.ir = ir
         self.dr = dr
 
-    def cmd(self, tdi = None, read_tdo = None, read_ir = False, return_type = None):
+    def cmd(self, tdi = None, read_tdo = None, read_ir = False, return_type = None,
+            pre_dr_run = 0):
         if return_type is None and self.dr:
             return_type = self.dr.type
 
@@ -734,7 +735,8 @@ class TapInstruction:
                                      length = length,
                                      read_tdo = read_tdo,
                                      read_ir = read_ir,
-                                     return_type = return_type)
+                                     return_type = return_type,
+                                     pre_dr_run = pre_dr_run)
 
     def shift(self, *args, **kwargs):
         op = self.cmd(*args, **kwargs)
@@ -876,9 +878,12 @@ class Tap(PortComponent, InstructionRegistry):
                             CaptureIr(),
                             Shift(BitString(-1, self.ir_pre)
                                   + BitString(c.ir, self.irlen)
-                                  + BitString(-1, self.ir_post)),
+                                  + BitString(-1, self.ir_post), read_tdo = False),
                         ]
                     current_ir = int(c.ir)
+
+                if c.pre_dr_run:
+                    ops += [Run(c.pre_dr_run)]
 
                 if c.tdi is not None:
                     ops += [CaptureDr()]
@@ -963,11 +968,12 @@ class TapOperation(object):
         return str(self)
 
 class TapDrShift(TapOperation):
-    def __init__(self, ir, tdi, length = None, read_tdo = True, read_ir = False, return_type = None):
+    def __init__(self, ir, tdi, length = None, read_tdo = True, read_ir = False, return_type = None, pre_dr_run = 0):
         self.ir = int(ir) if ir is not None else None
         self.postprocess = return_type or (lambda x:x)
         self.tdo = 0
         self.read_ir = False
+        self.pre_dr_run = pre_dr_run
 
         if tdi is None and length is None:
             read_tdo = False
