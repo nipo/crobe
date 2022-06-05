@@ -142,7 +142,9 @@ class DomainFilter(logging.Filter):
 
 class Formatter(logging.Formatter):
     def __init__(self, color = True, timestamp = False):
-        line = '\x1b[G\x1b[2K'
+        line = ''
+        if color:
+            line += '\x1b[G\x1b[2K'
         if timestamp:
             line += '{relativeCreatedSec:5.3f} '
         line += '{name}: '
