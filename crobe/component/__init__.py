@@ -32,3 +32,4 @@ from . import realtek
 from . import usb
 from . import riscv
 from . import neorv32
+from . import espressif

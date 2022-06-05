@@ -1,2 +1,1 @@
-from . import neorv32
 from . import esp32c3
