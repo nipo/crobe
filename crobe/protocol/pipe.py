@@ -4,6 +4,7 @@ from ..model import PortComponent
 from ..db import Db
 import threading
 import weakref
+import time
 
 __all__ = ["Interface", "Read", "Write", "WriteRead", "BackgroundInterface"]
 
@@ -134,18 +135,19 @@ class BackgroundWriter(threading.Thread):
                 self.cond.wait()
 
     def run(self):
-        while self.running:
-            with self.cond:
-                while not self.queue:
-                    self.cond.wait()
-                    if not self.running:
-                        return
+        with self.cond:
+            while self.running:
+                try:
                     data, timeout = self.queue.popleft()
-                    try:
-                        self.device._write(data, timeout)
-                    except Exception as e:
-                        self.exception = e
-                        return
+                except IndexError:
+                    self.cond.wait()
+                    continue
+
+                try:
+                    self.device._write(data, timeout)
+                except Exception as e:
+                    self.exception = e
+                    return
                 self.cond.notify_all()
 
 class BackgroundInterface(Interface):
@@ -172,6 +174,7 @@ class BackgroundInterface(Interface):
             else:
                 raise base.ProtocolError("Unknown Pipe operation %s" % type(op))
         self.__bw.flush()
+#        time.sleep(.01)
 
     def _write(self, data, timeout = None):
         raise NotImplementedError()

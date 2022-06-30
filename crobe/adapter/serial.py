@@ -3,6 +3,7 @@ import serial
 import serial.tools.list_ports
 from ..protocol import pipe
 import threading
+import time
 
 __all__ = []
 
@@ -25,7 +26,7 @@ class SerialInterface(pipe.BackgroundInterface):
             rtscts = False,
         )
         self.io = None
-        pipe.Interface.__init__(self, adapter, adapter.name)
+        pipe.BackgroundInterface.__init__(self, adapter, adapter.name)
 
     def freq_update(self, freq):
         return self.params["rate"]
@@ -58,8 +59,10 @@ class SerialInterface(pipe.BackgroundInterface):
     def options_apply(self):
         if not self.io:
             return
-        for k, v in self._options():
+        for k, v in self._options().items():
             setattr(self.io, k, v)
+            self.logger.info(f"Set {k} = {v}")
+        self.io.timeout = .1
     
     def _options(self):
         return dict(
@@ -72,18 +75,40 @@ class SerialInterface(pipe.BackgroundInterface):
 
     def start(self):
         self.io = serial.Serial(self.params["dev"], **self._options())
+        self.options_apply()
+        super().start()
         
     def _write(self, data, timeout = None):
-        self.adapter.io.timeout = timeout or 60
-        self.adapter.io.write(bytes(data))
+        start = time.time()
+        written = 0
+        while data:
+            self.logger.protocol("< %s", data.hex())
+            w = self.io.write(bytes(data))
+            data = data[w:]
+            written += w
+            elapsed = time.time() - start
+            if timeout and elapsed > timeout:
+                break
+        return written
 
     def _read(self, size, timeout = None):
-        self.adapter.io.timeout = timeout or 60
+        self.logger.protocol("> size %s timeout %s", size, timeout)
         if size is None:
-            size = self.adapter.io.in_waiting
-        if size:
-            return bytes(self.adapter.io.read(size))
-        return b''
+            left = self.io.in_waiting or 1
+        else:
+            left = size
+
+        start = time.time()
+        data = b''
+        while left > 0:
+            d = bytes(self.io.read(left))
+            left -= len(d)
+            data += d
+            elapsed = time.time() - start
+            if timeout and elapsed > timeout:
+                break
+        self.logger.protocol("> %s", data.hex())
+        return data
 
 class SerialAdapter(model.Adapter):
     supported_interfaces = ["pipe"]

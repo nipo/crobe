@@ -40,7 +40,10 @@ class Hdlc(PortComponent):
                 if not pkt:
                     continue
                 frame = self.unescape(pkt)
-                if self.crc(frame[:-2]) !=  frame[-2:]:
+                c = self.crc(frame[:-2])
+                if c !=  frame[-2:]:
+                    self.logger.protocol(">x Frame with bad CRC: %s had %s calculated %s",
+                                         frame[:-2].hex(), frame[-2:].hex(), c.hex())
                     continue
                 addr = frame[0]
                 cmd = frame[1]
@@ -81,9 +84,13 @@ class Hdlc(PortComponent):
         return bytes(r)
 
     def _frame_recv(self, data, addr, cmd):
+        self.logger.protocol("> addr %02x cmd %02x %s",
+                             addr, cmd, data.hex())
         self.rx_queue.append(data)
         
     def _frame_send(self, data, addr = 0, cmd = 0):
+        self.logger.protocol("< addr %02x cmd %02x %s",
+                             addr, cmd, data.hex())
         header = bytes([addr, cmd])
         crc = self.crc(header + data)
         frame = b'\x7e' + self.escape(header + data + crc) + b'\x7e'
@@ -103,3 +110,31 @@ class Hdlc(PortComponent):
                 if data:
                     self.buffer += data
                     self.process()
+
+    def route(self, remote_id):
+        return Route(self, remote_id)
+
+class Route(PortComponent):
+    def __init__(self, port, remote_id):
+        super().__init__(port, f">{remote_id}")
+        self.remote_id = remote_id
+        self.waiting = []
+        port.child_add(self)
+
+    def flush(self):
+        self.waiting = []
+        
+    def send(self, data):
+        self.logger.protocol("< %s", data.hex())
+        self.port._frame_send(data, addr = self.remote_id)
+
+    def recv(self, timeout = None):
+        return self.port.frame_recv()
+    
+    def execute(self, cmd, rsp_size, timeout = None):
+        self.send(cmd)
+
+        if rsp_size == 0:
+            return
+
+        return self.recv()
