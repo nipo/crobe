@@ -1,100 +1,29 @@
 from . import model
-from ..protocol import jtag, base
+from ..protocol import jtag, base, pipe
 from .. import bitstring
 import os
 import socket
-import struct
 
 __all__ = []
 
 class SocketClosed(Exception):
     pass
 
-@model.HwRoot.register
-class Enumerator(model.ExplicitEnumerator):
-    def __init__(self):
-        model.Enumerator.__init__(self, "XVC")
-
-    def child_spawn(self, name):
-        return Adapter.from_target(name)
-            
-class Adapter(model.Adapter):
-    @classmethod
-    def from_target(cls, name):
-        port = name.split(":")[-1]
-        hostname = name[:-len(port)-1]
-        
-        return cls(name, hostname, int(port))
-
-    supported_interfaces = ["jtag"]
-    nickname = "XVC"
-
-    def __init__(self, name, hostname, port):
-        self.hostname = hostname
-        self.port = port
-        model.Adapter.__init__(self, "xvc@%s" % name)
-
-    @property
-    def firmware_info(self):
-        return "XVCD server at %s:%d" % (self.hostname, self.port)
-
-    def open(self, interface_name):
-        if interface_name.lower() == "jtag":
-            return JtagInterface(self)
-
-class JtagInterface(jtag.Interface):
+@pipe.Interface.db.register("xvc")
+class XvcdClient(jtag.Interface):
     def __init__(self, port):
-        jtag.Interface.__init__(self, port)
+        super().__init__(port)
         self.__state = None
-        self.__tck_period = 1e-6
-
-        ais \
-                = socket.getaddrinfo(self.port.hostname, self.port.port,
-                                     0, 0, socket.IPPROTO_TCP)
-
-
-        for i, (family, socktype, proto, canonname, sockaddr) in enumerate(ais):
-            self.socket = socket.socket(family, socktype, proto)
-            try:
-                self.socket.connect(sockaddr)
-            except ConnectionRefusedError:
-                if i == len(ais) - 1:
-                    raise
-                continue
-            break
-
-    def send_command(self, response_size, *command):
-        for data in command:
-            while data:
-                written = self.socket.send(data)
-                data = data[written:]
-        self.socket.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
-        
-        rsp = b''
-        while len(rsp) < response_size:
-            d = self.socket.recv(response_size - len(rsp))
-            if not d:
-                raise SocketClosed()
-            rsp += d
-        return rsp
 
     def freq_update(self, freq):
-        if not getattr(self, "socket", None):
-            return 1e6
         tck_period = 1. / (freq or 1e6)
-        rsp = self.send_command(4, b"settck:", struct.pack("<L", int(1e9 * tck_period)))
-        tck_period_ns, = struct.unpack("<L", rsp)
+        rsp = self.port.write_read(
+            b"settck:" + int(1e9 * tck_period).to_bytes(4, "little"),
+            4)
+        tck_period_ns = int.from_bytes(rsp, "little")
         self.__tck_period = tck_period_ns * 1e-9
         return 1 / self.__tck_period
         
-    @property
-    def power(self):
-        return False
-
-    @power.setter
-    def power(self, power):
-        self.logger.warning("Power %s ignored", "enabling" if power else "disabling")
-
     def _execute(self, operation_list):
         to_join = []
         ops = []
@@ -230,11 +159,12 @@ class JtagInterface(jtag.Interface):
             self.logger.debug("tms: %s", tms_buf)
             self.logger.debug("tdi: %s", tdi_buf)
             
-            tdo_blob = self.send_command((len(tms_buf) + 7) // 8,
-                                         b"shift:",
-                                         struct.pack("<L", len(tms_buf)),
-                                         tms_buf.data,
-                                         tdi_buf.data)
+            tdo_blob = self.port.write_read(
+                b''.join([
+                    b"shift:",
+                    len(tms_buf).to_bytes(4, "little"),
+                    tms_buf.data,
+                    tdi_buf.data]), (len(tms_buf) + 7) // 8)
 
             tdo_buf = bitstring.BitString(tdo_blob, len(tms_buf))
 
