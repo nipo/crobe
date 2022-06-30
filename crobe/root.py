@@ -4,7 +4,7 @@ import re
 def roots(paths):
     HwRoot.start_root()
 
-    splitter = re.compile(r'([a-z0-9._-]+(\([^\)]*\))?)', re.I)
+    splitter = re.compile(r'([a-z0-9._:-]+(\([^\)]*\))?)', re.I)
 
     r = []
     for root in paths:

@@ -24,7 +24,7 @@ setup(
     },
     use_2to3 = False,
     packages = find_packages(),
-    install_requires = ["pyelftools >= 0.23", "click >= 0.6", "ptpython", "tqdm", "pyusb"],
+    install_requires = ["pyelftools >= 0.23", "click >= 0.6", "ptpython", "tqdm", "pyusb", "pyserial"],
     dependency_links=[
         'https://code.ssji.net/git/nipo/vhsic/snapshot/vhsic-c4430e08c1d3680606e01f42ad55bd0d67bb7f73.tar.gz#egg=vhsic-0.1',
     ],

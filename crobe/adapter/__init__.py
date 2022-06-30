@@ -20,5 +20,5 @@ from . import cy_usb_serial
 from . import xds110
 from . import cmsis_dap
 from . import esp_usb_jtag
-
-
+from . import serial
+from . import tcp
