@@ -1,0 +1,105 @@
+import time
+from collections import deque
+from ....model import PortComponent
+
+class Hdlc(PortComponent):
+    ST_UNSYNC = 0
+    ST_DATA = 1
+
+    def __init__(self, port):
+        super().__init__(port, "hdlc")
+        import threading
+        self.lock = threading.Lock()
+        self.state = self.ST_UNSYNC
+        self.buffer = b""
+        self.rx_queue = deque()
+
+    def process(self):
+        while True:
+            if self.state == self.ST_UNSYNC:
+                try:
+                    i = self.buffer.index(b"\x7e")
+                except:
+                    self.buffer = b""
+                    return
+                self.buffer = self.buffer[i:].lstrip(b"\x7e")
+                self.state = self.ST_DATA
+                if not self.buffer:
+                    return
+                continue
+
+            elif self.state == self.ST_DATA:
+                try:
+                    i = self.buffer.index(b"\x7e")
+                except:
+                    return
+                pkt = self.buffer[:i]
+                self.buffer = self.buffer[i:]
+                self.state = self.ST_UNSYNC
+
+                if not pkt:
+                    continue
+                frame = self.unescape(pkt)
+                if self.crc(frame[:-2]) !=  frame[-2:]:
+                    continue
+                addr = frame[0]
+                cmd = frame[1]
+                data = frame[2:-2]
+
+                self._frame_recv(data, addr, cmd)
+
+    @classmethod
+    def crc(self, data, init = 0):
+        import crcmod
+        c = crcmod.Crc(0x11021, initCrc = init ^ 0xffff)
+        c.update(data)
+        return (0xffff ^ int.from_bytes(c.digest(), "big")).to_bytes(2, "little")
+
+    @classmethod
+    def escape(self, data):
+        r = []
+        for i in data:
+            if i in [0x7d, 0x7e, 0x11, 0x13, 0x91, 0x93, 0x03]:
+                r.append(0x7d)
+                r.append(i ^ 0x20)
+            else:
+                r.append(i)
+        return bytes(r)
+
+    @classmethod
+    def unescape(self, data):
+        r = []
+        escaped = False
+        for i in data:
+            if escaped:
+                escaped = False
+                r.append(i ^ 0x20)
+            elif i == 0x7d:
+                escaped = True
+            else:
+                r.append(i)
+        return bytes(r)
+
+    def _frame_recv(self, data, addr, cmd):
+        self.rx_queue.append(data)
+        
+    def _frame_send(self, data, addr = 0, cmd = 0):
+        header = bytes([addr, cmd])
+        crc = self.crc(header + data)
+        frame = b'\x7e' + self.escape(header + data + crc) + b'\x7e'
+        self.port.write(frame)
+
+    def frame_send(self, frame):
+        self._frame_send(frame)
+
+    def frame_recv(self):
+        with self.lock:
+            while True:
+                try:
+                    return self.rx_queue.popleft()
+                except IndexError:
+                    pass
+                data = self.port._read()
+                if data:
+                    self.buffer += data
+                    self.process()
