@@ -1,6 +1,6 @@
 from . import base
 from .. import bitstring
-from ..db import Db
+from ..db import Db, NoMatch
 from ..part_id import PartId
 import time
 from enum import IntEnum
@@ -145,45 +145,61 @@ class Interface(base.Interface):
             return
         if opt == "multidrop":
             self.do_multidrop_enumeration = True
+            self.turnaround_supported = False
             return
         base.Interface.option_set(self, opt)
 
     def multidrop_enumerate(self):
         # Limit frequency to 1M for line reset and jtag-to-swd.
-        self.freq_cap("enumeration", 1e6)
-        self.logger.trace("Multidrop enumeration")
+        with self.freq_capped("enumeration", 1e6):
+            self.logger.trace("Multidrop enumeration")
 
-        for id, name in self.targetsel_db.registry.items():
-            self.logger.trace("Multidrop probing %s %s", name, id)
+            self.execute([
+                self.cmd_wakeup(50),
+                self.cmd_swd_to_dormant(),
+                self.cmd_wakeup(50),
+                self.cmd_dormant_to_swd(),
+            ])
+
+            for id, name in self.targetsel_db.registry.items():
+                self.logger.trace("Multidrop probing %s %s", name, id)
+                try:
+                    self.multidrop_probe(id)
+                except (BadTarget, NoMatch):
+                    continue
+
+    def multidrop_probe(self, id, reinit = False):
+        with self.freq_capped("multidrop probe", 1e6):
+            idcode = self.cmd_read(0, self.IDCODE)
+            if reinit:
+                self.execute([
+                    self.cmd_wakeup(50),
+                    self.cmd_swd_to_dormant(),
+                    self.cmd_wakeup(50),
+                    self.cmd_dormant_to_swd(),
+                ])
+            self.execute([
+                self.cmd_wakeup(50),
+                self.cmd_run(4),
+                self.cmd_write(0, self.TARGETSEL, int(id)),
+                self.cmd_run(4),
+                idcode,
+            ])
+
+            if idcode.data in [0, 0xffffffff]:
+                raise BadTarget(id)
+
+            targetid = PartId.from_idcode(int(id))
             try:
-                self.multidrop_probe(id)
-            except BadTarget:
-                continue
+                idcode = PartId.from_idcode(idcode.data)
+            except ValueError:
+                raise BadTarget(id)
 
-        self.freq_cap("enumeration", None)
-
-    def multidrop_probe(self, id):
-        self.execute([self.cmd_wakeup(), self.cmd_read(0, self.IDCODE), self.cmd_dormant_to_swd()])
-        idcode = self.target_select(id)
-
-        targetid = self.cmd_read(0, 4)
-        dlpidr = self.cmd_read(0, 4)
-        self.execute([
-            self.cmd_write(0, 2, 2),
-            targetid,
-            self.cmd_write(0, 2, 3),
-            dlpidr,
-        ])
-
-        targetid = PartId.from_idcode(targetid.data)
-        dlpidr = PartId.from_idcode(dlpidr.data)
-        
-        self.logger.info("Found multidrop TargetSel %s, IDCODE %s, DLPIDR %s, TARGETID %s",
-                         id, idcode, dlpidr, targetid)
-
-        self.child_add(self.multidrop_db.call(idcode, self, id))
-
-        self.current_target = None
+            self.logger.info("Found multidrop TargetSel %s, IDCODE %s",
+                             id, idcode)
+            target = self.multidrop_db.call(idcode, self, id)
+            self.child_add(target)
+            self.current_target = None
         
     def start(self):
         if self.do_multidrop_enumeration:
@@ -331,13 +347,15 @@ class Interface(base.Interface):
         if self.current_target == int(id):
             return
         id_get = self.cmd_read(0, self.IDCODE)
-        self.execute([self.cmd_wakeup(),
-                self.cmd_write(0, self.TARGETSEL, int(id)),
-#                self.cmd_run(10),
-                id_get,
+        self.execute([
+            self.cmd_wakeup(),
+            self.cmd_run(10),
+            self.cmd_write(0, self.TARGETSEL, int(id)),
+            self.cmd_run(10),
+            id_get,
         ])
 
-        self.logger.trace("Ack after targetsel %s: %s", id, id_get.ack)
+        self.logger.trace("IDCODE Ack after targetsel %s: %s, %#10x", id, id_get.ack, id_get.data)
         
         if id_get.ack != Ack.OK:
             self.current_target = None

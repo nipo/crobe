@@ -19,8 +19,8 @@ class SwDp(dp.Dp):
 
     max_freq = 15e6
 
-    def __init__(self, port):
-        dp.Dp.__init__(self, "DAP", port)
+    def __init__(self, port, name = "SWDP"):
+        dp.Dp.__init__(self, name, port)
         self.freq_cap("default", 30e6)
 
     def start(self):
@@ -144,9 +144,14 @@ class SwDp(dp.Dp):
             if isinstance(o, TargetSel):
                 if self.port.current_target == o.target:
                     continue
-                ops.append(self.port.cmd_wakeup())
+                ops.append(self.port.cmd_wakeup(50))
+                ops.append(self.port.cmd_run(4))
                 ops.append(self.port.cmd_write(0, self.port.TARGETSEL, o.target))
-                ops.append(self.port.cmd_read(0, self.port.IDCODE))
+                ops.append(self.port.cmd_run(4))
+                ops.append(self.port.cmd_read(0, self.IDCODE))
+                ops.append(self.port.cmd_run(4))
+                ops.append(self.port.cmd_write(0, self.ABORT, 0x1f))
+                ops.append(self.port.cmd_run(4))
                 self.port.current_target = o.target
                 continue
 
@@ -217,9 +222,13 @@ class TargetSel:
 class MultidropSwDp(SwDp):
     version = 2
 
-    def __init__(self, port, targetsel):
+    def __init__(self, port, targetsel, name = "MSWDP"):
         self.targetsel = targetsel
-        super().__init__(port)
+        super().__init__(port, name)
 
     def execute(self, operations):
-        super().execute([TargetSel(int(self.targetsel))] + list(operations))
+        with self.port.freq_capped(self.name, self.max_freq):
+            super().execute([TargetSel(int(self.targetsel))] + list(operations))
+
+    def __str__(self):
+        return f"{SwDp.__str__(self)}, Sel {self.targetsel}"

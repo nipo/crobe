@@ -10,8 +10,7 @@ class Rp2040RescueDp(MultidropSwDp):
     max_freq = 25e6
 
     def __init__(self, port, targetsel):
-        super().__init__(port, targetsel)
-        self.name = "RP2040-RescueDp"
+        super().__init__(port, targetsel, name = "RP2040-RescueDp")
 
     def start(self):
         rd = self.port.cmd_read(0, 1)
@@ -25,7 +24,9 @@ class Rp2040RescueDp(MultidropSwDp):
         ])
         self.logger.debug("Ctrlstat: %08x", rd.data)
 
-        for t in [0, 1]:
-            self.port.multidrop_probe(PartId(9, 0x13, 0x1002, t))
-
+        for idx, core in enumerate([
+                PartId(9, 0x13, 0x1002, 0),
+                PartId(9, 0x13, 0x1002, 1),
+        ]):
+            self.port.multidrop_probe(core, reinit = not idx)
 

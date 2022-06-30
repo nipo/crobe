@@ -89,14 +89,14 @@ class Dp(PortComponent, FreqCapper):
         
     def __str__(self):
         try:
-            ret = "%s v.%dr%d" % (self.name, self.version, self.idr_or_idcode.revision)
+            ret = f"{super().__str__()} v.{self.version}r{self.idr_or_idcode.revision}"
             if self.minimal:
                 ret += ", minimal"
             if self.target_id:
-                ret += ", Target ID: %s" % self.target_id.pretty()
+                ret += f", Target {self.target_id.pretty()}"
             return ret
         except AttributeError:
-            return self.name
+            return super().__str__()
 
     def debug_enable(self, enabled):
         if not enabled:
