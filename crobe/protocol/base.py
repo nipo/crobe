@@ -83,12 +83,12 @@ class Interface(model.PortComponent, FreqCapper):
     def cmd_reset(self, asserted):
         return Reset(asserted)
 
-    def _execute(self, commands):
-        pass
+    def _execute(self, commands, *args, **kwargs):
+        ...
 
-    def execute(self, commands):
+    def execute(self, commands, *args, **kwargs):
         with self._lock:
-            self._execute(commands)
+            self._execute(commands, *args, **kwargs)
 
 class Operation:
     def __repr__(self):
