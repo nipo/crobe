@@ -200,7 +200,7 @@ class MemAp(ap.Ap, model.Bus):
         all_transfers = list(transfers)
         be_to_size_l2 = {0xf: 2, 0x3: 1, 0xc: 1, 0x1: 0, 0x2: 0, 0x4: 0, 0x8: 0}
 
-        chunk_size = 64
+        chunk_size = 256
         
         for chunk_offset in range(0, len(all_transfers), chunk_size):
             transfers = all_transfers[chunk_offset : chunk_offset + chunk_size]
