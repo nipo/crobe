@@ -13,6 +13,7 @@ class Hdlc(PortComponent):
         self.state = self.ST_UNSYNC
         self.buffer = b""
         self.rx_queue = deque()
+        self.tx_queue = deque()
 
     def process(self):
         while True:
@@ -88,14 +89,21 @@ class Hdlc(PortComponent):
                              addr, cmd, data.hex())
         self.rx_queue.append(data)
         
-    def _frame_send(self, data, addr = 0, cmd = 0):
+    def _frame_send(self, data, addr = 0, cmd = 0, background = False):
         self.logger.protocol("< addr %02x cmd %02x %s",
                              addr, cmd, data.hex())
         header = bytes([addr, cmd])
         crc = self.crc(header + data)
         frame = b'\x7e' + self.escape(header + data + crc) + b'\x7e'
-        self.port.write(frame)
+        self.tx_queue.append(frame)
+        if not background:
+            self.port.tx_queue_flush()
 
+    def tx_queue_flush(self):
+        data = b''.join(self.tx_queue)
+        self.tx_queue = deque()
+        self.port.write(data)
+            
     def frame_send(self, frame):
         self._frame_send(frame)
 
@@ -106,7 +114,12 @@ class Hdlc(PortComponent):
                     return self.rx_queue.popleft()
                 except IndexError:
                     pass
-                data = self.port._read()
+                if self.tx_queue:
+                    wdata = b''.join(self.tx_queue)
+                    self.tx_queue = deque()
+                    data = self.port.write_read(wdata, rsize = None)
+                else:
+                    data = self.port.read(size = None)
                 if data:
                     self.buffer += data
                     self.process()
@@ -124,15 +137,15 @@ class Route(PortComponent):
     def flush(self):
         self.waiting = []
         
-    def send(self, data):
+    def send(self, data, background = False):
         self.logger.protocol("< %s", data.hex())
-        self.port._frame_send(data, addr = self.remote_id)
+        self.port._frame_send(data, addr = self.remote_id, background = background)
 
     def recv(self, timeout = None):
         return self.port.frame_recv()
-    
+
     def execute(self, cmd, rsp_size, timeout = None):
-        self.send(cmd)
+        self.send(cmd, background = bool(rsp_size))
 
         if rsp_size == 0:
             return
