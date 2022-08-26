@@ -27,7 +27,8 @@ class I2cMem(i2c.Slave, Bus):
         
     def _addr(self, addr):
         baddr = (addr & ((1 << (self.addr_bytes * 8)) - 1)).to_bytes(self.addr_bytes, 'big')
-        saddr = self.saddr + (addr >> (self.addr_bytes * 8))
+        saddr = (self.saddr & ~((1 << self.saddr_bits) - 1)) + (addr >> (self.addr_bytes * 8))
+        print(addr, baddr, saddr)
         return saddr, baddr
 
     def read(self, addr, size):
@@ -37,13 +38,11 @@ class I2cMem(i2c.Slave, Bus):
         r = b''
         for off in range(addr, addr + size, read_by):
             saddr, baddr = self._addr(off)
-            saddr_old = self.saddr
 
-            self.saddr = saddr
-            try:
-                r += i2c.Slave.write_read(self, baddr, read_by)
-            finally:
-                self.saddr = saddr_old
+            ro = self.port.cmd_read(saddr, read_by)
+            wa = self.port.cmd_write(saddr, baddr)
+            self.port.execute([wa, ro])
+            r += ro.data
         return r[:size]
 
     def write(self, addr, data):
@@ -70,13 +69,7 @@ class I2cMem(i2c.Slave, Bus):
         assert addr // self.page_size == (addr + len(data) - 1) // self.page_size
 
         saddr, baddr = self._addr(addr)
-        saddr_old = self.saddr
-
-        self.saddr = saddr
-        try:
-            i2c.Slave.write(self, baddr + data)
-        finally:
-            self.saddr = saddr_old
+        self.port.execute([self.port.cmd_write(saddr, baddr + data)])
 
     def option_set(self, opt):
         k, v = opt.split('=', 1)
@@ -96,16 +89,14 @@ class I2cEeprom(I2cMem):
         assert 0 < len(data) <= self.page_size
         assert addr // self.page_size == (addr + len(data) - 1) // self.page_size
 
-        saddr, baddr = self._addr(addr)
-
         for retry in range(3):
-            i2c.Slave.write(self, baddr + data)
+            I2cMem._write(self, addr, data)
 
             time.sleep(.05)
             deadline = time.time() + .1
             while time.time() < deadline:
                 try:
-                    r = i2c.Slave.write_read(self, baddr, len(data))
+                    r = I2cMem.read(self, addr, len(data))
                     if r == data:
                         return
                 except i2c.AddressNack:
