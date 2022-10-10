@@ -41,14 +41,14 @@ class FreqCapper:
             return
 
         self.logger.debug("Frequency now capped to %s because of %s",
-                         metric(freq, "Hz"), reason)
+                          freq and metric(freq, "Hz"), reason)
 
         freq = self.freq_update(freq)
         if freq is None:
-            raise RuntimeError("%s did not return actual freq" % self.freq_update)
+            self.logger.info("is not frequency-capable")
         self.__freq = freq
 
-        self.logger.debug("  -> got %s", metric(self.freq, "Hz"))
+        self.logger.debug("  -> got %s", self.freq and metric(self.freq, "Hz"))
 
     def freq_update(self, freq):
         return freq
