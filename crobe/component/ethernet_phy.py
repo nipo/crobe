@@ -7,11 +7,11 @@ class Register(enum.IntEnum):
     Status = 1
     PhyId0 = 2
     PhyId1 = 3
-    AutoNegAdv = 4
-    AutoNegPartnerBase = 5
-    AutoNegExpansion = 6
-    AutoNegNextPageTransmit = 7
-    AutoNegNextPageReceive = 8
+    AutonegAdv = 4
+    AutonegPartnerBase = 5
+    AutonegExpansion = 6
+    AutonegNextPageTransmit = 7
+    AutonegNextPageReceive = 8
     MasterSlaveControl = 9
     MasterSlaveStatus = 10
     PseControl = 11
@@ -19,6 +19,18 @@ class Register(enum.IntEnum):
     MmdAccessControl = 13
     MmdAccessAddressData = 14
     ExtendedStatus = 15
+
+class Control(bitfield.Bitfield):
+    all = bitfield.Field(0, 16)
+    reset = bitfield.BooleanField(15)
+    loopback = bitfield.BooleanField(14)
+    speed0 = bitfield.MappingField(13, 1, [10, 100])
+    autoneg = bitfield.BooleanField(12)
+    power_down = bitfield.BooleanField(11)
+    isolate = bitfield.BooleanField(10)
+    aneg_restart = bitfield.BooleanField(9)
+    fd = bitfield.BooleanField(8)
+    col_test = bitfield.BooleanField(7)
 
 class Status(bitfield.Bitfield):
     all = bitfield.Field(0, 16)
@@ -37,6 +49,37 @@ class Status(bitfield.Bitfield):
     tech_100btx = bitfield.BooleanField(13)
     tech_100btx_fd = bitfield.BooleanField(14)
     tech_100bt4 = bitfield.BooleanField(15)
+
+class AutonegAdv(bitfield.Bitfield):
+    all = bitfield.Field(0, 16)
+    remote_fault = bitfield.BooleanField(13)
+    pause = bitfield.MappingField(10, 2, ["None", "Symmetric", "Asymmetric", "Both"])
+    tech_100btxfd = bitfield.BooleanField(8)
+    tech_100btx = bitfield.BooleanField(7)
+    tech_10btfd = bitfield.BooleanField(6)
+    tech_10bt = bitfield.BooleanField(5)
+    selector = bitfield.Field(0, 5)
+
+class AutonegLpAbility(bitfield.Bitfield):
+    all = bitfield.Field(0, 16)
+    np = bitfield.BooleanField(15)
+    ack = bitfield.BooleanField(14)
+    remote_fault = bitfield.BooleanField(13)
+    pause = bitfield.BooleanField(10)
+    tech_100bt4 = bitfield.BooleanField(9)
+    tech_100btxfd = bitfield.BooleanField(8)
+    tech_100btx = bitfield.BooleanField(7)
+    tech_10btfd = bitfield.BooleanField(6)
+    tech_10bt = bitfield.BooleanField(5)
+    selector = bitfield.Field(0, 5)
+
+class AutonegExpansion(bitfield.Bitfield):
+    all = bitfield.Field(0, 16)
+    par_detec_fault = bitfield.BooleanField(4)
+    lp_np_able = bitfield.BooleanField(3)
+    np_able = bitfield.BooleanField(2)
+    page_rx = bitfield.BooleanField(1)
+    lp_aneg_able = bitfield.BooleanField(0)
 
 class BasePage(bitfield.Bitfield):
     all = bitfield.Field(0, 16)
@@ -73,6 +116,15 @@ class UnformattedPage(bitfield.Bitfield):
 @smi.Interface.db.register("eth_phy")
 @smi.Interface.db.register_default
 class Clause22EthernetPhy(smi.C22Slave):
+    REGISTERS = Register
+    REGISTER_MAP = {
+        Register.Control: Control,
+        Register.Status: Status,
+        Register.AutonegExpansion: AutonegExpansion,
+        Register.AutonegAdv: AutonegAdv,
+        Register.AutonegPartnerBase: AutonegLpAbility,
+    }
+
     def __init__(self, bus, name = "phy", phyad = None):
         super().__init__(bus, name = name, phyad = phyad)
 
