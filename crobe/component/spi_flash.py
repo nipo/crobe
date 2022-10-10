@@ -160,7 +160,12 @@ class SpiMemory(PortComponent, Bus):
     def read(self, address, size, op = None):
         if op is None:
             op = self.CMD_FAST_READ
-        return self.command(op, arg = self.addr(address), rsize = size, dummy_words = 1)
+        rdata = b''
+        for off in range(0, size, 1024):
+            rsize = min(size - off, 1024)
+            chunk = self.command(op, arg = self.addr(address + off), rsize = rsize, dummy_words = 1)
+            rdata += chunk
+        return rdata
 
     def verify(self, program):
         si = self.SECTOR_INFO[0]
@@ -427,6 +432,9 @@ class SfdpFlash(SelfDescriptiveFlash):
             if major == 1 and minor <= 5:
                 self._sfdp_1_5_parse(data)
             elif major == 1 and minor == 6:
+                self._sfdp_1_6_parse(data)
+            elif major == 1 and minor > 6:
+                self.logger.warning("Future 1.x SFDP version: %d.%d, parsed as 1.6" % (major, minor))
                 self._sfdp_1_6_parse(data)
             else:
                 self.logger.warning("Unsupported SFDP version: %d.%d" % (major, minor))
