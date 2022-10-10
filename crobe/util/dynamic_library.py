@@ -56,6 +56,7 @@ def load(name, *vers):
         default_paths += ld_so_conf_paths("/etc/ld.so.conf")
     default_paths += [os.path.expanduser('~/lib'),
                       os.path.expanduser('~/local/lib'),
+                      '/opt/homebrew/lib',
                       '/usr/local/lib',
                       '/usr/lib']
 
