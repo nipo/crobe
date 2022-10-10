@@ -6,7 +6,7 @@ import threading
 import weakref
 import time
 
-__all__ = ["Interface", "Read", "Write", "WriteRead", "BackgroundInterface"]
+__all__ = ["Interface", "Read", "Write", "BackgroundInterface"]
 
 class Interface(base.Interface):
     """
@@ -16,6 +16,9 @@ class Interface(base.Interface):
 
     def __init__(self, port, name = None):
         base.Interface.__init__(self, port, (name or port.name) + "-pipe")
+
+    def freq_update(self, freq):
+        return None
         
     def read(self, size, timeout = None):
         """
@@ -36,9 +39,10 @@ class Interface(base.Interface):
         """
         See cmd_write_read()
         """
-        op = self.cmd_write_read(data, size)
-        self.execute([op], timeout)
-        return op.rdata
+        w = self.cmd_write(data)
+        r = self.cmd_read(size)
+        self.execute([w, r], timeout)
+        return r.data
 
     def cmd_read(self, size):
         """
@@ -53,16 +57,6 @@ class Interface(base.Interface):
         Writes `data`
         """
         return Write(data)
-
-    def cmd_write_read(self, wdata, rsize):
-        """Writes `wdata` while reading rsize bytes.
-
-        Both operations happen in the same time. This is mostly useful
-        for pipelined processing where the whole write/read operation
-        does not fit in the full IO buffers.
-
-        """
-        return WriteRead(wdata, rsize)
 
     def child_spawn(self, sub):
         return self.db.call(sub, self)
@@ -88,19 +82,7 @@ class Read(Operation):
         self.data = None
 
     def __str__(self):
-        return "<Read %d>" % (self.size)
-
-class WriteRead(Operation):
-    def __init__(self, wdata, rsize):
-        self.wdata = wdata
-        self.rsize = rsize
-        self.rdata = None
-
-    def __str__(self):
-        return "<WriteRead %s %d>" % (self.wdata.hex(), self.rsize)
-
-
-
+        return "<Read %s>" % (self.size)
     
 class BackgroundWriter(threading.Thread):
     def __init__(self, device):
@@ -157,19 +139,17 @@ class BackgroundInterface(Interface):
 
     def start(self):
         super().start()
+        self.logger.info("starting")
         self.__bw.start()
 
     def _execute(self, operation_list, timeout = None):
         for op in operation_list:
             if isinstance(op, Write):
+                self.logger.info("to background writer: %s", op.data.hex())
                 self.__bw.write(op.data, timeout)
 
             elif isinstance(op, Read):
                 op.data = self._read(op.size, timeout)
-
-            elif isinstance(op, WriteRead):
-                self.__bw.write(op.wdata, timeout)
-                op.rdata = self._read(op.rsize, timeout)
 
             else:
                 raise base.ProtocolError("Unknown Pipe operation %s" % type(op))
