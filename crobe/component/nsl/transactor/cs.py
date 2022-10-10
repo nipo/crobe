@@ -50,7 +50,7 @@ class ControlStatus(PortComponent):
             else:
                 raise NotImplementedError(o)
 
-        rsp = self.port.execute(cmd, rsp_size)
+        rsp = self.port.send_receive(cmd, timeout = 1)
 
         off = 0
         for o in operation_list:

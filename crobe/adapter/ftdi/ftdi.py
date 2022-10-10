@@ -1,7 +1,7 @@
 from . import api
 from ...bitstring import BitString
 from ... import model
-from ...protocol import base, jtag
+from ...protocol import base, jtag, pipe
 from collections import deque
 import ctypes
 import struct
@@ -114,16 +114,15 @@ class Device(object):
         elif mode == "reset":
             return Handle(self.connection_id, interface, "RESET")
             
-class Handle(Context):
+class Handle(pipe.Interface, Context):
     def __init__(self, connection_id, interface, mode):
         self.opened = False
+        pipe.Interface.__init__(self, interface, mode)
         Context.__init__(self)
 
         self.write_queue = queue.Queue()
         self.background_writer = threading.Thread(target = self.writer_worker, daemon = True)
         self.background_writer.start()
-
-        self.logger = logging.getLogger(str(connection_id, 'ascii'))
 
         self.check(api.set_interface(self.context, api.INTERFACE[interface]))
         self.check(api.usb_open_string(self.context, connection_id))
@@ -276,7 +275,7 @@ class Handle(Context):
 
         self.check(api.set_eeprom_value(self.context, id, value))
 
-    def write(self, blob):
+    def _do_write(self, blob):
         self.write_queue.put(blob)
 
     def writer_worker(self):
@@ -304,7 +303,7 @@ class Handle(Context):
         size = self.check(api.read_data(self.context, blob, size))
         return bytes(blob[:size])
 
-    def read(self, rsize, timeout = 1.):
+    def _do_read(self, rsize, timeout = 1.):
         ret = bytearray()
         deadline = time.time() + timeout
         while len(ret) < rsize:
@@ -316,13 +315,21 @@ class Handle(Context):
                 raise base.CommunicationError("Short read, expected %d bytes, had %d" % (rsize, len(ret)))
         self.logger.protocol(">> %s", binascii.b2a_hex(ret))
         return ret
-    
-    def execute(self, blob, rsize = None, timeout = 1.):
-        self.write(blob)
-        rsp = b''
-        while len(rsp) < (rsize or 0):
-            rsp += self.read(rsize - len(rsp), timeout = timeout)
-        return rsp
+
+    def execute(self, operation_list, timeout = 1.0):
+        for o in operation_list:
+            if isinstance(o, pipe.Write):
+                self._do_write(o.data)
+                continue
+
+            if isinstance(o, pipe.Read):
+                rsp = b''
+                while len(rsp) < (o.size or 0):
+                    rsp += self._do_read(o.size - len(rsp), timeout = timeout)
+                    if o.size is None:
+                        break
+                o.data = rsp
+                continue
 
 @api.stream_callback_fn
 def _callback(buf, size, progress_info, owner):
@@ -390,8 +397,8 @@ class Mpsse(Handle):
 
         self.logger.note("Using MPSSE with a %s device, MPS: %d", self.type,
                          self.max_packet_size)
-        self.execute(h_commands
-                     + self.cmd_gpio_mask_set(0xffff, gpio_oe, gpio_val))
+        self.write(h_commands
+                   + self.cmd_gpio_mask_set(0xffff, gpio_oe, gpio_val))
 
         self.base_freq = 12e6 if self.type == "2232C" else 60e6
         self.can_div5 = self.type != "2232C"
@@ -413,6 +420,8 @@ class Mpsse(Handle):
 
     @property
     def freq(self):
+        if not hasattr(self, "_Mpsse__divisor"):
+            return 1e6
         div5, div = self.__divisor
         r = self.base_freq / (div + 1) / self.cycle_div
         if div5:
@@ -433,7 +442,7 @@ class Mpsse(Handle):
         self.logger.debug("freq %s base %s half %s div5 %s div %s -> %s",
                           freq, self.base_freq, self.cycle_div, div5, div, self.freq)
 
-        self.execute(self.cmd_divisor())
+        self.write(self.cmd_divisor())
 
     def cmd_divisor(self, divisor = None):
         if divisor is None:
@@ -450,7 +459,7 @@ class Mpsse(Handle):
             cmd = bytes([api.MPSSE_GET_BITS_LOW])
         else:
             cmd = bytes([api.MPSSE_GET_BITS_HIGH])
-        rsp = self.execute(cmd, 1)
+        rsp = self.write_read(cmd, 1)
         return bool(rsp[0] & (1 << (pin & 7)))
 
     def gpio_set(self, pin, value):
@@ -458,7 +467,7 @@ class Mpsse(Handle):
 
     def gpio_mask_set(self, change_mask, oe, val):
         cmd = self.cmd_gpio_mask_set(change_mask, oe, val)
-        self.execute(cmd)
+        self.write(cmd)
         
     def cmd_gpio_mask_set(self, change_mask, oe, val):
         cmd = bytearray()
@@ -703,7 +712,17 @@ class Mpsse(Handle):
         assert cycles
 
         return cls.cmd_out(BitString(-value, cycles))
-        
+
+    def mpsse_execute(self, wdata, rsize = 0):
+        w = self.cmd_write(wdata)
+        if rsize:
+            r = self.cmd_read(rsize)
+            self.execute([w, r])
+            return r.data
+        else:
+            self.execute([w])
+            return b""
+    
 def main():
     import time
     adapters = Device.list_all(0x10eb, 0x26)

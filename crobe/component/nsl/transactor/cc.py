@@ -29,7 +29,7 @@ class CcTransactor(PortComponent):
         if self.__reset and not value:
             self.logger.trace("toggling reset pin")
             cmds = bytes([self.CMD_DIV(0x40), self.CMD_RESET])
-            self.port.execute(cmds, 2)
+            self.port.send_receive(cmds)
 
         self.__reset = bool(value)
         
@@ -94,7 +94,7 @@ class CcTransactor(PortComponent):
             rsp_len += r
 
             if len(cmd) > 2000 or rsp_len > 2000 or i == len(commands) - 1:
-                rsp += self.port.execute(cmd, rsp_len)
+                rsp += self.port.send_receive(cmd)
                 cmd = b''
                 rsp_len = 0
 

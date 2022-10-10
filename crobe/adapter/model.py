@@ -1,4 +1,7 @@
 from .. import model
+from collections import deque
+from ..protocol import pipe
+import threading
 from .. import db
 
 __all__ = ['Adapter', 'HwRoot', 'SelfEnumerator', 'ExplicitEnumerator', 'UsbEnumerator']
@@ -101,11 +104,107 @@ class UsbEnumerator(AutoEnumerator):
                 continue
             for owner in owners:
                 self.logger.debug(" - using %s", owner)
-                try:
-                    child = owner.from_device(dev)
-                except Exception as e:
-                    print(e)
-                    continue
+                #try:
+                child = owner.from_device(dev)
+                #except Exception as e:
+                #    print(e)
+                #    continue
                 self.child_add(child)
 
         super().start()
+    
+
+class BackgroundWriter(threading.Thread):
+    def __init__(self, owner, device, ep):
+        self.owner = owner
+        threading.Thread.__init__(self, daemon = True)
+        self.device = device
+        self.ep = ep
+
+        self.queue = deque()
+        self.cond = threading.Condition()
+        self.running = False
+        self.exception = None
+
+    def start(self):
+        self.running = True
+        super().start()
+
+    def stop(self):
+        self.running = False
+        with self.cond:
+            self.cond.notify_all()
+        super().join()
+        if self.exception:
+            raise self.exception
+        
+    def write(self, data, timeout = None):
+        with self.cond:
+            self.queue.append((data, timeout))
+            self.cond.notify_all()
+
+    def flush(self):
+        with self.cond:
+            while self.queue and self.running:
+                self.cond.wait()
+
+    def run(self):
+        with self.cond:
+            while self.running:
+                try:
+                    data, timeout = self.queue.popleft()
+                except IndexError:
+                    self.cond.wait()
+                    continue
+
+                try:
+                    self.owner.logger.protocol("%02x < %s", self.ep.bEndpointAddress, data.hex())
+                    self.device.write(self.ep.bEndpointAddress, data, int((timeout or 1.) * 1000))
+                except Exception as e:
+                    self.exception = e
+                    return
+                self.cond.notify_all()
+
+class BulkStreamPair(pipe.Interface):
+    def __init__(self, port, device, name, out_ep, in_ep):
+        super().__init__(port, name = name)
+        self.device = device
+        self.out_ep = out_ep
+        self.in_ep = in_ep
+        self.__bw = BackgroundWriter(self, device, out_ep)
+        self.__bw.start()
+
+    def execute(self, blob, read_size = 0):
+        self.logger.protocol("Execute, %d out, %d in", len(blob), read_size)
+        self.bulk_out(blob)
+        rbuf = b''
+        while len(rbuf) < read_size:
+            rbuf += self.bulk_in(512)
+        return rbuf
+
+    def _do_read(self, size, timeout):
+        self.logger.protocol("%02x > %s", self.in_ep.bEndpointAddress, size)
+        data = self.device.read(self.in_ep.bEndpointAddress,
+                                size or self.in_ep.wMaxPacketSize,
+                                int((timeout or 1.) * 1000))
+        data = bytes(data)
+        self.logger.protocol("-> %s", data.hex())
+        return data
+    
+    def execute(self, operation_list, timeout = None):
+        for op in operation_list:
+            if isinstance(op, pipe.Write):
+                self.__bw.write(op.data, timeout)
+
+            elif isinstance(op, pipe.Read):
+                op.data = self._do_read(op.size, timeout)
+
+            elif isinstance(op, pipe.WriteRead):
+                self.__bw.write(op.wdata, timeout)
+                op.rdata = self._do_read(op.rsize, timeout)
+
+            else:
+                raise base.ProtocolError("Unknown Pipe operation %s" % type(op))
+        self.__bw.flush()
+        
+    

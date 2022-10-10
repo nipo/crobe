@@ -1,5 +1,5 @@
 from ....model import PortComponent
-from ....protocol import base, swd
+from ....protocol import base, swd, datagram, pipe
 from ....util.pretty import metric
 import math
 from collections import deque
@@ -162,7 +162,15 @@ class SwdTransactor(PortComponent):
                 else:
                     raise base.ProtocolError("Unknown SWD operation %s" % type(op))
 
-            in_blob = self.port.execute(cmd[:cmd_size], rsp_size)
+            self.logger.protocol("< %s rx %d", cmd[:cmd_size].hex(), rsp_size)
+            if isinstance(self.port, datagram.Interface):
+                in_blob = self.port.send_receive(cmd[:cmd_size])
+            elif isinstance(self.port, pipe.Interface):
+                in_blob = self.port.write_read(cmd[:cmd_size], rsp_size)
+                while len(in_blob) < rsp_size:
+                    in_blob += self.port.read(rsp_size - len(in_blob))
+            else:
+                raise RuntimeError(f"Cannot handle port {self.port}")
 
             for idx, op in enumerate(pending):
 #                if isinstance(op, swd.Write) and op.addr == 0 and not op.ap and op.data == 0x1f:

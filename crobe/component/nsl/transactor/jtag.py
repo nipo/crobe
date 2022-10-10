@@ -166,7 +166,7 @@ class JtagTransactor(PortComponent):
 
             assert cmd_size
             try:
-                in_blob = self.port.execute(cmd[:cmd_size], rsp_size)
+                in_blob = self.port.send_receive(cmd[:cmd_size])
             except:
                 print(ops)
                 print(pending)

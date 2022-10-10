@@ -1,5 +1,6 @@
 from . import model
 from ..protocol import pipe
+from ..util import socket_server
 import os
 import socket
 import struct
@@ -40,37 +41,18 @@ class Adapter(model.Adapter):
         if interface_name.lower() == "pipe":
             return PipeInterface(self)
 
-class PipeInterface(pipe.BackgroundInterface):
+class PipeInterface(socket_server.SocketPipe):
     def __init__(self, port):
-        super().__init__(port)
-
         ais = socket.getaddrinfo(self.port.hostname, self.port.port,
                                  0, 0, socket.IPPROTO_TCP)
 
         for i, (family, socktype, proto, canonname, sockaddr) in enumerate(ais):
-            self.socket = socket.socket(family, socktype, proto)
+            socket = socket.socket(family, socktype, proto)
             try:
-                self.socket.connect(sockaddr)
+                socket.connect(sockaddr)
             except ConnectionRefusedError:
                 if i == len(ais) - 1:
                     raise
                 continue
             break
-
-    def freq_update(self, freq):
-        return 100e6
-
-    def _write(self, data, timeout = None):
-        self.logger.protocol("< %s", data.hex())
-        self.socket.settimeout(timeout)
-        self.socket.send(data)
-
-    def _read(self, size, timeout = None):
-        self.logger.protocol("> expect %d...", size)
-        self.socket.settimeout(timeout)
-        data = b''
-        while len(data) < size:
-            chunk = self.socket.recv(size - len(data))
-            self.logger.protocol("> %s", chunk.hex())
-            data += chunk
-        return data
+        super().__init__(socket)

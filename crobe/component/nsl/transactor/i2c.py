@@ -1,5 +1,5 @@
 from ....model import PortComponent
-from ....protocol import base, i2c
+from ....protocol import base, i2c, datagram, pipe
 from ....util.pretty import metric
 import math
 
@@ -36,7 +36,6 @@ class I2cTransactor(PortComponent):
         cmd = [self.CMD_DIV | self.__div]
         rsp_size = 1
         rsp_total_size = 0
-        rsp = b''
         starts = []
 
         prev = None
@@ -88,7 +87,14 @@ class I2cTransactor(PortComponent):
         rsp_size += 1
 
         #self.logger.protocol("Running %s", bytes(cmd).hex())
-        rsp += self.port.execute(bytes(cmd), rsp_size)
+        if isinstance(self.port, datagram.Interface):
+            rsp = self.port.send_receive(bytes(cmd))
+        elif isinstance(self.port, pipe.Interface):
+            rsp = self.port.write_read(bytes(cmd), rsp_size)
+            while len(rsp) < rsp_size:
+                rsp += self.port.read(rsp_size - len(rsp))
+        else:
+            raise RuntimeError(f"Cannot handle port {self.port}")
 
         for op, s in starts:
             if not rsp[s]:

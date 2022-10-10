@@ -26,14 +26,14 @@ class Dacx0508SlopeController(PortComponent):
         return bytes([self.CMD_INCREMENT_SET]) + increment.to_bytes(4, "big")
 
     def init(self, channel, value):
-        self.port.execute(self.cmd_current_set(channel, value), 1)
+        self.port.send_receive(self.cmd_current_set(channel, value))
 
     def slope_set(self, unit_per_sec):
         """
         Sets target slope, in max DAC LSB per second.
         """
         increment = unit_per_sec / self.clock_freq
-        self.port.execute(self.cmd_increment_set(increment), 1)
+        self.port.send_receive(self.cmd_increment_set(increment))
 
     def target_set(self, target):
-        self.port.execute(self.cmd_target_set(target), 1)
+        self.port.send_receive(self.cmd_target_set(target))

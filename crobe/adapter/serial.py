@@ -102,6 +102,7 @@ class SerialInterface(pipe.BackgroundInterface):
         data = b''
         while left > 0:
             d = bytes(self.io.read(left))
+            self.logger.protocol(">* %s", d.hex())
             left -= len(d)
             data += d
             elapsed = time.time() - start

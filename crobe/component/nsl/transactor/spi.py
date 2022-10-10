@@ -89,7 +89,7 @@ class SpiTransactor(PortComponent):
                 raise base.ProtocolError("Unknown SPI operation %s" % type(op))
 
         cmd = b''.join(pending)
-        rsp = self.port.execute(cmd, rsp_size)
+        rsp = self.port.send_receive(cmd)
 
         for op in operation_list:
             if isinstance(op, spi.Shift) and op.__gather:

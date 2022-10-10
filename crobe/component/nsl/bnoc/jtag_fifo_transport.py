@@ -1,6 +1,7 @@
 import time
 from ....bitstring import BitString
 from ....model import PortComponent
+from ....protocol import datagram
 from collections import deque
 
 class JtagFifoTransport(PortComponent):
@@ -120,3 +121,42 @@ class JtagFifoTransport(PortComponent):
                 ok = True
 
         return ok
+
+class JtagFramedTransport(datagram.Interface):
+    def __init__(self, port, data_ir, status_ir = None, name = None):
+        super().__init__(port, f"{name or port.name}-framed")
+        self.transporter = JtagFifoTransport(port, 9, data_ir, status_ir)
+        self.rx_buf = []
+
+    def execute(self, operation_list, timeout = None):
+        recv_pending = []
+        for op in operation_list:
+            if isinstance(op, datagram.Send):
+                enc = list(op.data)
+                enc[-1] |= 0x100
+                self.transporter.write(enc)
+            elif isinstance(op, datagram.Receive):
+                recv_pending.append(op)
+            else:
+                self.logger.warning("Ignoring operation %s", op)
+
+        while recv_pending:
+            more_data = self.transporter.read()
+
+            self.rx_buf += more_data
+
+            for i, word in enumerate(self.rx_buf):
+                if word & 0x100:
+                    frame = bytes([x & 0xff for x in self.rx_buf[:i+1]])
+                    self.rx_buf = self.rx_buf[i+1:]
+                    op = recv_pending.pop(0)
+                    op.receive_done(frame)
+
+                    if not recv_pending:
+                        return
+
+            if more_data:
+                continue
+            
+
+        

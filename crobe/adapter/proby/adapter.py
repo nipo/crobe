@@ -70,7 +70,7 @@ class ProbyAdapter(basic.Adapter):
 
         elif interface_name == "spi-raw":
             self.reprogram("jtag_swd_raw")
-            return basic.Adapter.open(self, interface_name, channel = "A",
+            return basic.Adapter.open(self, "spi", channel = "A",
                                 resetn_pin = 8,
                                 csn_pin = 3,
                                 gpio_output = 0x061b, gpio_value = 0x0210)

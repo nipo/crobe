@@ -333,24 +333,6 @@ class SpiInterface(spi.Interface):
 class Adapter(model.Adapter):
     supported_interfaces = ["cs", "jtag", "swd", "spi", "spi-inv", "i2c", "i2c-int", "i2c-ext"]
 
-    def bulk_out(self, data, timeout = None):
-        self.logger.protocol("BULK OUT %s", binascii.b2a_hex(data))
-        self.handle.write(self.EP_OUT, data, int((timeout or 1.) * 1000))
-
-    def bulk_in(self, size, timeout = None):
-        self.logger.protocol("BULK IN %d", size)
-        data = self.handle.read(self.EP_IN, size, int((timeout or 1.) * 1000))
-        self.logger.protocol("-> %s", binascii.b2a_hex(data))
-        return data
-
-    def execute(self, blob, read_size = 0):
-        self.logger.protocol("Execute, %d out, %d in", len(blob), read_size)
-        self.bulk_out(blob)
-        rbuf = b''
-        while len(rbuf) < read_size:
-            rbuf += self.bulk_in(512)
-        return rbuf
-
     @classmethod
     def from_device(cls, d):
         serial = usb.util.get_string(d, d.iSerialNumber)
@@ -388,24 +370,23 @@ class Adapter(model.Adapter):
             usb.util.endpoint_direction(e.bEndpointAddress) ==
             usb.util.ENDPOINT_OUT)
 
-        self.EP_IN = self.ep_in.bEndpointAddress
-        self.EP_OUT = self.ep_out.bEndpointAddress
-
         self.logger.debug("Using interface %d, EP_IN: %02x, EP_OUT: %02x",
-                         self.intf.index, self.EP_IN, self.EP_OUT)
+                          self.intf.index,
+                          self.ep_in.bEndpointAddress,
+                          self.ep_out.bEndpointAddress)
 
-    def write(self, data):
-        self.bulk_out(data)
-
-    def _read(self):
-        return self.bulk_in(512)
+        self.io = model.BulkStreamPair(self, self.handle, "io", self.ep_out, self.ep_in)
+        self.child_add(self.io)
         
     def open(self, interface_name):
         from ..component.nsl.bnoc.routed import Router
         from ..component.nsl.bnoc.sized import Sized
 
-        s = Sized(self)
+        s = Sized(self.io)
+        self.child_add(s)
         r = Router(s)
+        self.child_add(r)
+
         self.regs = Registers(r.route(0xf, 0x0).framed_endpoint())
         self.child_add(self.regs)
         self.base_freq = self.regs.base_freq()

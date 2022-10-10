@@ -1,5 +1,6 @@
 from . import api
 from ...bitstring import BitString, BitStringSlice
+from ...model import PortComponent
 from .ftdi import Handle
 import enum
 
@@ -21,18 +22,19 @@ class Pin(enum.IntFlag):
     GpioH6 = 0x4000
     GpioH7 = 0x8000
 
-class Engine(Handle):
+class Engine(PortComponent):
     def __init__(self, device, interface):
-        Handle.__init__(self, device.connection_id, interface, "MPSSE")
+        super().__init__(device, interface)
+        self.handle = Handle(device.connection_id, interface, "MPSSE")
 
-        self.logger.note("Using MPSSE with a %s device, MPS: %d", self.type,
-                         self.max_packet_size)
+        self.logger.note("Using MPSSE with a %s device, MPS: %d", self.handle.type,
+                         self.handle.max_packet_size)
 
-        self.base_freq = 12e6 if self.type == "2232C" else 60e6
-        self.can_div5 = self.type != "2232C"
-        self.can_opendrain = self.type == "232H"
-        self.can_adaptive = "H" in self.type
-        self.can_pad = self.type in ["232H", "2232H", "4232H"]
+        self.base_freq = 12e6 if self.handle.type == "2232C" else 60e6
+        self.can_div5 = self.handle.type != "2232C"
+        self.can_opendrain = self.handle.type == "232H"
+        self.can_adaptive = "H" in self.handle.type
+        self.can_pad = self.handle.type in ["232H", "2232H", "4232H"]
         self.cycle_div = 2
         self.last_div = 0
         self.__freq = self.base_freq
@@ -70,7 +72,7 @@ class Engine(Handle):
 
         cmd = b''.join(cmd_parts)
             
-        rsp = super().execute(cmd, rsp_len, time)
+        rsp = self.handle.write_read(cmd, rsp_len, time)
 
         for (l, r), op in zip(rsp_range, operation_list):
             if l == r:

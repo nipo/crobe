@@ -596,7 +596,7 @@ class I2cInterface(BaseInterface, i2c.Interface):
         cmd_init = bytes([api.MPSSE_3_PHASE_ENABLE])
         if use_open_collector and self.handle.can_opendrain:
             cmd_init += bytes([api.MPSSE_DRIVE_OPEN_COLLECTOR, 0x03, 0x00])
-        self.handle.execute(cmd_init)
+        self.handle.mpsse_execute(cmd_init)
 
     def option_set(self, opt):
         if opt == "pullups":
@@ -705,7 +705,7 @@ class I2cInterface(BaseInterface, i2c.Interface):
             first = False
         cmd += self._cmd_stop()
 
-        rsp = self.handle.execute(bytes(cmd), rsp_size)
+        rsp = self.handle.mpsse_execute(bytes(cmd), rsp_size)
 
         for op in ops:
             if op.__saddr_ack is not None:
@@ -894,20 +894,20 @@ class ChipconInterface(BaseInterface, chipcon.Interface):
         cmd_read_low = bytes([api.MPSSE_GET_BITS_LOW])
         cmd_stuff = bytes([api.MPSSE_WRITE | api.MPSSE_WRITE_NEG, 0, 0, 0])
 
-        self.handle.execute(self.cmd_activity(True))
+        self.handle.mpsse_execute(self.cmd_activity(True))
 
         for op in operation_list:
             if isinstance(op, chipcon.DebugInit):
-                self.handle.execute(cmd_oe_off)
+                self.handle.mpsse_execute(cmd_oe_off)
                 self.reset(True)
-                self.handle.execute(bytes([api.MPSSE_WRITE | api.MPSSE_BITS | api.MPSSE_WRITE_NEG, 1, 0]))
+                self.handle.mpsse_execute(bytes([api.MPSSE_WRITE | api.MPSSE_BITS | api.MPSSE_WRITE_NEG, 1, 0]))
                 self.reset(False)
 
             elif isinstance(op, chipcon.Wait):
                 time.sleep(op.cycles / self.freq)
 
             elif isinstance(op, chipcon.Command):
-                r = self.handle.execute(
+                r = self.handle.mpsse_execute(
                     cmd_oe_on
                     + bytes([api.MPSSE_WRITE | api.MPSSE_WRITE_NEG, len(op.command) - 1, 0])
                     + op.command
@@ -915,15 +915,15 @@ class ChipconInterface(BaseInterface, chipcon.Interface):
                     + cmd_read_low, 1)
                 if op.rlen:
                     while r[0] & 4:
-                        r = self.handle.execute(cmd_stuff + cmd_read_low, 1)
-                    op.data = self.handle.execute(
+                        r = self.handle.mpsse_execute(cmd_stuff + cmd_read_low, 1)
+                    op.data = self.handle.mpsse_execute(
                         bytes([api.MPSSE_READ | api.MPSSE_WRITE_NEG | api.MPSSE_READ_NEG, op.rlen - 1, 0]),
                         op.rlen)
 
             else:
                 raise ValueError(op)
 
-        self.handle.execute(self.cmd_activity(False))
+        self.handle.mpsse_execute(self.cmd_activity(False))
 
 class SpiInterface(EngineInterface, spi.Interface):
     def __init__(self, adapter, csn_pin = None, name = None, **args):
