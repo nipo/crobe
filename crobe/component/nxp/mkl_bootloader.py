@@ -1,14 +1,14 @@
 from ...model import PortComponent
-from ...protocol import i2c
+from ...protocol import i2c, pipe
 import binascii
 import time
-from ...util.crc import crc
+from ...util.crc import crc as _crc
 
 __all__ = ["MklBootloader"]
 
 class MklI2cTransport(i2c.Slave):
     def __init__(self, bus, saddr):
-        PortComponent.__init__(self, bus, "MklI2c", saddr)
+        super().__init__(bus, "MklI2c", saddr)
 
 class MklBootloader(PortComponent):
     max_packet_size = 0x10
@@ -18,7 +18,7 @@ class MklBootloader(PortComponent):
 
     @staticmethod
     def crc(blob, state = 0):
-        state = crc(data, state, 0x11021, pop_lsb = False, push_lsb = True, inv_state = False)
+        state = _crc(blob, state, 0x11021, pop_lsb = False, push_lsb = True, inv_state = False)
         return state.to_bytes(2, "little")
 
     FRAME_START         = 0x5a
@@ -225,3 +225,7 @@ class MklBootloader(PortComponent):
 def mkl_reg(bus):
     tr = MklI2cTransport(bus, 0x10)
     return MklBootloader(tr)
+
+@pipe.Interface.db.register("mkl")
+def mkl_serial(pipe):
+    return MklBootloader(pipe)
