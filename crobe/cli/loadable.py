@@ -22,7 +22,7 @@ def loadable():
 @loadable.command(help = "Dump file parsing results")
 @click.argument("programs", type = base.PROGRAM, nargs = -1)
 def dump(programs):
-    Program.from_programs(programs).simplified().pprint()
+    Program.from_programs(programs).pprint()
         
 @loadable.command(help = "Convert to binary")
 @click.argument("programs", type = base.PROGRAM, nargs = -1)
