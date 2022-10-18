@@ -21,3 +21,4 @@ from . import ethernet
 from . import one_wire
 from . import pll
 from . import loadable
+from . import rp2
