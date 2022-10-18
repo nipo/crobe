@@ -199,3 +199,22 @@ class IHex(object):
       f = open(fname, "wb")
     f.write(self.write())
     f.close()
+
+from . import model
+
+@model.Program.ext_db.register("hex")
+@model.Program.ext_db.register("ihex")
+@model.Program.ext_db.register("mcs")
+@model.Program.format_db.register("hex")
+@model.Program.format_db.register("ihex")
+class HexProgram(model.Program):
+    """Program from an Intel-Hex file"""
+
+    def __init__(self, filename, offset = 0):
+        super().__init__(filename)
+        ih = IHex.read_file(filename)
+
+        segment = None
+        for addr, data in ih.areas.items():
+            segment = model.Segment(addr + offset, data, filename)
+            self.append(segment)
