@@ -9,3 +9,5 @@ from . import lattice
 from . import literals
 from . import mem
 from . import xilinx
+from . import dfu
+from . import uf2
