@@ -4,6 +4,8 @@ import serial.tools.list_ports
 from ..protocol import pipe
 import threading
 import time
+import os
+import os.path
 
 __all__ = []
 
@@ -132,6 +134,10 @@ class SerialEnumerator(model.Enumerator):
     
     def start(self):
         for port in serial.tools.list_ports.comports():
-            adapter = SerialAdapter(port.name, port.device)
+            if port.name:
+                name = port.name
+            else:
+                name = os.path.basename(str(port.device))
+            adapter = SerialAdapter(name, port.device)
             self.child_add(adapter)
         super().start()
