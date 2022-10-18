@@ -72,7 +72,7 @@ class Interface(model.PortComponent, FreqCapper):
             self.execute([self.cmd_reset(True), self.cmd_reset(False)])
 
         if self.__wait:
-            self.logger.trace("Waiting for %d sec", self.__wait)
+            self.logger.trace("Waiting for %f sec", self.__wait)
             time.sleep(self.__wait)
 
         super().start()
