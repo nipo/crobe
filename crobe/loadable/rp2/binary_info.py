@@ -20,18 +20,18 @@ class Core:
 Core.db.register_default(Core)
 
 names = {
-    (b'RP', 0x02031c86): "Program name",
-    (b'RP', 0x11a9bc3a): "Program version string",
-    (b'RP', 0x9da22254): "Program build date string",
-    (b'RP', 0x68f465de): "Binary end",
-    (b'RP', 0x1856239a): "Program URL",
-    (b'RP', 0xb6a07c19): "Program description",
-    (b'RP', 0xa1f4b453): "Program feature",
-    (b'RP', 0x4275f0d3): "Program build attribute",
-    (b'RP', 0x5360b3ab): "SDK version",
-    (b'RP', 0xb63cffbb): "Pico board",
-    (b'RP', 0x7f8882e1): "Boot2 name",
-    (b'MP', 0x4a99d719): "Frozen",
+    (b'RP', 0x02031c86): ("program_name","Program name",),
+    (b'RP', 0x11a9bc3a): ("program_version_string","Program version string",),
+    (b'RP', 0x9da22254): ("program_build_date_string","Program build date string",),
+    (b'RP', 0x68f465de): ("binary_end","Binary end",),
+    (b'RP', 0x1856239a): ("program_url","Program URL",),
+    (b'RP', 0xb6a07c19): ("program_description","Program description",),
+    (b'RP', 0xa1f4b453): ("program_feature","Program feature",),
+    (b'RP', 0x4275f0d3): ("program_build_attribute","Program build attribute",),
+    (b'RP', 0x5360b3ab): ("sdk_version","SDK version",),
+    (b'RP', 0xb63cffbb): ("pico_board","Pico board",),
+    (b'RP', 0x7f8882e1): ("boot2_name","Boot2 name",),
+    (b'MP', 0x4a99d719): ("frozen","Frozen",),
 }
 
 @Core.db.register((b'RP', 1))
@@ -75,10 +75,10 @@ class IdAndInt(Core):
     def __init__(self, program, pointer, type, tag):
         super().__init__(program, pointer, type, tag)
         self.id, self.value = struct.unpack("<LL", program.read(pointer+4, 8))
+        self.key, self.pretty_name = names.get((self.tag, self.id), (f'{self.id:#010x}', f'Unknown ID {self.id:#010x}'))
 
     def __str__(self):
-        id = names.get((self.tag, self.id), f'{self.id:#010x}')
-        return f"<{self.tag} Int {id}: {self.value:#010x}>"
+        return f"<{self.tag} Int {self.pretty_name}: {self.value:#010x}>"
 
 @Core.db.register((b'MP', 6))
 @Core.db.register((b'RP', 6))
@@ -90,10 +90,10 @@ class IdAndString(Core):
         while not b'\x00' in self.value:
             self.value += program.read(strp+len(self.value), 32)
         self.value = str(self.value.split(b'\x00')[0], 'utf-8')
+        self.key, self.pretty_name = names.get((self.tag, self.id), (f'{self.id:#010x}', f'Unknown ID {self.id:#010x}'))
 
     def __str__(self):
-        id = names.get((self.tag, self.id), f'{self.id:#010x}')
-        return f"<{self.tag} Str {id}: '{self.value}'>"
+        return f"<{self.tag} Str {self.pretty_name}: '{self.value}'>"
 
 @Core.db.register((b'MP', 7))
 @Core.db.register((b'RP', 7))
