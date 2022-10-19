@@ -1,4 +1,7 @@
-targets = efm32series0g efm32series0 efm32series1 efm32series1gg nrf51 lpc11 stm32f01 mkl arm79 crc32_cm3 crc32_cm0
+targets = arm_soc_puppet
+arm_soc_puppet-code = efm32series0g efm32series0 efm32series1 efm32series1gg nrf51 lpc11 stm32f01 mkl arm79 crc32_cm3 crc32_cm0
+arm_soc_puppet-dest = ../../../../crobe/target/soc/arm_based/puppet_code.py
+
 arm-prefix = arm-mutekh-eabi-
 
 arm79-src = arm79.c
@@ -56,18 +59,10 @@ lpc11-sections = iap_call
 lpc11-cflags = -mcpu=cortex-m0 -mthumb -Os -fPIC
 lpc11-arch = arm
 
-target = ../../../../crobe/target/soc/arm_based/puppet_code.py
-
-all: $(target)
-
-$(target): code.py
-	cp $< $@
+all:
 
 clean:
 	rm -f $(clean-files)
-
-code-files =
-clean-files = code.py
 
 define section_expand
 
@@ -80,27 +75,41 @@ $1-$2.py: $1-$2.bin dump_code.py
 $1-code-files += $1-$2.py
 clean-files += $1-$2.bin
 clean-files += $1-$2.py
-code-files += $1.py
+$3 += $1.py
 
 endef
 
-define target_expand
+define code_file_expand
 
-$1.o: $($1-src) $(MAKEFILE_LIST)
+$1.o: $$($1-src) $(MAKEFILE_LIST)
 	$($($1-arch)-prefix)gcc -c -o $$@ $$< $($(1)-cflags) -std=c99 -ffunction-sections -g
 
 clean-files += $1.o
 clean-files += $1.py
 
-$(eval $(foreach s,$($1-sections),$(call section_expand,$1,$s)))
+$(foreach s,$($1-sections),$(call section_expand,$1,$s,$2))
 
-$1.py: $($1-code-files)
+$1.py: $$($1-code-files)
 	echo "$1 = {}" > $$@
 	cat $$^ | sort >> $$@
 
 endef
 
-$(eval $(foreach t,$(targets),$(call target_expand,$t)))
+define code_gen
 
-code.py: $(code-files)
-	cat $^ > $@
+$1-files :=
+clean-files = $1.py
+
+$(foreach t,$($1-code),$(call code_file_expand,$t,$1-files))
+
+$1.py: $$($1-files)
+	cat $$^ > $$@
+
+all: $$($1-dest)
+
+$$($1-dest): $1.py
+	cp $$< $$@
+
+endef
+
+$(eval $(foreach n,$(targets),$(call code_gen,$n)))
