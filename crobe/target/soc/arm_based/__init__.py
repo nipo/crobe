@@ -9,4 +9,5 @@ from . import psoc6
 from . import cc26xx
 from . import zynq_ps
 from . import rp2040
+from . import rp2_picoboot
 from . import zup_ps

@@ -1,6 +1,6 @@
-from ...part_id import PartId
-from ...protocol import swd
-from ..arm.sw_dp import MultidropSwDp
+from ....part_id import PartId
+from ....protocol import swd
+from ...arm.sw_dp import MultidropSwDp
 
 swd.Interface.targetsel_db._register([PartId(9, 0x13, 0x1002, 0xf)], "RP2040")
 

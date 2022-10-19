@@ -1,6 +1,8 @@
-targets = arm_soc_puppet
+targets = arm_soc_puppet rp2
 arm_soc_puppet-code = efm32series0g efm32series0 efm32series1 efm32series1gg nrf51 lpc11 stm32f01 mkl arm79 crc32_cm3 crc32_cm0
 arm_soc_puppet-dest = ../../../../crobe/target/soc/arm_based/puppet_code.py
+rp2-code = rp2040
+rp2-dest = ../../../../crobe/component/raspberrypi/rp2/bootloader_kernels.py
 
 arm-prefix = arm-mutekh-eabi-
 
@@ -8,6 +10,11 @@ arm79-src = arm79.c
 arm79-sections = dcc_cnc
 arm79-cflags = -march=armv5te -Os -fPIC
 arm79-arch = arm
+
+rp2040-src = rp2040.c
+rp2040-sections = flash_spi_transact
+rp2040-cflags = -mcpu=cortex-m0 -mthumb -Os -fPIC
+rp2040-arch = arm
 
 crc32_cm3-src = crc32.c
 crc32_cm3-sections = memory_crc32
