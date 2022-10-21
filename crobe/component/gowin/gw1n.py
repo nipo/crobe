@@ -1,7 +1,7 @@
-from ..model import JtagSramFpga
+from ..model import JtagSramFpga, SramFpga
 from ...model import PortComponent
 from ...part_id import PartId
-from ...protocol import jtag
+from ...protocol import jtag, spi
 from ... import bitfield
 from ... import bitstring
 from ...util.endian import bitswap8
@@ -108,7 +108,6 @@ class GowinFpga(jtag.Tap, JtagSramFpga):
         self.logger.warning("Not implemented")
 
     def status_read(self):
-        print("Read status")
         return self.READ_STATUS.shift(read_tdo = True)
 
     def _sram_erase(self):
@@ -223,3 +222,34 @@ def spi_interface(tap):
     from ..jtag_spi_bridge import JtagSpiBridge
     return JtagSpiBridge(tap, tap.USER_IR[0], tap.USER_IR[1], tap.max_freq)
 
+@spi.Target.db.register("gowin_slave")
+def gowin_slave_probe(target, *args):
+    return GowinSlaveSerial(target)
+
+class GowinSlaveSerial(PortComponent, SramFpga):
+    def __init__(self, port):
+        PortComponent.__init__(self, port, "Slave Gowin")
+        SramFpga.__init__(self)
+
+    def start(self):
+        self.port.freq_cap("gowin", 50e6)
+        super().start()
+
+    def stop(self):
+        pass
+
+    def reset(self):
+        pass
+
+    def load(self, program):
+        self.port.port.reset(True)
+        self.port.port.reset(False)
+
+        blob = program[0].data
+        self.logger.trace("Loading %d bytes bitstream", len(blob))
+        self.port.execute([self.port.cmd_cs(True)])
+        for off in range(0, len(blob), 1024):
+            chunk = blob[off : off + 1024]
+            self.port.execute([self.port.cmd_shift(chunk, read_miso = False)])
+        self.port.execute([self.port.cmd_shift(b'\x00'*32, read_miso = False)])
+        self.port.execute([self.port.cmd_cs(False)])
