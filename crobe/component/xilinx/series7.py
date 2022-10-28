@@ -48,9 +48,19 @@ class Series7(Series67):
         Code0        = bitfield.MappingField(48, 5, "0123456789ABCDEFGhjTlmnpqrUvwxYz")
         Unk2         = bitfield.Field(53, 11)
 
+    class FuseCts(bitfield.Bitfield):
+        KEY = 0xa08a28ac
+
+        dma = bitfield.BooleanField(0)
+        program = bitfield.BooleanField(1)
+        data = bitfield.Field(32, 32)
+        row = bitfield.Field(3, 5)
+        bit = bitfield.Field(8, 5)
+        margin_opt = bitfield.Field(13, 2)
+
     FUSE_DNA_REGISTER = jtag.Dr(64, FuseDNA)
     IR_FUSE_DNA    = jtag.Instruction(0x32, "FUSE_DNA_REGISTER")
-    FUSE_CMD_REGISTER = jtag.Dr(64)
+    FUSE_CMD_REGISTER = jtag.Dr(64, FuseCts)
     IR_FUSE_CTS    = jtag.Instruction(0x30, "FUSE_CMD_REGISTER")
     IR_FUSE_USER   = jtag.Instruction(0x33, None)
     IR_FUSE_KEY    = jtag.Instruction(0x31, None)
@@ -130,6 +140,22 @@ class Series7(Series67):
             return int(self.fuse_dna)
         finally:
             self.port.port.freq_cap("dna", None)
+
+    def start(self):
+        super().start()
+        ctl0 = self.cfg_read(5, 1)[0]
+        ctl1 = self.cfg_read(0x18, 1)[0]
+        cor0 = self.cfg_read(9, 1)[0]
+        cor1 = self.cfg_read(0xe, 1)[0]
+        wbstar = self.cfg_read(0x10, 1)[0]
+        bootsts = self.cfg_read(0x16, 1)[0]
+        bspi = self.cfg_read(0x1f, 1)[0]
+
+        self.logger.info("CTL0: %08x, CTL1: %08x", ctl0, ctl1)
+        self.logger.info("COR0: %08x, COR1: %08x", cor0, cor1)
+        self.logger.info("WBSTAR: %08x", wbstar)
+        self.logger.info("BOOTSTS: %08x", bootsts)
+        self.logger.info("BSPI: %08x", bspi)
 
     def load(self, program, force_reload = False):
         if len(program) != 1:
@@ -330,16 +356,6 @@ class Series7(Series67):
         assert a == b
         return a
 
-    class FuseCts(bitfield.Bitfield):
-        KEY = 0xa08a28ac
-
-        dma = bitfield.BooleanField(0)
-        program = bitfield.BooleanField(1)
-        data = bitfield.Field(32, 32)
-        row = bitfield.Field(3, 5)
-        bit = bitfield.Field(8, 5)
-        margin_opt = bitfield.Field(13, 2)
-
     @classmethod
     def dr_cts_write(cls, row, bit, margin_opt, program, dma):
         assert 0 <= margin_opt <= 3
@@ -375,17 +391,18 @@ class Series7(Series67):
         """
         cts = self.FuseCts(row = row, bit = 0, margin_opt = margin_opt,
                            program = 0, dma = 1, data = self.FuseCts.KEY)
+        r = self.IR_FUSE_CTS.cmd(0, read_tdo = True)
 
         ops = [self.IR_FUSE_CTS.cmd(0),
                self.cmd_run(12),
                self.IR_FUSE_CTS.cmd(cts, read_tdo = False),
-               self.IR_FUSE_CTS.cmd(read_tdo = True),
+               r,
                self.cmd_run(1),
                self.BYPASS.cmd(),
                ]
         self.execute(ops)
 
-        value = int(ops[3].tdo) & 0x3fffffff
+        value = (r.tdo.data) & 0x3fffffff
 
         return value
 
