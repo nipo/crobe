@@ -33,10 +33,10 @@ class I2cInterface(i2c.Interface):
             self.scl = opt[4:]
             return
         if opt.startswith("hi="):
-            self.hi = opt[3:].split(",")
+            self.hi = opt[3:].split(";")
             return
         if opt.startswith("lo="):
-            self.lo = opt[3:].split(",")
+            self.lo = opt[3:].split(";")
             return
         super().option_set(opt)
 
