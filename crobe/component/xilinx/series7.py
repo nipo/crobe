@@ -568,9 +568,10 @@ class Series7SlaveSerial(PortComponent, SramFpga):
 
         blob = program[0].data
         self.logger.trace("Loading %d bytes bitstream", len(blob))
-        self.port.execute([self.port.cmd_cs(True)])
+        commands = [self.port.cmd_cs(True)]
         for off in range(0, len(blob), 1024):
             chunk = blob[off : off + 1024]
-            self.port.execute([self.port.cmd_shift(chunk, read_miso = False)])
-        self.port.execute([self.port.cmd_shift(b'\x00'*32, read_miso = False)])
-        self.port.execute([self.port.cmd_cs(False)])
+            commands.append(self.port.cmd_shift(chunk, read_miso = False))
+        commands.append(self.port.cmd_shift(b'\x00'*1024, read_miso = False))
+        commands.append(self.port.cmd_cs(False))
+        self.port.execute(commands)
