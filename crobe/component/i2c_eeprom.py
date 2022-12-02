@@ -37,12 +37,8 @@ class I2cMem(i2c.Slave, Bus):
 
         r = b''
         for off in range(addr, addr + size, read_by):
-            saddr, baddr = self._addr(off)
-
-            ro = self.port.cmd_read(saddr, read_by)
-            wa = self.port.cmd_write(saddr, baddr)
-            self.port.execute([wa, ro])
-            r += ro.data
+            chunk = self._read(off, read_by)
+            r += chunk
         return r[:size]
 
     def write(self, addr, data):
@@ -64,6 +60,13 @@ class I2cMem(i2c.Slave, Bus):
     def mem_write(self, address, data):
         return self.write(address, data)
 
+    def _read(self, addr, size):
+        saddr, baddr = self._addr(addr)
+        wa = self.port.cmd_write(saddr, baddr)
+        ro = self.port.cmd_read(saddr, size)
+        self.port.execute([wa, ro])
+        return ro.data
+    
     def _write(self, addr, data):
         assert 0 < len(data) <= self.page_size
         assert addr // self.page_size == (addr + len(data) - 1) // self.page_size
@@ -89,21 +92,29 @@ class I2cEeprom(I2cMem):
         assert 0 < len(data) <= self.page_size
         assert addr // self.page_size == (addr + len(data) - 1) // self.page_size
 
-        for retry in range(3):
-            I2cMem._write(self, addr, data)
-
-            time.sleep(.05)
-            deadline = time.time() + .1
-            while time.time() < deadline:
-                try:
-                    r = I2cMem.read(self, addr, len(data))
-                    if r == data:
-                        return
-                except i2c.AddressNack:
-                    time.sleep(.01)
+        deadline = time.time() + .1
+        while True:
+            try:
+                return I2cMem._write(self, addr, data)
+            except i2c.AddressNack:
+                if time.time() < deadline:
+                    time.sleep(.001)
                     continue
-                break
-        raise RuntimeError()
+                raise
+
+    def _read(self, addr, size):
+        assert 0 < size <= self.page_size
+        assert addr // self.page_size == (addr + size - 1) // self.page_size
+
+        deadline = time.time() + .1
+        while True:
+            try:
+                return I2cMem._read(self, addr, size)
+            except i2c.AddressNack:
+                if time.time() < deadline:
+                    time.sleep(.001)
+                    continue
+                raise
 
 @i2c.Interface.db.register("m24m02")
 def m24m02(bus):
