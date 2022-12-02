@@ -124,13 +124,14 @@ class AddressedSlave(Slave, Bus):
         Bus.__init__(self, self.name)
         self.addr_bytes = addr_bytes
         self.saddr_bits = saddr_bits
-        self.page_size = page_size
+        self.size = 1 << (self.addr_bytes * 8 + self.saddr_bits)
+        self.page_size = page_size or self.size
 
     def start(self):
         super().start()
         self.size = 1 << (self.addr_bytes * 8 + self.saddr_bits)
         if self.page_size is None:
-            self.page_size = 16
+            self.page_size = self.size
         
     def _addr(self, addr):
         baddr = (addr & ((1 << (self.addr_bytes * 8)) - 1)).to_bytes(self.addr_bytes, 'big')
