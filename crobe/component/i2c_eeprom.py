@@ -129,6 +129,13 @@ def _24lc128(bus):
                      addr_bytes = 2,
                      page_size = 64)
 
+@i2c.Interface.db.register("24lc08")
+def _24lc08(bus):
+    return I2cEeprom(bus, 0x50,
+                     addr_bytes = 1,
+                     saddr_bits = 2,
+                     page_size = 16)
+
 @i2c.Interface.db.register("pca24s08")
 def _pca24s08(bus):
     return I2cEeprom(bus, 0x54,
