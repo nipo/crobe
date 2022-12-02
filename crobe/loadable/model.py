@@ -262,7 +262,7 @@ class Program:
                 continue
 
             try:
-                parsers = cls.format_db.get(option)
+                parsers = cls.format_db.get(option.lower())
                 continue
             except db.NoMatch:
                 pass
