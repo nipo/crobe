@@ -39,9 +39,13 @@ class SocketPipe(pipe.BackgroundInterface):
         return data
 
 class SocketSession(model.Component):
-    def __init__(self, socket):
-        addrinfo = socket.getpeername()
-        name = "%s:%d" % (addrinfo[0], addrinfo[1])
+    def __init__(self, socket, name = None):
+        if name is None:
+            try:
+                addrinfo = socket.getpeername()
+                name = "%s:%d" % (addrinfo[0], addrinfo[1])
+            except AttributeError:
+                name = "session"
         super().__init__(name)
         self.sock = socket
         self.buffer = b''
@@ -81,11 +85,13 @@ class SessionThread(threading.Thread):
         super().__init__()
 
     def run(self):
+        self.root.logger.info("Starting")
         try:
             while True:
                 self.root.serve()
         except SocketClosed:
-            return
+            pass
+        self.root.logger.info("Done")
         
 class SocketServer(object):
     handler_class = SocketSession

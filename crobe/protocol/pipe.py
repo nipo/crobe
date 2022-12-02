@@ -161,3 +161,42 @@ class BackgroundInterface(Interface):
 
     def _read(self, size, timeout = None):
         raise NotImplementedError()
+
+class Closed(Exception):
+    pass
+    
+class Responder(PortComponent):
+    def __init__(self, pipe, name = "session"):
+        super().__init__(pipe, name)
+        self.buffer = b''
+
+    def refill(self, count = None):
+        if count is None:
+            self.wait_more()
+        else:
+            while len(self.buffer) < count:
+                self.wait_more()
+
+    def wait_more(self):
+        d = self.port.read(1)
+        if not d:
+            raise Closed()
+        self.logger.protocol("> %s", d.hex())
+        self.buffer += d
+        
+    def read(self, count):
+        self.refill(count)
+        blob = self.buffer[:count]
+        self.buffer = self.buffer[count:]
+        return blob
+
+    def write(self, data):
+        while data:
+            try:
+                self.logger.protocol("< todo %s", data.hex())
+                written = self.port.write(data)
+            except Exception:
+                raise Closed()
+            if written:
+                self.logger.protocol("< %s", data[:written].hex())
+            data = data[written:]
