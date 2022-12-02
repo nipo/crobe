@@ -1,5 +1,5 @@
 from ....model import PortComponent
-from ....protocol import base, jtag
+from ....protocol import base, jtag, datagram, pipe
 from ....util.pretty import metric
 from ....bitstring import BitString, BitStringSlice
 import math
@@ -166,7 +166,14 @@ class JtagTransactor(PortComponent):
 
             assert cmd_size
             try:
-                in_blob = self.port.send_receive(cmd[:cmd_size])
+                if isinstance(self.port, datagram.Interface):
+                    in_blob = self.port.send_receive(cmd[:cmd_size])
+                elif isinstance(self.port, pipe.Interface):
+                    in_blob = self.port.write_read(cmd[:cmd_size], rsp_size)
+                    while len(in_blob) < rsp_size:
+                        in_blob += self.port.read(rsp_size - len(in_blob))
+                else:
+                    raise RuntimeError(f"Cannot handle port {self.port}")
             except:
                 print(ops)
                 print(pending)
