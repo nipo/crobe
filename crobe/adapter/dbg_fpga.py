@@ -235,6 +235,10 @@ class I2cInterface(i2c.Interface):
     def freq_update(self, freq):
         return self.__i2c_trx.freq_update(freq)
 
+    def start(self):
+        self.options.apply()
+        super().start()
+
     def option_set(self, opt):
         if self.options.option_set(opt):
             return
@@ -341,7 +345,11 @@ class Adapter(model.Adapter):
     def __init__(self, device, name):
         model.Adapter.__init__(self, name)
         self.handle = device
+        self.io = None
 
+    def _open(self):
+        if self.io:
+            return
         cfg = self.handle.get_active_configuration()
         if cfg.bConfigurationValue == 0:
             self.handle.set_configuration(1)
@@ -382,6 +390,8 @@ class Adapter(model.Adapter):
         from ..component.nsl.bnoc.routed import Router
         from ..component.nsl.bnoc.sized import Sized
 
+        self._open()
+        
         s = Sized(self.io)
         self.child_add(s)
         r = Router(s)
