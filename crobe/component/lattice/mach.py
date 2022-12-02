@@ -109,6 +109,7 @@ class MachXO2Config(jtag.InstructionRegistry):
 
     ISC_ADDRESS   = jtag.Dr(None)
     ISC_SECTOR    = jtag.Dr(8)
+    DR_ADDR_INIT  = jtag.Dr(8)
     ISC_DEFAULT   = jtag.Dr(1)
     BUSY          = jtag.Dr(1)
     ISC_DATA      = jtag.Dr(None)
@@ -161,8 +162,8 @@ class MachXO2Config(jtag.InstructionRegistry):
     LSC_WRITE_ADDRESS    = jtag.Instruction(0xb4, "PAGE_ADDRESS")
     VERIFY_ID            = jtag.Instruction(0xe2, "DR_UNKNOWN")
     LSC_WRITE_COMP_DIC   = jtag.Instruction(0x02, "DR_UNKNOWN")
-    LSC_INIT_ADDRESS     = jtag.Instruction(0x46, None)
-    LSC_INIT_ADDRESS_UFM = jtag.Instruction(0x47, None)
+    LSC_INIT_ADDRESS     = jtag.Instruction(0x46, "DR_ADDR_INIT")
+    LSC_INIT_ADDRESS_UFM = jtag.Instruction(0x47, "DR_ADDR_INIT")
     LSC_PROG_INCR_RTI    = jtag.Instruction(0x82, "DR_UNKNOWN")
     LSC_VERIFY_INCR_RTI  = jtag.Instruction(0x6a, "DR_UNKNOWN")
 
@@ -418,7 +419,7 @@ class MachXO2Config(jtag.InstructionRegistry):
         data = self.row_flip(data)
 
         for off in range(0, len(data), 16):
-            w = self.LSC_PROG_INCR_NV.cmd(bytes(data[off : off+16]))
+            w = self.LSC_PROG_INCR_NV.cmd(bitstring.BitString(bytes(data[off : off+16])))
             cmds = [
                 w,
                 self.cmd_run(1000),
