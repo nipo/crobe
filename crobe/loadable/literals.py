@@ -19,12 +19,12 @@ class RandomProgram(model.Program):
 class ZeroProgram(model.Program):
     def __init__(self, size, offset = 0):
         super().__init__()
-
-        program.append(model.Segment(address = offset, data = b'\x00' * int(size, 0)))
+        
+        self.append(model.Segment(address = offset, data = b'\x00' * int(size, 0)))
 
 @model.Program.format_db.register("one")
 class OneProgram(model.Program):
     def __init__(self, size, offset = 0):
         super().__init__()
 
-        program.append(model.Segment(address = offset, data = b'\xff' * int(size, 0)))
+        self.append(model.Segment(address = offset, data = b'\xff' * int(size, 0)))
