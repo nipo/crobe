@@ -108,6 +108,12 @@ class Adapter(model.Adapter):
         return self.ctrl_in(self.CMD_RW_INTERNAL, addr & 0xffff, addr >> 16, size)
 
     def reopen(self):
+        try:
+            usb.util.get_string(self.device, self.device.iManufacturer)
+            return
+        except Exception as e:
+            print(e)
+            pass
         self.logger.trace("Reopening %s", self.original_persistent_id)
         del self.device
 
