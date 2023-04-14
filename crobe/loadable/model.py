@@ -276,13 +276,16 @@ class Program:
                 parsers += cls.ext_db.get(ext)
             except db.NoMatch:
                 pass
-
+            
         for p in parsers:
             try:
                 return p(filename, offset)
             except db.NoMatch:
                 pass
-            except:
+            except ValueError:
+                raise
+            except Exception as e:
+                warnings.warn(f"Loading {filename} with {p} failed: {e}")
                 pass
 
         raise RuntimeError(f"Format of {filename} not known")
