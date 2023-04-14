@@ -1295,6 +1295,9 @@ class SmiInterface(EngineInterface, smi.Interface):
                 mpsse_ops += self.__oe.cmds_set(False)
                 mpsse_ops.append(mpsse.ShiftBits(1, 1))
 
+            elif isinstance(op, base.Reset):
+                mpsse_ops += self.cmds_system_reset(op.asserted)
+
 #            elif isinstance(op, smi.C45Read):
 #                pending.append(([self.CMD_C45_READ | op.prtad, op.devad], 3, op))
 #            elif isinstance(op, smi.C45Write):
