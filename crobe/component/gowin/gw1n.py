@@ -108,7 +108,9 @@ class GowinFpga(jtag.Tap, JtagSramFpga):
         self.logger.warning("Not implemented")
 
     def status_read(self):
-        return self.READ_STATUS.shift(read_tdo = True)
+        r = self.READ_STATUS.shift(read_tdo = True)
+        self.logger.info("Status: %s", r)
+        return r
 
     def _sram_erase(self):
         self.logger.trace("Erasing SRAM")
@@ -118,8 +120,10 @@ class GowinFpga(jtag.Tap, JtagSramFpga):
             self.ISC_SRAM_ERASE.cmd(),
             self.cmd_run(8),
             self.ISC_NOOP.cmd(),
-            self.cmd_run(2),
-            self.cmd_run(10000),
+            self.cmd_run(100),
+        ])
+        time.sleep(10e-3)
+        self.execute([
             self.ISC_SRAM_ERASE_DONE.cmd(),
             self.cmd_run(8),
             self.ISC_NOOP.cmd(),
@@ -127,9 +131,9 @@ class GowinFpga(jtag.Tap, JtagSramFpga):
             self.ISC_DISABLE.cmd(),
             self.cmd_run(8),
             self.ISC_NOOP.cmd(),
-            self.cmd_run(8),
-            self.cmd_run(8),
+            self.cmd_run(100),
             ])
+        time.sleep(10e-3)
 
     def sram_erase(self):
         for retry in range(3):
@@ -139,22 +143,39 @@ class GowinFpga(jtag.Tap, JtagSramFpga):
                 break
         assert not st.Done, st
 
+    def assert_done(self):
+        for retry in range(3):
+            r = self.READ_STATUS.cmd(read_tdo = True)
+            self.execute([
+                self.cmd_run(1000),
+                r,
+                ])
+            self.logger.info("Status: %s", r)
+            st = r.tdo
+            if st.Done:
+                break
+        assert st.Done, st
+
     def sram_configure(self, program_data):
         self.logger.trace("Loading %d bytes to SRAM", len(program_data))
         program_data = bitswap8(program_data)
         program_data = b'\xff'*60 + program_data + b'\xff'*60
         self.execute([
             self.ISC_ENABLE.cmd(),
-            self.cmd_run(2),
+            self.cmd_run(100),
             self.ISC_ADDRESS_INIT.cmd(),
+            self.cmd_run(100),
             self.ISC_TRANSFER_CONFIG.cmd(),
-            self.cmd_run(2),
+            self.cmd_run(100),
             self.ISC_TRANSFER_CONFIG.cmd(bitstring.BitString(program_data)),
+            self.cmd_run(100),
             self.ISC_DISABLE.cmd(),
-            self.cmd_run(2),
+            self.cmd_run(100),
             self.ISC_NOOP.cmd(),
-            self.cmd_run(5),
+            self.cmd_run(100),
             ])
+        self.assert_done()
+        return self.status_read().Done
         
 @jtag.Chain.db.register(*set([PartId(8, 0x0d, p) for (p,n) in parts.items() if n.startswith("GW1")]))
 class Gw1n(GowinFpga):
