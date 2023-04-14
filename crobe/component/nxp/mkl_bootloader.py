@@ -10,12 +10,18 @@ class MklI2cTransport(i2c.Slave):
     def __init__(self, bus, saddr):
         super().__init__(bus, "MklI2c", saddr)
 
+    def read(self, size, timeout = None):
+        return super().read(size)
+
 class MklBootloader(PortComponent):
     max_packet_size = 0x10
 
     def __init__(self, port):
         PortComponent.__init__(self, port, "MklBl")
 
+    def option_set(self, opt):
+        return self.port.option_set(opt)
+        
     @staticmethod
     def crc(blob, state = 0):
         state = _crc(blob, state, 0x11021, pop_lsb = False, push_lsb = True, inv_state = False)
@@ -72,8 +78,10 @@ class MklBootloader(PortComponent):
 
         self.port.write(blob)
 
-    def frame_receive(self, tag, size):
-        r = self.port.read(size)
+    def frame_receive(self, tag, size, timeout = 1.):
+        r = self.port.read(size, timeout = timeout)
+        if size and not r:
+            raise TimeoutError("No data")
 
         if tag == self.FRAME_PING_RESPONSE:
             assert r[0] == self.FRAME_START
@@ -104,32 +112,42 @@ class MklBootloader(PortComponent):
         FRAME_DATA: .010,
         }
 
-    def txn_write(self, tag, params, rsp_tag, rsp_frame_size):
+    def txn_write(self, tag, params, rsp_tag, rsp_frame_size, timeout = 1.):
         self.logger.protocol("txn write %02x %s %02x", tag, params, rsp_tag)
         self.frame_send(tag, params)
         time.sleep(self.DELAYS.get(tag, .1))
-        return self.frame_receive(rsp_tag, rsp_frame_size)
+        return self.frame_receive(rsp_tag, rsp_frame_size, timeout)
 
-    def txn_read(self, tag, size):
+    def txn_read(self, tag, size, timeout = 1.):
         self.logger.protocol("txn read %02x", tag)
         time.sleep(.1)
-        r = self.frame_receive(tag, size)
+        r = self.frame_receive(tag, size, timeout)
         self.frame_send(self.FRAME_ACK)
         return r
 
     def ping(self):
-        time.sleep(.1)
+        time.sleep(.01)
         self.logger.trace("ping")
-        return self.txn_write(self.FRAME_PING, b'', self.FRAME_PING_RESPONSE, 10)
+        for retry in range(9, -1, -1):
+            try:
+                r = self.txn_write(self.FRAME_PING, b'', self.FRAME_PING_RESPONSE, 10, timeout = .5)
+            except TimeoutError:
+                continue
+            if r:
+                return r
 
     def abort(self):
         self.frame_send(self.FRAME_ACK_ABORT)
         for i in range(10):
             try:
-                self.ping()
+                r = self.ping()
             except i2c.AddressNack:
                 continue
             except AssertionError:
+                continue
+            except TimeoutError:
+                continue
+            if not r:
                 continue
             break
 
@@ -188,6 +206,9 @@ class MklBootloader(PortComponent):
         assert flash_start <= entry_point < flash_start + flash_size
         assert not stack or (ram_start <= stack < ram_start + ram_size)
         self.command(self.CMD_EXECUTE, [entry_point, arg, stack])
+
+    def reset(self):
+        self.command(self.CMD_RESET)
 
     def mem_write(self, addr, blob, chunk_size = 0x8):
         chunks = [blob[i:i+chunk_size] for i in range(0, len(blob), chunk_size)]

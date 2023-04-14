@@ -37,10 +37,10 @@ class MKL0x(SoC):
         self.mdm_ap, = dp.children_of_class(MdmAp)
 
         st = self.mdm_ap.status
-        self.logger.debug("MDM-AP control: %08x", self.mdm_ap.control)
-        self.logger.debug("MDM-AP status: %08x", st)
+        self.logger.debug("MDM-AP control: %s", self.mdm_ap.control)
+        self.logger.debug("MDM-AP status: %s", st)
 
-        if not (st & self.mdm_ap.STATUS_SYSTEM_SECURITY):
+        if not st.SystemSecurity:
             self.info_update()
 
     def info_update(self):
@@ -101,7 +101,7 @@ class MKL0x(SoC):
         self.mdm_ap.erase_all()
         self.force_blank()
 
-        if not (st & self.mdm_ap.STATUS_SYSTEM_SECURITY):
+        if not st.SystemSecurity:
             return
 
         self.bus.port.port.reset = True
