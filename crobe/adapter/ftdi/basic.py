@@ -1314,4 +1314,4 @@ class SmiInterface(EngineInterface, smi.Interface):
 
         for index, op in enumerate(operation_list):
             if index in tdos:
-                op.data = int(mpsse_ops[tdos[index]].data)
+                op.data = int.from_bytes(mpsse_ops[tdos[index]].data, "big")
