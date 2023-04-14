@@ -10,10 +10,12 @@ import os
 import math
 import threading
 import weakref
+import errno
 
 __all__ = []
                 
 @model.UsbEnumerator.db.register(model.UsbInfo(idVendor = 0x0483, idProduct = 0x572a))
+@model.UsbEnumerator.db.register(model.UsbInfo(idVendor = 0x0483, idProduct = 0x5740))
 class Adapter(model.Adapter):
     supported_interfaces = ["swd"]
 
@@ -33,15 +35,31 @@ class Adapter(model.Adapter):
         self.cmsis_dap_intf = None
 
     def cmsis_interface_lookup(self):
+        possible = []
         for config in self.device:
             for interface in config:
                 if interface.iInterface == 0:
                     continue
-                if usb.util.get_string(self.device, interface.iInterface) != "CMSIS-DAP":
+                name = usb.util.get_string(self.device, interface.iInterface)
+                precedence = {
+                    "CMSIS-DAP": 10,
+#                    "CMSIS-DAP v1 Adapter": 5,
+                    "CMSIS-DAP v2 Adapter": 2,
+                }.get(name, None)
+                
+                if precedence is None:
                     continue
 
-                return config.bConfigurationValue, interface.bInterfaceNumber
-        return None
+                possible.append((precedence, config.bConfigurationValue, interface.bInterfaceNumber))
+
+        if not possible:
+            return
+
+        if len(possible) > 1:
+            possible.sort()
+
+        selected = possible[0]
+        return selected[1], selected[2]
 
     def cmsis_dap_out(self, data, timeout = None):
         data = bytes(data)
@@ -87,8 +105,9 @@ class Adapter(model.Adapter):
                 usb.util.ENDPOINT_OUT)
             try:
                 self.cmsis_dap_in(timeout = .1)
-            except usb.core.USBTimeoutError:
-                pass
+            except usb.core.USBError as e:
+                if e.args[0] != errno.ETIMEDOUT:
+                    raise
         
         if interface_name.lower() == "swd":
             return SwdInterface(self)
