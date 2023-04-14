@@ -4,6 +4,7 @@ import click
 import click
 from ..loadable.object import Program
 import struct
+import re
 
 def program_get(programs, within):
     p = Program.from_programs(programs)
@@ -88,6 +89,72 @@ def hexdump(programs, within, bitswap):
         if bitswap:
             data = endian.bitswap8(data)
         hexdump(s.address, data, printer = print)
+
+@loadable.command(help = "C blob file generator")
+@click.argument("programs", type = base.PROGRAM, nargs = -1)
+@click.option("--within", type = base.ADDRESS_RANGE, multiple = True)
+@click.option('-s', '--bitswap', is_flag = True, help = "Byte swap output")
+@click.option('-n', '--name', type = str, default = "blob", help = "Variable name")
+@click.option('--align', type = int, default = 1, help = "Alignment constraint")
+@click.option('--section', type = str, default = None, help = "Target section")
+@click.option('--static', is_flag = True, default = False, help = "Emit symbols as static")
+@click.option('--extern', is_flag = True, default = False, help = "Only emit symbol forward declarations")
+@click.option('-S', '--size', is_flag = True, default = False, help = "Also emit size constant")
+@click.argument("output", type = click.File("w"))
+def to_c_blob(programs, within, bitswap, output, name, align, section, size, static, extern):
+    p = program_get(programs, within).simplified()
+    if len(p) > 1:
+        raise ValueError("Loadable has more than one segment")
+    data = p[0].data
+    if bitswap:
+        data = endian.bitswap8(data)
+
+    guard_name = re.sub('[^A-Z]+', '_', name.upper()) + "_DECLARED"
+
+    if static and extern:
+        raise ValueError("Cannot be extern and static at the same time")
+        
+    output.write(f"""\
+#ifndef {guard_name}
+#define {guard_name}
+
+#include <stdint.h>
+#include <stdlib.h>
+
+""")
+
+    if not extern:
+        if section:
+            output.write(f"__attribute__((section \"{section}\"))\n")
+        if align != 1:
+            output.write(f"__attribute__((aligned ({align})))\n")
+    if static:
+        output.write(f"static ")
+    elif extern:
+        output.write(f"extern ")
+    output.write(f"const uint8_t {name}[]")
+    if not extern:
+        output.write(f" = {{\n")
+        for off in range(0, len(data), 16):
+            subset = data[off : min(len(data) , off + 16)]
+            line = ', '.join(f'{v:#04x}' for v in subset)
+            output.write(f" /* {off:#010x}: */ {line},\n")
+        output.write(f"}}")
+    output.write(f";\n")
+    
+    if size:
+        if static:
+            output.write(f"static ")
+        elif extern:
+            output.write(f"extern ")
+        output.write(f"const size_t {name}_size")
+        if not extern:
+            output.write(f" = {len(data):#x}")
+        output.write(f";\n\n")
+
+    output.write(f"""\
+#endif
+""")
 
 if __name__ == "__main__":
     cli.main()
