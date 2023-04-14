@@ -1,11 +1,12 @@
 from .isp import Isp
+from ...protocol import spi
 
 class Atmega(Isp):
     def __init__(self, port):
         Isp.__init__(self, port, "ATMega")
 
     def start(self):
-        PortComponent.start(self)
+        super().start()
         self.enable()
         self.device_signature = self.device_signature_read()
         self.name = self.DEVICE_LIST.get(self.device_signature, "AVR (%06x)" % self.device_signature)
@@ -107,4 +108,4 @@ class Atmega(Isp):
 
 @spi.Target.db.register("atmega")
 def atmega_probe(bus, *args):
-    return Atmega(bus)
+    return Atmega(bus, *args)

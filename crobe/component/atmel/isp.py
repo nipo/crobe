@@ -1,39 +1,42 @@
 from ...protocol import spi
+from ...model import PortComponent
 import struct
 import time
 
-class Isp(spi.Target):
+class Isp(PortComponent):
     def __init__(self, port, name = None):
-        spi.Target.__init__(self, name or "ISP", port)
+        super().__init__(port, name or "ISP")
 
     def command(self, *data):
         assert len(data) <= 4
-        b = bytes(list(data) + ([0] * (4 - len(data))))
-        return self.port.shift(b)
+        rop = self.port.cmd_shift(b"\x00"*(4 - len(data)), read_miso = True)
+        self.port.execute([self.port.cmd_cs(True)])
+        self.port.execute([self.port.cmd_shift(bytes(data), read_miso = False),
+                           rop,
+                           self.port.cmd_cs(False)])
+        return rop.miso
 
     def enable(self):
-        self.port.reset = False
-        time.sleep(.1)
-        self.port.reset = True
         ret = self.command(0xac, 0x53)
-        assert ret[2] == 0x53
+        assert ret[0] == 0x53, ret.hex()
 
     def device_signature_read(self):
-        cmds = []
+        rsp = []
         for i in range(3):
-            cmds.append(self.port.cmd_shift(bytes([0x30, 0, i, 0])))
-        self.port.execute(cmds)
-        return int.from_bytes(bytes([c.miso[-1] for c in cmds]), byteorder = "big")
+            r, = self.command(0x30, 0, i)
+            rsp.append(r)
+        v = bytes(rsp)
+        return int.from_bytes(v, "big")
 
     def chip_erase(self):
-        return self.command(0xac, 0x80)
+        return self.command(0xac, 0x80)[0]
 
     def program_read_word(self, addr):
         h = addr & 1
         a = (addr >> 9) & 0xff
         b = (addr >> 1) & 0xff
 
-        return self.command(0x20 | (h << 3), a, b)[-1]
+        return self.command(0x20 | (h << 3), a, b)[0]
 
     def program_mem_read(self, base, size):
         cmds = []
