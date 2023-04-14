@@ -95,7 +95,11 @@ class UsbEnumerator(AutoEnumerator):
 
     def start(self):
         import usb.core
-        for dev in usb.core.find(find_all = True):
+        try:
+            devices = usb.core.find(find_all = True)
+        except usb.core.NoBackendError:
+            devices = []
+        for dev in devices:
             try:
                 owners = self.db.get(dev, allow_default = False)
                 self.logger.debug("Device %03d/%03d %04x:%04x, %d drivers", dev.bus, dev.address, dev.idVendor, dev.idProduct, len(owners))

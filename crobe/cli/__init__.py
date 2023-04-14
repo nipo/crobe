@@ -1,6 +1,16 @@
 from . import info
-from . import jlink
-from . import ftdi
+
+try:
+    from . import jlink
+except RuntimeError:
+    pass
+
+try:
+    from . import ftdi
+    from . import digilent
+except RuntimeError:
+    pass
+
 from . import xilinx
 from . import memory
 from . import chip
@@ -13,7 +23,6 @@ from . import secu
 from . import ltc_poe
 from . import melexis
 from . import smbus
-from . import digilent
 from . import repl
 from . import run
 from . import wiznet
