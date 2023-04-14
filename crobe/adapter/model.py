@@ -185,7 +185,7 @@ class BulkStreamPair(pipe.Interface):
     def _do_read(self, size, timeout):
         self.logger.protocol("%02x > %s", self.in_ep.bEndpointAddress, size)
         data = self.device.read(self.in_ep.bEndpointAddress,
-                                size or self.in_ep.wMaxPacketSize,
+                                self.in_ep.wMaxPacketSize,
                                 int((timeout or 1.) * 1000))
         data = bytes(data)
         self.logger.protocol("-> %s", data.hex())
