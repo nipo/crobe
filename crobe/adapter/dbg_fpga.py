@@ -60,14 +60,55 @@ class Adapter(model.Adapter):
     def __init__(self, device, name):
         model.Adapter.__init__(self, name)
         self.handle = device
+        self.io = None
+
+    def _open(self):
+        if self.io:
+            return
+        cfg = self.handle.get_active_configuration()
+        if cfg.bConfigurationValue == 0:
+            self.handle.set_configuration(1)
+            cfg = self.handle.get_active_configuration()
+        for intf in cfg:
+            self.logger.debug("Has interface %d, %02x:%02x:%02x",
+                  intf.index,
+                  intf.bInterfaceClass,
+                  intf.bInterfaceSubClass,
+                  intf.bInterfaceProtocol)
+            if intf.bInterfaceClass == 0xff and \
+               intf.bInterfaceSubClass == 0xff and \
+               intf.bInterfaceProtocol == 0xff:
+                self.intf = intf
+                break
+        usb.util.claim_interface(self.handle, self.intf)
+
+        self.ep_in = usb.util.find_descriptor(
+            self.intf,
+            custom_match = lambda e:
+            usb.util.endpoint_direction(e.bEndpointAddress) ==
+            usb.util.ENDPOINT_IN)
+        self.ep_out = usb.util.find_descriptor(
+            self.intf,
+            custom_match = lambda e:
+            usb.util.endpoint_direction(e.bEndpointAddress) ==
+            usb.util.ENDPOINT_OUT)
+
+        self.logger.debug("Using interface %d, EP_IN: %02x, EP_OUT: %02x",
+                          self.intf.index,
+                          self.ep_in.bEndpointAddress,
+                          self.ep_out.bEndpointAddress)
+
+        self.io = model.BulkStreamPair(self, self.handle, "io", self.ep_out, self.ep_in)
+        self.child_add(self.io)
 
     def open(self, interface_name):
+        self._open()
         try:
             self.execute(b"\x07", 64, timeout = .05)
         except:
             pass
         if interface_name.lower() == "spi":
-            return BlSpiInterface(self)
+            return BlSpiInterface(self.io)
 
 class BlSpiInterface(spi.Interface):
     def __init__(self, port):
