@@ -97,23 +97,14 @@ class InfoL1C34(Rm0038Cat3):
             return 256
         return 384
 
-class Rm0008(Info):
-    flash_size_addr = 0x1ffff7e0
-    uid_blob_addr = 0x1ffff7e8
-    dbgmcu_addr = 0xe0042000
-    dbgmcu_init = {4: 0x186}
-
-class Rm0091Flash:
-    BASE = 0x40022000
-
-    ACR     = BASE + 0x00
-    KEYR    = BASE + 0x04
-    OPTKEYR = BASE + 0x08
-    SR      = BASE + 0x0c
-    CR      = BASE + 0x10
-    AR      = BASE + 0x14
-    OBR     = BASE + 0x1c
-    WRPR    = BASE + 0x20
+class Pm0075FlashBank:
+    # Flash bank used by Pm0075, Pm0068, Rm0091
+    KEYR    = 0x04
+    SR      = 0x0c
+    CR      = 0x10
+    AR      = 0x14
+    OBR     = 0x1c
+    WRPR    = 0x20
 
     KEY_RDPRT   = 0x00A5
     KEY_1       = 0x45670123
@@ -132,55 +123,119 @@ class Rm0091Flash:
     CR_STRT     = 0x00000040
     CR_LOCK     = 0x00000080
     CR_OPTWRE   = 0x00000200
-    CR_OBL_LAUNCH = 0x00002000
 
-    def __init__(self, bus):
+    def __init__(self, bus, base):
         self.bus = bus
+        self.base = base
 
     def unlock(self):
-        while self.bus.u32_read(self.SR) & self.SR_BSY:
+        while self.bus.u32_read(self.base + self.SR) & self.SR_BSY:
             time.sleep(.01)
-        if self.bus.u32_read(self.CR) & self.CR_LOCK:
-            self.bus.u32_write(self.KEYR, self.KEY_1)
-            self.bus.u32_write(self.KEYR, self.KEY_2)
-
-    def opt_unlock(self):
-        self.unlock()
-        if not (self.bus.u32_read(self.CR) & self.CR_OPTWRE):
-            self.bus.u32_write(self.OPTKEYR, self.KEY_1)
-            self.bus.u32_write(self.OPTKEYR, self.KEY_2)
+        if self.bus.u32_read(self.base + self.CR) & self.CR_LOCK:
+            self.bus.u32_write(self.base + self.KEYR, self.KEY_1)
+            self.bus.u32_write(self.base + self.KEYR, self.KEY_2)
 
     def lock(self):
-        if self.bus.u32_read(self.CR) & self.CR_OPTWRE:
-            self.bus.u32_write(self.CR, self.bus.u32_read(self.CR) & ~self.CR_OPTWRE)
-        if not (self.bus.u32_read(self.CR) & self.CR_LOCK):
-            self.bus.u32_write(self.CR, self.bus.u32_read(self.CR) | self.CR_LOCK)
+        if not (self.bus.u32_read(self.base + self.CR) & self.CR_LOCK):
+            self.bus.u32_write(self.base + self.CR, self.bus.u32_read(self.base + self.CR) | self.CR_LOCK)
 
     def mass_erase(self):
         self.unlock()
-        self.bus.u32_write(self.CR, self.bus.u32_read(self.CR) | self.CR_MER)
-        self.bus.u32_write(self.CR, self.bus.u32_read(self.CR) | self.CR_STRT)
-        while self.bus.u32_read(self.SR) & self.SR_BSY:
+        self.bus.u32_write(self.base + self.CR, self.bus.u32_read(self.base + self.CR) | self.CR_MER)
+        self.bus.u32_write(self.base + self.CR, self.bus.u32_read(self.base + self.CR) | self.CR_STRT)
+        while self.bus.u32_read(self.base + self.SR) & self.SR_BSY:
             time.sleep(.01)
-        if self.bus.u32_read(self.SR) & self.SR_EOP:
-            self.bus.u32_write(self.SR, self.SR_EOP)
-        self.bus.u32_write(self.CR, self.bus.u32_read(self.CR) & ~self.CR_MER)
+        if self.bus.u32_read(self.base + self.SR) & self.SR_EOP:
+            self.bus.u32_write(self.base + self.SR, self.SR_EOP)
+        self.bus.u32_write(self.base + self.CR, self.bus.u32_read(self.base + self.CR) & ~self.CR_MER)
         self.lock()
+
+class Pm0075Opt:
+    OPTKEYR = 0x08
+    SR      = 0x0c
+    CR      = 0x10
+
+    KEY_1       = 0x45670123
+    KEY_2       = 0xCDEF89AB
+
+    SR_BSY      = 0x00000001
+    SR_EOP      = 0x00000020
+
+    CR_OPTPG    = 0x00000010
+    CR_OPTER    = 0x00000020
+    CR_STRT     = 0x00000040
+    CR_OPTWRE   = 0x00000200
+    CR_OBL_LAUNCH = 0x00002000
+
+    def __init__(self, bus, base):
+        self.bus = bus
+        self.base = base
+
+    def unlock(self):
+        if not (self.bus.u32_read(self.base + self.CR) & self.CR_OPTWRE):
+            self.bus.u32_write(self.base + self.OPTKEYR, self.KEY_1)
+            self.bus.u32_write(self.base + self.OPTKEYR, self.KEY_2)
+
+    def lock(self):
+        if self.bus.u32_read(self.base + self.CR) & self.CR_OPTWRE:
+            self.bus.u32_write(self.base + self.CR, self.bus.u32_read(self.base + self.CR) & ~self.CR_OPTWRE)
+
+    def erase(self):
+        self.unlock()
+        self.bus.u32_write(self.base + self.CR, self.bus.u32_read(self.base + self.CR) | self.CR_OPTER)
+        self.bus.u32_write(self.base + self.CR, self.bus.u32_read(self.base + self.CR) | self.CR_STRT)
+        while self.bus.u32_read(self.base + self.SR) & self.SR_BSY:
+            time.sleep(.01)
+        if self.bus.u32_read(self.base + self.SR) & self.SR_EOP:
+            self.bus.u32_write(self.base + self.SR, self.SR_EOP)
+        self.bus.u32_write(self.base + self.CR, self.bus.u32_read(self.base + self.CR) & ~self.CR_OPTER)
+        self.lock()
+
+    def rm0091_reload(self):
+        self.bus.u32_write(self.base + self.CR, self.bus.u32_read(self.base + self.CR) | self.CR_OBL_LAUNCH)
+        time.sleep(0.1)
+
+class Pm0075Flash:
+    def __init__(self, bus, base = 0x40022000):
+        self.bus = bus
+        self.bank = Pm0075FlashBank(bus, base)
+        self.opt = Pm0075Opt(bus, base)
+
+    def unlock(self):
+        self.bank.unlock()
+
+    def opt_unlock(self):
+        self.bank.unlock()
+        self.opt.unlock()
+
+    def lock(self):
+        self.opt.lock()
+        self.bank.lock()
+
+    def mass_erase(self):
+        self.bank.mass_erase()
 
     def opt_erase(self):
-        self.unlock()
-        self.bus.u32_write(self.CR, self.bus.u32_read(self.CR) | self.CR_OPTER)
-        self.bus.u32_write(self.CR, self.bus.u32_read(self.CR) | self.CR_STRT)
-        while self.bus.u32_read(self.SR) & self.SR_BSY:
-            time.sleep(.01)
-        if self.bus.u32_read(self.SR) & self.SR_EOP:
-            self.bus.u32_write(self.SR, self.SR_EOP)
-        self.bus.u32_write(self.CR, self.bus.u32_read(self.CR) & ~self.CR_OPTER)
-        self.lock()
+        self.opt.erase()
 
     def reload(self):
-        self.bus.u32_write(self.CR, self.bus.u32_read(self.CR) | self.CR_OBL_LAUNCH)
-        time.sleep(0.1)
+        pass
+        
+class Rm0091Flash(Pm0075Flash):
+    def reload(self):
+        self.opt.rm0091_reload()
+
+class Rm0008(Info):
+    flash_size_addr = 0x1ffff7e0
+    uid_blob_addr = 0x1ffff7e8
+    dbgmcu_addr = 0xe0042000
+    dbgmcu_init = {4: 0x186}
+
+class Rm0008_Pm0068(Rm0008):
+    pass
+
+class Rm0008_Pm0075(Rm0008):
+    flash_class = Pm0075Flash
 
 class Pm0059Flash:
     BASE = 0x40023c00
@@ -315,11 +370,11 @@ Info.parts = {
     0: Info("", 0),
 
     # RM0008
-    0x410: Rm0008("F10x/Medium-Density", 1024),
-    0x412: Rm0008("F10x/Low-Density",    1024),
-    0x414: Rm0008("F10x/High-Density",   2048),
-    0x418: Rm0008("F10x/Connectivity",   2048),
-    0x430: Rm0008("F10x/XL",             2048),
+    0x410: Rm0008_Pm0075("F10x/Medium-Density", 1024),
+    0x412: Rm0008_Pm0075("F10x/Low-Density",    1024),
+    0x414: Rm0008_Pm0075("F10x/High-Density",   2048),
+    0x418: Rm0008_Pm0075("F10x/Connectivity",   2048),
+    0x430: Rm0008_Pm0068("F10x/XL",             2048),
     # RM0360/RM0091
     0x440: Rm0360("F030x8",              1024),
     0x444: Rm0360("F030x4/6",            1024),
