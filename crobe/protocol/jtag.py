@@ -72,11 +72,12 @@ class Interface(base.Interface):
 
     def __init__(self, port, name = None):
         base.Interface.__init__(self, port, name or "ATE")
+        self.child_add(Chain(self))
 
     def start(self):
         super().start()
-        if not self.children:
-            self.child_summon("chain")
+        #if not self.children:
+        #    self.child_summon("chain")
 
     def child_spawn(self, sub):
         if sub in ["chain", "0"]:
@@ -341,7 +342,7 @@ class Chain(PortComponent):
     db = Db("TAP IDCODE")
     
     def __init__(self, port):
-        PortComponent.__init__(self, port, "JTAG Chain")
+        PortComponent.__init__(self, port, "chain")
         self.name = "Chain"
         self.default_dr_override = []
         self.tap = {}
@@ -369,7 +370,11 @@ class Chain(PortComponent):
 
             # Last IR is still IDCODE, so blind discovery should
             # happen nornally even for iCEPicks
-            self.discover()
+            try:
+                self.discover()
+            except:
+                self.reset()
+                raise
 
     def children_changed(self):
         self.port.freq_cap_min(self.children)
@@ -489,7 +494,7 @@ class Chain(PortComponent):
             self.logger.error("Ambiguous IR lengths")
             raise ValueError("Bad IR length possibilities", ir_length_possibilities)
 
-        idcodes = [(self.tap.get(index, None) or idcode) for (index, idcode) in enumerate(id_codes)]
+        id_codes = [self.tap.get(index, idcode) for (index, idcode) in enumerate(id_codes)]
         ir_lengths = ir_length_possibilities[0]
 
         self.taps_set(zip(id_codes, ir_lengths))
@@ -538,6 +543,7 @@ class Chain(PortComponent):
             no, value = opt.split("=", 1)
             no = int(no[4:])
             self.tap[no] = value
+            self.logger.info("Forcing TAP#%d to be %s", no, value)
             return
 
         super().option_set(opt)
