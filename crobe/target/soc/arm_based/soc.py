@@ -279,7 +279,7 @@ class SoC(model.SoC):
         cpu.resume()
 
     def reset(self):
-        cpu, = self.children_of_class(Cortex)
+        cpu = self.children_of_class(Cortex)[0]
         cpu.reset(False)
 
     def write(self, program,
