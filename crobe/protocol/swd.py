@@ -147,6 +147,9 @@ class Interface(base.Interface):
             self.do_multidrop_enumeration = True
             self.turnaround_supported = False
             return
+        if opt == "nota":
+            self.turnaround_supported = False
+            return
         base.Interface.option_set(self, opt)
 
     def multidrop_enumerate(self):
