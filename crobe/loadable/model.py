@@ -1,4 +1,5 @@
 from .. import db
+import warnings
 
 __all__ = ['Segment', 'Program']
 
@@ -198,6 +199,8 @@ class Program:
         fd.close()
 
     def save_cypress_img(self, filename, type = 0xb0):
+        import struct
+        
         fd = open(filename, "wb")
 
         fd.write(b"CY")
@@ -282,8 +285,9 @@ class Program:
                 return p(filename, offset)
             except db.NoMatch:
                 pass
-            except ValueError:
-                raise
+            except ValueError as e:
+                warnings.warn(f"Loading {filename} with {p} failed: {e}")
+                pass
             except Exception as e:
                 warnings.warn(f"Loading {filename} with {p} failed: {e}")
                 pass
