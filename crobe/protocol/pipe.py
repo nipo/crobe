@@ -145,11 +145,12 @@ class BackgroundInterface(Interface):
     def _execute(self, operation_list, timeout = None):
         for op in operation_list:
             if isinstance(op, Write):
-                self.logger.info("to background writer: %s", op.data.hex())
+                self.logger.info("bg < %s", op.data.hex())
                 self.__bw.write(op.data, timeout)
 
             elif isinstance(op, Read):
                 op.data = self._read(op.size, timeout)
+                self.logger.info("   > %s", op.data.hex())
 
             else:
                 raise base.ProtocolError("Unknown Pipe operation %s" % type(op))
