@@ -601,6 +601,8 @@ class I2cInterface(BaseInterface, i2c.Interface):
     def option_set(self, opt):
         if opt == "pullups":
             self.pullup_enable = True
+            return True
+        return super().option_set(opt)
 
     def _cmd_read(self, size, ack_last):
         cmd_ack = bytes([
