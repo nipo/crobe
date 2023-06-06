@@ -15,3 +15,10 @@ def pll():
 def si5351_dump(root, clkin, xtal):
     root.state_dump(clkin = clkin * 1e6, xtal = xtal * 1e6)
 
+@pll.command(help = "Dump CDCM6208 config/status")
+@click.option('-r', '--root', type = base.ROOT)
+@click.option('-p', '--primary', type = float, default = 0.)
+@click.option('-s', '--secondary', type = float, default = 0.)
+def cdcm6208_dump(root, primary, secondary):
+    root.state_dump(pri = primary, sec = secondary)
+
