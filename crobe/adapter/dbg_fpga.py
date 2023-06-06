@@ -183,7 +183,11 @@ class Registers(ControlStatus):
 
     def reset_assert(self, asserted):
         self.logger.trace("%s reset", "Holding" if asserted else "Releasing")
-        self.reg_update(self.REG_MODE, 0x10, -int(bool(asserted)))
+        self.reg_update(self.REG_MODE, 0x20000, -int(bool(asserted)))
+
+    def detect_assert(self, asserted):
+        self.logger.trace("%s detect", "Holding" if asserted else "Releasing")
+        self.reg_update(self.REG_MODE, 0x10000, -int(not asserted))
 
     def target_voltage_get(self):
         reg = self.reg_read(self.REG_V)
@@ -217,16 +221,20 @@ class Registers(ControlStatus):
 class DbgFpgaOpts:
     def __init__(self, regs):
         self.regs = regs
-        self.cycle = False
+        self.cycle_time = 0
         self.power = "track", None
+        self.power_settle = .2
         self.baudrate = None
+        self.detect = True
 
     def option_set(self, value):
         if value.startswith("baudrate="):
             self.baudrate = sci_parse(value[9:])
             return True
         if value.startswith("poweroff"):
-            self.cycle = True
+            self.cycle_time = .2
+            if value.startswith("poweroff="):
+                self.cycle_time = float(value[9:])
             return True
         if value.startswith("vsupply="):
             self.power = "supply", float(value[8:])
@@ -234,8 +242,15 @@ class DbgFpgaOpts:
         if value.startswith("vref="):
             self.power = "force", float(value[5:])
             return True
+        if value.startswith("power_settle="):
+            self.power_settle = float(value[13:])
+            return True
+        if value.startswith("nodetect"):
+            self.detect = False
+            return True
 
     def apply(self):
+        self.regs.detect_assert(self.detect)
         if self.baudrate is not None:
             self.regs.baudrate_set(self.baudrate)
             br = self.regs.baudrate_get()
@@ -243,10 +258,10 @@ class DbgFpgaOpts:
                                   metric(self.baudrate, "baud"),
                                   metric(br, "baud"))
 
-        if self.cycle:
+        if self.cycle_time:
             self.regs.logger.note("Cycling target")
             self.regs.target_voltage_set(supply = True, voltage = 0)
-            time.sleep(.2)
+            time.sleep(self.cycle_time)
 
         mode, value = self.power
         if mode == "track":
@@ -258,7 +273,7 @@ class DbgFpgaOpts:
         else:
             self.regs.logger.note("Setting reference voltage to %1.1fV", value)
             self.regs.target_voltage_set(voltage = value+.025)
-        time.sleep(.2)
+        time.sleep(self.power_settle)
         self.regs.logger.info("Current target voltage: %1.3f", self.regs.target_voltage_get())
 
 class I2cInterface(i2c.Interface):
@@ -373,6 +388,22 @@ class SpiInterface(spi.Interface):
 
     def freq_update(self, freq):
         return self.spi.freq_update(freq)
+
+class NoneInterface(base.Interface):
+    def __init__(self, regs):
+        self.regs = regs
+        self.options = DbgFpgaOpts(regs)
+        super().__init__(regs, "none")
+
+    def start(self):
+        self.regs.detect_assert(False)
+        self.options.apply()
+        super().start()
+
+    def option_set(self, opt):
+        if self.options.option_set(opt):
+            return
+        super().option_set(opt)
     
 @model.UsbEnumerator.db.register(model.UsbInfo(idVendor = 0x1500, idProduct = 0xdeba))
 class Adapter(model.Adapter):
@@ -446,6 +477,7 @@ class Adapter(model.Adapter):
         self.jtag = JtagInterface(r.route(0xf, 0x2).framed_endpoint(), self.base_freq, self.regs)
         self.spi = SpiInterface(r.route(0xf, 0x3).framed_endpoint(), self.base_freq, self.regs)
         self.i2c = I2cInterface(r.route(0xf, 0x4).framed_endpoint(), self.base_freq, self.regs)
+        self.none = NoneInterface(self.regs)
 
         self.child_add(self.jtag)
         self.child_add(self.spi)
@@ -482,3 +514,7 @@ class Adapter(model.Adapter):
         elif interface_name.lower() == "i2c-int":
             self.regs.mode_set("I2C-INT")
             return self.i2c
+
+        elif interface_name.lower() == "none":
+            self.regs.mode_set("FORCE")
+            return self.none
