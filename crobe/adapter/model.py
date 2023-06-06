@@ -188,12 +188,19 @@ class BulkStreamPair(pipe.Interface):
 
     def _do_read(self, size, timeout):
         self.logger.protocol("%02x > %s", self.in_ep.bEndpointAddress, size)
-        data = self.device.read(self.in_ep.bEndpointAddress,
-                                self.in_ep.wMaxPacketSize,
-                                int((timeout or 1.) * 1000))
-        data = bytes(data)
-        self.logger.protocol("-> %s", data.hex())
-        return data
+        rdata = b''
+        while len(rdata) < (size or 1):
+            data = self.device.read(self.in_ep.bEndpointAddress,
+                                    self.in_ep.wMaxPacketSize,
+                                    int((timeout or 1.) * 1000))
+            data = bytes(data)
+            rdata += data
+        if size is not None and len(rdata) > size:
+            self.logger.warning("Too much data received, expected %d bytes, had %d, truncating",
+                                size, len(rdata))
+            rdata = rdata[:size]
+        self.logger.protocol("-> %s", rdata.hex())
+        return rdata
     
     def execute(self, operation_list, timeout = None):
         for op in operation_list:
