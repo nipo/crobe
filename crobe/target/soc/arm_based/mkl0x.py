@@ -100,6 +100,12 @@ class MKL0x(SoC):
 
         self.mdm_ap.erase_all()
         self.force_blank()
+        self.mdm_ap.control_mod(DebugReq = True)
+        self.mdm_ap.control_mod(ResetReq = True)
+        self.mdm_ap.control_mod(ResetReq = False)
+        time.sleep(.1)
+        self.mdm_ap.control
+        self.mdm_ap.status
 
         if not st.SystemSecurity:
             return
@@ -110,7 +116,7 @@ class MKL0x(SoC):
         self.bus.port.port.reset = False
         self.bus.port.debug_enable(True)
         self.bus.enable()
-#        self.mdm_ap.connect(False)
+        self.mdm_ap.connect(False)
         cpu, = self.children_of_class(Cpu)
         cpu.scs.enable()
         cpu.fpb.enable()
