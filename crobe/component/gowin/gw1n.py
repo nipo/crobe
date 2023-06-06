@@ -69,6 +69,8 @@ class GowinFpga(jtag.Tap, JtagSramFpga):
     # User registers
     USER1 = jtag.Instruction(0x42, None)
     USER2 = jtag.Instruction(0x43, None)
+    IR_USER1 = jtag.Instruction(0x42, None)
+    IR_USER2 = jtag.Instruction(0x43, None)
     
     # Documented for SPI configuration
     WRITE_DISABLE     = jtag.Instruction(0x3a, 'ISC_DEFAULT')
@@ -86,7 +88,8 @@ class GowinFpga(jtag.Tap, JtagSramFpga):
 
     def start(self):
         super().start()
-        self.logger.debug("Status: %s", self.status_read())
+        status = self.status_read()
+        self.logger.debug("Status: %s", status)
 
     def flash_erase(self):
         raise NotImplementedError()
@@ -98,7 +101,9 @@ class GowinFpga(jtag.Tap, JtagSramFpga):
         self.sram_erase()
         data = program[0].data
         self.sram_configure(data)
-        self.logger.debug(self.status_read())
+        status = self.status_read()
+        self.logger.debug("Status: %s", status)
+        return status.Done
 
     def stop(self):
         self.sram_erase()
