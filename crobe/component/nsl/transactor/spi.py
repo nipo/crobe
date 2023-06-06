@@ -1,6 +1,6 @@
 from ....util.pretty import metric
 from ....model import PortComponent
-from ....protocol import base, spi
+from ....protocol import base, spi, datagram, pipe
 from ....bitstring import BitString
 import math
 
@@ -89,7 +89,14 @@ class SpiTransactor(PortComponent):
                 raise base.ProtocolError("Unknown SPI operation %s" % type(op))
 
         cmd = b''.join(pending)
-        rsp = self.port.send_receive(cmd)
+        if isinstance(self.port, datagram.Interface):
+            rsp = self.port.send_receive(cmd)
+        elif isinstance(self.port, pipe.Interface):
+            rsp = self.port.write_read(cmd, rsp_size)
+            while len(rsp) < rsp_size:
+                rsp += self.port.read(rsp_size - len(rsp))
+        else:
+            raise RuntimeError(f"Cannot handle port {self.port}")
 
         for op in operation_list:
             if isinstance(op, spi.Shift) and op.__gather:
