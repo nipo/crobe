@@ -21,9 +21,8 @@ class JtagSpiBridge(PortComponent):
     def __init__(self, port, data_io, status_io, base_freq):
         from .nsl.bnoc import jtag_fifo_transport, framed
 
-        self.__fifo = jtag_fifo_transport.JtagFifoTransport(port, 9, data_io, status_io)
+        self.__gateway = jtag_fifo_transport.JtagFramedTransport(port, data_io, status_io)
         self.__base_freq = base_freq
-        self.__gateway = framed.Framed(self.__fifo)
 
         super().__init__(port, "bridge")
         self.spi = SpiInterface(self.__gateway, base_freq)
