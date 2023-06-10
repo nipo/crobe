@@ -1,4 +1,5 @@
 from ...protocol import jtag
+from ...part_id import PartId
 from ... import bitfield
 import enum
 from . import dm
@@ -100,3 +101,16 @@ class Tap(IrReg):
             next_dm = dm_inst.next_base_get() or None
             self.child_add(dm_inst)
             dm_index += 1
+
+
+@jtag.Chain.db.register("riscv")
+class RvTap(jtag.Tap, Tap):
+    irlen = 5
+
+    def __init__(self, port, idcode):
+        jtag.Tap.__init__(self, port, idcode, name = "Risc-V Tap")
+        Tap.__init__(self)
+
+    def start(self):
+        jtag.Tap.start(self)
+        Tap.start(self)
