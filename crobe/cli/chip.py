@@ -33,8 +33,6 @@ def program(ctx, programs, assume_clean, erase, check, run, nodetach, reset):
     click.echo("Target: %s" % target)
 
     program = Program.from_programs(programs) or Program()
-
-    program = program.simplified()
     
     target.write(program,
                  do_erase = erase,

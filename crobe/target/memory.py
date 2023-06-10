@@ -254,6 +254,8 @@ class Loadable:
               assume_clean = False):
         self.program_begin(do_erase, assume_clean)
 
+        program = program.simplified()
+        
         to_erase = []
         to_flash = []
 
