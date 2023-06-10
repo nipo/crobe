@@ -65,6 +65,115 @@ class ArmMPuppet(Puppet):
     def stub(self, code):
         return PuppetStub(self, code)
 
+class AutoPuppetBuffer:
+    """
+    Buffer wrapper with allocate-write-read policy for AutoPuppet
+    """
+    def __init__(self, size_or_data, do_read = None, do_write = None, alignment = 4):
+        self.do_read = bool(do_read)
+        self.do_write = bool(do_write)
+        self.buffer = None
+        if isinstance(size_or_data, int):
+            self.size = size_or_data
+            self.data = bytearray(size_or_data)
+            if do_read is None:
+                self.do_read = True
+        elif isinstance(size_or_data, bytearray):
+            if do_read is None:
+                self.do_read = True
+            self.data = size_or_data
+            self.size = len(self.data)
+        else:
+            if do_write is None:
+                self.do_write = True
+            self.data = bytes(size_or_data)
+            self.size = len(self.data)
+        self.alignment = alignment
+
+    def pre(self, puppet):
+        self.buffer = puppet.allocate(self.size, self.alignment)
+        if self.do_write:
+            self.buffer.write(self.data)
+
+    def post(self, puppet):
+        if self.do_read:
+            self.data[:] = self.buffer.read(self.size)
+        puppet.unallocate(self.buffer)
+
+    def address(self):
+        return self.buffer.address
+        
+class AutoPuppet:
+    """
+    Puppet + code stub wrapper that automatically handles blob arguments.
+    - bytes are allocated/uploaded, replaced with their pointer in argument list
+    - bytearray are allocated and read back only
+    - integers are passed as-is
+    
+    If you need some read/write buffer, pass a AutoPuppetBuffer created with:
+    AutoPuppetBuffer(ByteArray(some_payload), do_write = True)
+    """
+    def __init__(self, puppet, code):
+        """
+        :param puppet: Puppet
+        :param code: Code stub dict
+        """
+        self.puppet = puppet
+        self.code = code
+
+    def __getattr__(self, entry_point):
+        if entry_point not in self.code:
+            raise AttributeError(entry_point)
+
+        def _runner(*args, timeout = .5):
+            return self.run(entry_point, *args, timeout = timeout)
+        return _runner
+        
+    def run(self, entry_point, *args, timeout = 0.5):
+        """
+        :param entry_point: Name of the entry point to call in code dict object
+        :param args: A list of any of int, bytes, bytearray, AutoPuppetBuffer
+        """
+        args_reg = [0] * len(args)
+        to_clean = []
+
+        assert len(args) <= 4
+
+        code = None
+        
+        try:
+            for i, arg in enumerate(args):
+                if isinstance(arg, int):
+                    args_reg[i] = arg
+                elif isinstance(arg, bytearray):
+                    b = AutoPuppetBuffer(arg, do_write = False, do_read = True)
+                    b.pre(self.puppet)
+                    to_clean.append(b)
+                    args_reg[i] = b.address()
+                elif isinstance(arg, bytes):
+                    b = AutoPuppetBuffer(arg, do_write = True, do_read = False)
+                    b.pre(self.puppet)
+                    to_clean.append(b)
+                    args_reg[i] = b.address()
+                elif isinstance(arg, AutoPuppetBuffer):
+                    b = arg
+                    b.pre(self.puppet)
+                    to_clean.append(b)
+                    args_reg[i] = b.address()
+                else:
+                    raise NotImplementedError(arg)
+
+            self.puppet.logger.info("Running %s(%s)", entry_point, ", ".join(hex(a) for a in args_reg))
+            code = self.puppet.stub(self.code[entry_point])
+            ret = code.call(*args_reg, timeout = timeout)
+            self.puppet.logger.info(" -> %#010x", ret)
+            return ret
+        finally:
+            for a in to_clean:
+                a.post(self.puppet)
+            if code:
+                code.cleanup()
+    
 class BusRam(memory.Ram):
     def __init__(self, name, address, size, bus):
         memory.Ram.__init__(self, name, address, size)
