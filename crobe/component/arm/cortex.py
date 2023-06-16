@@ -109,6 +109,15 @@ class Cortex(Cpu):
         return self.scs.cpu_resume(allow_interrupts = allow_interrupts)
     
     def halt(self):
+        if self.scs.cpu_state == Cpu.State.SLEEP:
+            self.logger.info("Trying to exit sleep state")
+            self.logger.info("DHCSR bef: %#010x", self.scs.reg_read(self.scs.DHCSR))
+            self.scs.dhcsr_mod(self.scs.DHCSR_C_DEBUGEN, 0)
+            self.scs.dhcsr_mod(self.scs.DHCSR_C_HALT | self.scs.DHCSR_C_STEP, 0)
+            self.logger.info("DHCSR mid: %#010x", self.scs.reg_read(self.scs.DHCSR))
+            self.scs.reg_write(self.scs.STIR, 42)
+            self.scs.cpu_step()
+            self.logger.info("DHCSR aft: %#010x", self.scs.reg_read(self.scs.DHCSR))
         return self.scs.cpu_halt()
 
     def attach(self):
@@ -120,14 +129,14 @@ class Cortex(Cpu):
     def detach(self):
         for b in self.bus.children_of_class(MemoryMappedComponent):
             b.enable(False)
-
+            
     def reset(self, block_after_reset = True):
         tmp = self.scs.cpu_reset_catch
         self.scs.cpu_reset_catch = True
         self.scs.cpu_reset()
         time.sleep(.1)
         while self.scs.cpu_state == Cpu.State.RUN:
-            pass
+            time.sleep(.01)
         self.scs.cpu_reset_catch = tmp
         if not block_after_reset:
             self.resume(allow_interrupts = True)

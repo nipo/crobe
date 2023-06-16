@@ -14,18 +14,18 @@ import time
 class Scs(MemoryMappedComponent):
     def __init__(self, ap, base):
         MemoryMappedComponent.__init__(self, ap, base, "SCS")
-        self.reg_write(self.DHCSR, self.DHCSR_KEY | self.DHCSR_C_MASKINTS | self.DHCSR_C_DEBUGEN | self.DHCSR_C_HALT)
         self.enable()
-
-        self.cpu_name = cpuid.decode(self.cpuid)
-
-        if self.has_fpu:
-            self.cpu_name += " with FPU"
-
-        self.name = cpuid.short_name(self.cpuid) + "-SCS"
 
         self.__cpuid_read()
 
+        self.cpu_name = cpuid.decode(self.cpuid)
+        self.name = cpuid.short_name(self.cpuid) + "-SCS"
+
+        self.logger.note("CPU Type: %s", self.cpu_name)
+        self.logger.note("REVID: %010x", self.revid)
+        self.logger.note("FPU extension: %s", "yes" if self.has_fpu else "no")
+        self.logger.note("DSP extension: %s", "yes" if self.has_dsp_ext else "no")
+        self.logger.note("CPUID: %08x", self.cpuid)
         self.logger.note("PFR: %s", ', '.join(["0x%08x" % x for x in self.pfr]))
         self.logger.note("DFR: 0x%08x", self.dfr)
         self.logger.note("AFR: 0x%08x", self.afr)
@@ -45,6 +45,8 @@ class Scs(MemoryMappedComponent):
         cmds += [self.cmd_reg_read(self.MVFR(i)) for i in range(3)]
         cmds += [self.cmd_reg_read(self.CLIDR)]
         cmds += [self.cmd_reg_read(self.CCSIDR)]
+        cmds += [self.cmd_reg_read(self.CPUID)]
+        cmds += [self.cmd_reg_read(self.REVIDR)]
         self.bus.execute(cmds)
 
         self.pfr = [op.data for op in cmds[0:2]]
@@ -55,12 +57,15 @@ class Scs(MemoryMappedComponent):
         self.mvfr = [op.data for op in cmds[14:17]]
         self.clidr = cmds[17].data
         self.ccsidr = cmds[18].data
+        self.cpuid = cmds[19].data
+        self.revid = cmds[20].data
 
     def __str__(self):
         return "System Control Space for %s" % self.cpu_name
 
     def enable(self, en = True):
         if en:
+            self.reg_write(self.DHCSR, self.DHCSR_KEY | self.DHCSR_C_DEBUGEN) 
             self.demcr = self.DEMCR_TRCENA
         else:
             self.cpu_resume()
@@ -72,10 +77,20 @@ class Scs(MemoryMappedComponent):
     def has_fpu(self):
         # Has single or double precision implemented ?
         return bool(self.reg_read(self.MVFR(0)) & 0xff0)
-
+            
     @property
-    def cpuid(self):
-        return self.reg_read(self.CPUID)
+    def has_dsp_ext(self):
+        # has DSP extension
+        #if cpuid.short_name(self.cpuid) != "CM33":
+        #    return False
+
+        extend = (self.isar[1] >> 12) & 0xf
+        multu = (self.isar[2] >> 20) & 0xf
+        mults = (self.isar[2] >> 16) & 0xf
+        saturate = (self.isar[3] >> 0) & 0xf
+        simd = (self.isar[3] >> 4) & 0xf
+
+        return extend >= 2 and multu >= 2 and mults >= 3 and saturate >= 1 and simd >= 3
 
     @property
     def cpu_state(self):
@@ -107,11 +122,19 @@ class Scs(MemoryMappedComponent):
         
         return Cpu.HaltCause.UNKNOWN
 
+    def dhcsr_mod(self, to_set, to_clear):
+        value = self.reg_read(self.DHCSR)
+        value &= 0xffff
+        value &= ~(to_clear & 0xffff)
+        value |= (to_set & 0xffff)
+        self.reg_write(self.DHCSR, self.DHCSR_KEY | value)        
+    
     def cpu_halt(self):
-        self.reg_write(self.DHCSR, self.DHCSR_KEY | self.DHCSR_C_DEBUGEN | self.DHCSR_C_HALT)
+        self.dhcsr_mod(self.DHCSR_C_DEBUGEN | self.DHCSR_C_HALT, self.DHCSR_C_STEP)
 
-        if self.cpu_state == Cpu.State.RUN:
-            raise RuntimeError("Unable to halt core")
+        state = self.cpu_state
+        if state != Cpu.State.HALT:
+            raise RuntimeError("Unable to halt core, still in %s", state)
 
     def cpu_step(self, allow_interrupts = False):
         maskints = self.DHCSR_C_MASKINTS if not allow_interrupts else 0
@@ -220,6 +243,7 @@ class Scs(MemoryMappedComponent):
     ACTLR = 0x008
 
     # 0xd00-0xd8f  SCB
+    REVIDR            = 0xcfc
     CPUID             = 0xd00
     ICSR              = 0xd04
     VTOR              = 0xd08
@@ -259,8 +283,8 @@ class Scs(MemoryMappedComponent):
     CTR     = 0xd7c
     CCSIDR  = 0xd80
     CSSELR  = 0xd84
-    
     CPACR   = 0xd88
+    NSACR   = 0xd8c
 
     # 0xdf0-0xeff  Debug
     DHCSR = 0xdf0
@@ -271,6 +295,7 @@ class Scs(MemoryMappedComponent):
     DHCSR_S_SLEEP     = 1 << 18
     DHCSR_S_HALT      = 1 << 17
     DHCSR_C_REGRDY    = 1 << 16
+    DHCSR_C_PMOV      = 1 << 6
     DHCSR_C_SNAPSTALL = 1 << 5
     DHCSR_C_MASKINTS  = 1 << 3
     DHCSR_C_STEP      = 1 << 2
@@ -316,6 +341,14 @@ class Scs(MemoryMappedComponent):
     STCR  = 0x020
     
     # 0x100-0xcff NVIC
+    NVIC_ISER = staticmethod(lambda x: 0x100 + 4 * x)
+    NVIC_ICER = staticmethod(lambda x: 0x180 + 4 * x)
+    NVIC_ISPR = staticmethod(lambda x: 0x200 + 4 * x)
+    NVIC_ICPR = staticmethod(lambda x: 0x280 + 4 * x)
+    NVIC_IABR = staticmethod(lambda x: 0x300 + 4 * x)
+    NVIC_ITNS = staticmethod(lambda x: 0x380 + 4 * x)
+    NVIC_IPR = staticmethod(lambda x: 0x400 + 4 * x)
+
     # 0xd90-0xdef MPU
     MPU_TR = 0xd90
     MPU_CR = 0xd94

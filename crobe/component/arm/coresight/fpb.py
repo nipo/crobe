@@ -24,6 +24,9 @@ class Fpb(MemoryMappedComponent):
     def enable(self, enable = True):
         self.reg_write(self.CTRL, 0x3 if enable else 0)
 
+    def is_enabled(self):
+        return self.reg_read(self.CTRL) & 1
+        
     def comp_set(self, index, addr = None):
         if index >= self.code_count:
             raise ValueError(index)
@@ -33,6 +36,15 @@ class Fpb(MemoryMappedComponent):
         else:
             value = 0
         self.reg_write(self.COMP(index), value)
+
+    def comp_get(self, index):
+        if index >= self.code_count:
+            raise ValueError(index)
+
+        value = self.COMP(index)
+        if value & 1:
+            return value & ~1
+        return None
 
     def comp_clear(self):
         for index in range(self.code_count):
