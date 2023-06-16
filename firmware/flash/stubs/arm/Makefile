@@ -17,12 +17,12 @@ rp2040-cflags = -mcpu=cortex-m0 -mthumb -Os -fPIC
 rp2040-arch = arm
 
 crc32_cm3-src = crc32.c
-crc32_cm3-sections = memory_crc32
+crc32_cm3-sections = memory_crc32 memory_crc32_many
 crc32_cm3-cflags = -mcpu=cortex-m3 -mthumb -Os -fPIC
 crc32_cm3-arch = arm
 
 crc32_cm0-src = crc32.c
-crc32_cm0-sections = memory_crc32
+crc32_cm0-sections = memory_crc32 memory_crc32_many
 crc32_cm0-cflags = -mcpu=cortex-m0 -mthumb -Os -fPIC
 crc32_cm0-arch = arm
 

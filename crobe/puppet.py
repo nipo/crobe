@@ -33,12 +33,12 @@ class Zone(object):
             raise ValueError("Addresses do not fit the zone")
         return self.bus.mem_read(self.address + offset, size)
 
-class Puppet(Component):
-    def __init__(self, cpu, ram,
+class Puppet(PortComponent):
+    def __init__(self, soc, cpu, ram,
                  pc_reg, sp_reg,
                  arg_regs, trampoline_code,
                  stack_size = 128, stack_direction = -1):
-        super().__init__("puppet")
+        super().__init__(soc, "puppet")
         self.cpu = cpu
         self.ram = ram
         self.ram_allocator = Allocator(ram.address, ram.size)
@@ -80,8 +80,10 @@ class Puppet(Component):
         self.cpu.reg_write(regs)
 
     def run(self):
+        st = self.cpu.state
+        hc = self.cpu.halt_cause
+        self.logger.trace("Starting CPU, current state: %s, halt cause %s", st, hc)
         self.cpu.resume(allow_interrupts = False)
-        self.logger.trace("...started !")
 
     def step(self):
         self.cpu.step()

@@ -13,6 +13,7 @@ from ....puppet import Puppet
 from ....db import Db, NoMatch, DisabledEntry, InitializationFailure
 from .puppet_code import crc32_cm0
 from ....util.crc import crc32
+import struct
 
 __all__ = ["SoC", 'ArmMPuppet', 'StubFlash']
 
@@ -50,20 +51,56 @@ class PuppetStub:
     
 class ArmMPuppet(Puppet):
     CRC32 = crc32_cm0["memory_crc32"]
+    CRC32_MANY = crc32_cm0["memory_crc32_many"]
 
     def __init__(self, soc):
         cpu = soc.children_of_class(Cortex)[0]
         ram = soc.children_of_class(memory.Ram)[0]
 
-        Puppet.__init__(self, cpu, ram,
+        super().__init__(soc, cpu, ram,
                         pc_reg = cpu.registers[15],
                         sp_reg = cpu.registers[13],
                         arg_regs = cpu.registers[:4],
                         trampoline_code = b'\x01L\xa0\x47\xbe\xbe\xbe\xbe',
         )
 
+    def run(self):
+        st = self.cpu.state
+        hc = self.cpu.halt_cause
+        if st == self.cpu.State.SLEEP:
+            self.logger.trace("CPU is sleeping, halting it first")
+            self.cpu.halt()
+        st = self.cpu.state
+        self.logger.trace("Starting CPU, current state: %s, halt cause %s", st, hc)
+        self.cpu.resume(allow_interrupts = False)
+
     def stub(self, code):
         return PuppetStub(self, code)
+
+    def crc32(self, address, size):
+        code = self.stub(self.CRC32)
+        ret = code.call(address, size)
+        code.cleanup()
+        return ret
+
+    def crc32_many(self, ranges):
+        code = self.stub(self.CRC32_MANY)
+        to_scan = []
+
+        params = self.allocate(len(ranges) * 8)
+        params_blob = b''
+        for address, size in sorted(ranges):
+            params_blob += struct.pack("<LL", address, size)
+        params.write(params_blob)
+        code.call(params.address, len(ranges))
+        response_blob = params.read(len(params_blob))
+        self.unallocate(params)
+        code.cleanup()
+
+        values = {}
+        for i, (address, size) in enumerate(sorted(ranges)):
+            values[address], = struct.unpack("<L", response_blob[i*8:i*8+4])
+        return values
 
 class AutoPuppetBuffer:
     """
@@ -103,7 +140,7 @@ class AutoPuppetBuffer:
     def address(self):
         return self.buffer.address
         
-class AutoPuppet:
+class AutoPuppet(ArmMPuppet):
     """
     Puppet + code stub wrapper that automatically handles blob arguments.
     - bytes are allocated/uploaded, replaced with their pointer in argument list
@@ -113,23 +150,30 @@ class AutoPuppet:
     If you need some read/write buffer, pass a AutoPuppetBuffer created with:
     AutoPuppetBuffer(ByteArray(some_payload), do_write = True)
     """
-    def __init__(self, puppet, code):
+    def __init__(self, soc, codes):
         """
         :param puppet: Puppet
         :param code: Code stub dict
         """
-        self.puppet = puppet
-        self.code = code
+        super().__init__(soc)
+        self.codes = codes
 
+    def entry_point_get(self, entry_point):
+        for code in self.codes[::-1]:
+            try:
+                return code[entry_point]
+            except:
+                pass
+
+        raise AttributeError(entry_point)
+        
     def __getattr__(self, entry_point):
-        if entry_point not in self.code:
-            raise AttributeError(entry_point)
-
+        self.entry_point_get(entry_point)
         def _runner(*args, timeout = .5):
-            return self.run(entry_point, *args, timeout = timeout)
+            return self._auto_run(entry_point, *args, timeout = timeout)
         return _runner
         
-    def run(self, entry_point, *args, timeout = 0.5):
+    def _auto_run(self, entry_point, *args, timeout = 0.5):
         """
         :param entry_point: Name of the entry point to call in code dict object
         :param args: A list of any of int, bytes, bytearray, AutoPuppetBuffer
@@ -147,30 +191,30 @@ class AutoPuppet:
                     args_reg[i] = arg
                 elif isinstance(arg, bytearray):
                     b = AutoPuppetBuffer(arg, do_write = False, do_read = True)
-                    b.pre(self.puppet)
+                    b.pre(self)
                     to_clean.append(b)
                     args_reg[i] = b.address()
                 elif isinstance(arg, bytes):
                     b = AutoPuppetBuffer(arg, do_write = True, do_read = False)
-                    b.pre(self.puppet)
+                    b.pre(self)
                     to_clean.append(b)
                     args_reg[i] = b.address()
                 elif isinstance(arg, AutoPuppetBuffer):
                     b = arg
-                    b.pre(self.puppet)
+                    b.pre(self)
                     to_clean.append(b)
                     args_reg[i] = b.address()
                 else:
                     raise NotImplementedError(arg)
 
-            self.puppet.logger.info("Running %s(%s)", entry_point, ", ".join(hex(a) for a in args_reg))
-            code = self.puppet.stub(self.code[entry_point])
+            self.logger.info("Running %s(%s)", entry_point, ", ".join(hex(a) for a in args_reg))
+            code = self.stub(self.entry_point_get(entry_point))
             ret = code.call(*args_reg, timeout = timeout)
-            self.puppet.logger.info(" -> %#010x", ret)
+            self.logger.info(" -> %#010x", ret)
             return ret
         finally:
             for a in to_clean:
-                a.post(self.puppet)
+                a.post(self)
             if code:
                 code.cleanup()
     
@@ -220,8 +264,8 @@ class StubFlash(BusFlash):
 
     def puppet_erase(self, puppet, address, size):
         code = puppet.stub(self.RANGE_ERASE)
-        code.call(address, size, self.page_size,
-                  timeout = 0.2 + 0.1 * size / self.page_size)
+        return code.call(address, size, self.page_size,
+                         timeout = 0.2 + 0.1 * size / self.page_size)
 
     def puppet_write(self, puppet, pages):
         if not pages:
@@ -268,26 +312,28 @@ class StubFlash(BusFlash):
                 code.cleanup()
 
     def puppet_update(self, puppet, pages):
-        valid = set()
+        to_scan = []
+        for address, data in pages.items():
+            to_scan.append((address, len(data)))
 
-        code = puppet.stub(puppet.CRC32)
-        with self.logger.progress("Scanning", len(pages)) as progress:
-            for address, data in progress.iterate(sorted(pages.items())):
-                from_mem = code.call(address, self.page_size)
-                crc = crc32(data)
-                self.logger.trace("Page at 0x%08x, CRC32=%08x, in mem=%08x",
-                                 address, crc, from_mem)
-                if from_mem == crc:
-                    valid.add(address)
-            code.cleanup()
+        values = puppet.crc32_many(to_scan)
 
-            for a in valid:
-                pages.pop(a)
+        good = set()
+        for address, data in pages.items():
+            calc = crc32(data)
+            if values[address] ==  calc:
+                good.add(address)
 
+        self.logger.trace("Updating, %d/%d pages already match", len(good), len(pages))
+
+        for address in good:
+            pages.pop(address)
         return self.puppet_write(puppet, pages)
 
 class SoC(model.SoC):
     db = Db("SoC model")
+    puppet_code = [crc32_cm0]
+    cpu_class = Cortex
 
     def __init__(self, name, port):
         model.SoC.__init__(self, name)
@@ -301,25 +347,42 @@ class SoC(model.SoC):
                 rt, = port.children_find(lambda x: isinstance(x, RomTable) and s in x.children)
                 if rt is not last_rt:
                     rtidx = 0
-                self.child_add(Cortex.from_romtable(rt, idx, rtidx))
+                self.child_add(self.cpu_class.from_romtable(rt, idx, rtidx))
                 rtidx += 1
                 idx += 1
 
         self.bus = self.buses[0]
 
+    def child_spawn(self, crit):
+        if crit == "rtt":
+            from ....component.segger.rtt import Rtt
+            return Rtt(self.buses[0])
+        
     def puppet(self):
-        return ArmMPuppet(self)
+        try:
+            return self.__puppet
+        except:
+            self.__puppet = AutoPuppet(self, self.puppet_code)
+            return self.__puppet
 
-    def reattach(self):
-        assert self.attached
-        model.SoC.detach(self)
+    def reattach(self, with_system_reset = True, force = False):
+        if not force:
+            if self.attached:
+                self.logger.note("Reattaching already done")
+                return
+            self.detach()
+        else:
+            self.logger.info("Force-reattaching")
+            if self.attached:
+                super().detach()
 
-        self.bus.port.port.reset = True
-        self.bus.port.port.line_reset()
-        self.bus.port.port.reset = False
+        if with_system_reset:
+            self.bus.port.debug_enable(False)
+            self.bus.port.port.reset = with_system_reset
+            self.bus.port.port.line_reset()
+            self.bus.port.port.reset = False
         self.bus.port.debug_enable(True)
         self.bus.enable()
-
         self.attach()
 
     def attach(self):
@@ -383,13 +446,16 @@ class SoC(model.SoC):
 
     def run_attached(self):
         cpu, = self.children_of_class(Cortex)
-        cpu.halt()
+        cpu.reset(True)
         cpu.reset(False)
-        cpu.resume()
 
     def reset(self):
         cpu = self.children_of_class(Cortex)[0]
         cpu.reset(False)
+
+    def reset_halt(self):
+        cpu = self.children_of_class(Cortex)[0]
+        cpu.reset(True)
 
     def write(self, program,
               do_erase = False,

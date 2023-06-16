@@ -38,3 +38,18 @@ uint32_t memory_crc32(const uint8_t *data, size_t len)
 {
     return crc32_zlib(CRC32_ZLIB_INIT, data, len);
 }
+
+struct crc32_zone
+{
+    union {
+        const uint8_t *address;
+        uint32_t crc;
+    };
+    uint32_t size;
+};
+
+void memory_crc32_many(struct crc32_zone *zone, size_t zone_count)
+{
+    for (size_t i = 0; i < zone_count; ++i)
+        zone[i].crc = crc32_zlib(CRC32_ZLIB_INIT, zone[i].address, zone[i].size);
+}
