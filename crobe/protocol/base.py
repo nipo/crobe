@@ -4,7 +4,7 @@ from ..freq_capper import FreqCapper
 import threading
 import time
 
-__all__ = ["Interface", "ProtocolError", "CommunicationError"]
+__all__ = ["Interface", "ProtocolError", "CommunicationError", "Reset"]
 
 class Interface(model.PortComponent, FreqCapper):
     """
