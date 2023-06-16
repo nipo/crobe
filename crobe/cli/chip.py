@@ -8,6 +8,8 @@ from ..util.pretty import metric
 from ..target import memory
 from ..loadable.object import Program, Segment
 import logging
+from ..util.file_monitor import FileMonitor
+from ..util import retry
 
 @base.cli.group(help = "Target chip manipulation")
 @click.option('-r', '--root', "roots", type = base.ROOT, multiple = True)
@@ -105,3 +107,45 @@ def info(ctx):
     target = ctx.obj["target"]
 
     click.echo("Target: %s" % target)
+
+class AutoUpdater(FileMonitor):
+    def __init__(self, path, target):
+        self.target = target
+        super().__init__(path)
+
+    def on_appear(self):
+        self.target_reload()
+
+    def on_update(self):
+        self.target_reload()
+
+    def target_reload(self):
+        try:
+            program = Program.from_file(self.path)
+        except Exception as e:
+            print(f"Unable to load {self.path}, will retry when it changes again")
+            return
+
+        self.program_write(program)
+
+    @retry.retried(3, delay = .2)
+    def program_write(self, program):
+#        self.target.attach()
+        self.target.reset_halt()
+        
+        self.target.write(program,
+                          do_erase = False,
+                          do_verify = False,
+                          do_start = True)
+
+        self.target.run_attached()
+#        self.target.detach()
+        
+@chip.command(help = "Auto-reprogram binary")
+@click.argument("program", type = click.Path(exists = None, dir_okay = False))
+@click.pass_context
+def auto_program(ctx, program):
+    target = ctx.obj["target"]
+
+    autoupdater = AutoUpdater(program, target)
+    autoupdater.run()
