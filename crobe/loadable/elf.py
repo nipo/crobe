@@ -9,18 +9,32 @@ class ElfProgram(model.Program):
         super().__init__(filename)
         from elftools.elf.elffile import ELFFile
 
-        elf = ELFFile(open(filename, "rb"))
-        for segno in range(elf.num_segments()):
-            seg = elf.get_segment(segno)
+        self.elf = ELFFile(open(filename, "rb"))
+
+        for segno in range(self.elf.num_segments()):
+            seg = self.elf.get_segment(segno)
             if seg["p_type"] != "PT_LOAD":
                 continue
 
             sections = []
-            for section in elf.iter_sections():
+            for section in self.elf.iter_sections():
                 if seg.section_in_segment(section):
                     sections.append(section.name)
             
             self.append(model.Segment(seg["p_paddr"], seg.data().ljust(seg['p_memsz'], b'\x00'), filename, name = ' '.join(sections)))
 
-        self.info["device"] = elf.get_machine_arch()
-        self.info["entry"] = elf.header["e_entry"]
+        self.info["device"] = self.elf.get_machine_arch()
+        self.info["entry"] = self.elf.header["e_entry"]
+
+    def symbol_address_get(self, name):
+        symtab = self.elf.get_section_by_name('.symtab')
+        if not symtab:
+            return None
+
+        symbols = symtab.get_symbol_by_name(name)
+        if not symbols:
+            return None
+
+        symbol = symbols[0]
+
+        return symbol.entry["st_value"]
