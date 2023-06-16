@@ -260,8 +260,9 @@ class Bitfield(object, metaclass = _register_meta):
 
     def __int__(self):
         return self.__value
-
+    
     def dump_pretty(self, printer):
+        widest_name = max([len(n) for (n, v) in self._fields.items()], default = 1)
         widest = max([v.width for (n, v) in self._fields.items() if n != "all"], default = 1)
         msb = max([1] + [v.msb+1 for v in self._fields.values()])
         nibble_count = (msb + 3) // 4
@@ -274,7 +275,7 @@ class Bitfield(object, metaclass = _register_meta):
 
         printer(self.__class__.__name__)
         printer(self.__doc__)
-
+        
         for name, f in sorted(self._fields.items(), key = sorter_key):
             aligned_post_nibbles = f.lsb // 4
             aligned_pre_nibbles = nibble_count - (f.msb + 4) // 4
@@ -286,23 +287,31 @@ class Bitfield(object, metaclass = _register_meta):
             aligned_fmt = "%%0%dx" % (aligned_nibbles)
             aligned_val = aligned_fmt % (self[f.slice] << (f.lsb % 4))
             aligned_mask = aligned_fmt % (((1 << f.width) - 1) << (f.lsb % 4))
-            val = val_fmt % self[f.slice]
+            val_fmt = "%%0%dx" % ((f.width + 3) // 4)
+            val = (val_fmt % self[f.slice]).rjust(val_nibble_count, " ")
 
             if name == "all":
-                printer("                               %s %s" % (aligned_mask, aligned_val))
+                printer("%s          %s %s" % (" " * widest_name, aligned_mask, aligned_val))
                 continue
             
             if f.doc:
-                printer("                               %s %s %s %s" % (
-                    " " * nibble_count,
+                printer(" [%2d:%2d] %s %s%s%s %s %s %s" % (
+                    f.msb, f.lsb, name.ljust(widest_name, " "),
+                    aligned_pad_pre, aligned_mask, aligned_pad_post,
                     " " * nibble_count,
                     " " * val_nibble_count,
                     f.doc))
-            printer(" [%2d:%2d]  % -20s %s%s%s %s%s%s %s %s" % (
-                f.msb, f.lsb, name,
-                aligned_pad_pre, aligned_mask, aligned_pad_post,
-                aligned_pad_pre, aligned_val, aligned_pad_post,
-                val, f.get_from(self)))
+                printer("         %s %s %s%s%s %s %s" % (
+                    " " * widest_name,
+                    " " * nibble_count,
+                    aligned_pad_pre, aligned_val, aligned_pad_post,
+                    val, f.get_from(self)))
+            else:
+                printer(" [%2d:%2d] %s %s%s%s %s%s%s %s %s" % (
+                    f.msb, f.lsb, name.ljust(widest_name, " "),
+                    aligned_pad_pre, aligned_mask, aligned_pad_post,
+                    aligned_pad_pre, aligned_val, aligned_pad_post,
+                    val, f.get_from(self)))
 
     def __str__(self):
         values = {
