@@ -9,7 +9,8 @@ class ElfProgram(model.Program):
         super().__init__(filename)
         from elftools.elf.elffile import ELFFile
 
-        self.elf = ELFFile(open(filename, "rb"))
+        self.fd = open(filename, "rb")
+        self.elf = ELFFile(self.fd)
 
         for segno in range(self.elf.num_segments()):
             seg = self.elf.get_segment(segno)
@@ -38,3 +39,6 @@ class ElfProgram(model.Program):
         symbol = symbols[0]
 
         return symbol.entry["st_value"]
+
+    def close(self):
+        self.fd.close()
