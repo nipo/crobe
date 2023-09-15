@@ -28,10 +28,12 @@ class I2cMem(i2c.Slave, Bus):
     def _addr(self, addr):
         baddr = (addr & ((1 << (self.addr_bytes * 8)) - 1)).to_bytes(self.addr_bytes, 'big')
         saddr = (self.saddr & ~((1 << self.saddr_bits) - 1)) + (addr >> (self.addr_bytes * 8))
-        print(addr, baddr, saddr)
         return saddr, baddr
 
     def read(self, addr, size):
+        if not size:
+            return b''
+
         read_by = min(self.page_size, size, 32)
         assert addr + size <= self.size, (addr, size, self.size)
 
@@ -104,7 +106,7 @@ class I2cEeprom(I2cMem):
 
     def _read(self, addr, size):
         assert 0 < size <= self.page_size
-        assert addr // self.page_size == (addr + size - 1) // self.page_size
+        #assert addr // self.page_size == (addr + size - 1) // self.page_size
 
         deadline = time.time() + .1
         while True:
@@ -122,6 +124,15 @@ def m24m02(bus):
                      addr_bytes = 2,
                      saddr_bits = 2,
                      page_size = 256)
+
+@i2c.Interface.db.register("24aa64")
+@i2c.Interface.db.register("24fc64")
+@i2c.Interface.db.register("24lc64")
+def _24lc64(bus):
+    return I2cEeprom(bus, None,
+                     addr_bytes = 2,
+                     page_size = 32,
+                     size = 8*1024)
 
 @i2c.Interface.db.register("24lc128")
 def _24lc128(bus):
