@@ -5,6 +5,7 @@ import datetime
 @model.Program.ext_db.register("bit")
 @model.Program.ext_db.register("bit.gz")
 @model.Program.format_db.register("bit")
+@model.Program.format_db.register("xilinx")
 class XilinxBitstream(model.Program):
     HEADER = bytes([0x00, 0x09, 0x0f, 0xf0, 0x0f, 0xf0, 0x0f, 0xf0, 0x0f, 0xf0, 0x00, 0x00, 0x01])
 
