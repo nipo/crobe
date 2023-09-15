@@ -664,11 +664,11 @@ class SerIrMap:
 
             in_data_byte_count = (io_len + 7) // 8
 
-            mach.logger.protocol("i2c < %s, %d", out_data.hex(), in_data_byte_count)
+            mach.logger.protocol("ser < %s, %d", out_data.hex(), in_data_byte_count)
             
             r = mach.do_write_read(out_data, in_data_byte_count)
 
-            mach.logger.protocol("i2c > %s", r.hex())
+            mach.logger.protocol("ser > %s", r.hex())
 
             if io_len == 1:
                 tdo = bitstring.BitString(r[0] >> 7, 1)
@@ -681,7 +681,7 @@ class SerIrMap:
         if self.data_direction == "write":
             out_data += bytes(op.tdi)[::-1]
         
-        mach.logger.protocol("i2c < %s", out_data.hex())
+        mach.logger.protocol("ser < %s", out_data.hex())
         mach.do_write(out_data)
 
         if self.post_wait:
@@ -747,7 +747,7 @@ class MachXO2Serial(PortComponent, MachXO2Config):
 #        self.BYPASS.shift()
         time.sleep(cycles / 1e5)
 
-    def cmd_dr_shift(self, ir, tdi, length = None, read_tdo = True, read_ir = False, return_type = None):
+    def cmd_dr_shift(self, ir, tdi, length = None, read_tdo = True, read_ir = False, return_type = None, pre_dr_run = 0):
         return jtag.TapDrShift(ir, tdi, length, read_tdo, read_ir, return_type)
 
     def cmd_run(self, cycles):
@@ -896,15 +896,19 @@ class SpiPassthrough(spi.Interface):
         for op, shift in io.items():
             op.miso = bitswap8(bytes(shift.tdo))
 
-@spi.Target.db.register("machxo2")
 class MachXO2Spi(MachXO2Serial):
     """
     SPI-based specialization of Mach-XO2 controller
     """
 
-    def __init__(self, port, name, cs):
-        super().__init__(port, cs = cs)
+    def __init__(self, port):
+        super().__init__(port)
 
+    def start(self):
+        self.idcode = self.IDCODE.shift(0)
+        self.logger.info("IDCODE: %s", self.idcode)
+        super().start()
+        
     def execute(self, ops):
         for op in ops:
             if isinstance(op, jtag.TapDrShift):
@@ -916,12 +920,16 @@ class MachXO2Spi(MachXO2Serial):
                 raise RuntimeError("No mapping for %s"%op)
 
     def do_write_read(self, wdata, rdata_len):
-        r = self.cmd_shift(rdata_len, read_miso = True)
-        self.port.execute([self.cmd_cs(True),
-                           self.cmd_shift(wdata),
+        r = self.port.cmd_shift(rdata_len, read_miso = True)
+        self.port.execute([self.port.cmd_cs(True),
+                           self.port.cmd_shift(wdata),
                            r,
-                           self.cmd_cs(False)])
+                           self.port.cmd_cs(False)])
         return r.miso
 
     def do_write(self, wdata):
-        return self.transaction(wdata, read_miso = False)
+        return self.port.transaction(wdata, read_miso = False)
+
+@spi.Target.db.register("machxo2")
+def machxo2_spi_probe(target, *args):
+    return MachXO2Spi(target)
