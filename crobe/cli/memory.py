@@ -1,4 +1,5 @@
 from . import base
+from ..loadable.model import Program, Segment
 import click
 import binascii
 import struct
@@ -73,3 +74,19 @@ def hexdump(ctx, address, size):
     from ..util.hexdump import hexdump
 
     hexdump(address, data, printer = print)
+
+@memory.command(help = "Dump to file")
+@click.argument('address', metavar = 'ADDRESS', type = str)
+@click.argument('size', metavar = 'size', type = str, default = "4")
+@click.argument('file', type = str)
+@click.pass_context
+def dump(ctx, address, size, file):
+    bus = ctx.obj["bus"]
+    address = int(address, 16)
+    size = int(size, 0)
+
+    data = bus.mem_read(address, size)
+
+    p = Program()
+    p.append(Segment(address, data))
+    p.save(file)
