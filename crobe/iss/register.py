@@ -81,5 +81,5 @@ class RegisterSet:
                 continue
             v = self.__values[name]
             v_p = ("%%#0%dx" % ((info.bit_size + 3) // 4)) % v
-            print(f"{name}: {vp}", end = "\n" if i & 3 == 3 else "  ")
+            print(f"{name}: {v_p}", end = "\n" if i & 3 == 3 else "  ")
         print()

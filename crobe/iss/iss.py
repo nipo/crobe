@@ -102,6 +102,7 @@ class Iss(metaclass = IssMeta):
             self._instruction_info_add(ii)
 
         self.memory = memory
+        self.instruction_count = 0
 
     def run(self, max_cycles = None, **registers):
         for k, v in registers.items():
@@ -136,6 +137,8 @@ class Iss(metaclass = IssMeta):
             except KeyError:
                 continue
 
+            self.instruction_count += 1
+            #print(f"{self.pc:#010x} {target.__name__}")
             return target(opcode)
 
         return self.unimplemented(opcode)

@@ -136,7 +136,7 @@ class BaseIntegerInstructionSet(Iss):
             self.registers[f"x{rd}"] = self.pc
         self.pc = target
         
-    def __signed(self, value):
+    def _signed(self, value):
         """
         Make XLEN-bit value a python signed number
         """
@@ -165,11 +165,11 @@ class BaseIntegerInstructionSet(Iss):
 
     @Iss.encoding(op_func3, 0x4063)
     def __op_blt(self, opcode):
-        return self.__op_branch(opcode, lambda rs1, rs2: self.__signed(rs1) < self.__signed(rs2))
+        return self.__op_branch(opcode, lambda rs1, rs2: self._signed(rs1) < self._signed(rs2))
 
     @Iss.encoding(op_func3, 0x5063)
     def __op_bge(self, opcode):
-        return self.__op_branch(opcode, lambda rs1, rs2: self.__signed(rs1) >= self.__signed(rs2))
+        return self.__op_branch(opcode, lambda rs1, rs2: self._signed(rs1) >= self._signed(rs2))
 
     @Iss.encoding(op_func3, 0x6063)
     def __op_bltu(self, opcode):
@@ -229,7 +229,7 @@ class BaseIntegerInstructionSet(Iss):
     @Iss.encoding(op_func3, 0x2013)
     @op_i_reg_imm
     def __op_slti(self, rs1, imm):
-        return int(self.__signed(rs1) < self.__signed(imm))
+        return int(self._signed(rs1) < self._signed(imm))
 
     @Iss.encoding(op_func3, 0x3013)
     @op_i_reg_imm
@@ -287,7 +287,7 @@ class BaseIntegerInstructionSet(Iss):
     @Iss.encoding(op_r, 0x00002033)
     @op_r_reg_reg
     def __op_slt(self, rs1, rs2):
-        return int(self.__signed(rs1) < self.__signed(rs2))
+        return int(self._signed(rs1) < self._signed(rs2))
 
     @Iss.encoding(op_r, 0x00003033)
     @op_r_reg_reg
