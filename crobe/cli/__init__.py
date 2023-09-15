@@ -34,3 +34,4 @@ from . import rp2
 from . import pipe
 from . import kinetis
 from . import rtt
+from . import stm32

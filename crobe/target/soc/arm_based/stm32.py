@@ -129,15 +129,22 @@ class Stm(SoC, pin_control.Controller):
         except:
             self.logger.warning("Unable to read UID")
 
+        flash_size = self.info.flash_kb_get(self)
+        if flash_size == 0:
+            self.logger.warning(f"Unable to fetch flash size, default to {flash_size}kB")
+
+        self.info.flash_add(lambda name, base, size, page:
+                            self.child_add(Stm32f1Flash(name, base, size, page, self)),
+                            flash_size)
+
+        self.child_add(Stm32f1Opt("opt", 0x1ffff800, 16, 16, self))
+
         try:
             ram_size = self.ram_size_probe(0x20000000, 512 * 1024)
-            self.info.flash_add(lambda name, base, size, page: self.child_add(Stm32f1Flash(name, base, size, page, self)),
-                                self.info.flash_kb_get(self))
-            self.child_add(Stm32f1Opt("opt", 0x1ffff800, 16, 16, self))
             self.child_add(BusRam("ram", 0x20000000, ram_size, self.buses[0]))
         except:
             self.logger.warning("Unable to get RAM size")
-
+            
         if self.info.uid_blob_is_coords:
             x, y, no, self.lot_number = struct.unpack("<HHB7s", uid_blob)
             self.wafer_pos = no, x, y
@@ -199,8 +206,11 @@ class Stm(SoC, pin_control.Controller):
         self.attach()
         f = self.info.flash_class(self.bus)
         f.mass_erase()
-        f.opt_erase()
 
+        for f in self.children:
+            if isinstance(f, StubFlash):
+                f.is_blank = True
+        
         self.reset()
         self.reattach()
         

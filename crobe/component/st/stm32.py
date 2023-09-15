@@ -17,6 +17,10 @@ class Info:
         self.flash_page_size = flash_page_size
 
     def flash_kb_get(self, soc):
+        bus = soc.buses[0]
+        flash = self.flash_class(bus)
+        if flash.is_read_protected():
+            return 0
         return soc.buses[0].u32_read(self.flash_size_addr) & 0xffff
 
     def uid_read(self, soc):
@@ -128,6 +132,9 @@ class Pm0075FlashBank:
         self.bus = bus
         self.base = base
 
+    def is_read_protected(self):
+        return bool(self.bus.u32_read(self.base + self.OBR) & 2)
+        
     def unlock(self):
         while self.bus.u32_read(self.base + self.SR) & self.SR_BSY:
             time.sleep(.01)
@@ -151,6 +158,8 @@ class Pm0075FlashBank:
         self.lock()
 
 class Pm0075Opt:
+    OPT_ADDR = 0x1ffff800
+
     OPTKEYR = 0x08
     SR      = 0x0c
     CR      = 0x10
@@ -195,11 +204,28 @@ class Pm0075Opt:
         self.bus.u32_write(self.base + self.CR, self.bus.u32_read(self.base + self.CR) | self.CR_OBL_LAUNCH)
         time.sleep(0.1)
 
+    def write(self, options):
+        self.unlock()
+        while self.bus.u32_read(self.base + self.SR) & self.SR_BSY:
+            time.sleep(.01)
+
+        for off, o in enumerate(options[::2]):
+            self.bus.u32_write(self.base + self.CR, self.bus.u32_read(self.base + self.CR) | self.CR_OPTPG)
+            self.bus.u16_write(self.OPT_ADDR + 2 * off, o | ((o ^ 0xff) << 8))
+            while self.bus.u32_read(self.base + self.SR) & self.SR_BSY:
+                time.sleep(.01)
+            self.bus.u32_write(self.base + self.CR, self.bus.u32_read(self.base + self.CR) & ~self.CR_OPTPG)
+
+        self.lock()
+        
 class Pm0075Flash:
     def __init__(self, bus, base = 0x40022000):
         self.bus = bus
         self.bank = Pm0075FlashBank(bus, base)
         self.opt = Pm0075Opt(bus, base)
+
+    def is_read_protected(self):
+        return self.bank.is_read_protected()
 
     def unlock(self):
         self.bank.unlock()
@@ -214,11 +240,17 @@ class Pm0075Flash:
 
     def mass_erase(self):
         self.bank.mass_erase()
+        self.opt_unlock()
+        self.opt.erase()
+        self.opt.write(bytes([0xa5, 0x5a]))
+        self.lock()
+        self.unlock()
 
     def opt_erase(self):
         self.opt.erase()
 
     def reload(self):
+        self.bus.u32_write(self.opt.base + self.opt.CR, self.bus.u32_read(self.opt.base + self.opt.CR) | 0x2000)
         pass
         
 class Rm0091Flash(Pm0075Flash):
@@ -282,6 +314,10 @@ class Pm0059Flash:
 
     def __init__(self, bus):
         self.bus = bus
+
+    def is_read_protected(self):
+        rdp = (self.bus.u32_read(self.BASE + self.OPTCR) >> 8) & 0xff
+        return rdp != 0xaa
 
     def unlock(self):
         while self.bus.u32_read(self.SR) & self.SR_BSY:
