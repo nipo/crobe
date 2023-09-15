@@ -1,5 +1,5 @@
 from ..bitstring import BitString
-from ..protocol import jtag, bitbang
+from ..protocol import jtag, bitbang, base
 from ..bsdl.cache import Cache
 from ..bscan.controller import ChipController
 from ..util.pretty import metric
