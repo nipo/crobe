@@ -420,8 +420,12 @@ class Adapter(model.Adapter):
         self.io = None
 
     def _open(self):
+        from ..component.nsl.bnoc.routed import Router
+        from ..component.nsl.bnoc.sized import Sized
+
         if self.io:
             return
+
         cfg = self.handle.get_active_configuration()
         if cfg.bConfigurationValue == 0:
             self.handle.set_configuration(1)
@@ -458,12 +462,6 @@ class Adapter(model.Adapter):
         self.io = model.BulkStreamPair(self, self.handle, "io", self.ep_out, self.ep_in)
         self.child_add(self.io)
         
-    def open(self, interface_name):
-        from ..component.nsl.bnoc.routed import Router
-        from ..component.nsl.bnoc.sized import Sized
-
-        self._open()
-        
         s = Sized(self.io)
         self.child_add(s)
         r = Router(s)
@@ -483,6 +481,9 @@ class Adapter(model.Adapter):
         self.child_add(self.spi)
         self.child_add(self.swd)
         self.child_add(self.i2c)
+
+    def open(self, interface_name):
+        self._open()
 
         if interface_name.lower() == "cs":
             return self.regs
