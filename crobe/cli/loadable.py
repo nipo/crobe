@@ -156,5 +156,22 @@ def to_c_blob(programs, within, bitswap, output, name, align, section, size, sta
 #endif
 """)
 
+@loadable.command(help = "Do CRC of an image")
+@click.argument("programs", type = base.PROGRAM, nargs = -1)
+@click.option("--alg", type = str)
+@click.option("--swap4", is_flag = True)
+def crc(programs, alg, swap4):
+    from ..util.crc import Crc
+    crc_alg = getattr(Crc, alg)
+    for p in programs:
+        for s in p:
+            ctx = crc_alg()
+            data = s.data
+            if swap4:
+                data = b"".join(data[i:i+4][::-1] for i in range(0, len(data), 4))
+            ctx.update(data)
+            print(f"{p.sources[0]} {s.name} <{s.address:#x}:{s.address+len(s.data):#x}>: {bytes(ctx).hex()}")
+
+
 if __name__ == "__main__":
     cli.main()
