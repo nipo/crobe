@@ -2,9 +2,16 @@ from ...model import PortComponent
 from ...protocol import i2c, pipe
 import binascii
 import time
-from ...util.crc import crc as _crc
+from ...util.crc import Crc
 
 __all__ = ["MklBootloader"]
+
+crc_alg = Crc(width = 16,
+              poly = 0x1021,
+              init = 0,
+              pop_lsb = False, insert_msb = False,
+              complement_input = False, complement_state = False,
+              spill_bitswap = False, spill_byte_order = "little")
 
 class MklI2cTransport(i2c.Slave):
     def __init__(self, bus, saddr):
@@ -22,11 +29,6 @@ class MklBootloader(PortComponent):
     def option_set(self, opt):
         return self.port.option_set(opt)
         
-    @staticmethod
-    def crc(blob, state = 0):
-        state = _crc(blob, state, 0x11021, pop_lsb = False, push_lsb = True, inv_state = False)
-        return state.to_bytes(2, "little")
-
     FRAME_START         = 0x5a
     FRAME_ACK           = 0xa1
     FRAME_NAK           = 0xa2
@@ -71,8 +73,7 @@ class MklBootloader(PortComponent):
         header = bytes([self.FRAME_START, tag])
         if params or tag not in [self.FRAME_ACK, self.FRAME_NAK, self.FRAME_ACK_ABORT, self.FRAME_PING]:
             header += len(params).to_bytes(2, "little")
-            crc = self.crc(header + params)
-            blob = header + crc + params
+            blob = header + crc_alg.append_to(params)
         else:
             blob = header
 
@@ -86,7 +87,7 @@ class MklBootloader(PortComponent):
         if tag == self.FRAME_PING_RESPONSE:
             assert r[0] == self.FRAME_START
             assert r[1] == tag
-            assert self.crc(r[:-2]) == r[-2:]
+            assert crc_alg.is_valid(r)
             return r[2:]
 
         if tag == self.FRAME_COMMAND:
@@ -94,11 +95,10 @@ class MklBootloader(PortComponent):
             assert r[1] == tag
 
             length = int.from_bytes(r[2:4], "little")
-            crc = r[4:6]
-            rsp = r[6:]
-            r = r[:length + 6]
+            hdr = r[0:4]
+            rsp = r[6:length + 6]
 
-            assert self.crc(r[0:4] + rsp) == crc, self.crc(r[0:4] + rsp)
+            assert crc_alg.crc_is(hdr + rsp, r[4:6])
 
             return rsp
 

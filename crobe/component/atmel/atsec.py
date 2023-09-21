@@ -1,20 +1,15 @@
 from ...protocol import i2c, base
 from ...model import PortComponent
 from ... import bitfield
+from ...util.crc import Crc
 import struct
 import time
 import enum
 
-def crc16(blob, crc = 0):
-    for b in blob:
-        for i in range(8):
-            append = (b & 0x1) ^ (crc >> 15)
-            crc <<= 1
-            if append:
-                crc ^= 0x8005
-            b >>= 1
-            crc &= 0xffff
-    return crc
+crc16 = Crc(width = 16, poly = 0x8005, init = 0,
+            pop_lsb = True, insert_msb = False,
+            complement_input = False, complement_state = False,
+            spill_bitswap = False, spill_byte_order = "little")
 
 class CommandFailure(Exception):
     pass
@@ -99,16 +94,13 @@ class AtSec(i2c.Slave):
 
     def io_group_send(self, blob):
         data = bytes([len(blob)+3]) + blob
-        crc = crc16(data)
-        super().write(b'\x03' + data + crc.to_bytes(2, "little"))
+        super().write(b'\x03' + crc16.append_to(data))
 
     def io_group_recv(self):
         count = super().read(1)
         data_crc = super().read(count[0] - 1)
-        crc = crc16(count + data_crc[:-2])
-        packet_crc = int.from_bytes(data_crc[-2:], "little")
-        if crc != packet_crc:
-            raise base.CommunicationError("Bad CRC, had %04x, expected %04x" % (packet_crc, crc))
+        if not crc16.is_valid(count + data_crc):
+            raise base.CommunicationError("Bad CRC")
         return data_crc[:-2]
 
     def command_send(self, opcode, param1 = 0, param2 = 0, data = b''):

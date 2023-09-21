@@ -2,9 +2,16 @@ from ...protocol import i2c
 import time
 import enum
 import math
-from ...util.crc import crc
+from ...util.crc import Crc
 
 __all__ = ["CyBl"]
+
+crc_alg = Crc(width = 16,
+              poly = 0x1021,
+              init = 0,
+              pop_lsb = False, insert_msb = False,
+              complement_state = False, complement_input = False,
+              spill_bitswap = False, spill_byte_order = "little")
 
 @i2c.Interface.db.register("cybl")
 class CyBl(i2c.Slave):
@@ -20,7 +27,7 @@ class CyBl(i2c.Slave):
         
     def checksum(self, blob):
         if self.checksum_mode == "crc":
-            return crc(blob, 0, 0x11021, pop_lsb = False, push_lsb = True, inv_state = False)
+            return crc_alg.calc(blob)
         elif self.checksum_mode == "sum":
             return (-sum(blob, 0)) & 0xffff
         else:

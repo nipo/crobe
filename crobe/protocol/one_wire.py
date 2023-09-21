@@ -3,21 +3,12 @@ from .. import bitstring
 from enum import IntEnum
 from ..db import Db, NoMatch
 from ..model import PortComponent
+from ..util.crc import Crc
 
 __all__ = ["Interface"]
 
 class ProtocolError(base.ProtocolError):
     pass
-
-def crc8(data, init = 0):
-    crc = init
-    for d in data:
-        for i in range(0, 8):
-            b = ((d >> i) & 1) ^ (crc & 1)
-            crc >>= 1
-            if b:
-                crc ^= 0x8c
-    return crc
 
 class Rom:
     def __init__(self, family, uid):
@@ -37,7 +28,8 @@ class Rom:
     @property
     def crc(self):
         tmp = bytes([self.family]) + self.uid.to_bytes(6, "little")
-        return crc8(tmp)
+        state = Crc.one_wire()
+        return state(tmp)
 
     def __str__(self):
         return f'<Family {self.family:#04x} UID {self.uid:#014x}>'

@@ -1,19 +1,14 @@
 from ...protocol import i2c
 from ...model import PortComponent
+from ...util.crc import Crc
 import struct
 import time
 import enum
 
-def crc16(blob, crc = 0):
-    for b in blob:
-        for i in range(8):
-            append = ((b >> 7) & 0x1) ^ (crc >> 15)
-            crc <<= 1
-            if append:
-                crc ^= 0x8005
-            b <<= 1
-            crc &= 0xffff
-    return crc
+crc16 = Crc(width = 16, poly = 0x8005, init = 0,
+            pop_lsb = False, insert_msb = False,
+            complement_input = False, complement_state = False,
+            spill_bitswap = False, spill_byte_order = "big")
 
 @i2c.Interface.db.register("ataes132a")
 class AtAes132A(i2c.Slave):
@@ -191,19 +186,15 @@ class AtAes132A(i2c.Slave):
     def block_send(self, data):
         header = bytes([len(data) + 3])
         checksum = 0
-        crc = crc16(header + data).to_bytes(2, "big")
-
-        self._write(self.COMMAND_ADDR, header + data + crc)
+        blob = crc16.append_to(header + data)
+        self._write(self.COMMAND_ADDR, blob)
 
     def block_receive(self):
         header = self._read(self.RESPONSE_ADDR, 1)
         data_crc = self._read(self.RESPONSE_ADDR, header[0] - 1)
-        data = data_crc[:-2]
-        
-        crc = crc16(header + data).to_bytes(2, "big")
-        if crc != data_crc[-2:]:
+        if not crc16.is_valid(header + data_crc):
             raise ValueError("Bad framing")
-        return data
+        return data_crc[:-2]
 
     def command_send(self, opcode, mode = 0,
                      param1 = 0, param2 = 0,

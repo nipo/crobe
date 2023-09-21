@@ -65,10 +65,10 @@ class Hdlc(datagram.Interface):
 
     @classmethod
     def __crc(cls, data, init = 0):
-        import crcmod
-        c = crcmod.Crc(0x11021, initCrc = init ^ 0xffff)
-        c.update(data)
-        return (0xffff ^ int.from_bytes(c.digest(), "big")).to_bytes(2, "little")
+        from ....util.crc import Crc
+        state = Crc.hdlc(init)
+        state.update(data)
+        return bytes(state)
 
     @classmethod
     def __escape(cls, data):

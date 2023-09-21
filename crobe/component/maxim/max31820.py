@@ -1,5 +1,6 @@
 from ...model import PortComponent
 from ...protocol import one_wire
+from ...util.crc import Crc
 
 @one_wire.Interface.db.register(0x28)
 class Max31820(one_wire.Device):
@@ -19,8 +20,9 @@ class Max31820(one_wire.Device):
         self.execute([convert, self.cmd_wait(self.tCONV_12)])
         self.execute([read])
 
+        crc = Crc.one_wire.calc(read.data[:-1])
         self.logger.debug("Current scratchpad: %s %02x",
-                         read.data.hex(), one_wire.crc8(read.data[:-1]))
+                          read.data.hex(), int(crc))
 
         temp = int.from_bytes(read.data[:2], 'little', signed = True)
         temp /= 16

@@ -12,7 +12,7 @@ from ... import memory
 from ....puppet import Puppet
 from ....db import Db, NoMatch, DisabledEntry, InitializationFailure
 from .puppet_code import crc32_cm0
-from ....util.crc import crc32
+from ....util.crc import Crc
 import struct
 
 __all__ = ["SoC", 'ArmMPuppet', 'StubFlash']
@@ -320,8 +320,7 @@ class StubFlash(BusFlash):
 
         good = set()
         for address, data in pages.items():
-            calc = crc32(data)
-            if values[address] ==  calc:
+            if Crc.zlib_crc32.calc(data) == values[address]:
                 good.add(address)
 
         self.logger.trace("Updating, %d/%d pages already match", len(good), len(pages))
