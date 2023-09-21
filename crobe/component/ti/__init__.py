@@ -7,3 +7,4 @@ from . import dp83867
 from . import tla202x
 from . import dac3171
 from . import cc2650
+from . import adc3101
