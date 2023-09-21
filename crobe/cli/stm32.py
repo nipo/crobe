@@ -144,7 +144,7 @@ def clone_identify(roots, field, target):
     from crobe.component.arm.coresight.etm import Etm
     from crobe.util.endian import swib_u32
     from crobe.target.model import Target
-    from zlib import crc32
+    from crobe.util.crc import Crc
 
     target = field.child_summon(target)
 
@@ -177,8 +177,8 @@ def clone_identify(roots, field, target):
 
     
     bootloader = bus.mem_read(0x1ffff000, 0x400)
-#    bootloader = b"".join(bootloader[i:i+4][::-1] for i in range(0, len(bootloader), 4))
-    bootloader_crc32 = crc32(bootloader)
+    bootloader = b"".join(bootloader[i:i+4][::-1] for i in range(0, len(bootloader), 4))
+    bootloader_crc32 = Crc.stm32.calc(bootloader)
     
     if root_rom_table.use_jep106:
         if root_rom_table.partid.jep106_bank == 0 and root_rom_table.partid.jep106_id == 0x20:
@@ -211,15 +211,18 @@ def clone_identify(roots, field, target):
     by_crc = {
         # From https://github.com/a-v-s/ucdev-demos/blob/master/todo/cortex_romtable/stm32f1/main.c
         0xda6104d0: "STM32F103x6",
-        0x27377129: "STM32F103xB",
+        # Also seen on genuine chip from discovery board
+        # Also seen on AKAI MPD26
+        0x27377129: "STM32F10[23]xB",
         0x1527d032: "GD32F101C6 or GC32F103CB",
         0x52d42adb: "HK32",
         0xdcbd2235: "CH32",
 
         # Own findings
-        0x9af55669: "STM32F051R8T6", # Genuine chip from discovery board
-        0xef201f8d: "STM32F103C8T6", # Genuine chip from discovery board
-        0x0a72ef1c: "Unsure (FC)", # Unidentified chip, on frequency counter #2
+        # Genuine chip from discovery board
+        0x3790c7bd: "STM32F051R8T6",
+        # Unidentified chip, on frequency counter #2
+        0x2db91edd: "Unsure (FC)",
         }
 
     bootloader_maker = by_crc.get(bootloader_crc32, "Unknown")
