@@ -16,3 +16,18 @@ def swib_u24(w):
 
 def swib_u32(w):
     return swib_u16(w >> 16) | (swib_u16(w) << 16)
+
+def swib(word, width):
+    r = 0
+    for i in range(width):
+        r <<= 1
+        r |= word & 1
+        word >>= 1
+    return r
+    
+def swap(word, width):
+    assert width & 7 == 0
+    byte_count = width // 8
+    blob = word.to_bytes(byte_count, "little")
+    swapped_word = int.from_bytes(blob, "big")
+    return swapped_word
