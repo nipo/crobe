@@ -34,6 +34,7 @@ from . import rp2
 from . import pipe
 from . import kinetis
 from . import rtt
+from . import riscv
 from . import stm32
 from . import crc
 
