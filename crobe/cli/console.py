@@ -46,6 +46,8 @@ def cli():
     try:
         ctx = base.cli.make_context("crobe", sys.argv[1:])
         ctx.obj = {}
+        ctx.help_option_names = ["-h", "--help"]
+        ctx.show_default = True
 
         base.cli.invoke(ctx)
 
