@@ -6,8 +6,8 @@ import struct
 import time
 import enum
 
-crc16 = Crc(width = 16, poly = 0x8005, init = 0,
-            pop_lsb = True, insert_msb = False,
+crc16 = Crc(poly = 0x18005, init = 0,
+            pop_lsb = True, order0_at_lsb = True,
             complement_input = False, complement_state = False,
             spill_bitswap = False, spill_byte_order = "little")
 

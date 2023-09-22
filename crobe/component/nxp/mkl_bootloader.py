@@ -6,10 +6,9 @@ from ...util.crc import Crc
 
 __all__ = ["MklBootloader"]
 
-crc_alg = Crc(width = 16,
-              poly = 0x1021,
+crc_alg = Crc(poly = 0x11021,
               init = 0,
-              pop_lsb = False, insert_msb = False,
+              pop_lsb = False, order0_at_lsb = True,
               complement_input = False, complement_state = False,
               spill_bitswap = False, spill_byte_order = "little")
 

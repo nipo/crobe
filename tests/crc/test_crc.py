@@ -1,5 +1,6 @@
 from crobe.util.crc import Crc
 import unittest
+from crobe.util.bytes_ops import xor_
 
 class CrcTest(unittest.TestCase):
     def test_zlib(self):
@@ -44,6 +45,10 @@ class CrcTest(unittest.TestCase):
         value = Crc.iso14443b.append_to(b"\x0a\x12\x34\x56")
         self.assertEqual(value, b"\x0a\x12\x34\x56\x2c\xf6")
         
+    def test_1wire(self):
+        self.assertEqual(Crc.one_wire.calc(bytes.fromhex("1050a90a020800")), 0x37)
+        self.assertTrue(Crc.one_wire.is_valid(bytes.fromhex("1050a90a02080037")))
+        
 class AtmelCrcTest(unittest.TestCase):
     def test_ataes132a(self):
         def from_datasheet(blob, crc = 0):
@@ -57,14 +62,11 @@ class AtmelCrcTest(unittest.TestCase):
                     crc &= 0xffff
             return crc
 
-        as_alg = Crc(width = 16, poly = 0x8005, init = 0,
-                     pop_lsb = False, insert_msb = False,
-                     complement_input = False, complement_state = False,
-                     spill_bitswap = False, spill_byte_order = "big")
+        from crobe.component.atmel.ataes132a import crc16
 
-        self.assertEqual(from_datasheet(b"012345678", 0), as_alg.calc(b"012345678", 0))
-        self.assertEqual(from_datasheet(b"012345678", 0x1234), as_alg.calc(b"012345678", 0x1234))
-        self.assertTrue(as_alg.is_valid(bytes.fromhex("09020200000000f960")))
+        self.assertEqual(from_datasheet(b"012345678", 0), crc16.calc(b"012345678", 0))
+        self.assertEqual(from_datasheet(b"012345678", 0x1234), crc16.calc(b"012345678", 0x1234))
+        self.assertTrue(crc16.is_valid(bytes.fromhex("09020200000000f960")))
 
     def test_ataecc(self):
         # Atmel CryptoAuthentication Data Zone CRC Calculation APPLICATION NOTE
@@ -79,15 +81,56 @@ class AtmelCrcTest(unittest.TestCase):
                     crc &= 0xffff
             return crc
 
-        as_alg = Crc(width = 16, poly = 0x8005, init = 0,
-                     pop_lsb = True, insert_msb = False,
-                     complement_input = False, complement_state = False,
-                     spill_bitswap = False, spill_byte_order = "little")
+        from crobe.component.atmel.atsec import crc16
 
-        self.assertEqual(from_datasheet(b"012345678", 0), as_alg.calc(b"012345678", 0))
-        self.assertEqual(from_datasheet(b"012345678", 0x1234), as_alg.calc(b"012345678", 0x1234))
-        
-class OneWireCrcTest(unittest.TestCase):
-    def test_1wire(self):
-        self.assertEqual(Crc.one_wire.calc(bytes.fromhex("1050a90a020800")), 0x37)
-        self.assertTrue(Crc.one_wire.is_valid(bytes.fromhex("1050a90a02080037")))
+        self.assertEqual(from_datasheet(b"012345678", 0), crc16.calc(b"012345678", 0))
+        self.assertEqual(from_datasheet(b"012345678", 0x1234), crc16.calc(b"012345678", 0x1234))
+
+class PatchTests(unittest.TestCase):
+    # Synthetic algorithm to test complemented input and funny init values
+    stupid_alg = Crc(
+        poly = 0x104c11db7,
+        init = 0x055555555,
+        pop_lsb = True,
+        order0_at_lsb = False,
+        complement_input = True,
+        complement_state = True,
+        spill_bitswap = True,
+        spill_byte_order = "little")
+
+    all_algs = [
+        Crc.zlib,
+        Crc.ethernet_fcs,
+        Crc.bluetooth_crc24,
+        Crc.hdlc,
+        stupid_alg,
+    ]
+    def test_patch(self):
+        original_payload = bytes.fromhex("10f9c510cecccb70a9dee996e074e2cfbb7120a590b568c808c106f3636b7015")
+        change_offset = 8
+        change_data = bytes.fromhex("c334993b")
+        patch_offset = 14
+
+        for alg in self.all_algs:
+            original_crc = alg.update(alg.init, original_payload)
+
+            changed_payload = original_payload[:change_offset] + change_data + original_payload[change_offset+len(change_data):]
+            changed_payload_crc = alg.update(alg.init, changed_payload)
+
+            self.assertNotEqual(original_crc, changed_payload_crc)
+
+            data_diff = xor_(original_payload[change_offset : change_offset+len(change_data)],
+                             changed_payload[change_offset : change_offset+len(change_data)])
+
+            for patch_offset in [1, 14]:
+                patch_delta = alg.data_mod_data_delta_compute(
+                    change_offset,
+                    data_diff,
+                    patch_offset)
+
+                patch_data = xor_(patch_delta, original_payload[patch_offset : patch_offset+len(patch_delta)])
+                fixed_payload = changed_payload[:patch_offset] + patch_data + changed_payload[patch_offset+len(patch_data):]
+
+                fixed_payload_crc = alg.update(alg.init, fixed_payload)
+
+                self.assertEqual(original_crc, fixed_payload_crc, f"{alg}")

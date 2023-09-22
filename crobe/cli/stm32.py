@@ -2,6 +2,21 @@ from . import base
 import click
 import binascii
 import time
+from ..util.crc import Crc
+
+# In RM0008, ST says they use the ethernet CRC, but their IP takes the
+# four bytes in opposite order. Moreover, they have no pre/post
+# complementation of state, so they initialize with 0xffffffff, but
+# forget to tell output should be negated.
+stm32_crc = Crc(
+    poly = 0x104c11db7,
+    init = 0xffffffff,
+    pop_lsb = False,
+    order0_at_lsb = True,
+    complement_input = False,
+    complement_state = False,
+    spill_bitswap = False,
+    spill_byte_order = "big")
 
 @base.cli.group(help = "STM32-Specific")
 def stm32():
@@ -144,7 +159,6 @@ def clone_identify(roots, field, target):
     from crobe.component.arm.coresight.etm import Etm
     from crobe.util.endian import swib_u32
     from crobe.target.model import Target
-    from crobe.util.crc import Crc
 
     target = field.child_summon(target)
 
@@ -178,7 +192,7 @@ def clone_identify(roots, field, target):
     
     bootloader = bus.mem_read(0x1ffff000, 0x400)
     bootloader = b"".join(bootloader[i:i+4][::-1] for i in range(0, len(bootloader), 4))
-    bootloader_crc32 = Crc.stm32.calc(bootloader)
+    bootloader_crc32 = stm32_crc.calc(bootloader)
     
     if root_rom_table.use_jep106:
         if root_rom_table.partid.jep106_bank == 0 and root_rom_table.partid.jep106_id == 0x20:

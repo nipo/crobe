@@ -61,24 +61,23 @@ def lfsr(x, n):
 # Last bit of data has position 0.
 def crc_of_bit(pos):
     return gfmul(0x8005, gfexp(2, pos))
-    #return lfsr(0x8005, pos)
 
 # Compute CRC contribution of initial value.
 def crc_init(init, len):
     return gfmul(init, gfexp(2, len))
-    #return lfsr(init, len)
 
-matching_alg = Crc(width = 16,
-          poly = 0x8005, init = 0,
-          pop_lsb = False, insert_msb = False,
-          complement_input = False, complement_state = False,
-          spill_bitswap = False, spill_byte_order = "little")
+matching_alg = Crc(
+    poly = 0x18005, init = 0,
+    pop_lsb = False, order0_at_lsb = True,
+    complement_input = False, complement_state = False,
+    spill_bitswap = False, spill_byte_order = "little")
 
 all_algs = [
     matching_alg,
     Crc.zlib,
     Crc.ethernet_fcs,
     Crc.bluetooth_crc24,
+    Crc.hdlc,
 ]
 
 class SelfTest(unittest.TestCase):
@@ -200,23 +199,29 @@ class SeekTests(unittest.TestCase):
 
     def test_backward0(self):
         for alg in all_algs:
-            init = alg.update(alg.init, b"deadbeef")
+            for init in [alg.mask, alg.mask ^ alg.unit,
+                         0, alg.unit,
+                         alg.mask, alg.mask ^ alg.msb,
+                         0, alg.msb
+                         ]:
+                seeked = init
+                seeked = alg._forward(seeked, 0)
+                seeked = alg._backward(seeked, 0)
 
-            seeked = init
-            seeked = alg._backward(seeked)
-            seeked = alg._forward(seeked)
-
-            self.assertEqual(init, seeked)
+                self.assertEqual(init, seeked, f"{alg} at {init:x} fails {seeked ^ init : #x}")
 
     def test_backward1(self):
         for alg in all_algs:
-            init = alg.update(alg.init, b"deadbeef")
+            for init in [alg.mask, alg.mask ^ alg.unit,
+                         0, alg.unit,
+                         alg.mask, alg.mask ^ alg.msb,
+                         0, alg.msb
+                         ]:
+                seeked = init
+                seeked = alg._forward(seeked, 1)
+                seeked = alg._backward(seeked, 1)
 
-            seeked = init
-            seeked = alg._backward(seeked, 1)
-            seeked = alg._forward(seeked, 1)
-
-            self.assertEqual(init, seeked)
+                self.assertEqual(init, seeked, f"{alg} at {init:x} fails {seeked ^ init : #x}")
 
     def test_backward_fw_many(self):
         bit_count = 1
@@ -257,24 +262,3 @@ class SeekTests(unittest.TestCase):
             cpart12m2 = alg.unupdate(cpart12, part2) 
 
             self.assertEqual(cpart1, cpart12m2)
-
-class PatchTests(unittest.TestCase):
-    def test_patch(self):
-        original_data = bytes.fromhex("10f9c510cecccb70a9dee996e074e2cfbb7120a590b568c808c106f3636b7015")
-        patch_offset = 8
-        patch_data = bytes.fromhex("c334993b")
-
-        for alg in all_algs:
-            data_crc = alg.update(alg.init, original_data)
-
-            patched_data = original_data[:patch_offset] + patch_data + original_data[patch_offset+len(patch_data):]
-            patched_data_crc = alg.update(alg.init, patched_data)
-
-            self.assertNotEqual(data_crc, patched_data_crc)
-
-            
-            patch_delta = bytes((x^y) for (x, y) in zip(patch_data, original_data[patch_offset:]))
-            crc_patch = alg._forward_bytes(0, patch_delta)
-            crc_patch = alg._forward_many(crc_patch, 8 * (len(original_data) - len(patch_data) - patch_offset))
-            fast_patched_data_crc = data_crc ^ crc_patch
-            self.assertNotEqual(data_crc, fast_patched_data_crc)
