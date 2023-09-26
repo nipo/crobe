@@ -8,21 +8,23 @@ local_dir = Path(__file__).parent
 class CrcTest(unittest.TestCase):
     def test_zlib(self):
         import zlib
-        zlib_alg = Crc.zlib
+        zlib_alg = Crc.from_name("zlib")
 
         self.assertEqual(zlib_alg.calc(b"0123456789", 0xdeadbeef), zlib.crc32(b"0123456789", 0xdeadbeef))
         self.assertEqual(zlib_alg.calc(b"0123456789"), zlib.crc32(b"0123456789"))
 
     def test_bluetooth(self):
-        ble_chk = Crc.bluetooth_crc24
+        ble_chk = Crc.from_name("bluetooth_crc24")
+
         ble_chk_state = ble_chk()
         payload = bytes.fromhex("27104a49aeadacabaaa9bcead60507090b0d")
         ble_chk_state.update(payload)
         self.assertTrue(ble_chk.is_valid(payload + bytes(ble_chk_state)))
         
     def test_ethernet(self):
+        ethernet_fcs = Crc.from_name("ethernet_fcs")
+
         ethernet_frame = bytes.fromhex("20cf301acea16238e0c2bd30080600010800060400016238e0c2bd300a2a2a010000000000000a2a2a0200000000000000000000000000000000000022b72660")
-        ethernet_fcs = Crc.ethernet_fcs
         ethernet_fcs_state = ethernet_fcs()
         ethernet_fcs_state.update(ethernet_frame[:-4])
         ethernet_fcs_value = bytes(ethernet_fcs_state)
@@ -30,27 +32,33 @@ class CrcTest(unittest.TestCase):
         self.assertTrue(ethernet_fcs.is_valid(ethernet_frame))
         
     def test_14443a(self):
+        alg = Crc.from_name("iso14443a")
+
         # From ISO-Std-14443-3:2007
-        with_crc = Crc.iso14443a.append_to(b"\x00\x00")
+        with_crc = alg.append_to(b"\x00\x00")
         self.assertEqual(with_crc, b"\x00\x00\xa0\x1e")
 
-        with_crc = Crc.iso14443a.append_to(b"\x12\x34")
+        with_crc = alg.append_to(b"\x12\x34")
         self.assertEqual(with_crc, b"\x12\x34\x26\xcf")
         
     def test_14443b(self):
+        alg = Crc.from_name("iso14443b")
+
         # From ISO-Std-14443-3:2007
-        value = Crc.iso14443b.append_to(b"\x00\x00\x00")
+        value = alg.append_to(b"\x00\x00\x00")
         self.assertEqual(value, b"\x00\x00\x00\xcc\xc6")
 
-        value = Crc.iso14443b.append_to(b"\x0f\xaa\xff")
+        value = alg.append_to(b"\x0f\xaa\xff")
         self.assertEqual(value, b"\x0f\xaa\xff\xfc\xd1")
 
-        value = Crc.iso14443b.append_to(b"\x0a\x12\x34\x56")
+        value = alg.append_to(b"\x0a\x12\x34\x56")
         self.assertEqual(value, b"\x0a\x12\x34\x56\x2c\xf6")
         
     def test_1wire(self):
-        self.assertEqual(Crc.one_wire.calc(bytes.fromhex("1050a90a020800")), 0x37)
-        self.assertTrue(Crc.one_wire.is_valid(bytes.fromhex("1050a90a02080037")))
+        alg = Crc.from_name("one_wire")
+
+        self.assertEqual(alg.calc(bytes.fromhex("1050a90a020800")), 0x37)
+        self.assertTrue(alg.is_valid(bytes.fromhex("1050a90a02080037")))
         
 class AtmelCrcTest(unittest.TestCase):
     def test_ataes132a(self):
@@ -102,10 +110,10 @@ class PatchTests(unittest.TestCase):
         spill_byte_order = "little")
 
     all_algs = [
-        Crc.zlib,
-        Crc.ethernet_fcs,
-        Crc.bluetooth_crc24,
-        Crc.hdlc,
+        Crc.from_name("zlib"),
+        Crc.from_name("ethernet_fcs"),
+        Crc.from_name("bluetooth_crc24"),
+        Crc.from_name("hdlc"),
         stupid_alg,
     ]
     def test_patch(self):
@@ -141,7 +149,7 @@ class PatchTests(unittest.TestCase):
 class AlgSerializationTest(unittest.TestCase):
     def test_save_restore(self):
         for _, alg in Crc.algorithms():
-            self.assertEqual(alg, Crc.by_name(str(alg)))
+            self.assertEqual(alg, Crc.from_desc_string(str(alg)))
 
 class RevengTest(unittest.TestCase):
     def test_save_restore(self):

@@ -74,10 +74,10 @@ matching_alg = Crc(
 
 all_algs = [
     matching_alg,
-    Crc.zlib,
-    Crc.ethernet_fcs,
-    Crc.bluetooth_crc24,
-    Crc.hdlc,
+    Crc.from_name("zlib"),
+    Crc.from_name("ethernet_fcs"),
+    Crc.from_name("bluetooth_crc24"),
+    Crc.from_name("hdlc"),
 ]
 
 class SelfTest(unittest.TestCase):

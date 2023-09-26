@@ -335,12 +335,12 @@ class Crc:
     @classmethod
     def from_desc_string(cls, s):
         try:
-            cls.from_name(s)
+            return cls.from_name(s)
         except ValueError:
             pass
 
         try:
-            cls.from_reveng(s)
+            return cls.from_reveng(s)
         except ValueError:
             pass
 
