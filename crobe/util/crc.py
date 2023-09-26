@@ -562,48 +562,6 @@ class Crc:
         """
         return self.calc_bytes(data, init) == crc
 
-    def c_bit_spill(self, file = sys.stdout):
-        print(f"#define MY_CRC_INIT {self.init:#x}", file = file)
-        print(f"uint{self.order}_t my_crc_update(const uint8_t *data, size_t size, uint{self.order}_t state)", file = file)
-        print("{", file = file)
-        if self.complement_state:
-            print("    state = ~state;", file = file)
-        print("    for (size_t i = 0; i < size; ++i) {", file = file)
-        print("        uint8_t word = data[i];", file = file)
-        if self.complement_input:
-            print("        word = ~word;", file = file)
-        print("        for (size_t bit_index = 0; bit_index < 8; ++bit_index) {", file = file)
-
-        v = "word" if self.pop_lsb else "(word >> 7)"
-        e = "state" if not self.order0_at_lsb else f"(state >> {self.order - 1})"
-
-        print(f"            uint8_t feedback = ({e} ^ {v}) & 1;", file = file)
-
-        shd = ">>" if not self.order0_at_lsb else "<<"
-
-        print(f"            state {shd}= 1;", file = file)
-        print("            if (feedback)", file = file)
-        print(f"                state ^= {self.lpoly:#x};", file = file)
-
-        shd = ">>" if self.pop_lsb else "<<"
-
-        print(f"            word {shd}= 1;", file = file)
-        print("        }", file = file)
-        print("    }", file = file)
-        if self.complement_state:
-            print("    state = ~state;", file = file)
-        print("    return state;", file = file)
-        print("}", file = file)
-
-    def c_test_spill(self, data = b"012345678", file = sys.stdout):
-        print("int main(int argc, char **argv)", file = file)
-        print("{", file = file)
-        crc = self.update(self.init, data)
-        print(f"    const uint8_t data[] = {{{', '.join(hex(x) for x in data)}}};", file = file)
-        print(f"    assert(my_crc_update(data, sizeof(data), MY_CRC_INIT) == {crc:#x});", file = file)
-        print("    return 0;", file = file)
-        print("}", file = file)
-
     def state_error(self, message_with_crc, init = None):
         """
         For a message with CRC appended respecting algorithm spilling
