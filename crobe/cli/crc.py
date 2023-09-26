@@ -333,45 +333,61 @@ def patch(alg, patch_offset, data_offset, total_size, old_data, new_data, old):
 
 def print_alg_info(alg):
     print(f"Calculation:")
-    print(f"- Polynom representation: order 0 at {'LSB' if alg.order0_at_lsb else 'MSB'}")
+    print(f"- Polynom representation: exponent 0 at {'LSB' if alg.order0_at_lsb else 'MSB'}")
     print(f"- Order: {alg.order}")
     print(f"- Divisor: {alg.poly:#x}")
     p = ' + '.join((f"x^{x}" if x else "1") for x in alg.poly_exponents)
     print(f"  Exponents: {p}")
     print(f"- Initial value: {alg.init:#x}")
     p = ' + '.join((f"x^{x}" if x else "1") for x in alg.init_exponents)
-    print(f"  Exponents: {p or '0'}")
+    print(f"  Exponents: {p or '-'}")
+
     print(f"Bitstream processing:")
     print(f"- Read bits in bytestream from", ["MSB", "LSB"][alg.pop_lsb], "of each byte")
     print(f"- Complement input data:", alg.complement_input)
     print(f"- Complement internal state:", alg.complement_state)
+
     print(f"Output generation:")
     print(f"- Bitswap output:", alg.spill_bitswap)
     print(f"- Byte order:", alg.spill_byte_order)
-    print(f"Trivia:")
+
+    print(f"Properties:")
     print(f"- CRC state after blob with valid CRC: {alg.check_state:#x}")
-    print(f"- CRC bytes of a blob with valid CRC: <{alg.as_bytes(alg.check_state).hex()}>")
+    print(f"- CRC bytes computed over a blob with valid CRC: <{alg.as_bytes(alg.check_state).hex()}>")
     if alg.is_trinomial:
-        print(f"- Is trinomial")
+        print(f"- Trinomial")
     if alg.is_prime:
-        print(f"- Is prime")
+        print(f"- Prime")
+    if (alg.init == 0 and not alg.complement_state) \
+       or (alg.init == alg.mask and alg.complement_state):
+        if alg.complement_input:
+            print("- Transparent to pre-image 0xff-padding")
+        else:
+            print("- Transparent to pre-image zero-padding")
+    if alg.check_state == 0:
+        if alg.complement_input:
+            print("- Transparent to post-image 0xff-padding")
+        else:
+            print("- Transparent to post-image zero-padding")
+
+    print(f"Trivia:")
     print("- Crobe short definition:", alg.info_string)
     aliases = alg.known_names
     if aliases:
         print("- Known as:", ', '.join(aliases))
     print("- Crobe instantiation:", repr(alg))
     print("- Reveng-like definition:", alg.reveng_string)
-            
+        
 @crc.command()
 @click.argument("alg", type = str, metavar = "ALG_NAME")
-@click.option("--reciprocal", is_flag = True, help = "Use reciprocal of CRC")
-def info(alg, reciprocal):
+@click.option("--swap", is_flag = True, help = "Use swapped polynom representation")
+def info(alg, swap):
     """
     Print human-readable info about algorithm
     """
     alg = Crc.from_desc_string(alg)
-    if reciprocal:
-        alg = alg.reciprocal()
+    if swap:
+        alg = alg.order_swapped()
     print_alg_info(alg)
 
 @crc.command()

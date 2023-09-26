@@ -344,8 +344,13 @@ class Crc:
         except ValueError:
             pass
 
-        return cls.from_info(name)
+        try:
+            return cls.from_info(s)
+        except ValueError:
+            pass
 
+        raise ValueError(s)
+        
     @classmethod
     def from_info(cls, info):
         import re
