@@ -2,32 +2,33 @@ from . import base
 from ..util.crc import Crc
 from ..util.bytes_ops import xor_
 import click
+from collections import defaultdict
 
 @base.cli.group(help = "CRC tools")
 def crc():
     pass
 
 @crc.command()
+@click.argument("alg", type = str)
 @click.argument("data", type = str)
-@click.option("--alg", type = str, help = "CRC algorithm name", metavar = "ALG_NAME")
 def init_recover(data, alg):
     """
     Assuming a blob with correct CRC appended, recover initial value
     """
-    crc_alg = getattr(Crc, alg)
+    crc_alg = Crc.from_desc_string(alg)
     data = bytes.fromhex(data)
     init_state = crc_alg._backward_bytes(crc_alg.check_state, data)
     print(f"{init_state:x}")
 
 @crc.command()
+@click.argument("alg", type = str)
 @click.argument("data", type = str)
 @click.option("--init", type = base.HEX, default = None, help = "Initial CRC state (defaults to algorithm's default)", metavar = "HEX_VALUE")
-@click.option("--alg", type = str, help = "CRC algorithm name", metavar = "ALG_NAME")
 def calculate(data, alg, init):
     """
     Calculate CRC of a small blob
     """
-    crc_alg = getattr(Crc, alg)
+    crc_alg = Crc.from_desc_string(alg)
     data = bytes.fromhex(data)
     state = crc_alg(init)
     state.update(data)
@@ -36,20 +37,64 @@ def calculate(data, alg, init):
     print(f"Output as bytes:   {bytes(state).hex()}")
 
 @crc.command()
+@click.argument("alg", type = str)
 @click.argument("data", type = str)
 @click.option("--init", type = base.HEX, default = None, help = "Initial CRC state (defaults to algorithm's default)", metavar = "HEX_VALUE")
-@click.option("--alg", type = str, help = "CRC algorithm name", metavar = "ALG_NAME")
 def validate(data, alg, init):
     """
     Check a piece of data passes CRC validation
     """
-    crc_alg = getattr(Crc, alg)
+    crc_alg = Crc.from_desc_string(alg)
     data = bytes.fromhex(data)
     state = crc_alg(init)
     state.update(data)
     if not state.is_valid():
+        print("Invalid")
         raise click.exceptions.Exit(1)
 
+@crc.command()
+@click.argument("alg", type = str)
+@click.argument("data", type = str)
+@click.option("--init", type = base.HEX, default = None, help = "Initial CRC state (defaults to algorithm's default)", metavar = "HEX_VALUE")
+def recover(alg, data, init):
+    """For a payload with CRC, try to fix a 1 or 2-bit transmission error.
+
+    When numbering bits in the message, bytes are taken in data order,
+    bits from lsb.
+
+    """
+    alg = Crc.from_desc_string(alg)
+    data = bytes.fromhex(data)
+
+    crc_diff = alg.state_error(data, init = init)
+    if crc_diff == 0:
+        print("CRC is OK")
+        return
+
+    fixes = defaultdict(list)
+    bit_contribution = alg.bit_contributions(len(data))
+
+    for bit, contribution in bit_contribution.items():
+        fixes[contribution].append((bit, ))
+
+        for second in range(bit + 1, len(data) * 8):
+            fixes[bit_contribution[second] ^ contribution].append((bit, second))
+
+    if crc_diff not in fixes:
+        print("Cannot recover bit flips")
+        return
+
+    for changed_bits in fixes[crc_diff]:
+        print(f"Changing bits {changed_bits}:")
+        mask = bytearray(len(data))
+        for b in changed_bits:
+            mask[b //8] ^= 1 << (b & 7)
+        new_blob = xor_(data, mask)
+        print(f" Mask  {mask.hex()}")
+        print(f" Fixed {new_blob.hex()}")
+
+        assert alg.is_valid(new_blob)
+    
 @crc.command()
 @click.argument("data", type = str)
 @click.argument("output", type = str)
@@ -57,8 +102,7 @@ def validate(data, alg, init):
 @click.option("--init", type = base.HEX, default = None, help = "Initial CRC state (defaults to algorithm's default)", metavar = "HEX_VALUE")
 @click.option("--poly", type = base.HEX, metavar = "HEX_VALUE", help = "Polynom as an integer")
 @click.option("--swap4", is_flag = True, help = "Swap bytes four-by-four before sending them to the CRC computation")
-@click.option("--c-alg", is_flag = True, help = "Spill matching C algorithm")
-def find_parameters(data, output, width, poly, init, swap4, c_alg):
+def find_parameters(data, output, width, poly, init, swap4):
     """Find actual parameters of CRC.
 
     Polynom, initial value, sample data and result CRC are needed.
@@ -70,22 +114,18 @@ def find_parameters(data, output, width, poly, init, swap4, c_alg):
     """
     from crobe.util.endian import swib, swap
 
-    c_alg_test = True
-
     try:
         data = bytes.fromhex(data)
     except ValueError:
         from ..loadable.model import Program
         p = Program.from_file(data)
         data = p[0].data
-        c_alg_test = False
 
     value_bytes = bytes.fromhex(output)
     value = int.from_bytes(value_bytes, "little")
 
     if swap4:
         data = b"".join(data[i:i+4][::-1] for i in range(0, len(data), 4))
-        c_alg_test = False
 
     mask = (1 << width) - 1
     outputs = [value]
@@ -105,6 +145,8 @@ def find_parameters(data, output, width, poly, init, swap4, c_alg):
 
     for _poly in polys:
         if not _poly & 1:
+            continue
+        if not _poly & (1 << width):
             continue
 
         for pop_lsb in [False, True]:
@@ -143,17 +185,11 @@ def find_parameters(data, output, width, poly, init, swap4, c_alg):
                     if v == value_bytes:
                         ok.add(alg)
 
-    for crc_alg in ok:
-        print(repr(crc_alg))
-
-        if c_alg:
-            print("#include <assert.h>")
-            print("#include <stdio.h>")
-            print("#include <stdlib.h>")
-            print("#include <stdint.h>")
-            crc_alg.c_bit_spill()
-            if c_alg_test:
-                crc_alg.c_test_spill(data)
+    for index, crc_alg in enumerate(ok):
+        if index:
+            print()
+        print(f"Option #{index+1}:")
+        print_alg_info(crc_alg)
 
 @crc.command(short_help = "Compute CRC or data patch after modification in a blob",
              epilog = """
@@ -169,7 +205,7 @@ $ crobe loadable hexdump example.bin
 0x00000050: 47 81 41 60 5a 86 d3 fa e1 d1 10 1e 57 b4 15 7c | G.A`Z.......W..|
 0x00000060: 6f aa 6c 71 ae c4 f5 88 50 80 26 0f be 9d 24 ac | o.lq....P.&...$.
 0x00000070: 4d fc a0 82 b3 b6 87 35 b3 d6 a8 35 cc 62 bd d5 | M......5...5.b..
-$ crobe loadable crc --alg ethernet_fcs example.bin
+$ crobe loadable crc ethernet_fcs example.bin
 example.bin None <0x0:0x80>: ba7d7de2
 
 Let's say we want to replace six bytes at 0x40 to be [C0 DE DE AD F0 0D]:
@@ -189,19 +225,19 @@ $ crobe loadable hexdump example-patched.bin
 0x00000050: 47 81 41 60 5a 86 d3 fa e1 d1 10 1e 57 b4 15 7c | G.A`Z.......W..|
 0x00000060: 6f aa 6c 71 ae c4 f5 88 50 80 26 0f be 9d 24 ac | o.lq....P.&...$.
 0x00000070: 4d fc a0 82 b3 b6 87 35 b3 d6 a8 35 cc 62 bd d5 | M......5...5.b..
-$ crobe loadable crc --alg ethernet_fcs example-patched.bin
+$ crobe loadable crc ethernet_fcs example-patched.bin
 example-patched.bin None <0x0:0x80>: 8eb2fbc8
 
 We can compute effect of data change on CRC without having the whole binary:
 
 \b
-$ crobe crc patch --alg ethernet_fcs 0x40 0x80 e5be4660861c c0dedeadf00d
+$ crobe crc patch ethernet_fcs 0x40 0x80 e5be4660861c c0dedeadf00d
 To XOR on CRC: 34cf862a
 
 Crobe may even do the XOR for you if you have old CRC:
 
 \b
-$ crobe crc patch --alg ethernet_fcs 0x40 0x80 e5be4660861c c0dedeadf00d --old ba7d7de2
+$ crobe crc patch ethernet_fcs 0x40 0x80 e5be4660861c c0dedeadf00d --old ba7d7de2
 To XOR on CRC: 34cf862a
 Old CRC: ba7d7de2
 New CRC: 8eb2fbc8
@@ -212,13 +248,13 @@ at another offset in the payload in order to keep CRC intact.
 Let's say we prefer to patch bytes at offset 0x60:
 
 \b
-$ crobe crc patch --alg ethernet_fcs 0x40 0x80 e5be4660861c c0dedeadf00d --patch-offset 0x60
+$ crobe crc patch ethernet_fcs 0x40 0x80 e5be4660861c c0dedeadf00d --patch-offset 0x60
 To XOR on data at 0x60: 249ed2bf
 
 Again, tool may calculate new data:
 
 \b
-$ crobe crc patch --alg ethernet_fcs 0x40 0x80 e5be4660861c c0dedeadf00d --patch-offset 0x60 --old 6faa6c71
+$ crobe crc patch ethernet_fcs 0x40 0x80 e5be4660861c c0dedeadf00d --patch-offset 0x60 --old 6faa6c71
 To XOR on data at 0x60: 249ed2bf
 Old data: 6faa6c71
 New data: 4b34bece
@@ -227,22 +263,22 @@ And this actually works:
 
 \b
 $ crobe loadable to-bin example-patched.bin 4b34bece:literal:+0x60 example-fixed.bin
-$ crobe loadable crc --alg ethernet_fcs example-fixed.bin
+$ crobe loadable crc ethernet_fcs example-fixed.bin
 example-fixed.bin None <0x0:0x80>: ba7d7de2
 
 Patch offset may actually be before data offset:
 
 \b
-$ crobe crc patch --alg ethernet_fcs 0x40 0x80 e5be4660861c c0dedeadf00d --patch-offset 0x5 --old 6bb7775f
+$ crobe crc patch ethernet_fcs 0x40 0x80 e5be4660861c c0dedeadf00d --patch-offset 0x5 --old 6bb7775f
 To XOR on data at 0x5: 247568f2
 Old data: 6bb7775f
 New data: 4fc21fad
 $ crobe loadable to-bin example-patched.bin 4fc21fad:literal:+0x5 example-fixed.bin
-$ crobe loadable crc --alg ethernet_fcs example-fixed.bin
+$ crobe loadable crc ethernet_fcs example-fixed.bin
 example-fixed.bin None <0x0:0x80>: ba7d7de2
 """
              )
-@click.option("--alg", type = str, help = "CRC algorithm name", metavar = "ALG_NAME")
+@click.argument("alg", type = str)
 @click.option("--patch-offset", type = base.HEX, default = None, help = "Offset for fixup data if not changing final CRC")
 @click.option("--old", type = str, default = None, help = "Old CRC value (as payload bytes) or data before fixup patch", metavar = "HEX_DATA")
 @click.argument("data_offset", type = base.HEX)
@@ -256,7 +292,7 @@ def patch(alg, patch_offset, data_offset, total_size, old_data, new_data, old):
     Change may be of arbitrary size, but patch to fix CRC must be of
     the CRC size.
     """
-    crc_alg = getattr(Crc, alg)
+    crc_alg = Crc.from_desc_string(alg)
     old_data = bytes.fromhex(old_data)
     new_data = bytes.fromhex(new_data)
     if old is not None:
@@ -294,3 +330,74 @@ def patch(alg, patch_offset, data_offset, total_size, old_data, new_data, old):
             print(f"Old data: {old.hex()}")
             new_data = xor_(old, patch_xor_blob)
             print(f"New data: {new_data.hex()}")
+
+def print_alg_info(alg):
+    print(f"Calculation:")
+    print(f"- Polynom representation: order 0 at {'LSB' if alg.order0_at_lsb else 'MSB'}")
+    print(f"- Order: {alg.order}")
+    print(f"- Divisor: {alg.poly:#x}")
+    p = ' + '.join((f"x^{x}" if x else "1") for x in alg.poly_exponents)
+    print(f"  Exponents: {p}")
+    print(f"- Initial value: {alg.init:#x}")
+    p = ' + '.join((f"x^{x}" if x else "1") for x in alg.init_exponents)
+    print(f"  Exponents: {p or '0'}")
+    print(f"Bitstream processing:")
+    print(f"- Read bits in bytestream from", ["MSB", "LSB"][alg.pop_lsb], "of each byte")
+    print(f"- Complement input data:", alg.complement_input)
+    print(f"- Complement internal state:", alg.complement_state)
+    print(f"Output generation:")
+    print(f"- Bitswap output:", alg.spill_bitswap)
+    print(f"- Byte order:", alg.spill_byte_order)
+    print(f"Trivia:")
+    print(f"- CRC state after blob with valid CRC: {alg.check_state:#x}")
+    print(f"- CRC bytes of a blob with valid CRC: <{alg.as_bytes(alg.check_state).hex()}>")
+    if alg.is_trinomial:
+        print(f"- Is trinomial")
+    if alg.is_prime:
+        print(f"- Is prime")
+    print("- Crobe short definition:", alg.info_string)
+    aliases = alg.known_names
+    if aliases:
+        print("- Known as:", ', '.join(aliases))
+    print("- Crobe instantiation:", repr(alg))
+    print("- Reveng-like definition:", alg.reveng_string)
+            
+@crc.command()
+@click.argument("alg", type = str, metavar = "ALG_NAME")
+@click.option("--reciprocal", is_flag = True, help = "Use reciprocal of CRC")
+def info(alg, reciprocal):
+    """
+    Print human-readable info about algorithm
+    """
+    alg = Crc.from_desc_string(alg)
+    if reciprocal:
+        alg = alg.reciprocal()
+    print_alg_info(alg)
+
+@crc.command()
+@click.argument("poly", type = base.HEX, metavar = "POLY")
+@click.argument("init", type = base.HEX, metavar = "INIT")
+@click.option("--msb0", is_flag = True, help = "Order at MSB")
+@click.option("--pop-msb", is_flag = True, help = "Pop bytestream from MSBs")
+@click.option("--complement-state", is_flag = True, help = "Complement state")
+@click.option("--complement-input", is_flag = True, help = "Complement input data")
+@click.option("--spill-bitswap", is_flag = True, help = "Spill bitswap")
+@click.option("--big-endian", is_flag = True, help = "Spill as Big-endian")
+def build(poly, init, msb0, pop_msb, complement_state, complement_input,
+          spill_bitswap, big_endian):
+    """
+    Build algorithm and print info
+    """
+    alg = Crc(poly = poly, init = init,
+              order0_at_lsb = not msb0, pop_lsb = not pop_msb,
+              complement_state = complement_state, complement_input = complement_input,
+              spill_bitswap = spill_bitswap, spill_byte_order = "big" if big_endian else "little")
+    print_alg_info(alg)
+
+@crc.command(name = "list")
+def list_():
+    """
+    List known CRCs
+    """
+    for name, alg in Crc.algorithms():
+        print(f"{name}: {alg.info_string}")

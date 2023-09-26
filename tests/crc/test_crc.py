@@ -1,6 +1,9 @@
 from crobe.util.crc import Crc
 import unittest
 from crobe.util.bytes_ops import xor_
+from pathlib import Path
+
+local_dir = Path(__file__).parent
 
 class CrcTest(unittest.TestCase):
     def test_zlib(self):
@@ -134,3 +137,35 @@ class PatchTests(unittest.TestCase):
                 fixed_payload_crc = alg.update(alg.init, fixed_payload)
 
                 self.assertEqual(original_crc, fixed_payload_crc, f"{alg}")
+
+class AlgSerializationTest(unittest.TestCase):
+    def test_save_restore(self):
+        for _, alg in Crc.algorithms():
+            self.assertEqual(alg, Crc.by_name(str(alg)))
+
+class RevengTest(unittest.TestCase):
+    def test_save_restore(self):
+        filename = local_dir / "crc_list.txt"
+        ignore_count = 0
+        with open(filename, "r") as fd:
+            for line in fd.readlines():
+                line = line.strip()
+                if line.startswith("#"):
+                    continue
+
+                if not line:
+                    continue
+
+                try:
+                    alg = Crc.from_reveng(line)
+                except NotImplementedError:
+                    #print(line, "Ignored")
+                    ignore_count += 1
+                    continue
+
+                check = alg.calc(b"123456789")
+                self.assertEqual(alg._reveng_check, check, f"While testing {alg._reveng_name}: {repr(alg)}")
+                without_name = " ".join(line.split()[:-1])
+                self.assertEqual(without_name, alg.reveng_string)
+
+        self.assertEqual(ignore_count, 3)
