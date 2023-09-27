@@ -425,7 +425,8 @@ def list_():
 @click.argument("alg", type = str, metavar = "ALG_NAME")
 @click.argument("basename", type = str, metavar = "BASENAME")
 @click.option("--insert-width", type = int, default = 8)
-def c_code(alg, basename, insert_width):
+@click.option("-o", "--output", type = click.File("w"), default = "-")
+def c_code(alg, basename, insert_width, output):
     """
     Spill C code
     """
@@ -446,4 +447,6 @@ def c_code(alg, basename, insert_width):
     code += alg.c_serialize_func(basename)
     code.append("")
     code += alg.c_test_func(basename)
-    print("\n".join(code))
+
+    for l in code:
+        print(l, file = output)
