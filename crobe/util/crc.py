@@ -76,6 +76,11 @@ class Crc:
         return self.update(self.init, self.as_bytes(self.init))
 
     @property
+    @cache
+    def has_valid_state(self):
+        return self.calc(b"123456789" + self.calc_bytes(b"123456789")) == self.calc(b"deadbeef" + self.calc_bytes(b"deadbeef"))
+
+    @property
     def is_prime(self):
         p = self.poly
         if not self.order0_at_lsb:
@@ -493,7 +498,7 @@ class Crc:
                 complement_state = complement_state,
                 complement_input = False,
                 spill_bitswap = spill_bitswap,
-                spill_byte_order = "little")
+                spill_byte_order = "little" if spill_bitswap else "big")
 
         r._reveng_check = check
         r._reveng_residue = residue
@@ -596,6 +601,211 @@ class Crc:
 
         return r
 
+    @classmethod
+    def c_fitting_word_length(cls, width):
+        for b in [8, 16, 32, 64]:
+            if width <= b:
+                return b
+        raise NotImplementedError("Cannot handle such big states")
+
+    @classmethod
+    def c_data_type(cls, width):
+        return "uint%d_t" % cls.c_fitting_word_length(width)
+        raise NotImplementedError("Cannot handle such big states")
+
+    @property
+    def c_state_type(self):
+        return self.c_data_type(self.order)
+    
+    def c_table_update_func(self, base_name, insert_width):
+        assert self.pop_lsb != self.order0_at_lsb
+
+        def _table_entry(index):
+            state = 0
+            for b in self.bits_iterate(index, insert_width, self.pop_lsb):
+                state = self._forward(state, b)
+            return state
+
+        code = [
+            "static inline",
+            f"{base_name}_state_t {base_name}_insert{insert_width}({base_name}_state_t state, {self.c_data_type(insert_width)} word)",
+            "{",
+            f"    static const {base_name}_state_t state_update_table[] = {{",
+        ]
+
+        index_mask = (1 << insert_width) - 1
+
+        fmt = " %%#0%dx," % (2 + (self.order + 3) // 4)
+        line = "       "
+        comp = index_mask if self.complement_input else 0
+        for index, entry in enumerate([_table_entry(x^comp) for x in range(2**insert_width)]):
+            line += fmt % entry
+            if index % 4 == 3:
+                code.append(line)
+                line = "       "
+        code.append("    };")
+        code.append("")
+
+        if self.pop_lsb:
+            code.append(f"    const {self.c_data_type(insert_width)} index = (state ^ word) & {index_mask:#x};")
+            code.append(f"    const {base_name}_state_t shifted_state = (state >> {insert_width}) & {self.mask:#x};")
+        else:
+            code.append(f"    const {self.c_data_type(insert_width)} index = ((state >> {self.order - insert_width}) ^ word) & {index_mask:#x};")
+            code.append(f"    const {base_name}_state_t shifted_state = (state << {insert_width}) & {self.mask:#x};")
+        code.append(f"    return shifted_state ^ state_update_table[index];")
+        code.append("}")
+        return code
+
+    def c_update_func(self, base_name, insert_width):
+        assert self.pop_lsb != self.order0_at_lsb
+        assert 8 % insert_width == 0
+
+        code = [
+            "static inline",
+            f"{base_name}_state_t {base_name}_update({base_name}_state_t state, const uint8_t *data, size_t size)",
+            "{",
+        ]
+
+        code.append("    for (size_t i = 0; i < size; ++i) {")
+        code.append("        const uint8_t word = data[i];")
+        if insert_width != 8:
+            index_mask = (1 << insert_width) - 1
+            for i in range(0, 8, insert_width):
+                if self.pop_lsb:
+                    code.append(f"        state = {base_name}_insert{insert_width}(state, (word >> {i}) & {index_mask:#x});")
+                else:
+                    code.append(f"        state = {base_name}_insert{insert_width}(state, (word >> {8 - insert_width - i}) & {index_mask:#x});")
+        else:
+            code.append(f"        state = {base_name}_insert{insert_width}(state, word);")
+        code.append("    }")
+        code.append("")
+        code.append("    return state;")
+        code.append("}")
+        return code
+
+    def c_finalize_func(self, base_name):
+        assert self.pop_lsb != self.order0_at_lsb
+
+        code = [
+            f"{base_name}_state_t {base_name}_finalize({base_name}_state_t state)",
+            "{",
+            ]
+
+        if self.complement_state:
+            code.append(f"    state = {self.mask:#x} ^ state;")
+
+        if self.spill_bitswap:
+            code.append(f"    {base_name}_state_t ret = 0;")
+            code.append(f"    for (size_t i = 0; i < {self.order}; ++i) {{")
+            code.append("        ret <<= 1;")
+            code.append("        ret |= state & 1;")
+            code.append("        state >>= 1;")
+            code.append("    }")
+            code.append("    return ret;")
+        else:
+            code.append("    return state;")
+        code.append("}")
+        return code
+
+    def c_serialize_func(self, base_name):
+        assert self.pop_lsb != self.order0_at_lsb
+
+        code = [
+            f"void {base_name}_serialize(uint8_t dest[static {self.byte_width}], {base_name}_state_t final_value)",
+            "{",
+            ]
+
+        if self.spill_byte_order == "little":
+            code.append(f"    for (ssize_t i = 0; i < {self.byte_width}; ++i) {{")
+        else:
+            code.append(f"    for (ssize_t i = {self.byte_width-1}; i >= 0; --i) {{")
+        code.append("        dest[i] = final_value & 0xff;")
+        code.append("        final_value >>= 8;")
+        code.append("    }")
+        code.append("}")
+        return code
+
+    def c_init_func(self, base_name):
+        assert self.pop_lsb != self.order0_at_lsb
+
+        code = [
+            f"{base_name}_state_t {base_name}_initialize({base_name}_state_t init)",
+            "{",
+            ]
+
+        if self.complement_state:
+            code.append(f"    {base_name}_state_t state = {self.mask:#x} ^ init;")
+        else:
+            code.append(f"    {base_name}_state_t state = init;")
+        if self.spill_bitswap:
+            code.append(f"    {base_name}_state_t ret = 0;")
+            code.append(f"    for (size_t i = 0; i < {self.order}; ++i) {{")
+            code.append("        ret <<= 1;")
+            code.append("        ret |= state & 1;")
+            code.append("        state >>= 1;")
+            code.append("    }")
+            code.append("    return ret;")
+        else:
+            code.append("    return state;")
+        code.append("}")
+        return code
+
+    def c_defs(self, base_name):
+        assert self.pop_lsb != self.order0_at_lsb
+
+        code = [
+            f"#include <stdint.h>",
+            f"#include <string.h>",
+            f"#include <stdlib.h>",
+            f"typedef {self.c_data_type(self.order)} {base_name}_state_t;",
+            f"static const {base_name}_state_t {base_name}_init = {self.init:#x};",
+            f"static const {base_name}_state_t {base_name}_check_state = {self.check_state:#x};",
+            ]
+        return code
+
+    def c_test_func(self, base_name):
+        assert self.pop_lsb != self.order0_at_lsb
+
+        payload = b"123456"
+        payload_final = self.calc(payload)
+        blob_data = ', '.join(f'{x:#x}' for x in payload)
+        
+        code = [
+            "#include <assert.h>",
+            "#include <inttypes.h>",
+            "#include <stdio.h>",
+            "",
+            "int main()",
+            "{",
+            f"    static const uint8_t check_payload[] = {{ {blob_data} }};",
+            f"    {base_name}_state_t state, final;",
+            "",
+            f"    state = {base_name}_initialize({base_name}_init);",
+            f"    state = {base_name}_update(state, check_payload, sizeof(check_payload));",
+            f"    final = {base_name}_finalize(state);",
+            f"    assert(final == {payload_final:#x} && \"Final for payload does not match\");",
+            "",
+            ]
+
+        if self.has_valid_state:
+            code += [
+                f"    uint8_t crc_payload[{self.byte_width}];",
+                f"    {base_name}_serialize(crc_payload, final);",
+                "",
+                f"    state = {base_name}_initialize({base_name}_init);",
+                f"    state = {base_name}_update(state, check_payload, sizeof(check_payload));",
+                f"    state = {base_name}_update(state, crc_payload, sizeof(crc_payload));",
+                f"    final = {base_name}_finalize(state);",
+                f"    assert(final == {self.check_state:#x} && \"Checked payload invalid\");",
+                "",
+                ]
+        code += [
+            "    return 0;",
+            "}",
+            ]
+        return code
+
+
 Crc.register("ethernet_fcs", Crc(
     poly = 0x104c11db7,
     init = 0x0,
@@ -605,7 +815,7 @@ Crc.register("ethernet_fcs", Crc(
     spill_byte_order = 'little'))
 
 Crc.register("zlib", Crc.from_name("ethernet_fcs").order_swapped().variant(
-    spill_byte_order = 'big'))
+    spill_byte_order = 'little'))
 
 Crc.register("bluetooth_crc24", Crc(
     poly = 0x100065b,

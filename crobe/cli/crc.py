@@ -352,8 +352,6 @@ def print_alg_info(alg):
     print(f"- Byte order:", alg.spill_byte_order)
 
     print(f"Properties:")
-    print(f"- CRC state after blob with valid CRC: {alg.check_state:#x}")
-    print(f"- CRC bytes computed over a blob with valid CRC: <{alg.as_bytes(alg.check_state).hex()}>")
     if alg.is_trinomial:
         print(f"- Trinomial")
     if alg.is_prime:
@@ -369,6 +367,11 @@ def print_alg_info(alg):
             print("- Transparent to post-image 0xff-padding")
         else:
             print("- Transparent to post-image zero-padding")
+    if alg.has_valid_state:
+        print(f"- CRC state after blob with valid CRC: {alg.check_state:#x}")
+        print(f"- CRC bytes computed over a blob with valid CRC: <{alg.as_bytes(alg.check_state).hex()}>")
+    else:
+        print(f"- Has no fixed output value for a blob with valid CRC")
 
     print(f"Trivia:")
     print("- Crobe short definition:", alg.info_string)
@@ -417,3 +420,30 @@ def list_():
     """
     for name, alg in Crc.algorithms():
         print(f"{name}: {alg.info_string}")
+
+@crc.command()
+@click.argument("alg", type = str, metavar = "ALG_NAME")
+@click.argument("basename", type = str, metavar = "BASENAME")
+@click.option("--insert-width", type = int, default = 8)
+def c_code(alg, basename, insert_width):
+    """
+    Spill C code
+    """
+    alg = Crc.from_desc_string(alg)
+    if alg.pop_lsb == alg.order0_at_lsb:
+        alg = alg.order_swapped()
+
+    code = alg.c_defs(basename)
+    code.append("")
+    code += alg.c_table_update_func(basename, insert_width)
+    code.append("")
+    code += alg.c_init_func(basename)
+    code.append("")
+    code += alg.c_update_func(basename, insert_width)
+    code.append("")
+    code += alg.c_finalize_func(basename)
+    code.append("")
+    code += alg.c_serialize_func(basename)
+    code.append("")
+    code += alg.c_test_func(basename)
+    print("\n".join(code))

@@ -1,4 +1,4 @@
-__all__ = ["bitswap8"]
+__all__ = ["random_data"]
 
 def random_data(size):
     with open("/dev/urandom", "rb") as fd:
