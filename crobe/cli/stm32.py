@@ -27,7 +27,7 @@ def stm32():
 @base.field()
 @click.option('--target', '-t', metavar = 'CRIT', help = 'Target criterion', default = "0")
 def lock(roots, field, target):
-    from crobe.target.model import Target
+    from ..target.model import Target
 
     roots[0].reset = True
     target = field.child_summon(target)
@@ -62,7 +62,7 @@ def lock(roots, field, target):
 @base.field()
 @click.option('--target', '-t', metavar = 'CRIT', help = 'Target criterion', default = "0")
 def erase(roots, field, target):
-    from crobe.target.model import Target
+    from ..target.model import Target
     target = field.child_summon(target)
 
     f = target.info.flash_class(target.bus)
@@ -82,9 +82,10 @@ def attack(root, dumper):
 
     This only works with dbg_fpga adapter as it requires two more pins to control boot modes.
     """
-    from crobe.loadable.elf import ElfProgram
-    from crobe.component.arm.coresight.scs import Scs
-    from crobe.component.model import Register
+    from ..loadable.elf import ElfProgram
+    from ..component.arm.coresight.scs import Scs
+    from ..component.model import Register
+    from ..adapter.dbg_fpga import Mode
 
     df = root
     df._open()
@@ -153,12 +154,12 @@ def clone_identify(roots, field, target):
     """
     Try to identify clone
     """
-    from crobe.component.arm.coresight.rom_table import RomTable
-    from crobe.component.arm.coresight.scs import Scs
-    from crobe.component.arm.mem_ap import MemAp
-    from crobe.component.arm.coresight.etm import Etm
-    from crobe.util.endian import swib_u32
-    from crobe.target.model import Target
+    from ..component.arm.coresight.rom_table import RomTable
+    from ..component.arm.coresight.scs import Scs
+    from ..component.arm.mem_ap import MemAp
+    from ..component.arm.coresight.etm import Etm
+    from ..util.endian import swib_u32
+    from ..target.model import Target
 
     target = field.child_summon(target)
 
