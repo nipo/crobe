@@ -134,6 +134,13 @@ def _24lc64(bus):
                      page_size = 32,
                      size = 8*1024)
 
+@i2c.Interface.db.register("cat24c32")
+def _cat24c32(bus):
+    return I2cEeprom(bus, None,
+                     addr_bytes = 2,
+                     page_size = 32,
+                     size = 4*1024)
+
 @i2c.Interface.db.register("24lc128")
 def _24lc128(bus):
     return I2cEeprom(bus, None,
