@@ -3,6 +3,7 @@ from setuptools import setup, find_packages
 setup(
     name = "crobe",
     version = "0.1",
+    python_requires = '>3.9',
     description = "Generic probe toolset",
     author = "Nicolas Pouillon",
     author_email = "nipo@ssji.net",
