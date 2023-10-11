@@ -10,14 +10,13 @@ def print_va(fmt, *args):
     else:
         print(fmt)
 
-def exc_pretty(e, pre = "", printer = print_va):
+def exc_pretty(e, pre = "", printer = print_va, once = False):
     m = " ".join(str(x) for x in e.args)
     if not pre:
         printer("Error: %s", m)
     else:
         printer("%sbecause of %s", pre, m)
     pre = pre + " "
-    once = False
     if isinstance(e, click.exceptions.BadParameter):
         p = e.param
         if isinstance(p, click.core.Option):
@@ -29,17 +28,17 @@ def exc_pretty(e, pre = "", printer = print_va):
         for l in e.message_get().split("\n"):
             printer(pre+l)
             once = True
+            
+    cause = e.__cause__
+    if cause:
+        return exc_pretty(cause, pre, printer)
 
-    else:
+    if not once:
         for l in traceback.format_exception(type(e), e, e.__traceback__):
             once = True
             printer(pre + l.rstrip())
-            
-        return once
 
-    cause = e.__cause__
-    if cause:
-        return once or exc_pretty(cause, pre, printer)
+    return once
         
 def cli():
     ctx = None
