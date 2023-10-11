@@ -1,5 +1,5 @@
 from . import model
-from ..protocol import i2c, spi, swd, jtag, base
+from ..protocol import i2c, spi, swd, jtag, base, bitbang
 from .. import bitstring
 from ..util.pretty import metric, sci_parse
 from ..util import endian
@@ -38,6 +38,8 @@ class Mode(enum.IntEnum):
     I2C_INT = 5
     I2C_EXT = 6
     I2C_TGT = 7
+    SWD_EXT = 8
+    JTAG_EXT = 9
         
 @model.UsbEnumerator.db.register(model.UsbInfo(idVendor = 0x1500, idProduct = 0xdeb9))
 class Adapter(model.Adapter):
@@ -517,3 +519,222 @@ class Adapter(model.Adapter):
         elif interface_name.lower() == "none":
             self.regs.mode_set(Mode.NONE)
             return self.none
+
+class DbgFpgaIoInfo(bitbang.IoInfo):
+    def __init__(self, name, no, opendrain):
+        self.name = name
+        self.no = no
+        self.opendrain = opendrain
+        
+class BitbangInterface(bitbang.Interface):
+    def __init__(self, adapter):
+        self.options = DbgFpgaOpts(adapter.regs)
+        super().__init__(adapter.regs, "BB")
+        self.adapter = adapter
+        self.out_reg = 0
+        self.repeats = 1
+
+    def start(self):
+        self.port.detect_assert(False)
+        self.options.apply()
+        super().start()
+
+    def option_set(self, opt):
+        if self.options.option_set(opt):
+            return
+        super().option_set(opt)
+
+    _ios = {x.name:x for x in [
+        DbgFpgaIoInfo("target_tdo", 0, False),
+        DbgFpgaIoInfo("target_tck", 1, False),
+        DbgFpgaIoInfo("target_tms", 2, False),
+        DbgFpgaIoInfo("target_tdi", 3, False),
+        DbgFpgaIoInfo("ext0", 4, False),
+        DbgFpgaIoInfo("ext1", 5, False),
+        DbgFpgaIoInfo("ext2", 6, False),
+        DbgFpgaIoInfo("ext3", 7, False),
+        DbgFpgaIoInfo("ext4", 8, False),
+        DbgFpgaIoInfo("ext5", 9, False),
+        DbgFpgaIoInfo("target_resetn", 10, True),
+    ]}
+        
+    def io_info(self):
+        return self._ios
+
+    def freq_update(self, freq):
+        base = 60e6/5
+        if not freq:
+            self.repeats = 1
+            return base
+        repeats = base / freq
+        self.repeats = int(math.ceil(repeats)) or 1
+        return base / repeats
+
+    def _execute(self, operation_list):
+        pending = []
+        ridx = {}
+
+        for op in operation_list:
+            if isinstance(op, bitbang.IoSet):
+                for iop in op.ops:
+                    io = self._ios[iop.io]
+
+                    m = 1 << io.no
+                    oe = 1 << (io.no + 16)
+
+                    if iop.mode is not None:
+                        io.mode = iop.mode
+
+                    if (io.mode & bitbang.Mode.D1) and iop.value and (not io.opendrain):
+                        self.out_reg |= oe | m
+                    elif (io.mode & bitbang.Mode.D0) and (not iop.value) and (iop.value is not None):
+                        self.out_reg |= oe
+                        self.out_reg &= ~m
+                    else:
+                        self.out_reg &= ~(oe | m)
+                pending += [self.port.cmd_reg_write(self.port.REG_IO, self.out_reg)] * self.repeats
+
+            elif isinstance(op, bitbang.IoGet):
+                ridx[op] = len(pending)
+                pending.append(self.port.cmd_reg_read(self.port.REG_IO))
+
+            else:
+                raise ValueError(op)
+                
+        self.port.execute(pending)
+
+        for op, idx in ridx.items():
+            rr = pending[idx]
+            in_reg = rr.value
+            r = {}
+            for io_name in op.ios:
+                io = self._ios[io_name]
+                r[io_name] = (in_reg >> io.no) & 1
+            op.values = r
+        
+@model.UsbEnumerator.db.register(model.UsbInfo(idVendor = 0x1500, idProduct = 0xdeba, bcdDevice = 0x0101))
+class Adapter(model.Adapter):
+    """
+    "target_cortex0" target board multi-protocol firmware, rev 1.01, has most serial protocol transactors
+    """
+    supported_interfaces = ["cs", "jtag", "swd", "spi", "spi-inv", "i2c", "i2c-int", "i2c-ext", "bb"]
+
+    @classmethod
+    def from_device(cls, d):
+        serial = usb.util.get_string(d, d.iSerialNumber)
+        return cls(d, "df-%s" % (serial,))
+
+    def __init__(self, device, name):
+        model.Adapter.__init__(self, name)
+        self.handle = device
+        self.io = None
+
+    def _open(self):
+        from ..component.nsl.bnoc.routed import Router
+
+        if self.io:
+            return
+
+        cfg = self.handle.get_active_configuration()
+        if cfg.bConfigurationValue == 0:
+            self.handle.set_configuration(1)
+            cfg = self.handle.get_active_configuration()
+        for intf in cfg:
+            self.logger.debug("Has interface %d, %02x:%02x:%02x",
+                  intf.index,
+                  intf.bInterfaceClass,
+                  intf.bInterfaceSubClass,
+                  intf.bInterfaceProtocol)
+            if intf.bInterfaceClass == 0xff and \
+               intf.bInterfaceSubClass == 0xff and \
+               intf.bInterfaceProtocol == 0xff:
+                self.intf = intf
+                break
+        usb.util.claim_interface(self.handle, self.intf)
+
+        self.ep_in = usb.util.find_descriptor(
+            self.intf,
+            custom_match = lambda e:
+            usb.util.endpoint_direction(e.bEndpointAddress) ==
+            usb.util.ENDPOINT_IN)
+        self.ep_out = usb.util.find_descriptor(
+            self.intf,
+            custom_match = lambda e:
+            usb.util.endpoint_direction(e.bEndpointAddress) ==
+            usb.util.ENDPOINT_OUT)
+
+        self.logger.debug("Using interface %d, EP_IN: %02x, EP_OUT: %02x",
+                          self.intf.index,
+                          self.ep_in.bEndpointAddress,
+                          self.ep_out.bEndpointAddress)
+
+        self.io = model.BulkDatagramInterface(self, self.handle, "io", self.ep_out, self.ep_in)
+        self.child_add(self.io)
+        
+        r = Router(self.io)
+        self.child_add(r)
+
+        self.regs = Registers(r.route(0xf, 0x0).framed_endpoint())
+        self.child_add(self.regs)
+        self.base_freq = self.regs.base_freq()
+
+        self.swd = SwdInterface(r.route(0xf, 0x1).framed_endpoint(), self.base_freq, self.regs)
+        self.jtag = JtagInterface(r.route(0xf, 0x2).framed_endpoint(), self.base_freq, self.regs)
+        self.spi = SpiInterface(r.route(0xf, 0x3).framed_endpoint(), self.base_freq, self.regs)
+        self.i2c = I2cInterface(r.route(0xf, 0x4).framed_endpoint(), self.base_freq, self.regs)
+        self.none = NoneInterface(self.regs)
+
+        self.child_add(self.jtag)
+        self.child_add(self.spi)
+        self.child_add(self.swd)
+        self.child_add(self.i2c)
+
+    def open(self, interface_name):
+        self._open()
+
+        if interface_name.lower() == "cs":
+            return self.regs
+
+        elif interface_name.lower() == "jtag":
+            self.regs.mode_set(Mode.JTAG)
+            return self.jtag
+
+        elif interface_name.lower() == "jtag-ext":
+            self.regs.mode_set(Mode.JTAG_EXT)
+            return self.jtag
+
+        elif interface_name.lower() == "spi":
+            self.regs.mode_set(Mode.SPI)
+            return self.spi
+
+        elif interface_name.lower() == "spi-inv":
+            self.regs.mode_set(Mode.SPI_INV)
+            return self.spi
+
+        elif interface_name.lower() == "swd":
+            self.regs.mode_set(Mode.SWD)
+            return self.swd
+
+        elif interface_name.lower() == "swd-ext":
+            self.regs.mode_set(Mode.SWD_EXT)
+            return self.swd
+
+        elif interface_name.lower() == "i2c":
+            self.regs.mode_set(Mode.I2C_TGT)
+            return self.i2c
+
+        elif interface_name.lower() == "i2c-ext":
+            self.regs.mode_set(Mode.I2C_EXT)
+            return self.i2c
+
+        elif interface_name.lower() == "i2c-int":
+            self.regs.mode_set(Mode.I2C_INT)
+            return self.i2c
+
+        elif interface_name.lower() == "none":
+            self.regs.mode_set(Mode.NONE)
+            return self.none
+
+        elif interface_name.lower() == "bb":
+            self.regs.mode_set(Mode.NONE)
+            return BitbangInterface(self)
