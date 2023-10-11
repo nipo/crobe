@@ -1,6 +1,6 @@
 from .. import model
 from collections import deque
-from ..protocol import pipe
+from ..protocol import pipe, datagram
 import threading
 from .. import db
 
@@ -119,12 +119,13 @@ class UsbEnumerator(AutoEnumerator):
     
 
 class BackgroundWriter(threading.Thread):
-    def __init__(self, owner, device, ep):
+    def __init__(self, owner, device, ep, use_zlp = False):
         self.owner = owner
         threading.Thread.__init__(self, daemon = True)
         self.device = device
         self.ep = ep
 
+        self.use_zlp = use_zlp
         self.queue = deque()
         self.cond = threading.Condition()
         self.running = False
@@ -164,6 +165,8 @@ class BackgroundWriter(threading.Thread):
                 try:
                     self.owner.logger.protocol("%02x < %s", self.ep.bEndpointAddress, data.hex())
                     self.device.write(self.ep.bEndpointAddress, data, int((timeout or 1.) * 1000))
+                    if self.use_zlp and (len(data) % self.ep.wMaxPacketSize) == 0:
+                        self.device.write(self.ep.bEndpointAddress, b"", int((timeout or 1.) * 1000))
                 except Exception as e:
                     self.exception = e
                     return
@@ -177,14 +180,6 @@ class BulkStreamPair(pipe.Interface):
         self.in_ep = in_ep
         self.__bw = BackgroundWriter(self, device, out_ep)
         self.__bw.start()
-
-    def execute(self, blob, read_size = 0):
-        self.logger.protocol("Execute, %d out, %d in", len(blob), read_size)
-        self.bulk_out(blob)
-        rbuf = b''
-        while len(rbuf) < read_size:
-            rbuf += self.bulk_in(512)
-        return rbuf
 
     def _do_read(self, size, timeout):
         self.logger.protocol("%02x > %s", self.in_ep.bEndpointAddress, size)
@@ -213,6 +208,40 @@ class BulkStreamPair(pipe.Interface):
             elif isinstance(op, pipe.WriteRead):
                 self.__bw.write(op.wdata, timeout)
                 op.rdata = self._do_read(op.rsize, timeout)
+
+            else:
+                raise base.ProtocolError("Unknown Pipe operation %s" % type(op))
+        self.__bw.flush()
+        
+class BulkDatagramInterface(datagram.Interface):
+    def __init__(self, port, device, name, out_ep, in_ep):
+        super().__init__(port, name = name)
+        self.device = device
+        self.out_ep = out_ep
+        self.in_ep = in_ep
+        self.__bw = BackgroundWriter(self, device, out_ep, use_zlp = True)
+        self.__bw.start()
+
+    def _do_recv(self, timeout):
+        block_size = self.in_ep.wMaxPacketSize
+        rdata = b''
+        while True:
+            data = self.device.read(self.in_ep.bEndpointAddress,
+                                    block_size,
+                                    int((timeout or 1.) * 1000))
+            rdata += bytes(data)
+            if len(data) < block_size:
+                break
+        self.logger.protocol("%02x > %s", self.in_ep.bEndpointAddress, rdata.hex())
+        return rdata
+    
+    def execute(self, operation_list, timeout = None):
+        for op in operation_list:
+            if isinstance(op, datagram.Send):
+                self.__bw.write(op.data, timeout)
+
+            elif isinstance(op, datagram.Receive):
+                op.data = self._do_recv(timeout)
 
             else:
                 raise base.ProtocolError("Unknown Pipe operation %s" % type(op))
