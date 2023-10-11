@@ -240,7 +240,7 @@ class MachXO2Config(jtag.InstructionRegistry):
             self._isc_enable(self.TARGET_FLASH, True)
             self.logger.debug(repr(self.Feature(self.feature_get())))
             self._isc_disable()
-        except ValueError:
+        except (ValueError, RuntimeError):
             self.logger.warning("Unable to background enable")
 
     TARGET_SRAM    = 0
