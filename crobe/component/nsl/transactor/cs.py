@@ -64,6 +64,9 @@ class Operation:
     def __init__(self, reg):
         self.reg = reg
 
+    def __repr__(self):
+        return str(self)
+
 class StatusRead(Operation):
     def __init__(self, reg):
         super().__init__(reg)

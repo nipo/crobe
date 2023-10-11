@@ -84,6 +84,9 @@ class IoOp:
         self.value = value
         self.mode = mode
 
+    def __repr__(self):
+        return str(self)
+
     def __str__(self):
         return "<IoOp %s %s %s>" % (self.io, self.value, self.mode)
 
@@ -92,7 +95,7 @@ class IoSet(Operation):
         self.ops = ops
 
     def __str__(self):
-        return "<IoSet %s>" % (self.ops)
+        return "<IoSet %s>" % (self.ops,)
 
 class IoGet(Operation):
     def __init__(self, ios):

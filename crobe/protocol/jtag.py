@@ -733,10 +733,12 @@ class TapInstruction:
             length = self.dr.length
         elif isinstance(tdi, BitStringBase):
             length = len(tdi)
+        elif isinstance(tdi, bytes):
+            length = len(tdi) * 8
         else:
             raise ValueError("Cannot determine shift length")
                     
-        return self.tap.cmd_dr_shift(self.ir,
+        return self.tap.cmd_dr_shift(self,
                                      tdi = tdi,
                                      length = length,
                                      read_tdo = read_tdo,
@@ -744,6 +746,12 @@ class TapInstruction:
                                      return_type = return_type,
                                      pre_dr_run = pre_dr_run)
 
+    def __int__(self):
+        return int(self.ir)
+
+    def __str__(self):
+        return f"<{int(self.ir):#x} ({self.name})>"
+    
     def shift(self, *args, **kwargs):
         op = self.cmd(*args, **kwargs)
         self.tap.execute([op])
@@ -872,18 +880,18 @@ class Tap(PortComponent, InstructionRegistry):
             if isinstance(c, TapDrShift):
                 if c.ir:
                     if c.read_ir:
-                        c.__op = Shift(BitString(c.ir, self.irlen), read_tdo = True)
+                        c.__op = Shift(BitString(int(c.ir), self.irlen), read_tdo = True)
                         ops += [
                             CaptureIr(),
                             Shift(BitString(-1, self.ir_pre)),
                             c.__op,
                             Shift(BitString(-1, self.ir_post)),
                         ]
-                    elif current_ir != c.ir:
+                    elif current_ir != int(c.ir):
                         ops += [
                             CaptureIr(),
                             Shift(BitString(-1, self.ir_pre)
-                                  + BitString(c.ir, self.irlen)
+                                  + BitString(int(c.ir), self.irlen)
                                   + BitString(-1, self.ir_post), read_tdo = False),
                         ]
                     current_ir = int(c.ir)
@@ -975,7 +983,7 @@ class TapOperation(object):
 
 class TapDrShift(TapOperation):
     def __init__(self, ir, tdi, length = None, read_tdo = True, read_ir = False, return_type = None, pre_dr_run = 0):
-        self.ir = int(ir) if ir is not None else None
+        self.ir = ir if ir is not None else None
         self.postprocess = return_type or (lambda x:x)
         self.tdo = 0
         self.read_ir = False
@@ -1003,7 +1011,7 @@ class TapDrShift(TapOperation):
 
     def __str__(self):
         if self.ir:
-            return "<DrShift %s %s %s%s>" % (self.ir,
+            return "<DrShift %s %s %s%s>" % (hex(self.ir) if isinstance(self.ir, int) else self.ir,
                                              self.tdi,
                                              BitString(self.tdo, len(self.tdi or [])),
                                              " rir" if self.read_ir else "")
