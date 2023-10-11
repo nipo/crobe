@@ -14,6 +14,7 @@ import math
 import struct
 import threading
 from ..component.nsl.transactor.cs import ControlStatus
+import enum
 
 __all__ = []
 
@@ -27,9 +28,22 @@ class BackgroundWriter(threading.Thread):
 
     def run(self):
         self.adapter.bulk_out(self.ep, self.data, int(self.timeout * 1000))
+
+class Mode(enum.IntEnum):
+    NONE    = 0
+    JTAG    = 1
+    SWD     = 2
+    SPI     = 3
+    SPI_INV = 4
+    I2C_INT = 5
+    I2C_EXT = 6
+    I2C_TGT = 7
         
 @model.UsbEnumerator.db.register(model.UsbInfo(idVendor = 0x1500, idProduct = 0xdeb9))
 class Adapter(model.Adapter):
+    """
+    dbg-fpga board firmware bootloader, only defines SPI transactor to the bitstream flash
+    """
     EP_IN  = 0x81
     EP_OUT = 0x01
     supported_interfaces = ["spi"]
@@ -155,30 +169,8 @@ class Registers(ControlStatus):
             value |= 1
         self.reg_update(self.REG_V, mask, value)
 
-    def mode_set(self, mode = "NONE"):
-        if mode == "NONE":
-            m = 0x0
-        elif mode == "JTAG":
-            m = 0x1
-        elif mode == "SWD":
-            m = 0x2
-        elif mode == "SPI":
-            m = 0x3
-        elif mode == "SPI-INV":
-            m = 0x4
-        elif mode == "I2C-INT":
-            m = 0x5
-        elif mode == "I2C-EXT":
-            m = 0x6
-        elif mode == "I2C-TGT":
-            m = 0x7
-        elif mode == "FORCE":
-            m = 0x1f
-        else:
-            try:
-                m = int(mode)
-            except:
-                m = 0
+    def mode_set(self, mode = Mode.NONE):
+        m = int(mode)
         self.reg_update(self.REG_MODE, 0x1f, m)
 
     def reset_assert(self, asserted):
@@ -274,7 +266,10 @@ class DbgFpgaOpts:
             self.regs.logger.note("Setting reference voltage to %1.1fV", value)
             self.regs.target_voltage_set(voltage = value+.025)
         time.sleep(self.power_settle)
-        self.regs.logger.info("Current target voltage: %1.3f", self.regs.target_voltage_get())
+        target_voltage = self.regs.target_voltage_get()
+        self.regs.logger.info("Current target voltage: %1.3f", target_voltage)
+        if mode == "track" and target_voltage < 0.5:
+            raise base.TargetError("No target VCC detected")
 
 class I2cInterface(i2c.Interface):
     def __init__(self, framed_i2c, base_freq, regs):
@@ -405,8 +400,11 @@ class NoneInterface(base.Interface):
             return
         super().option_set(opt)
     
-@model.UsbEnumerator.db.register(model.UsbInfo(idVendor = 0x1500, idProduct = 0xdeba))
+@model.UsbEnumerator.db.register(model.UsbInfo(idVendor = 0x1500, idProduct = 0xdeba, bcdDevice = 0x0100))
 class Adapter(model.Adapter):
+    """
+    "target_cortex0" target board multi-protocol firmware, rev 1.00, has most serial protocol transactors
+    """
     supported_interfaces = ["cs", "jtag", "swd", "spi", "spi-inv", "i2c", "i2c-int", "i2c-ext"]
 
     @classmethod
@@ -489,33 +487,33 @@ class Adapter(model.Adapter):
             return self.regs
 
         elif interface_name.lower() == "jtag":
-            self.regs.mode_set("JTAG")
+            self.regs.mode_set(Mode.JTAG)
             return self.jtag
 
         elif interface_name.lower() == "spi":
-            self.regs.mode_set("SPI")
+            self.regs.mode_set(Mode.SPI)
             return self.spi
 
         elif interface_name.lower() == "spi-inv":
-            self.regs.mode_set("SPI-INV")
+            self.regs.mode_set(Mode.SPI_INV)
             return self.spi
 
         elif interface_name.lower() == "swd":
-            self.regs.mode_set("SWD")
+            self.regs.mode_set(Mode.SWD)
             return self.swd
 
         elif interface_name.lower() == "i2c":
-            self.regs.mode_set("I2C-TGT")
+            self.regs.mode_set(Mode.I2C_TGT)
             return self.i2c
 
         elif interface_name.lower() == "i2c-ext":
-            self.regs.mode_set("I2C-EXT")
+            self.regs.mode_set(Mode.I2C_EXT)
             return self.i2c
 
         elif interface_name.lower() == "i2c-int":
-            self.regs.mode_set("I2C-INT")
+            self.regs.mode_set(Mode.I2C_INT)
             return self.i2c
 
         elif interface_name.lower() == "none":
-            self.regs.mode_set("FORCE")
+            self.regs.mode_set(Mode.NONE)
             return self.none

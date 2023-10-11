@@ -94,7 +94,7 @@ def attack(root, dumper):
     df.regs.reg_update(df.regs.REG_IO, 0x3f003f << 4, 0x30003 << 4)
     time.sleep(.05)
 
-    df.regs.mode_set("SWD")
+    df.regs.mode_set(Mode.SWD)
     df.regs.reg_update(df.regs.REG_IO, 0x3f003f << 4, 0x30003 << 4)
 
     swd = df.swd

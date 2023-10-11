@@ -101,12 +101,16 @@ class Reset(Operation):
     def __str__(self):
         return f"<Reset {self.asserted}>"
 
+class TargetError(Exception):
+    """
+    Target-dependent error, like no power
+    """
+
 class ProtocolError(Exception):
     """
     Protocol violation from API usage, like when someone asks for JTAG
     data shifting while FSM is in reset, for instance
     """
-    pass
 
 class CommunicationError(Exception):
 
