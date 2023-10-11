@@ -238,6 +238,8 @@ def clone_identify(roots, field, target):
         0x3790c7bd: "STM32F051R8T6",
         # Unidentified chip, on frequency counter #2
         0x2db91edd: "Unsure (FC)",
+        # From genuine GD32 chip
+        0x2d6187b2: "GD32F105VCT6",
         }
 
     bootloader_maker = by_crc.get(bootloader_crc32, "Unknown")
