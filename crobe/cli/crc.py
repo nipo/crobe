@@ -3,6 +3,8 @@ from ..util.crc import Crc
 from ..util.bytes_ops import xor_
 import click
 from collections import defaultdict
+import sys
+import re
 
 @base.cli.group(help = "CRC tools")
 def crc():
@@ -331,55 +333,55 @@ def patch(alg, patch_offset, data_offset, total_size, old_data, new_data, old):
             new_data = xor_(old, patch_xor_blob)
             print(f"New data: {new_data.hex()}")
 
-def print_alg_info(alg):
-    print(f"Calculation:")
-    print(f"- Polynom representation: exponent 0 at {'LSB' if alg.order0_at_lsb else 'MSB'}")
-    print(f"- Order: {alg.order}")
-    print(f"- Divisor: {alg.poly:#x}")
+def print_alg_info(alg, fd = sys.stdout):
+    print(f"Calculation:", file = fd)
+    print(f"- Polynom representation: exponent 0 at {'LSB' if alg.order0_at_lsb else 'MSB'}", file = fd)
+    print(f"- Order: {alg.order}", file = fd)
+    print(f"- Divisor: {alg.poly:#x}", file = fd)
     p = ' + '.join((f"x^{x}" if x else "1") for x in alg.poly_exponents)
-    print(f"  Exponents: {p}")
-    print(f"- Initial value: {alg.init:#x}")
+    print(f"  Exponents: {p}", file = fd)
+    print(f"- Initial value: {alg.init:#x}", file = fd)
     p = ' + '.join((f"x^{x}" if x else "1") for x in alg.init_exponents)
-    print(f"  Exponents: {p or '-'}")
+    print(f"  Exponents: {p or '-'}", file = fd)
 
-    print(f"Bitstream processing:")
-    print(f"- Read bits in bytestream from", ["MSB", "LSB"][alg.pop_lsb], "of each byte")
-    print(f"- Complement input data:", alg.complement_input)
-    print(f"- Complement internal state:", alg.complement_state)
+    print(f"Bitstream processing:", file = fd)
+    print(f"- Read bits in bytestream from", ["MSB", "LSB"][alg.pop_lsb], "of each byte", file = fd)
+    print(f"- Complement input data:", alg.complement_input, file = fd)
+    print(f"- Complement internal state:", alg.complement_state, file = fd)
 
-    print(f"Output generation:")
-    print(f"- Bitswap output:", alg.spill_bitswap)
-    print(f"- Byte order:", alg.spill_byte_order)
+    print(f"Output generation:", file = fd)
+    print(f"- Bitswap output:", alg.spill_bitswap, file = fd)
+    print(f"- Byte order:", alg.spill_byte_order, file = fd)
 
-    print(f"Properties:")
+    print(f"Properties:", file = fd)
     if alg.is_trinomial:
-        print(f"- Trinomial")
+        print(f"- Trinomial", file = fd)
     if alg.is_prime:
-        print(f"- Prime")
+        print(f"- Prime", file = fd)
     if (alg.init == 0 and not alg.complement_state) \
        or (alg.init == alg.mask and alg.complement_state):
         if alg.complement_input:
-            print("- Transparent to pre-image 0xff-padding")
+            print("- Transparent to pre-image 0xff-padding", file = fd)
         else:
-            print("- Transparent to pre-image zero-padding")
+            print("- Transparent to pre-image zero-padding", file = fd)
     if alg.check_state == 0:
         if alg.complement_input:
-            print("- Transparent to post-image 0xff-padding")
+            print("- Transparent to post-image 0xff-padding", file = fd)
         else:
-            print("- Transparent to post-image zero-padding")
+            print("- Transparent to post-image zero-padding", file = fd)
     if alg.has_valid_state:
-        print(f"- CRC state after blob with valid CRC: {alg.check_state:#x}")
-        print(f"- CRC bytes computed over a blob with valid CRC: <{alg.as_bytes(alg.check_state).hex()}>")
+        print(f"- CRC state after blob with valid CRC: {alg.check_state:#x}", file = fd)
+        print(f"- CRC bytes computed over a blob with valid CRC: <{alg.as_bytes(alg.check_state).hex()}>", file = fd)
     else:
-        print(f"- Has no fixed output value for a blob with valid CRC")
+        print(f"- Has no fixed output value for a blob with valid CRC", file = fd)
 
-    print(f"Trivia:")
-    print("- Crobe short definition:", alg.info_string)
+    print(f"Trivia:", file = fd)
+    print("- Crobe short definition:", alg.info_string, file = fd)
     aliases = alg.known_names
     if aliases:
-        print("- Known as:", ', '.join(aliases))
-    print("- Crobe instantiation:", repr(alg))
-    print("- Reveng-like definition:", alg.reveng_string)
+        print("- Known as:", ', '.join(aliases), file = fd)
+    print("- Crobe instantiation:", repr(alg), file = fd)
+    print("- Reveng-like definition:", alg.reveng_string, file = fd)
         
 @crc.command()
 @click.argument("alg", type = str, metavar = "ALG_NAME")
@@ -422,17 +424,24 @@ def list_():
         print(f"{name}: {alg.info_string}")
 
 @crc.command()
-@click.argument("alg", type = str, metavar = "ALG_NAME")
-@click.argument("basename", type = str, metavar = "BASENAME")
-@click.option("--insert-width", type = int, default = 8)
+@click.argument("alg_name", type = str, metavar = "ALG_NAME")
+@click.option("--basename", type = str, metavar = "BASENAME", default = None)
+@click.option("-w", "--insert-width", type = int, default = 8)
 @click.option("-o", "--output", type = click.File("w"), default = "-")
-def c_code(alg, basename, insert_width, output):
+def c_code(alg_name, basename, insert_width, output):
     """
     Spill C code
     """
-    alg = Crc.from_desc_string(alg)
+    alg = Crc.from_desc_string(alg_name)
     if alg.pop_lsb == alg.order0_at_lsb:
         alg = alg.order_swapped()
+
+    if basename is None:
+        basename = alg_name.lower()
+        basename = re.sub(r"[^a-z0-9]+", "_", basename, flags = re.I)
+        basename = basename.strip("_")
+        if re.match(r"^[0-9]", basename):
+            basename = "crc"+basename
 
     code = alg.c_defs(basename)
     code.append("")
@@ -448,5 +457,9 @@ def c_code(alg, basename, insert_width, output):
     code.append("")
     code += alg.c_test_func(basename)
 
+    print("/*", file = output)
+    print_alg_info(alg, output)
+    print("*/", file = output)
+    
     for l in code:
         print(l, file = output)

@@ -640,7 +640,7 @@ class Crc:
         comp = index_mask if self.complement_input else 0
         for index, entry in enumerate([_table_entry(x^comp) for x in range(2**insert_width)]):
             line += fmt % entry
-            if index % 4 == 3:
+            if index % 4 == 3 or index == 2 ** insert_width - 1:
                 code.append(line)
                 line = "       "
         code.append("    };")
@@ -661,7 +661,6 @@ class Crc:
         assert 8 % insert_width == 0
 
         code = [
-            "static inline",
             f"{base_name}_state_t {base_name}_update({base_name}_state_t state, const uint8_t *data, size_t size)",
             "{",
         ]
@@ -670,11 +669,11 @@ class Crc:
         code.append("        const uint8_t word = data[i];")
         if insert_width != 8:
             index_mask = (1 << insert_width) - 1
-            for i in range(0, 8, insert_width):
-                if self.pop_lsb:
-                    code.append(f"        state = {base_name}_insert{insert_width}(state, (word >> {i}) & {index_mask:#x});")
-                else:
-                    code.append(f"        state = {base_name}_insert{insert_width}(state, (word >> {8 - insert_width - i}) & {index_mask:#x});")
+            if self.pop_lsb:
+                code.append(f"        for (int8_t b = 0; b < 8; b += {insert_width})")
+            else:
+                code.append(f"        for (int8_t b = {8 - insert_width}; b >= 0; b -= {insert_width})")
+            code.append(f"            state = {base_name}_insert{insert_width}(state, (word >> b) & {index_mask:#x});")
         else:
             code.append(f"        state = {base_name}_insert{insert_width}(state, word);")
         code.append("    }")
@@ -687,7 +686,7 @@ class Crc:
         assert self.pop_lsb != self.order0_at_lsb
 
         code = [
-            f"{base_name}_state_t {base_name}_finalize({base_name}_state_t state)",
+            f"{base_name}_final_t {base_name}_finalize({base_name}_state_t state)",
             "{",
             ]
 
@@ -695,7 +694,7 @@ class Crc:
             code.append(f"    state = {self.mask:#x} ^ state;")
 
         if self.spill_bitswap:
-            code.append(f"    {base_name}_state_t ret = 0;")
+            code.append(f"    {base_name}_final_t ret = 0;")
             code.append(f"    for (size_t i = 0; i < {self.order}; ++i) {{")
             code.append("        ret <<= 1;")
             code.append("        ret |= state & 1;")
@@ -729,7 +728,7 @@ class Crc:
         assert self.pop_lsb != self.order0_at_lsb
 
         code = [
-            f"{base_name}_state_t {base_name}_initialize({base_name}_state_t init)",
+            f"{base_name}_final_t {base_name}_initialize({base_name}_state_t init)",
             "{",
             ]
 
@@ -738,7 +737,7 @@ class Crc:
         else:
             code.append(f"    {base_name}_state_t state = init;")
         if self.spill_bitswap:
-            code.append(f"    {base_name}_state_t ret = 0;")
+            code.append(f"    {base_name}_final_t ret = 0;")
             code.append(f"    for (size_t i = 0; i < {self.order}; ++i) {{")
             code.append("        ret <<= 1;")
             code.append("        ret |= state & 1;")
@@ -758,6 +757,7 @@ class Crc:
             f"#include <string.h>",
             f"#include <stdlib.h>",
             f"typedef {self.c_data_type(self.order)} {base_name}_state_t;",
+            f"typedef {self.c_data_type(self.order)} {base_name}_final_t;",
             f"static const {base_name}_state_t {base_name}_init = {self.init:#x};",
             f"static const {base_name}_state_t {base_name}_check_state = {self.check_state:#x};",
             ]
