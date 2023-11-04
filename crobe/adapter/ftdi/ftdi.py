@@ -108,6 +108,8 @@ class Device(object):
             return Engine(self, interface)
         elif mode == "mpsse":
             return Mpsse(self, interface, **defaults)
+        elif mode == "bitbang":
+            return Handle(self.connection_id, interface, "BITBANG")
         elif mode == "ft245_sync_fifo":
             return Handle(self.connection_id, interface, "SYNCFF")
             return Ft245SyncFifo(self, interface, **defaults)
@@ -322,7 +324,7 @@ class Handle(pipe.Interface, Context):
                 self._do_write(o.data)
                 continue
 
-            if isinstance(o, pipe.Read):
+            if isinstance(o, pipe.Read) and o.size != 0:
                 rsp = b''
                 while len(rsp) < (o.size or 0):
                     rsp += self._do_read(o.size - len(rsp), timeout = timeout)

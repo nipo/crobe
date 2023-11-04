@@ -57,6 +57,9 @@ class Adapter(model.Adapter):
         if interface_name.lower() == "mpsse_bb":
             return MpsseBitbangInterface(self, **d)
 
+        if interface_name.lower() == "bb":
+            return BitbangInterface(self, **d)
+
 class AdapterEnumerator(model.AutoEnumerator):
     adapter_class = Adapter
 
@@ -93,6 +96,7 @@ class AdapterEnumerator(model.AutoEnumerator):
 class BaseInterface(object):
     def __init__(self, adapter,
                  channel = "A",
+                 mode = "MPSSE",
                  gpio_output = 0, gpio_value = 0,
                  resetn_pin = None, reset_pin = None,
                  reset_oe_pin = None, reset_oen_pin = None,
@@ -144,7 +148,7 @@ class BaseInterface(object):
             oe |= (1 << activityn_pin)
             val |= (1 << activityn_pin)
 
-        self.handle = adapter.device.open(interface = channel, gpio_oe = oe, gpio_val = val)
+        self.handle = adapter.device.open(interface = channel, gpio_oe = oe, gpio_val = val, mode = mode)
 
     def cmd_trst(self, reset):
         if self.__reset_pin and self.__reset_oe_pin:
@@ -278,7 +282,8 @@ class EngineInterface(object):
                  reset_oe_pin = None, reset_oen_pin = None,
                  reset_od_pin = None,
                  powern_pin = None, power_pin = None,
-                 activityn_pin = None, activity_pin = None):
+                 activityn_pin = None, activity_pin = None,
+                 freq_oversample = 1):
         self.__reset = PinControl(self, pin = reset_pin,
                                   n_pin = resetn_pin,
                                   oe_pin = reset_oe_pin,
@@ -292,6 +297,7 @@ class EngineInterface(object):
         
         self.gpio_oe = gpio_output
         self.gpio_val = gpio_value
+        self.__freq_oversample = freq_oversample
         
         self.handle = adapter.device.open(interface = channel, mode = "engine")
 
@@ -333,10 +339,12 @@ class EngineInterface(object):
             ret.append(mpsse.ClockDiv5(div5))
         ret.append(mpsse.ClockDivisor(div))
         return ret
-
+    
     def freq_update(self, freq):
         if freq is None:
             freq = self.handle.base_freq
+        else:
+            freq = freq * self.__freq_oversample
         base_freq = self.handle.base_freq / self.handle.cycle_div
 
         ratio = base_freq / float(freq)
@@ -350,8 +358,11 @@ class EngineInterface(object):
         if div5:
             actual_freq /= 5
 
-        self.logger.debug("freq %s base %s half %s div5 %s div %s -> %s",
-                          freq, self.handle.base_freq, self.handle.cycle_div, div5, div,
+        actual_freq = actual_freq / self.__freq_oversample
+            
+        self.logger.debug("freq %s (oversampled by %d) base %s half %s div5 %s div %s -> %s",
+                          freq, self.__freq_oversample,
+                          self.handle.base_freq, self.handle.cycle_div, div5, div,
                           actual_freq)
 
         divisor = div5, div
@@ -1052,6 +1063,78 @@ class MpsseBitbangInterface(EngineInterface, bitbang.Interface):
         for index, op in enumerate(operation_list):
             cmd_count_before = len(mpsse_ops)
             
+            if isinstance(op, bitbang.IoSet):
+                mask = 0
+                value = 0
+                oe = 0
+                for iop in op.ops:
+                    io = self._ios[iop.io]
+
+                    if iop.mode is not None:
+                        io.mode = iop.mode
+
+                    if iop.value is not None:
+                        m = 1 << io.no
+                        mask |= m
+                        if (io.mode & bitbang.Mode.D1) and iop.value:
+                            value |= m
+                            oe |= m
+                        if (io.mode & bitbang.Mode.D0) and not iop.value:
+                            oe |= m
+                mpsse_ops += self.cmds_gpio(mask = mask, oe = oe, value = value)
+
+            elif isinstance(op, bitbang.IoGet):
+                needed = [False, False]
+                for ion in op.ios:
+                    io = self._ios[ion]
+                    needed[int(io.no > 7)] = True
+
+                for n, c in zip(needed, [mpsse.GetBitsLow, mpsse.GetBitsHigh]):
+                    if not n:
+                        continue
+                    mpsse_ops.append(c())
+
+            else:
+                raise base.ProtocolError("Unknown BITBANG operation %s" % type(op))
+
+            cmd_count_after = len(mpsse_ops)
+            tdos.append((cmd_count_before, cmd_count_after))
+
+        self._mpsse_run(mpsse_ops)
+
+        for op, (before, after) in zip(operation_list, tdos):
+            if not isinstance(op, bitbang.IoGet):
+                continue
+            rv = 0
+            for cmd in mpsse_ops[before : after]:
+                offset = 8 if isinstance(cmd, mpsse.GetBitsHigh) else 0
+                rv |= cmd.value << offset
+            op.values = {}
+            for name in op.ios:
+                iod = self._ios[name]
+                op.values[name] = (rv >> iod.no) & 1
+
+    def io_info(self):
+        return self._ios
+
+class BbIoInfo(bitbang.IoInfo):
+    def __init__(self, name, no):
+        self.name = name
+        self.no = no
+        self.mode = bitbang.Mode.Input
+        self.value = False
+
+class BitbangInterface(BaseInterface, bitbang.Interface):
+    def __init__(self, adapter, channel = "A"):
+        BaseInterface.__init__(self, adapter, channel = channel)
+        bitbang.Interface.__init__(self, adapter, channel)
+        
+        self._ios = {}
+        for i in range(8):
+            self._ios[f"IO{i}"] = BbIoInfo(f"IO{i}", i)
+        
+    def _execute(self, operation_list):
+        for index, op in enumerate(operation_list):
             if isinstance(op, bitbang.IoSet):
                 mask = 0
                 value = 0

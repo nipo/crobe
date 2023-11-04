@@ -1,5 +1,5 @@
 from .. import i2c
-from .bitbang import Mode, IoOp, Interface
+from .bitbang import Mode, IoOpenDrain, IoPushPull, Interface
 
 @Interface.db.register("i2c")
 class I2cInterface(i2c.Interface):
@@ -17,13 +17,12 @@ class I2cInterface(i2c.Interface):
         if not self.sda or not self.scl:
             raise ValueError("Should set sda/scl options")
 
-        for port in self.hi:
-            self.port.set(IoOp(port, value = True, mode = Mode.D0D1))
-        for port in self.lo:
-            self.port.set(IoOp(port, value = False, mode = Mode.D0D1))
+        constants = {port:IoPushPull(value = True) for port in self.hi}
+        constants.update({port:IoPushPull(value = False) for port in self.lo})
+        self.port.set(constants)
 
-        self.port.set(IoOp(self.scl, value = True, mode = Mode.D0Z1),
-                      IoOp(self.sda, value = True, mode = Mode.D0Z1))
+        self.port.set({self.scl:IoOpenDrain(value = True),
+                       self.sda:IoOpenDrain(value = True)})
         
     def option_set(self, opt):
         if opt.startswith("sda="):
@@ -41,11 +40,11 @@ class I2cInterface(i2c.Interface):
         super().option_set(opt)
 
     def _set(self, scl, sda):
-        self.port.set(IoOp(self.scl, value = scl),
-                      IoOp(self.sda, value = sda))
+        self.port.set({self.scl:IoOpenDrain(value = scl),
+                       self.sda:IoOpenDrain(value = sda)})
         
     def _get(self):
-        return self.port.get(self.scl, self.sda)
+        return self.port.get([self.scl, self.sda])
 
     def _start(self):
         self.logger.trace("Start")

@@ -1,5 +1,5 @@
 from .. import spi
-from .bitbang import Mode, IoOp, IoSet, IoGet, Interface
+from .bitbang import Mode, IoConfig, IoSet, IoGet, Interface
 
 @Interface.db.register("spi")
 class SpiInterface(spi.Interface):
@@ -21,18 +21,18 @@ class SpiInterface(spi.Interface):
             raise ValueError("Should set sck at least")
 
         for port in self.hi:
-            self.port.set(IoOp(port, value = True, mode = Mode.D0D1))
+            self.port.set(IoConfig(port, value = True, mode = Mode.D0D1))
         for port in self.lo:
-            self.port.set(IoOp(port, value = False, mode = Mode.D0D1))
+            self.port.set(IoConfig(port, value = False, mode = Mode.D0D1))
 
         if self.cs0:
-            self.port.set(IoOp(self.cs0, value = True, mode = Mode.D0Z1))
+            self.port.set(IoConfig(self.cs0, value = True, mode = Mode.D0Z1))
         if self.mosi:
-            self.port.set(IoOp(self.mosi, value = False, mode = Mode.D0D1))
+            self.port.set(IoConfig(self.mosi, value = False, mode = Mode.D0D1))
         if self.miso:
-            self.port.set(IoOp(self.miso, value = False, mode = Mode.Input))
+            self.port.set(IoConfig(self.miso, value = False, mode = Mode.Input))
         if self.sck:
-            self.port.set(IoOp(self.sck, value = False, mode = Mode.D0D1))
+            self.port.set(IoConfig(self.sck, value = False, mode = Mode.D0D1))
         
     def option_set(self, opt):
         if opt.startswith("mosi="):
@@ -62,12 +62,12 @@ class SpiInterface(spi.Interface):
             byte_value <<= 1
 
             if self.mosi is not None:
-                ops.append(IoSet(IoOp(self.mosi, value = mosi),
-                                 IoOp(self.sck, value = False)))
+                ops.append(IoSet(IoConfig(self.mosi, value = mosi),
+                                 IoConfig(self.sck, value = False)))
             else:
-                ops.append(IoSet(IoOp(self.sck, value = False)))
+                ops.append(IoSet(IoConfig(self.sck, value = False)))
 
-            ops.append(IoSet(IoOp(self.sck, value = True)))
+            ops.append(IoSet(IoConfig(self.sck, value = True)))
             if self.miso is not None:
                 ops.append(IoGet([self.miso]))
         return ops
@@ -97,9 +97,9 @@ class SpiInterface(spi.Interface):
                 if self.cs0 is None:
                     continue
 
-                pending.append(IoSet(IoOp(self.sck, value = False)))
-                pending.append(IoSet(IoOp(self.cs0, value = op.value is None)))
-                pending.append(IoSet(IoOp(self.sck, value = False)))
+                pending.append(IoSet(IoConfig(self.sck, value = False)))
+                pending.append(IoSet(IoConfig(self.cs0, value = op.value is None)))
+                pending.append(IoSet(IoConfig(self.sck, value = False)))
                 continue
 
             if isinstance(op, spi.Shift):

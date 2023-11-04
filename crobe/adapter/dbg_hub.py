@@ -4,7 +4,7 @@ from .ftdi import basic
 __all__ = []
 
 class DbgV1(basic.Adapter):
-    supported_interfaces = ["jtag", "swd", "spi", "i2c", "spi_rst", "1wire", "smi", "bb"]
+    supported_interfaces = ["jtag", "swd", "spi", "i2c", "spi_rst", "1wire", "smi", "bb", "sbb"]
 
     def open(self, interface_name):
         if interface_name == "jtag":
@@ -47,6 +47,9 @@ class DbgV1(basic.Adapter):
         elif interface_name == "bb":
             return basic.Adapter.open(self, "mpsse_bb",
                                       channel = "A")
+        elif interface_name == "sbb":
+            return basic.Adapter.open(self, "mpsse_bb",
+                                      channel = "D")
 
 @model.HwRoot.register
 class EnumeratorV1(basic.AdapterEnumerator):

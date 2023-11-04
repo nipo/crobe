@@ -4,7 +4,7 @@ from ...db import Db, NoMatch
 from ...model import PortComponent
 import enum
 
-__all__ = ["ProtocolError", "Mode", "Interface", "Operation", "IoOp", "IoSet", "IoGet", "IoInfo"]
+__all__ = ["ProtocolError", "Mode", "Interface", "Operation", "IoInput", "IoPushPull", "IoOpenDrain", "IoSet", "IoGet", "IoInfo"]
 
 class ProtocolError(base.ProtocolError):
     pass
@@ -51,26 +51,26 @@ class Interface(base.Interface):
         """
         raise KeyError(str(crit))
 
-    def set(self, *io_ops):
+    def set(self, mod_map):
         """
         See cmd_set()
         """
-        op = self.cmd_set(*io_ops)
+        op = self.cmd_set(mod_map)
         self.execute([op])
 
-    def get(self, *ios):
+    def get(self, io_names):
         """
         See cmd_get()
         """
-        op = self.cmd_get(ios)
+        op = self.cmd_get(io_names)
         self.execute([op])
-        return [op.values[x] for x in ios]
+        return [op[x] for x in io_names]
 
-    def cmd_set(self, *ops):
-        return IoSet(*ops)
+    def cmd_set(self, mod_map):
+        return IoSet(mod_map)
 
-    def cmd_get(self, ios):
-        return IoGet(ios)
+    def cmd_get(self, io_names):
+        return IoGet(io_names)
 
     def child_spawn(self, sub):
         return self.db.call(sub, self)
@@ -78,9 +78,8 @@ class Interface(base.Interface):
 class Operation(base.Operation):
     pass
 
-class IoOp:
-    def __init__(self, io, value = None, mode = None):
-        self.io = io
+class IoConfig:
+    def __init__(self, value = None, mode = None):
         self.value = value
         self.mode = mode
 
@@ -88,11 +87,23 @@ class IoOp:
         return str(self)
 
     def __str__(self):
-        return "<IoOp %s %s %s>" % (self.io, self.value, self.mode)
+        return "<IoConfig %s %s>" % (self.value, self.mode)
 
+class IoInput(IoConfig):
+    def __init__(self):
+        super().__init__(mode = Mode.Input)
+
+class IoPushPull(IoConfig):
+    def __init__(self, value):
+        super().__init__(value = value, mode = Mode.D0D1)
+
+class IoOpenDrain(IoConfig):
+    def __init__(self, value):
+        super().__init__(value = value, mode = Mode.D0Z1)
+    
 class IoSet(Operation):
-    def __init__(self, *ops):
-        self.ops = ops
+    def __init__(self, mod_map):
+        self.mod_map = mod_map
 
     def __str__(self):
         return "<IoSet %s>" % (self.ops,)
@@ -102,5 +113,8 @@ class IoGet(Operation):
         self.ios = ios
         self.values = {}
 
+    def __getitem__(self, k):
+        return self.values[k]
+        
     def __str__(self):
         return "<IoGet %s>" % (self.ios)
