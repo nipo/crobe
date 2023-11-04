@@ -37,4 +37,5 @@ from . import rtt
 from . import riscv
 from . import stm32
 from . import crc
+from . import stusb4500
 from . import swire
