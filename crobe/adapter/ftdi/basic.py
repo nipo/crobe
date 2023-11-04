@@ -1,6 +1,6 @@
 from .. import model
 from ...bitstring import BitString, BitStringSlice
-from ...protocol import jtag, base, swd, spi, chipcon, i2c, bitbang, one_wire, smi
+from ...protocol import jtag, base, swd, spi, chipcon, i2c, bitbang, one_wire, smi, swire
 from . import ftdi, api, mpsse
 from ...util.pretty import metric
 from collections import deque
@@ -56,6 +56,9 @@ class Adapter(model.Adapter):
 
         if interface_name.lower() == "mpsse_bb":
             return MpsseBitbangInterface(self, **d)
+
+        if interface_name.lower() == "swire":
+            return SwireInterface(self, **d)
 
         if interface_name.lower() == "bb":
             return BitbangInterface(self, **d)
@@ -881,6 +884,112 @@ class SwdInterface(EngineInterface, swd.Interface):
                 dparity = (0x6996 >> (dparity & 0xf)) & 1
                 if dparity != int(mpsse_ops[rx[2]].data):
                     op.ack = swd.Ack.PARITY_ERR
+
+class SwireInterface(EngineInterface, swire.Interface):
+    def __init__(self, adapter, oen_pin = None, oe_pin = None, name = None, **args):
+        EngineInterface.__init__(self, adapter, freq_oversample = 5, **args)
+        swire.Interface.__init__(self, adapter, name)
+        self.freq_cap("hardware", adapter.freq_max)
+
+#        if oen_pin is None and oe_pin is None:
+#            raise ValueError("Need oen_pin or oe_pin")
+
+#        self.__oe = PinControl(self, pin = oe_pin, n_pin = oen_pin)
+
+    def start(self):
+        # Dont execute, super().start() will init GPIOs
+        self.cmds_gpio(mpsse.Pin.Tdi | mpsse.Pin.Tdo,
+                       mpsse.Pin.Tdi,
+                       mpsse.Pin.Tdi)
+        EngineInterface.start(self)
+        swire.Interface.start(self)
+
+    def lower(self, data):
+        start = True
+        ret = BitString()
+        for b in data:
+            ret += BitString(0x10 if start else 0x1e, 5)
+            start = False
+            for bit in range(7, -1, -1):
+                ret += BitString(0x10 if ((b >> bit) & 1) else 0x1e, 5)
+            ret += BitString(0x1e, 5)
+            ret += BitString(0xff, 2)
+        leftover = (-len(ret)) % 8
+        if leftover:
+            ret += BitString(-1, leftover)
+        return ret
+        
+    def _execute(self, operation_list):
+        self.logger.protocol("Running %s", operation_list)
+        mpsse_ops = []
+        tdos = {}
+
+        for index, op in enumerate(operation_list):
+#            mpsse_ops += self.__oe.cmds_set(False)
+            mpsse_ops.append(mpsse.ShiftBits8(b"\xff" * 8, read = False))
+
+            if isinstance(op, swire.Read):
+                cmd = struct.pack(">BHB", 0x5a, op.address, op.sid | 0x80)
+                cmd_bytes = self.lower(cmd)
+
+#                mpsse_ops += self.__oe.cmds_set(True)
+                mpsse_ops.append(mpsse.ShiftBits8(bytes(cmd_bytes), read = False))
+#                mpsse_ops += self.__oe.cmds_set(False)
+                offsets = []
+                for i in range(op.size):
+#                    mpsse_ops += self.__oe.cmds_set(True)
+                    mpsse_ops.append(mpsse.ShiftBits(0x1e, 3, read = False))
+#                    mpsse_ops += self.__oe.cmds_set(False)
+                    offsets.append(len(mpsse_ops))
+                    mpsse_ops.append(mpsse.ShiftBits8(b"\xff" * 8, read = True))
+#                mpsse_ops += self.__oe.cmds_set(True)
+                mpsse_ops.append(mpsse.ShiftBits8(bytes(self.lower(b"\xff")), read = False))
+#                mpsse_ops += self.__oe.cmds_set(False)
+
+                tdos[index] = offsets
+
+            elif isinstance(op, swire.Write):
+                cmd = struct.pack(">BHB", 0x5a, op.address, op.sid) + op.data
+                cmd_bytes = self.lower(cmd) + self.lower(b"\xff")
+
+#                mpsse_ops += self.__oe.cmds_set(True)
+                mpsse_ops.append(mpsse.ShiftBits8(bytes(cmd_bytes), read = False))
+#                mpsse_ops += self.__oe.cmds_set(False)
+
+            elif isinstance(op, base.Reset):
+                mpsse_ops += self.cmds_system_reset(op.asserted)
+
+            else:
+                raise base.ProtocolError("Unknown SWIRE operation %s" % type(op))
+
+        self._mpsse_run(mpsse_ops)
+
+        for op_index, offsets in tdos.items():
+            op = operation_list[op_index]
+
+            data = []
+            for i in offsets:
+                sws = BitString(1, 1) + mpsse_ops[i].data + BitString(1, 1)
+
+#                print(sws)
+                bv = 0
+                bl = 0
+                z_run = 0
+                for b in sws:
+                    if not b:
+                        z_run += 1
+                        continue
+
+                    if z_run:
+                        bv <<= 1
+                        bl += 1
+                        bv |= int(z_run > 2)
+                        if bl >= 8:
+                            break
+                    z_run = 0
+                if bl >= 7:
+                    data.append(bv)
+            op.data = bytes(data)
 
 class ChipconInterface(BaseInterface, chipcon.Interface):
     def __init__(self, adapter, oen_pin = None, oe_pin = None, name = None, **args):

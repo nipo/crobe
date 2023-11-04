@@ -37,4 +37,4 @@ from . import rtt
 from . import riscv
 from . import stm32
 from . import crc
-
+from . import swire

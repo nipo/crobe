@@ -50,6 +50,13 @@ class DbgV1(basic.Adapter):
         elif interface_name == "sbb":
             return basic.Adapter.open(self, "mpsse_bb",
                                       channel = "D")
+        elif interface_name == "swire":
+            return basic.Adapter.open(self, interface_name,
+                                      gpio_output = 0xeb, gpio_value = 0x20,
+#                                      gpio_output = 0xe3, gpio_value = 0xc0,
+                                      channel = "A",
+#                                      oen_pin = 6,
+                                      reset_od_pin = 4)
 
 @model.HwRoot.register
 class EnumeratorV1(basic.AdapterEnumerator):
