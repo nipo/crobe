@@ -242,7 +242,7 @@ class Pm0075Flash:
         self.bank.mass_erase()
         self.opt_unlock()
         self.opt.erase()
-        self.opt.write(bytes([0xa5, 0x5a]))
+#        self.opt.write(bytes([0xa5, 0x5a]))
         self.lock()
         self.unlock()
 
