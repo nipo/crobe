@@ -20,7 +20,11 @@ class Cc26xx(SoC):
 def cc26taps_probe(tap):
     icepicks = tap.port.children_of_class(IcePick)
     for icepick in icepicks:
-        if icepick.ir_pre == tap.ir_pre + tap.irlen:
-            name = names.get(icepick.idcode.drop_revision(), "CC13/26xx")
-            return Cc26xx(name, tap.children[0])
+        try:
+            name = names[icepick.idcode.drop_revision()]
+        except KeyError:
+            continue
+        for key, (tap,) in icepick.taps.items():
+            if isinstance(tap, JtagDpTap):
+                return Cc26xx(name, tap)
     raise NotImplementedError("Not my soc")
