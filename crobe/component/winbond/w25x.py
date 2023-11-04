@@ -42,7 +42,7 @@ class W25x(SpiFlash):
 
     def unprotect(self):
         self.command(self.CMD_STATUS_WRITE_ENABLE)
-        SpiFlash.unprotect(self)
+        super().unprotect()
         time.sleep(.02)
 
 

@@ -233,7 +233,7 @@ class SpiFlash(SpiMemory):
         self.logger.trace("Chip erase (%02x)", self.CMD_CHIP_ERASE[0])
         self.command(self.CMD_CHIP_ERASE)
         self.logger.trace("Waiting for erase to complete")
-        while self.status & self.STATUS_WIP:
+        while self.status & (self.STATUS_WIP | self.STATUS_WEL):
             time.sleep(.1)
         self.write_enable(False)
     
