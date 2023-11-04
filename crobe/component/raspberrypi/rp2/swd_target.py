@@ -1,8 +1,14 @@
 from ....part_id import PartId
 from ....protocol import swd
+from ....db import NoMatch
 from ...arm.sw_dp import MultidropSwDp
 
 swd.Interface.targetsel_db._register([PartId(9, 0x13, 0x1002, 0xf)], "RP2040")
+
+@swd.Interface.db.register(PartId(9, 0x13, 0x212, 1))
+def direct_rp2_discovery(port):
+    port.logger.error("Found RP2, please reenumerate with multidrop enabled")
+    raise NoMatch("swd", "idcode")
 
 @swd.Interface.multidrop_db.register(PartId(9, 0x13, 0x0212))
 class Rp2040RescueDp(MultidropSwDp):

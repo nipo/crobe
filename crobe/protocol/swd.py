@@ -164,12 +164,47 @@ class Interface(base.Interface):
                 self.cmd_dormant_to_swd(),
             ])
 
+            commands = []
+            probed = {}
+            
             for id, name in self.targetsel_db.registry.items():
-                self.logger.trace("Multidrop probing %s %s", name, id)
-                try:
-                    self.multidrop_probe(id)
-                except (BadTarget, NoMatch):
+                rop = self.cmd_read(0, self.IDCODE)
+                commands += [
+                    self.cmd_wakeup(50),
+                    self.cmd_swd_to_dormant(),
+                    self.cmd_wakeup(50),
+                    self.cmd_dormant_to_swd(),
+                    self.cmd_wakeup(50),
+                    self.cmd_run(4),
+                    self.cmd_write(0, self.TARGETSEL, int(id)),
+                    self.cmd_run(4),
+                    rop,
+                ]
+
+                probed[id] = rop
+
+            self.execute(commands)
+
+            responses = {}
+            for id, rop in probed.items():
+                if rop.data in [0, 0xffffffff]:
                     continue
+                targetsel = PartId.from_idcode(int(id))
+                try:
+                    idcode = PartId.from_idcode(rop.data)
+                except ValueError:
+                    continue
+
+                self.logger.info("Multidrop TargetSel %s gave Idcode %s", targetsel, idcode)
+                responses[targetsel] = idcode
+
+            for targetsel, idcode in responses.items():
+                self.logger.info("Enumerating TargetSel %s", targetsel)
+                try:
+                    self.multidrop_probe(targetsel, True)
+                except BadTarget as e:
+                    self.logger.warning("TargetSel %s was probed as %s but did not answer the second time",
+                                        targetsel, idcode)
 
     def multidrop_probe(self, id, reinit = False):
         with self.freq_capped("multidrop probe", 1e6):
@@ -180,14 +215,20 @@ class Interface(base.Interface):
                     self.cmd_swd_to_dormant(),
                     self.cmd_wakeup(50),
                     self.cmd_dormant_to_swd(),
+                    self.cmd_wakeup(50),
+                    self.cmd_run(4),
+                    self.cmd_write(0, self.TARGETSEL, int(id)),
+                    self.cmd_run(4),
+                    idcode,
                 ])
-            self.execute([
-                self.cmd_wakeup(50),
-                self.cmd_run(4),
-                self.cmd_write(0, self.TARGETSEL, int(id)),
-                self.cmd_run(4),
-                idcode,
-            ])
+            else:
+                self.execute([
+                    self.cmd_wakeup(50),
+                    self.cmd_run(4),
+                    self.cmd_write(0, self.TARGETSEL, int(id)),
+                    self.cmd_run(4),
+                    idcode,
+                ])
 
             if idcode.data in [0, 0xffffffff]:
                 raise BadTarget(id)
@@ -198,7 +239,7 @@ class Interface(base.Interface):
             except ValueError:
                 raise BadTarget(id)
 
-            self.logger.info("Found multidrop TargetSel %s, IDCODE %s",
+            self.logger.info("TargetSel %s Idcode %s",
                              id, idcode)
             target = self.multidrop_db.call(idcode, self, id)
             self.child_add(target)
@@ -235,8 +276,8 @@ class Interface(base.Interface):
         
         try:
             self.child_add(self.db.call(partid, self))
-        except:
-            raise UnknownDp(partid)
+        except NoMatch as e:
+            raise UnknownDp(partid) from e
         base.Interface.start(self)
         
     def _execute(self, operation_list):
