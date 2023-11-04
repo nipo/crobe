@@ -68,7 +68,7 @@ class SerialInterface(pipe.BackgroundInterface):
     
     def _options(self):
         return dict(
-            baudrate = self.params["rate"],
+            baudrate = int(self.params["rate"]),
             bytesize = self.params["bits"],
             stopbits = self.params["stop"],
             rtscts = self.params["rtscts"],
@@ -95,24 +95,33 @@ class SerialInterface(pipe.BackgroundInterface):
 
     def _read(self, size, timeout = None):
         self.logger.protocol("> size %s timeout %s", size, timeout)
-        if size is None:
-            left = self.io.in_waiting or 1
-        else:
-            left = size
 
-        start = time.time()
+        deadline = time.time() + timeout
         data = b''
-        while left > 0:
-            d = bytes(self.io.read(left))
+
+        while True:
+            if size is None:
+                d = bytes(self.io.read(self.io.in_waiting or 1))
+            else:
+                left = size - len(data)
+                if left <= 0:
+                    break
+                d = bytes(self.io.read(left))
             self.logger.protocol(">* %s", d.hex())
-            left -= len(d)
             data += d
-            elapsed = time.time() - start
-            if timeout and elapsed > timeout:
+            if d:
+                deadline = time.time() + timeout
+            if timeout is not None and time.time() > deadline:
                 break
         self.logger.protocol("> %s", data.hex())
         return data
 
+    def rts_set(self, value):
+        self.io.setRTS(value)
+
+    def rts_get(self):
+        return self.io.getRTS()
+    
 class SerialAdapter(model.Adapter):
     supported_interfaces = ["pipe"]
 
