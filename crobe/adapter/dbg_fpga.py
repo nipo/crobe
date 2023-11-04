@@ -40,6 +40,8 @@ class Mode(enum.IntEnum):
     I2C_TGT = 7
     SWD_EXT = 8
     JTAG_EXT = 9
+    SPI_SLAVE = 10
+    SPI_SLAVE_INV = 11
         
 @model.UsbEnumerator.db.register(model.UsbInfo(idVendor = 0x1500, idProduct = 0xdeb9))
 class Adapter(model.Adapter):
@@ -390,10 +392,10 @@ class NoneInterface(base.Interface):
     def __init__(self, regs):
         self.regs = regs
         self.options = DbgFpgaOpts(regs)
+        self.options.detect = False
         super().__init__(regs, "none")
 
     def start(self):
-        self.regs.detect_assert(False)
         self.options.apply()
         super().start()
 
@@ -529,13 +531,13 @@ class DbgFpgaIoInfo(bitbang.IoInfo):
 class BitbangInterface(bitbang.Interface):
     def __init__(self, adapter):
         self.options = DbgFpgaOpts(adapter.regs)
+        self.options.detect = False
         super().__init__(adapter.regs, "BB")
         self.adapter = adapter
         self.out_reg = 0
         self.repeats = 1
 
     def start(self):
-        self.port.detect_assert(False)
         self.options.apply()
         super().start()
 
@@ -733,6 +735,14 @@ class Adapter(model.Adapter):
 
         elif interface_name.lower() == "none":
             self.regs.mode_set(Mode.NONE)
+            return self.none
+
+        elif interface_name.lower() == "spi-slave":
+            self.regs.mode_set(Mode.SPI_SLAVE)
+            return self.none
+
+        elif interface_name.lower() == "spi-slave-inv":
+            self.regs.mode_set(Mode.SPI_SLAVE_INV)
             return self.none
 
         elif interface_name.lower() == "bb":
