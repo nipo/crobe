@@ -13,6 +13,7 @@ import os
 import math
 import struct
 import threading
+import enum
 from ..component.nsl.transactor.cs import ControlStatus
 import enum
 
@@ -403,13 +404,13 @@ class NoneInterface(base.Interface):
         if self.options.option_set(opt):
             return
         super().option_set(opt)
-    
+
 @model.UsbEnumerator.db.register(model.UsbInfo(idVendor = 0x1500, idProduct = 0xdeba, bcdDevice = 0x0100))
 class Adapter(model.Adapter):
     """
     "target_cortex0" target board multi-protocol firmware, rev 1.00, has most serial protocol transactors
     """
-    supported_interfaces = ["cs", "jtag", "swd", "spi", "spi-inv", "i2c", "i2c-int", "i2c-ext"]
+    supported_interfaces = ["cs", "jtag", "swd", "spi", "spi-inv", "i2c", "i2c-int", "i2c-ext", 'bb']
 
     @classmethod
     def from_device(cls, d):
@@ -613,7 +614,7 @@ class BitbangInterface(bitbang.Interface):
                 io = self._ios[io_name]
                 r[io_name] = (in_reg >> io.no) & 1
             op.values = r
-        
+
 @model.UsbEnumerator.db.register(model.UsbInfo(idVendor = 0x1500, idProduct = 0xdeba, bcdDevice = 0x0101))
 class Adapter(model.Adapter):
     """
