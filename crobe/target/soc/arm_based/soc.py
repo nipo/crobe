@@ -10,6 +10,7 @@ from ....component.arm.jtag_dp import JtagDp
 from ....component.arm.mem_ap import MemAp
 from ... import memory
 from ....puppet import Puppet
+from ....protocol import swd
 from ....db import Db, NoMatch, DisabledEntry, InitializationFailure
 from .puppet_code import crc32_cm0
 from ....util.crc import Crc
@@ -383,6 +384,8 @@ class SoC(model.SoC):
             self.bus.port.port.reset = with_system_reset
             self.bus.port.port.line_reset()
             self.bus.port.port.reset = False
+        if isinstance(self.bus.port.port, swd.Interface):
+            self.bus.port.port.line_reset()
         self.bus.port.debug_enable(True)
         self.bus.enable()
         self.attach()

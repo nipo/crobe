@@ -212,7 +212,7 @@ class Stm(SoC, pin_control.Controller):
                 f.is_blank = True
         
         self.reset()
-        self.reattach()
+        self.reattach(with_system_reset = False, force = True)
         
     def reset(self):
         self.attach()
