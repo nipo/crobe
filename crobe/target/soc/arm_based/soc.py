@@ -84,6 +84,9 @@ class ArmMPuppet(Puppet):
         return ret
 
     def crc32_many(self, ranges):
+        if not ranges:
+            return {}
+
         code = self.stub(self.CRC32_MANY)
         to_scan = []
 
@@ -320,7 +323,7 @@ class StubFlash(BusFlash):
 
         good = set()
         for address, data in pages.items():
-            if Crc.zlib_crc32.calc(data) == values[address]:
+            if Crc.from_name("zlib").calc(data) == values[address]:
                 good.add(address)
 
         self.logger.trace("Updating, %d/%d pages already match", len(good), len(pages))
