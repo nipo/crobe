@@ -66,9 +66,11 @@ def erase(roots, field, target):
     target = field.child_summon(target)
 
     f = target.info.flash_class(target.bus)
-    f.mass_erase()
     f.opt_unlock()
-    f.opt.write(bytes([0xa5, 0x5a]))
+    f.opt_erase()
+    f.opt.write(bytes([0xaa, 0x55]))
+    if hasattr(f.opt, "reload"):
+        f.opt.reload()
 
 @stm32.command()
 @click.argument("root", type = base.ROOT)

@@ -240,10 +240,10 @@ class Pm0075Flash:
 
     def mass_erase(self):
         self.bank.mass_erase()
-        self.opt_unlock()
-        self.opt.erase()
-#        self.opt.write(bytes([0xa5, 0x5a]))
-        self.lock()
+#        self.opt_unlock()
+#        self.opt.erase()
+#        self.opt.write(bytes([0xaa, 0x55]))
+#        self.lock()
         self.unlock()
 
     def opt_erase(self):
