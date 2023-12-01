@@ -364,11 +364,10 @@ def print_alg_info(alg, fd = sys.stdout):
             print("- Transparent to pre-image 0xff-padding", file = fd)
         else:
             print("- Transparent to pre-image zero-padding", file = fd)
-    if alg.check_state == 0:
-        if alg.complement_input:
-            print("- Transparent to post-image 0xff-padding", file = fd)
-        else:
-            print("- Transparent to post-image zero-padding", file = fd)
+    if alg.check_state == 0 and not alg.complement_input:
+        print("- Transparent to post-image zero-padding", file = fd)
+    if alg.check_state == alg.mask and alg.complement_input:
+        print("- Transparent to post-image 0xff-padding", file = fd)
     if alg.has_valid_state:
         print(f"- CRC state after blob with valid CRC: {alg.check_state:#x}", file = fd)
         print(f"- CRC bytes computed over a blob with valid CRC: <{alg.as_bytes(alg.check_state).hex()}>", file = fd)
