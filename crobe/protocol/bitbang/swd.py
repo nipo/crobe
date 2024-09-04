@@ -1,5 +1,5 @@
 from .. import swd
-from .bitbang import Mode, IoOp, Interface
+from .bitbang import Mode, IoInput, IoPushPull, Interface
 
 @Interface.db.register("swd")
 class SwdInterface(swd.Interface):
@@ -18,12 +18,12 @@ class SwdInterface(swd.Interface):
             raise ValueError("Should set swdio/swclk options")
 
         for port in self.hi:
-            self.port.set(IoOp(port, value = True, mode = Mode.D0D1))
+            self.port.set(IoPushPull(port, value = True))
         for port in self.lo:
-            self.port.set(IoOp(port, value = False, mode = Mode.D0D1))
+            self.port.set(IoPushPull(port, value = False))
             
-        self.port.set(IoOp(self.swclk, value = True, mode = Mode.D0D1),
-                      IoOp(self.swdio, value = True, mode = Mode.Input))
+        self.port.set(IoPushPull(self.swclk, value = True),
+                      IoInput(self.swdio, value = True))
 
         super().start()
         
@@ -45,17 +45,17 @@ class SwdInterface(swd.Interface):
     def _out(self, value = None):
         mode = Mode.D0D1 if value is not None else Mode.Input
         return [
-            self.port.cmd_set(IoOp(self.swclk, value = False, mode = Mode.D0D1),
-                              IoOp(self.swdio, value = value, mode = mode)),
-            self.port.cmd_set(IoOp(self.swclk, value = True)),
+            self.port.cmd_set(IoPushPull(self.swclk, value = False),
+                              IoConfig(self.swdio, value = value, mode = mode)),
+            self.port.cmd_set(IoPushPull(self.swclk, value = True)),
         ]
 
     def _in(self):
         return [
-            self.port.cmd_set(IoOp(self.swclk, value = False, mode = Mode.D0D1),
-                              IoOp(self.swdio, value = None, mode = Mode.Input)),
+            self.port.cmd_set(IoPushPull(self.swclk, value = False),
+                              IoInput(self.swdio, value = None)),
             self.port.cmd_get([self.swdio]),
-            self.port.cmd_set(IoOp(self.swclk, value = True)),
+            self.port.cmd_set(IoPushPull(self.swclk, value = True)),
         ]
         
     def _swd_wakeup(self, cycles = 50):
