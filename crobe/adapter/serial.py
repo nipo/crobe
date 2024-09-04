@@ -101,12 +101,15 @@ class SerialInterface(pipe.BackgroundInterface):
     def _read(self, size, timeout = None):
         self.logger.protocol("> size %s timeout %s", size, timeout)
 
-        deadline = time.time() + timeout
+        deadline = time.time() + (timeout or 0)
         data = b''
 
         while True:
             if size is None:
                 d = bytes(self.io.read(self.io.in_waiting or 1))
+                if d:
+                    data += d
+                    break
             else:
                 left = size - len(data)
                 if left <= 0:
@@ -115,8 +118,8 @@ class SerialInterface(pipe.BackgroundInterface):
             self.logger.protocol(">* %s", d.hex())
             data += d
             if d:
-                deadline = time.time() + timeout
-            if timeout is not None and time.time() > deadline:
+                deadline = time.time() + (timeout or 0)
+            if timeout is None or time.time() > deadline:
                 break
         self.logger.protocol("> %s", data.hex())
         return data
