@@ -39,3 +39,5 @@ except ModuleNotFoundError:
 from . import xvcd
 from . import serial
 from . import tcp
+from . import ssh
+    
