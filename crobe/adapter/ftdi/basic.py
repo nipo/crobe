@@ -152,6 +152,7 @@ class BaseInterface(object):
             val |= (1 << activityn_pin)
 
         self.handle = adapter.device.open(interface = channel, gpio_oe = oe, gpio_val = val, mode = mode)
+        assert self.handle
 
     def cmd_trst(self, reset):
         if self.__reset_pin and self.__reset_oe_pin:
