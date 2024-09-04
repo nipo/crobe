@@ -26,6 +26,7 @@ class SerialInterface(pipe.BackgroundInterface):
             parity = "N",
             stop = 1,
             rtscts = False,
+            xonxoff = False,
         )
         self.io = None
         pipe.BackgroundInterface.__init__(self, adapter, adapter.name)
@@ -56,6 +57,9 @@ class SerialInterface(pipe.BackgroundInterface):
         if k == "rtscts":
             self.params["rtscts"] = v.lower() in ["1", "true", "on", "yes"]
             return self.options_apply()
+        if k == "xonxoff":
+            self.params["xonxoff"] = v.lower() in ["1", "true", "on", "yes"]
+            return self.options_apply()
         return super().option_set(opt)
 
     def options_apply(self):
@@ -72,6 +76,7 @@ class SerialInterface(pipe.BackgroundInterface):
             bytesize = self.params["bits"],
             stopbits = self.params["stop"],
             rtscts = self.params["rtscts"],
+            xonxoff = self.params["xonxoff"],
             parity = self.PARITY_MAP[self.params["parity"].upper()],
         )
 
