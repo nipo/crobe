@@ -42,6 +42,7 @@ class Puppet(PortComponent):
         self.cpu = cpu
         self.ram = ram
         self.ram_allocator = Allocator(ram.address, ram.size)
+        self.ram_allocator.dump()
         self.pc_reg = pc_reg
         self.sp_reg = sp_reg
         self.arg_regs = arg_regs

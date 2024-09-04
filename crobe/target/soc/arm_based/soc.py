@@ -45,10 +45,16 @@ class PuppetStub:
         if self.cleaned:
             return
         self.cleaned = True
-        self.puppet.unallocate(self.zone)
+        if self.zone:
+            self.puppet.unallocate(self.zone)
+            self.zone = None
+            self.puppet = None
 
     def __del__(self):
-        self.cleanup()
+        try:
+            self.cleanup()
+        except AttributeError:
+            pass
     
 class ArmMPuppet(Puppet):
     CRC32 = crc32_cm0["memory_crc32"]
@@ -268,8 +274,11 @@ class StubFlash(BusFlash):
 
     def puppet_erase(self, puppet, address, size):
         code = puppet.stub(self.RANGE_ERASE)
-        return code.call(address, size, self.page_size,
-                         timeout = 0.2 + 0.1 * size / self.page_size)
+        try:
+            return code.call(address, size, self.page_size,
+                             timeout = 0.2 + 0.1 * size / self.page_size)
+        finally:
+            code.cleanup()
 
     def puppet_write(self, puppet, pages):
         if not pages:

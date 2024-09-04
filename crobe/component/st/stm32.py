@@ -253,9 +253,43 @@ class Pm0075Flash:
         self.bus.u32_write(self.opt.base + self.opt.CR, self.bus.u32_read(self.opt.base + self.opt.CR) | 0x2000)
         pass
         
+class Pm0063Flash:
+    def __init__(self, bus, base = 0x40022000):
+        self.bus = bus
+
+    def is_read_protected(self):
+        return True
+
+    def unlock(self):
+        pass
+
+    def opt_unlock(self):
+        pass
+
+    def lock(self):
+        pass
+
+    def mass_erase(self):
+        pass
+
+    def opt_erase(self):
+        pass
+
+    def reload(self):
+        pass
+
 class Rm0091Flash(Pm0075Flash):
     def reload(self):
         self.opt.rm0091_reload()
+
+class Rm0041(Info):
+    flash_size_addr = 0x1ffff7e0
+    uid_blob_addr = 0x1ffff7e8
+    dbgmcu_addr = 0xe0042000
+    dbgmcu_init = {}
+
+class Rm0041_Pm0063(Rm0041):
+    flash_class = Pm0063Flash
 
 class Rm0008(Info):
     flash_size_addr = 0x1ffff7e0
@@ -411,6 +445,8 @@ Info.parts = {
     0x414: Rm0008_Pm0075("F10x/High-Density",   2048),
     0x418: Rm0008_Pm0075("F10x/Connectivity",   2048),
     0x430: Rm0008_Pm0068("F10x/XL",             2048),
+    # RM0041
+    0x420: Rm0041_Pm0063("F10x/Value",   1024),
     # RM0360/RM0091
     0x440: Rm0360("F030x8",              1024),
     0x444: Rm0360("F030x4/6",            1024),

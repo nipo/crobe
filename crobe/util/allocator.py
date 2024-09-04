@@ -1,8 +1,12 @@
 class Range:
     def __init__(self, address, size):
+        import traceback
+
         self.address = address
         self.size = size
         assert size
+
+        self.allocated_on = traceback.extract_stack()
 
     @property
     def end(self):
@@ -12,13 +16,13 @@ class Range:
         if self.address > other.address:
             self, other = other, self
 
-        return self.address + self.size == other.address
+        return self.end == other.address
 
     def merge(self, other):
         if self.address > other.address:
             self, other = other, self
 
-        assert self.address + self.size == other.address
+        assert self.end == other.address
 
         return Range(self.address, other.size + self.size)
 
@@ -27,7 +31,8 @@ class Range:
 
         if size == self.size:
             return self, None
-        return Range(self.address, size), Range(self.address + size, self.size - size)
+        return Range(self.address, size), \
+            Range(self.address + size, self.size - size)
 
     def split_alloc(self, size, align):
         if self.size < size:
@@ -45,7 +50,7 @@ class Range:
 
         # try at right side
         address = (self.end - size) & ~(align - 1)
-        if address + size <= self.end:
+        if address >= self.address:
             right = address - self.address, size, self.end - size - address
         else:
             right = None
@@ -65,10 +70,10 @@ class Range:
         return self.address <= other.address
 
     def __str__(self):
-        return '<@0x%x, %d>' % (self.address, self.size)
+        return '<@%#x, %#x>' % (self.address, self.size)
 
     def __repr__(self):
-        return 'Range(0x%x, %d)' % (self.address, self.size)
+        return 'Range(%#x, %#x)' % (self.address, self.size)
     
 class Allocator:
     def __init__(self, address, size):
@@ -76,59 +81,103 @@ class Allocator:
         self.__size = size
         self.__free = set([Range(address, size)])
         self.__used = set()
+        self.assert_complete()
 
     def allocate(self, size, align = 1):
+        size = size or 4
+        #print(f"Allocating {size:#x}")
+        self.assert_complete()
         target = None
-
-        for i, r in enumerate(self.__free):
-            can_split = r.split_alloc(size, align)
+        
+        for i, maybe in enumerate(self.__free):
+            can_split = maybe.split_alloc(size, align)
 
             if not can_split:
                 continue
 
             left, allocated, right = can_split
 
+            if target:
+                t, (left_t, allocated_t, right_t) = target
+                if left + right < left_t + right_t:
+                    target = maybe, can_split
+            else:
+                target = maybe, can_split
+
             if not left and not right:
                 break
 
-            if not target:
-                target = r, can_split
-                continue
-
-            t, (left_t, allocated_t, right_t) = target
-            if left + right < left_t + right_t:
-                target = r, can_split
-
+        #print(f"Target {target}")
+            
         if not target:
-            for r in sorted(self.__used):
-                print(r)
-
+            self.dump()
             raise ValueError("No space left", size)
 
-        t, (left, allocated, right) = target
-        self.__free.remove(t)
+        ret, (left, allocated, right) = target
+        assert ret
+        #print(f"Ret {ret}")
+        
+        self.__free.remove(ret)
         if left:
-            crumb, t = t.split(left)
-            self.__free.add(crumb)
-        ret, crumb = t.split(allocated)
-        if crumb:
-            self.__free.add(crumb)
+            crumb, ret = ret.split(left)
+            #print(f"Split {crumb} {ret}")
+            assert crumb
+            assert ret
+            self.merge_free(crumb)
+
+        if right:
+            ret, crumb = ret.split(allocated)
+            #print(f"Split {ret} {crumb}")
+            assert crumb
+            assert ret
+            self.merge_free(crumb)
+
         self.__used.add(ret)
 
         assert ret.address % align == 0
-        
+        self.assert_complete()
         return ret
 
+    def assert_complete(self):
+        point = self.__address
+        for r in sorted(self.__free | self.__used):
+            assert r.address == point, (hex(r.address), hex(point))
+            point = r.end
+        assert point == self.__address + self.__size
+    
     def free(self, r):
+        #print("Freeing", r)
+        #self.dump()
+        self.assert_complete()
         self.__used.remove(r)
+        self.merge_free(r)
+        #self.dump()
+        self.assert_complete()
+        #print()
+        #print()
+
+    def merge_free(self, r):
         for i in range(2):
             for b in self.__free:
                 if b.touches(r):
                     self.__free.remove(b)
-                    r = r.merge(b)
+                    x = r.merge(b)
+                    #print("Merging", r, b, x)
+                    r = x
                     break
         self.__free.add(r)
         
+    def dump(self):
+        print(self)
+        print("Free:")
+        for r in sorted(self.__free):
+            print(r)
+            print(r.allocated_on[-6:])
+        print("Used:")
+        for r in sorted(self.__used):
+            print(r)
+            print(r.allocated_on[-6:])
+
     def __str__(self):
         return '<Allocator %s>' % ', '.join([str(b) for b in self.__free])
 
