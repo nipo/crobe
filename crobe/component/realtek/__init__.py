@@ -1,1 +1,1 @@
-from . import rtl8211f
+from . import rtl8211
