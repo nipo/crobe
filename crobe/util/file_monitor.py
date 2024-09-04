@@ -5,19 +5,22 @@ import time
 from .. import model
 
 class FileMonitor(model.Component):
-    def __init__(self, path, settle_delay = 1):
-        super().__init__(path)
-        self.path = path
+    def __init__(self, paths, settle_delay = 1):
+        super().__init__("FileMonitor")
+        self.paths = paths
         self.settle_delay = settle_delay
         self.last_mtime = None
         self.running = False
 
-    def path_mtime_get(self):
-        try:
-            st = os.stat(self.path)
-        except Exception:
-            return None
-        return st.st_mtime
+    def paths_mtime_get(self):
+        mtimes = []
+        for path in self.paths:
+            try:
+                st = os.stat(path)
+                mtimes.append(st.st_mtime)
+            except Exception:
+                return None
+        return max(mtimes)
 
     def stop(self):
         self.running = False
@@ -26,7 +29,7 @@ class FileMonitor(model.Component):
         self.running = True
         while self.running:
             now = time.time()
-            mtime = self.path_mtime_get()
+            mtime = self.paths_mtime_get()
             last_mtime = self.last_mtime
 
             if mtime:
@@ -37,11 +40,11 @@ class FileMonitor(model.Component):
 
             self.last_mtime = mtime
 
+            self.logger.debug(f"%s -> %s", last_mtime, mtime)
+
             if last_mtime == mtime:
                 time.sleep(self.settle_delay)
                 continue
-
-            self.logger.debug(f"%s -> %s", last_mtime, mtime)
 
             if mtime is None and last_mtime is not None:
                 self.logger.info(f"Disappeared")
@@ -68,6 +71,6 @@ class FileMonitor(model.Component):
         ...
         
 class FileMonitorThread(threading.Thread, FileMonitor):
-    def __init__(self, path, settle_delay = 1):
+    def __init__(self, paths, settle_delay = 1):
         super().__init__()
-        FileMonitor.__init__(self, path, settle_delay)
+        FileMonitor.__init__(self, paths, settle_delay)

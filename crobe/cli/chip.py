@@ -109,9 +109,9 @@ def info(ctx):
     click.echo("Target: %s" % target)
 
 class AutoUpdater(FileMonitor):
-    def __init__(self, path, target):
+    def __init__(self, paths, target):
         self.target = target
-        super().__init__(path)
+        super().__init__(paths)
 
     def on_appear(self):
         self.target_reload()
@@ -120,18 +120,25 @@ class AutoUpdater(FileMonitor):
         self.target_reload()
 
     def target_reload(self):
-        try:
-            program = Program.from_file(self.path)
-        except Exception as e:
-            print(f"Unable to load {self.path}, will retry when it changes again")
-            return
+        programs = []
+        for path in self.paths:
+            try:
+                program = Program.from_file(path)
+            except Exception as e:
+                print(f"Unable to load {self.path}, will retry when it changes again")
+                return
+            programs.append(program)
 
+        program = Program.from_programs(programs)
         self.program_write(program)
 
     @retry.retried(3, delay = .2)
     def program_write(self, program):
 #        self.target.attach()
         self.target.reset_halt()
+
+        print(f"Writing program again to {self.target}")
+        program.pprint()
         
         self.target.write(program,
                           do_erase = False,
@@ -142,10 +149,10 @@ class AutoUpdater(FileMonitor):
 #        self.target.detach()
         
 @chip.command(help = "Auto-reprogram binary")
-@click.argument("program", type = click.Path(exists = None, dir_okay = False))
+@click.argument("programs", type = click.Path(exists = None, dir_okay = False), nargs = -1)
 @click.pass_context
-def auto_program(ctx, program):
+def auto_program(ctx, programs):
     target = ctx.obj["target"]
 
-    autoupdater = AutoUpdater(program, target)
+    autoupdater = AutoUpdater(programs, target)
     autoupdater.run()
