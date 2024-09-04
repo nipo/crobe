@@ -33,3 +33,4 @@ from . import usb
 from . import riscv
 from . import neorv32
 from . import espressif
+from . import hdlc
