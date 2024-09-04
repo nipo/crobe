@@ -103,6 +103,7 @@ class Device(object):
         return "<%s %r %r %r>" % (self.connection_id, self.vendor, self.model, self.serial)
         
     def open(self, interface = "A", mode = "mpsse", **defaults):
+        mode = mode.lower()
         if mode == "engine":
             from .mpsse import Engine
             return Engine(self, interface)
