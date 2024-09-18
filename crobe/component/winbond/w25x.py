@@ -46,7 +46,14 @@ class W25x(SpiFlash):
         time.sleep(.02)
 
 
+@SpiFlash.db.register(0xef7015)
+@SpiFlash.db.register(0xef7016)
+@SpiFlash.db.register(0xef7017)
 @SpiFlash.db.register(0xef7018)
+@SpiFlash.db.register(0xef4015)
+@SpiFlash.db.register(0xef4016)
+@SpiFlash.db.register(0xef4017)
+@SpiFlash.db.register(0xef4018)
 class W25Q(SfdpFlash):
     page_size = 256
     write_buffer_size = 256

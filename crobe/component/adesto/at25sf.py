@@ -1,4 +1,4 @@
-from ..spi_flash import SpiFlash
+from ..spi_flash import SpiFlash, SfdpFlash
 import binascii
 
 @SpiFlash.db.register(0x1f8401)
@@ -26,3 +26,8 @@ class At25sf(SpiFlash):
     def start(self):
         SpiFlash.start(self)
         print("Status: %02x %02x" % (self.status, self.command(b'\x35', rsize = 1)[0]))
+
+@SpiFlash.db.register(0x1f8901)
+class At25sf(SfdpFlash):
+    page_size = 256
+    write_buffer_size = 256
