@@ -14,7 +14,7 @@ class SpiInterface(spi.Interface):
         self.child_add(spi.Target(self, "cs0", 0))
 
     def freq_update(self, freq):
-        return self.port.freq_cap("spi", freq or 1200e3)
+        return self.port.freq_cap("spi", (freq or 1200e3) * 2) / 2
 
     def start(self):
         if not self.sck:

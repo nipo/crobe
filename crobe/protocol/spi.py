@@ -141,7 +141,15 @@ class Operation(base.Operation):
 
 class Shift(Operation):
     def __init__(self, mosi, read_miso = True):
-        self.mosi = mosi if isinstance(mosi, int) else bytes(mosi)
+        if isinstance(mosi, bitstring.BitStringBase):
+            pass
+        elif isinstance(mosi, int):
+            pass
+        elif isinstance(mosi, bytes):
+            pass
+        else:
+            mosi = bytes(mosi)
+        self.mosi = mosi
         self.read_miso = read_miso
 
     # When executed
