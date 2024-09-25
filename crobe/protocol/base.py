@@ -56,6 +56,8 @@ class Interface(model.PortComponent, FreqCapper):
         super().option_set(opt)
 
     def start(self):
+        super().start()
+
         if self.__do_power is not None:
             self.power = self.__do_power
 
@@ -74,8 +76,6 @@ class Interface(model.PortComponent, FreqCapper):
         if self.__wait:
             self.logger.trace("Waiting for %f sec", self.__wait)
             time.sleep(self.__wait)
-
-        super().start()
         
     def reset(self, asserted):
         return self.execute([self.cmd_reset(asserted)])

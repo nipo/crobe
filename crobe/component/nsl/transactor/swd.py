@@ -34,7 +34,7 @@ class SwdTransactor(PortComponent):
             return 0
         if not freq:
             freq = 15e6
-        divisor = math.ceil(self.base_freq / float(freq)) - 1
+        divisor = math.ceil(self.base_freq / float(freq) / 2) - 1
         self.__divisor = max(0, min(divisor, 65535))
         self.__rate_dirty = True
         return self.base_freq / ((self.__divisor + 1) * 2)

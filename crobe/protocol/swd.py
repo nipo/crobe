@@ -103,6 +103,7 @@ class Interface(base.Interface):
             self.reset(True)
             time.sleep(.1)
             self.reset(False)
+            time.sleep(.1)
 
         idcode_read = self.cmd_read(False, self.IDCODE)
         ops = [self.cmd_wakeup(), self.cmd_wakeup(),
@@ -246,6 +247,8 @@ class Interface(base.Interface):
             self.current_target = None
         
     def start(self):
+        super().start()
+
         if self.do_multidrop_enumeration:
             return self.multidrop_enumerate()
         
@@ -278,7 +281,6 @@ class Interface(base.Interface):
             self.child_add(self.db.call(partid, self))
         except NoMatch as e:
             raise UnknownDp(partid) from e
-        base.Interface.start(self)
         
     def _execute(self, operation_list):
         """
