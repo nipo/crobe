@@ -76,7 +76,10 @@ class ArmMPuppet(Puppet):
         hc = self.cpu.halt_cause
         if st == self.cpu.State.SLEEP:
             self.logger.trace("CPU is sleeping, halting it first")
-            self.cpu.halt()
+            try:
+                self.cpu.halt()
+            except RuntimeError:
+                self.cpu.reset(block_after_reset = True)
         st = self.cpu.state
         self.logger.trace("Starting CPU, current state: %s, halt cause %s", st, hc)
         self.cpu.resume(allow_interrupts = False)
