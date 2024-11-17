@@ -165,3 +165,34 @@ def vcd_server(root, port):
     except NotImplementedError:
         pass
     XvcdServer(port, intf).serve()
+
+@xilinx.command(help = "Dump Series 7 bitstream")
+@click.argument("program", type = base.PROGRAM)
+def s7_dump(program):
+    from ..component.xilinx.bitstream import Bitstream
+
+    bs = Bitstream.from_loadable(program)
+    for packet in bs.packets:
+        print(packet)
+
+@xilinx.command(help = "Change Series 7 bitstream target IDCODE")
+@click.argument("source", type = base.PROGRAM)
+@click.argument("idcode", type = base.HEX)
+@click.argument("destination", type = click.File('wb'))
+def s7_idcode_change(source, idcode, destination):
+    from ..component.xilinx.bitstream import Bitstream
+
+    bs = Bitstream.from_loadable(source)
+
+    from ..protocol.jtag import Chain
+    from ..part_id import PartId
+    part_id = PartId.from_idcode(idcode).drop_revision()
+    tap = Chain.db.call(part_id, None, part_id)
+
+    new_bs = bs.with_idcode(int(part_id))
+    name = tap.name.lower()
+    if name.startswith("xc"):
+        name = name[2:]
+    new_bs.header_info["device"] = name
+    
+    destination.write(new_bs.to_bit())
