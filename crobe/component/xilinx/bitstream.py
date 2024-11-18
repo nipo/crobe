@@ -334,7 +334,7 @@ class Bitstream:
         parts = dict(
             a = project,
             b = device,
-            c = build_date.date().strftime("%Y/%m%/%d"),
+            c = build_date.date().strftime("%Y/%m/%d"),
             d = build_date.time().strftime("%H:%M:%S"),
             )
 
