@@ -86,6 +86,26 @@ class Crc:
         if not self.order0_at_lsb:
             p = swib(self.poly, self.order+1)
         return p in _all_primes
+
+    @property
+    def is_pre_zero_transparent(self):
+        return ((self.init == 0 and not self.complement_state)
+                or (self.init == self.mask and self.complement_state)) \
+                and not self.complement_input
+
+    @property
+    def is_pre_ff_transparent(self):
+        return ((self.init == 0 and not self.complement_state)
+                or (self.init == self.mask and self.complement_state)) \
+                and self.complement_input
+
+    @property
+    def is_post_zero_transparent(self):
+        return self.check_state == 0 and not self.complement_input
+
+    @property
+    def is_post_ff_transparent(self):
+        return self.check_state == self.mask and self.complement_input
     
     @property
     @cache

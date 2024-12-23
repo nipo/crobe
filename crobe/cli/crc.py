@@ -358,15 +358,13 @@ def print_alg_info(alg, fd = sys.stdout):
         print(f"- Trinomial", file = fd)
     if alg.is_prime:
         print(f"- Prime", file = fd)
-    if (alg.init == 0 and not alg.complement_state) \
-       or (alg.init == alg.mask and alg.complement_state):
-        if alg.complement_input:
-            print("- Transparent to pre-image 0xff-padding", file = fd)
-        else:
-            print("- Transparent to pre-image zero-padding", file = fd)
-    if alg.check_state == 0 and not alg.complement_input:
+    if alg.is_pre_ff_transparent:
+        print("- Transparent to pre-image 0xff-padding", file = fd)
+    if alg.is_pre_zero_transparent:
+        print("- Transparent to pre-image zero-padding", file = fd)
+    if alg.is_post_zero_transparent:
         print("- Transparent to post-image zero-padding", file = fd)
-    if alg.check_state == alg.mask and alg.complement_input:
+    if alg.is_post_ff_transparent:
         print("- Transparent to post-image 0xff-padding", file = fd)
     if alg.has_valid_state:
         print(f"- CRC state after blob with valid CRC: {alg.check_state:#x}", file = fd)
