@@ -17,22 +17,24 @@ class SocketPipe(pipe.BackgroundInterface):
         return 100e6
 
     def _write(self, data, timeout = None):
-        self.logger.protocol("< %s", data.hex())
+        self.logger.protocol("S< %s", data.hex())
         self.socket.settimeout(timeout)
         self.socket.send(data)
+        return len(data)
 
     def _read(self, size, timeout = None):
         self.logger.protocol("> expect %s...", size)
-        self.socket.settimeout(timeout)
+        self.socket.settimeout(timeout or 5)
         data = b''
         while size is None or len(data) < size:
-            rsize = 1024
             if size:
-                size - len(data)
+                rsize = size - len(data)
+            else:
+                rsize = 1024
             chunk = self.socket.recv(rsize)
             if len(chunk) == 0:
                 raise SocketClosed()
-            self.logger.protocol("> %s", chunk.hex())
+            self.logger.protocol("S> %s", chunk.hex())
             data += chunk
             if size is None:
                 break
@@ -50,12 +52,20 @@ class SocketSession(model.Component):
         self.sock = socket
         self.buffer = b''
 
+    def serve(self):
+        ...
+
     def refill(self, count = 1):
         while len(self.buffer) < count:
-            self.wait_more()
+            self.wait_more(count - len(self.buffer))
 
-    def wait_more(self):
-        d = self.sock.recv(1024)
+    def wait_more(self, count = 1024):
+        d = None
+        while not d:
+            try:
+                d = self.sock.read(count)
+            except TimeoutError:
+                continue
         if not d:
             raise SocketClosed()
         self.logger.protocol("> %s", d.hex())
@@ -68,16 +78,20 @@ class SocketSession(model.Component):
         return blob
 
     def write(self, data):
+        tw = 0
         while data:
+            written = 0
             try:
                 self.logger.protocol("< todo %s", data.hex())
-                written = self.sock.send(data)
+                written = self.sock.write(data)
             except Exception:
                 raise SocketClosed()
             if written:
                 self.logger.protocol("< %s", data[:written].hex())
+            tw += written or 0
             data = data[written:]
-        self.sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+#        self.sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+        return tw
 
 class SessionThread(threading.Thread):
     def __init__(self, root):

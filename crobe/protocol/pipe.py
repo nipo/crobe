@@ -34,6 +34,7 @@ class Interface(base.Interface):
         """
         op = self.cmd_write(data)
         self.execute([op], timeout)
+        return len(data)
 
     def write_read(self, data, size, timeout = None):
         """
@@ -110,6 +111,7 @@ class BackgroundWriter(threading.Thread):
         with self.cond:
             self.queue.append((data, timeout))
             self.cond.notify_all()
+        return len(data)
 
     def flush(self):
         with self.cond:
