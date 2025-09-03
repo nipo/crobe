@@ -24,4 +24,5 @@ class Enumerator(basic.AdapterEnumerator):
     def filter(self, adapter):
         return adapter.device.model in [
             "Sipeed-Debug",
+            "USB Debugger",
         ]

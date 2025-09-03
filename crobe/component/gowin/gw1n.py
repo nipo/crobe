@@ -21,6 +21,8 @@ parts = {
     0x9002: "GW1N-1",
     0x9003: "GW1N-1S",
     0x1206: "GW1-1P5/2[B]",
+    0x0016: "GW5A[R]T-15",
+    0x0012: "GW5A[R]-25",
 }
 
 # Reference: UG290-2.3E
@@ -232,6 +234,44 @@ class Gw2a(GowinFpga):
             self.ISC_NOOP.cmd(),
             self.cmd_run(5),
             ])
+
+@jtag.Chain.db.register(*set([PartId(8, 0x0d, p) for (p,n) in parts.items() if n.startswith("GW5A")]))
+class Gw5a(GowinFpga):
+    max_freq = 30e6
+
+    class Status(bitfield.Bitfield):
+        all             = bitfield.Field(0, 32)
+        CRCError        = bitfield.BooleanField(0)
+        BadCommand      = bitfield.BooleanField(1)
+        IdError         = bitfield.BooleanField(2)
+        Timeout         = bitfield.BooleanField(3)
+        AutoBoot2ndFail = bitfield.BooleanField(4)
+        MemoryErase     = bitfield.BooleanField(5)
+        Preamble        = bitfield.BooleanField(6)
+        EditMode        = bitfield.BooleanField(7)
+        PrgmSpi         = bitfield.BooleanField(8)
+        AutoBoot1stFail = bitfield.BooleanField(9)
+        NjAcriveR       = bitfield.BooleanField(10)
+        CmdBypassState  = bitfield.BooleanField(11)
+        I2cSramF        = bitfield.BooleanField(12)
+        DoneFinal       = bitfield.BooleanField(13)
+        SecurityFinal   = bitfield.BooleanField(14)
+        Encrypted       = bitfield.BooleanField(15)
+        KeyOk           = bitfield.BooleanField(16)
+        SspiMode        = bitfield.BooleanField(17)
+        SerCrcDone      = bitfield.BooleanField(18)
+        SerCrcErr       = bitfield.BooleanField(19)
+        SerCrcCorr      = bitfield.BooleanField(20)
+        SerEccUncorr    = bitfield.BooleanField(21)
+        SerRunning      = bitfield.BooleanField(22)
+        CpuBusWidth     = bitfield.MappingField(23, 2, ["None", "8-bit", "16-bit", "32-bit"])
+        SyncDetRetry    = bitfield.MappingField(25, 2, ["No retry", "Once", "Twice", "No Sync"])
+        DecompFail      = bitfield.BooleanField(27)
+        MfgDone         = bitfield.BooleanField(28)
+        InitR           = bitfield.BooleanField(29)
+        Wakeup          = bitfield.BooleanField(30)
+        AutoErase       = bitfield.BooleanField(31)
+    STATUS_REGISTER = jtag.Dr(32, type = Status)
 
 @GowinFpga.application_db.register("spi")
 def spi_interface(tap):
