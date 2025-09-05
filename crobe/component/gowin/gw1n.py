@@ -25,6 +25,59 @@ parts = {
     0x0012: "GW5A[R]-25",
 }
 
+# BYPASS 0
+# DEFAULT 255
+# ERASE_DONE 9
+# EXTEST_INST 4
+# E_PROGRAM_EFUSE 36
+# E_PROGRAM_KEY 33
+# E_PROGRAM_KEY2 41
+# E_PROGRAM_KEY_SECUIRITY 35
+# E_PROGRAM_MFG_DATA 34
+# E_READ_KEY 37
+# E_READ_MFG_DATA 38
+# E_READ_STATE 39
+# FAST_PROGRAM 23
+# FTDI <class 'instructions.FTDI'>
+# INIT_ADDRESS 18
+# INTEST_INST 1
+# ISC_ADDR_SFHIT 15
+# ISC_DISABLE 58
+# ISC_ENABLE 21
+# ISC_ERASE 5
+# ISC_NOOP 2
+# ISC_PROGRAM_DONE 8
+# ISC_READ 3
+# JTAG <class 'instructions.JTAG'>
+# JTAG_EF_2ND_DISABLE 121
+# JTAG_EF_2ND_ENABLE 120
+# JTAG_EF_ERASE 117
+# JTAG_EF_INFO_PROGRAM 112
+# JTAG_EF_INFO_READ 118
+# JTAG_EF_PROGRAM 113
+# JTAG_EF_READ 115
+# JTAG_EF_RST_MASS_ERASE_HL 119
+# JTAG_IP_WRITE_CYCLE 119
+# JTAG_IP_WRITE_ONLY 136
+# JTAG_IP_WRITE_READ 102
+# JTAG_MCU_SEL 122
+# JTAG_MFG_INST 128
+# JTAG_PROGRAM_SPI_FLASH 22
+# PROGRAM_INC_RTL 59
+# READ_CONTROL_REGISTER 80
+# READ_EBR 70
+# READ_ID_CODE 17
+# READ_STATUS_REGISTER 65
+# READ_USER_CODE 19
+# REPROGRAM 60
+# SCAN_2_SPI 61
+# SSPI <class 'instructions.SSPI'>
+# WRITE_ADDR 24
+# WRITE_CONTROL_REGISTER 16
+
+
+
+
 # Reference: UG290-2.3E
 # https://www.gowinsemi.com/upload/database_doc/1130/document/6020e45f5fe13.pdf
 class GowinFpga(jtag.Tap, JtagSramFpga):
@@ -254,7 +307,7 @@ class Gw5a(GowinFpga):
         NjAcriveR       = bitfield.BooleanField(10)
         CmdBypassState  = bitfield.BooleanField(11)
         I2cSramF        = bitfield.BooleanField(12)
-        DoneFinal       = bitfield.BooleanField(13)
+        Done            = bitfield.BooleanField(13)
         SecurityFinal   = bitfield.BooleanField(14)
         Encrypted       = bitfield.BooleanField(15)
         KeyOk           = bitfield.BooleanField(16)
