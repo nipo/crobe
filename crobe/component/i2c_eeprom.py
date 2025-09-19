@@ -35,7 +35,8 @@ class I2cMem(i2c.Slave, Bus):
             return b''
 
         read_by = min(self.page_size, size, 32)
-        assert addr + size <= self.size, (addr, size, self.size)
+        if self.size:
+            assert addr + size <= self.size, (addr, size, self.size)
 
         r = b''
         for off in range(addr, addr + size, read_by):
@@ -44,7 +45,8 @@ class I2cMem(i2c.Slave, Bus):
         return r[:size]
 
     def write(self, addr, data):
-        assert addr + len(data) <= self.size
+        if self.size:
+            assert addr + len(data) <= self.size
 
         if addr % self.page_size:
             size = -addr % self.page_size
@@ -70,8 +72,9 @@ class I2cMem(i2c.Slave, Bus):
         return ro.data
     
     def _write(self, addr, data):
-        assert 0 < len(data) <= self.page_size
-        assert addr // self.page_size == (addr + len(data) - 1) // self.page_size
+        if self.page_size:
+            assert 0 < len(data) <= self.page_size
+            assert addr // self.page_size == (addr + len(data) - 1) // self.page_size
 
         saddr, baddr = self._addr(addr)
         self.port.execute([self.port.cmd_write(saddr, baddr + data)])
