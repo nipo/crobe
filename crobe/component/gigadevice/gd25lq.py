@@ -1,6 +1,22 @@
 from ..spi_flash import SfdpFlash
 import binascii
 
+@SfdpFlash.db.register(0xc84016)
+class Gd25q(SfdpFlash):
+    write_buffer_size = 256
+    CMD_WRITE_STATUS = b'\x01'
+
+    def __init__(self, port, idr):
+        super().__init__(port, idr)
+        self.logger.note("Is GD25Q")
+
+    def start(self):
+        self.logger.note("Status: %02x %02x %02x" % (self.status,
+                                                     self.command(b'\x35', rsize = 1)[0],
+                                                     self.command(b'\x15', rsize = 1)[0],
+                                                     ))
+        super().start()
+
 @SfdpFlash.db.register(0xc86018)
 class Gd25lq(SfdpFlash):
     CMD_READ_UID = b"\x4b"
