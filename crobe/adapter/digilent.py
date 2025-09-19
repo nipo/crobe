@@ -161,6 +161,14 @@ class DigilentAdapter(basic.Adapter):
             else:
                 kwargs["oen_pin"] = pin
 
+        if interface_name == "spi":
+            pin, pol = self.mapping["cs_oe"]
+
+            if pol:
+                kwargs["cs_pin"] = pin
+            else:
+                kwargs["csn_pin"] = pin
+
         kwargs.update(self.mapping.get("reset", {}))
 
         return basic.Adapter.open(self, interface_name,
@@ -208,20 +216,29 @@ class Hs2Adapter(DigilentAdapter):
 
     mapping = dict(
         jtag_pins = {
-        tms_oe: 1,
-        tdi_oe: 1,
-        tck_oe: 1,
-        13: 0,
-        14: 0,
+            tms_oe: 1,
+            tdi_oe: 1,
+            tck_oe: 1,
+            13: 0,
+            14: 0,
+        },
+        spi_pins = {
+            tdi_oe: 1,
+            tck_oe: 1,
+            tms_oe: 1,
+            3: 0,
+            13: 0,
+            14: 0,
         },
         swd_pins = {
-        tms_oe: 0,
-        tdi_oe: 0,
-        tck_oe: 1,
-        13: 1,
-        14: 1,
+            tms_oe: 0,
+            tdi_oe: 0,
+            tck_oe: 1,
+            13: 1,
+            14: 1,
         },
         swdio_oe = (tms_oe, 1),
+        cs_oe = (tms_oe, 1),
         )
 
 @model.HwRoot.register
