@@ -3,6 +3,7 @@ from ...protocol import i2c
 from ...bitfield import *
 from ...util.pretty import metric
 import enum
+import time
 
 # 0x10 Primary Source and Shutdown Register
 # 0x11 VCO Band and Factory Reserved Bits
@@ -100,13 +101,6 @@ class XtalConfig(Bitfield):
     vreg = Field(4, 4)
     res = Field(0, 4)
 
-
-    power_sel = MappingField(16, 2, ["manual", "auto-non-revertive", "auto-revertive", "reserved"])
-    clk3_os = BooleanField(4)
-    clk4_os = BooleanField(3)
-    clk0_slew = BooleanField(2)
-    clk0_power = MappingField(0, 2, ["3.3v", "1.8v", "2.5v", "none"])
-
 class PllConfig(Bitfield):
     all = Field(0, 56)
     # 0x15
@@ -167,7 +161,7 @@ class DividerConfig(Bitfield):
     int_mode = BooleanField(113)
     en_fod = BooleanField(112)
     # 0x22 - 0x25
-    frac_div = Field(82, 30, signed = True)
+    frac_div = Field(82, 30, signed = False)
     ssce = BooleanField(81)
     # 0x26 - 0x28
     step = ByteSwapField(56, 24)
@@ -188,12 +182,12 @@ class DividerConfig(Bitfield):
 class OutputConfig(Bitfield):
     all = Field(0, 16)
     # 0x60
-    cfg = Field(13, 3)
-    power = Field(11, 2)
-    slew = Field(8, 2)
+    cfg = MappingField(13, 3, ["LVPECL", "CMOS", "HCSL33", "LVDS", "CMOS2", "CMOSD", "HCSL25", None])
+    power = MappingField(11, 2, ["1.8v", None, "2.5v", "3.3v"])
+    slew = MappingField(8, 2, ["0.8", "0.85", "0.9", "1.0"])
     # 0x61
     slew_diff = Field(2, 6)
-    amuxen2 = BooleanField(1)
+    amuxen2 = BooleanField(1, inverted = True)
     buf_en = BooleanField(0)
     
 class Versa6(i2c.Slave):
@@ -220,19 +214,26 @@ class Versa6(i2c.Slave):
         super().__init__(bus, "versa6", saddr)
 
     def reg_read(self, reg):
-        reg = int(reg)
-        addr = int(reg).to_bytes(1, "big")
+        for retry in range(3, -1, -1):
+            reg = int(reg)
+            addr = int(reg).to_bytes(1, "big")
 
-        reg_class = self.reg_map[reg]
-        reg_size = reg_class._width // 8
+            reg_class = self.reg_map[reg]
+            reg_size = reg_class._width // 8
 
-        rdata = self.write_read(addr, reg_size)
-        value = int.from_bytes(rdata, "big")
-        pretty = reg_class(all = value)
+            try:
+                rdata = self.write_read(addr, reg_size)
+            except i2c.AddressNack:
+                if retry:
+                    time.sleep(.01)
+                    continue
+                raise
+            value = int.from_bytes(rdata, "big")
+            pretty = reg_class(all = value)
 
-        self.logger.trace("Reg read %d %s: %s", reg, rdata.hex(), pretty)
+            self.logger.trace("Reg read %d %#06x: %s", reg, value, pretty)
 
-        return pretty
+            return pretty
 
     def reg_write(self, reg, value):
         reg = int(reg)
@@ -253,7 +254,7 @@ class Versa6(i2c.Slave):
             value = self.reg_read(no)
             self.logger.debug("[%d, %r]", no, value)
             
-    def state_dump(self, clkin = 1e6, xtalin = 1e6):
+    def state_dump(self, clkin = 1e6, xtal = 1e6):
         power = self.reg_read(0x10)
         vco = self.reg_read(0x11)
         xtal = self.reg_read(0x12)
@@ -289,19 +290,21 @@ class Versa6(i2c.Slave):
         for i in range(4):
             if divider[i].en_fod and not divider[i].selb_norm:
                 div = divider[i].int_div + divider[i].frac_div / 2 ** 24
+                freq = vco_freq / 2 / (div or 1)
+                fss = 0
+                ssamt = 0
+                print(divider[i])
+
                 if divider[i].ssce:
                     ssf = divider[i].step * divider[i].period / 2 ** 24
-                    div += ssf / 2
-                    freq = vco_freq / 2 / (div or 1)
-                    fss = freq / 2 / divider[i].period
-                    ssamt = ssf / div
+                    sdiv = div + ssf / 2
+                    avg_freq = vco_freq / 2 / (sdiv or 1)
+                    fss = avg_freq / 2 / divider[i].period
+                    ssamt = ssf / sdiv
+                    print(f"Output {i}, /2/{div}, {metric(freq, 'Hz')} fss={metric(fss, 'Hz')} +- {ssamt*100:2.2f}% -> {metric(avg_freq, 'Hz')} avg")
                 else:
-                    freq = vco_freq / 2 / (div or 1)
-                    fss = 0
-                    ssamt = 0
+                    print(f"Output {i}, /2/{div}, {metric(freq, 'Hz')}")
 
-                print(divider[i])
-                print(f"Output {i}, /2/{div}, {metric(freq, 'Hz')} fss={metric(fss, 'Hz')} +- {ssamt*100:2.2f}%")
                 continue
             if divider[i].selb_norm and divider[i].sel_ext:
                 print(f"Output {i}, same as {i-1}")

@@ -8,17 +8,21 @@ import time
 def pll():
     pass
 
-@pll.command(help = "Dump SI5351 config/status")
+@pll.command(help = "Dump config/status")
 @click.option('-r', '--root', type = base.ROOT)
-@click.option('-c', '--clkin', type = float, default = 0.)
-@click.option('-x', '--xtal', type = float, default = 0.)
-def si5351_dump(root, clkin, xtal):
-    root.state_dump(clkin = clkin * 1e6, xtal = xtal * 1e6)
-
-@pll.command(help = "Dump CDCM6208 config/status")
-@click.option('-r', '--root', type = base.ROOT)
-@click.option('-p', '--primary', type = float, default = 0.)
-@click.option('-s', '--secondary', type = float, default = 0.)
-def cdcm6208_dump(root, primary, secondary):
-    root.state_dump(pri = primary, sec = secondary)
+@click.option('-c', '--clkin', type = float, default = None)
+@click.option('-x', '--xtal', type = float, default = None)
+@click.option('-p', '--primary', type = float, default = None)
+@click.option('-s', '--secondary', type = float, default = None)
+def dump(root, clkin, xtal, primary, secondary):
+    args = {}
+    if clkin is not None:
+        args["clkin"] = clkin
+    if xtal is not None:
+        args["xtal"] = xtal
+    if primary is not None:
+        args["pri"] = primary
+    if secondary is not None:
+        args["sec"] = secondary
+    root.state_dump(**args)
 

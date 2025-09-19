@@ -18,17 +18,17 @@ class PllDiv(Bitfield):
 
 class InputConfig(Bitfield):
     all = Field(0, 16)
-    st1_sel_ref = BooleanField(12)
-    st1_lor_en = BooleanField(11)
-    st1_plllock_en = BooleanField(10)
-    st0_sel_ref = BooleanField(9)
-    st0_lor_en = BooleanField(8)
-    st0_plllock_en = BooleanField(7)
+    st1_ref = MappingField(12, 1, ["Primary", "Secondary"])
+    st1_present = BooleanField(11, inverted = True)
+    st1_locked = BooleanField(10, inverted = True)
+    st0_sel_ref = MappingField(9, 1, ["Primary", "Secondary"])
+    st0_present = BooleanField(8, inverted = True)
+    st0_locked = BooleanField(7, inverted = True)
     reset = BooleanField(6, inverted = True)
     sync = BooleanField(5, inverted = True)
     cal = BooleanField(4)
-    prescaler_b = MappingField(2, 2, [4, 5, 6, None])
-    prescaler_a = MappingField(0, 2, [4, 5, 6, None])
+    b_prescaler = MappingField(2, 2, [4, 5, 6, None])
+    a_prescaler = MappingField(0, 2, [4, 5, 6, None])
 
 class PowerConfig(Bitfield):
     all = Field(0, 16)
@@ -82,14 +82,14 @@ class Out67Config(Bitfield):
 
 class Status(Bitfield):
     all = Field(0, 16)
-    pll_lock = BooleanField(2, inverted = True)
-    ref_loss = BooleanField(1)
+    locked = BooleanField(2, inverted = True)
+    present = BooleanField(1, inverted = True)
     ref = MappingField(0, 1, ["Primary", "Secondary"])
 
 class Version(Bitfield):
     all = Field(0, 16)
-    vco_version = Field(3, 3)
-    die_revision = Field(0, 3)
+    vco_version = MappingField(3, 3, ["CDCM6208V1", "CDCM6208V2"])
+    die_revision = MappingField(0, 3, ["Proto0", "Proto1", "Production"])
 
 class Cdcm6208(i2c.Slave):
     reg_map = {
@@ -143,6 +143,34 @@ class Cdcm6208(i2c.Slave):
         for no, klass in self.reg_map.items():
             value = self.reg_read(no)
             self.logger.debug("[%d, %r]", no, value)
+
+    def fa_get(self, pri = 1e6, sec = 1e6):
+        status = self.reg_read(21)
+        reg1 = self.reg_read(1)
+        reg3 = self.reg_read(3)
+        reg4 = self.reg_read(4)
+
+        fpri = (pri / reg4.pri_div) if reg4.pri_en else 0
+        fsec = sec if reg4.sec_en else 0
+        fref = (fpri if reg4.ref == 'Primary' else fsec) / reg1.pll_refdiv
+        fvco = fref * reg1.pll_fbdiv0 * reg1.pll_fbdiv1 * reg3.a_prescaler
+        if reg3.a_prescaler is None:
+            return None
+        return fvco / reg3.a_prescaler
+
+    def fb_get(self, pri = 1e6, sec = 1e6):
+        status = self.reg_read(21)
+        reg1 = self.reg_read(1)
+        reg3 = self.reg_read(3)
+        reg4 = self.reg_read(4)
+
+        fpri = (pri / reg4.pri_div) if reg4.pri_en else 0
+        fsec = sec if reg4.sec_en else 0
+        fref = (fpri if reg4.ref == 'Primary' else fsec) / reg1.pll_refdiv
+        fvco = fref * reg1.pll_fbdiv0 * reg1.pll_fbdiv1 * reg3.a_prescaler
+        if reg3.b_prescaler is None:
+            return None
+        return fvco / reg3.b_prescaler
             
     def state_dump(self, pri = 1e6, sec = 1e6):
         status = self.reg_read(21)
@@ -159,16 +187,16 @@ class Cdcm6208(i2c.Slave):
         fpri = (pri / reg4.pri_div) if reg4.pri_en else 0
         fsec = sec if reg4.sec_en else 0
         fref = (fpri if reg4.ref == 'Primary' else fsec) / reg1.pll_refdiv
-        fvco = fref * reg1.pll_fbdiv0 * reg1.pll_fbdiv1 * reg3.prescaler_a
-        fa = fvco / reg3.prescaler_a
-        fb = fvco / reg3.prescaler_b
+        fvco = fref * reg1.pll_fbdiv0 * reg1.pll_fbdiv1 * reg3.a_prescaler
+        fa = fvco / reg3.a_prescaler
+        fb = fvco / reg3.b_prescaler
         f0 = fa / out01.outdiv
         f1 = fa / out01.outdiv
         f2 = fb / out23.outdiv
         f3 = fb / out23.outdiv
 
         if out4.outmux == "A":
-            prediv4 = out4.pre_div
+            prediv4 = out4.pre_div if out4.en_fracdiv else 1
             div4 = (out4.outdiv + ((out4.fracdiv * 2**-20) if out4.en_fracdiv else 0))
             f4 = fa / prediv4 / div4
         elif out4.outmux == "Primary":
@@ -181,7 +209,7 @@ class Cdcm6208(i2c.Slave):
             f4 = fsec
 
         if out5.outmux == "A":
-            prediv5 = out5.pre_div
+            prediv5 = out5.pre_div if out5.en_fracdiv else 1
             div5 = (out5.outdiv + ((out5.fracdiv * 2**-20) if out5.en_fracdiv else 0))
             f5 = fa / prediv5 / div5
         elif out5.outmux == "Primary":
@@ -201,15 +229,14 @@ class Cdcm6208(i2c.Slave):
         div7 = (out7.outdiv + ((out7.fracdiv * 2**-20) if out7.en_fracdiv else 0))
         f7 = (fa if out7.sel_drv == "A" else fb) / prediv7 / div7
 
-        print(f"PLL {'locked' if status.pll_lock else 'unlocked'}, reference: {status.ref} ({'lost' if status.ref_loss else 'ok'})")
-        print(f"Input frequencies: Primary={metric(pri, 'Hz')}, Secondary={metric(sec, 'Hz')}")
-        print(f"Primary: {'On' if reg4.pri_en else 'Off'}, {reg4.pri_selbuf} {reg4.pri_supply}V, div={reg4.pri_div}")
-        print(f"Secondary: {'On' if reg4.sec_en else 'Off'}, {reg4.sec_selbuf} {reg4.sec_supply}V")
-        print(f"Comparator input: {reg4.ref}, div={reg1.pll_refdiv}, freq={metric(fref, 'Hz')}")
-        print(f"Feedback divisor: {reg1.pll_fbdiv0}*{reg1.pll_fbdiv1}")
+        print(f"Primary: {metric(pri, 'Hz')}, {'On' if reg4.pri_en else 'Off'}, {reg4.pri_selbuf} {reg4.pri_supply}V, div={reg4.pri_div}")
+        print(f"Secondary: {metric(sec, 'Hz')}, {'On' if reg4.sec_en else 'Off'}, {reg4.sec_selbuf} {reg4.sec_supply}V")
+        print(f"Reference input: {reg4.ref}, div={reg1.pll_refdiv}, freq={metric(fref, 'Hz')}")
+        print(f"Feedback input: VCO / ({reg1.pll_fbdiv0}*{reg1.pll_fbdiv1})")
+        print(f"PLL {'locked' if status.locked else 'unlocked'}, reference: {status.ref}")
         print(f"VCO output: {metric(fvco, 'Hz')}")
-        print(f"Tree A: div={reg3.prescaler_a}, freq={metric(fa, 'Hz')}")
-        print(f"Tree B: div={reg3.prescaler_b}, freq={metric(fb, 'Hz')}")
+        print(f"Tree A: div={reg3.a_prescaler}, freq={metric(fa, 'Hz')}")
+        print(f"Tree B: div={reg3.b_prescaler}, freq={metric(fb, 'Hz')}")
         print(f"Output0: {out01.en0}, {out01.sel_drv0} {out01.supply_ch}V, A/{out01.outdiv}={metric(f0, 'Hz')}")
         print(f"Output1: {out01.en1}, {out01.sel_drv1} {out01.supply_ch}V, A/{out01.outdiv}={metric(f1, 'Hz')}")
         print(f"Output2: {out23.en0}, {out23.sel_drv0} {out23.supply_ch}V, B/{out23.outdiv}={metric(f2, 'Hz')}")
@@ -236,16 +263,16 @@ class Cdcm6208(i2c.Slave):
         fpri = (pri / reg4.pri_div) if reg4.pri_en else 0
         fsec = sec if reg4.sec_en else 0
         fref = (fpri if reg4.ref == 'Primary' else fsec) / reg1.pll_refdiv
-        fvco = fref * reg1.pll_fbdiv0 * reg1.pll_fbdiv1 * reg3.prescaler_a
-        fa = fvco / reg3.prescaler_a
-        fb = fvco / reg3.prescaler_b
+        fvco = fref * reg1.pll_fbdiv0 * reg1.pll_fbdiv1 * reg3.a_prescaler
+        fa = fvco / reg3.a_prescaler
+        fb = fvco / reg3.b_prescaler
         f[0] = fa / out01.outdiv
         f[1] = fa / out01.outdiv
         f[2] = fb / out23.outdiv
         f[3] = fb / out23.outdiv
 
         if out4.outmux == "A":
-            prediv4 = out4.pre_div
+            prediv4 = out4.pre_div if out4.en_fracdiv else 1
             div4 = (out4.outdiv + ((out4.fracdiv * 2**-20) if out4.en_fracdiv else 0))
             f[4] = fa / prediv4 / div4
         elif out4.outmux == "Primary":
@@ -258,7 +285,7 @@ class Cdcm6208(i2c.Slave):
             f[4] = fsec
 
         if out5.outmux == "A":
-            prediv5 = out5.pre_div
+            prediv5 = out5.pre_div if out5.en_fracdiv else 1
             div5 = (out5.outdiv + ((out5.fracdiv * 2**-20) if out5.en_fracdiv else 0))
             f[5] = fa / prediv5 / div5
         elif out5.outmux == "Primary":
