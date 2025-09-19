@@ -1,5 +1,6 @@
 from .... import model
 from .model import MemoryMappedComponent
+from ....db import Db, NoMatch
 
 class FailedComponent(model.Bus32Component):
     def __init__(self, bus, base):
@@ -7,6 +8,8 @@ class FailedComponent(model.Bus32Component):
 
 @MemoryMappedComponent.class_db.register(0x1)
 class RomTable(MemoryMappedComponent):
+    soc_db = Db("Owner/PartID DB")
+    
     def __init__(self, bus, base, name = "RomTable"):
         MemoryMappedComponent.__init__(self, bus, base, name)
         if self.component_class != 0x1:
@@ -26,10 +29,14 @@ class RomTable(MemoryMappedComponent):
                 continue
 
             address_offset = e & ~0x3ff
+            address = (self.base + address_offset) & 0xffffffff
             try:
-                c = MemoryMappedComponent(self.bus, (self.base + address_offset) & 0xffffffff).cast()
-            except:
-                c = FailedComponent(self.bus, (self.base + address_offset) & 0xffffffff)
+                c = self.soc_db.call((self.partid.drop_revision(), address), self.bus, address)
+            except NoMatch:
+                try:
+                    c = MemoryMappedComponent(self.bus, address).cast()
+                except:
+                    c = FailedComponent(self.bus, address)
             self.logger.debug("Entry at %03x: %s", addr, c)
             self.child_add(c)
 

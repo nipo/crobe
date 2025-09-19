@@ -13,8 +13,8 @@ class MemoryMappedComponent(model.Bus32Component):
     PID0 = 0xfe0
     CID = 0xff0
 
-    class_db = Db("Coresight class")
-    db = Db("Coresight part")
+    class_db = Db("Component Class DB")
+    db = Db("Component PartID DB")
 
     def __init__(self, bus, base, name = None):
         model.Bus32Component.__init__(self, bus, base & ~0x3ff,

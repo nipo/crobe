@@ -1,4 +1,5 @@
 from .model import MemoryMappedComponent
+from .rom_table import RomTable
 from .. import dp
 from ...model import Cpu
 from .. import cpuid
@@ -11,6 +12,9 @@ import time
     PartId(4, 0x3b, 0x00c), # m4
     PartId(4, 0x3b, 0x2a04), # v8 Devarch
     )
+@RomTable.soc_db.register(
+    (PartId(4, 0x3b, 0x470), 0xe000e000,), # Cortex-M1 default ID
+)
 class Scs(MemoryMappedComponent):
     def __init__(self, ap, base):
         MemoryMappedComponent.__init__(self, ap, base, "SCS")

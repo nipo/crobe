@@ -1,4 +1,5 @@
 from .model import MemoryMappedComponent
+from .rom_table import RomTable
 from ....part_id import PartId
 
 @MemoryMappedComponent.db.register(
@@ -7,6 +8,9 @@ from ....part_id import PartId
     PartId(4, 0x3b, 0x00e), # m7
     PartId(4, 0x3b, 0x1a03), # v8 Devarch
     )
+@RomTable.soc_db.register(
+    (PartId(4, 0x3b, 0x470), 0xe0002000,), # Cortex-M1 default ID
+)
 class Fpb(MemoryMappedComponent):
     CTRL = 0x000
     REMAP = 0x004
@@ -19,7 +23,7 @@ class Fpb(MemoryMappedComponent):
         self.lit_count = (ctrl >> 8) & 0xf
         self.code_count = ((ctrl >> 4) & 0xf) | ((ctrl >> 12) & 0x3)
 
-        self.logger.note("%d litteral, %d code", self.lit_count, self.code_count)
+        self.logger.note("%d literal, %d code", self.lit_count, self.code_count)
 
     def enable(self, enable = True):
         self.reg_write(self.CTRL, 0x3 if enable else 0)

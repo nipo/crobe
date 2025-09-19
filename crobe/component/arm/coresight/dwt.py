@@ -1,4 +1,5 @@
 from .model import MemoryMappedComponent
+from .rom_table import RomTable
 from ....part_id import PartId
 
 @MemoryMappedComponent.db.register(
@@ -6,6 +7,9 @@ from ....part_id import PartId
     PartId(4, 0x3b, 0x00a), # m0
     PartId(4, 0x3b, 0x1a02), # v8 Devarch
     )
+@RomTable.soc_db.register(
+    (PartId(4, 0x3b, 0x470), 0xe0001000,), # Cortex-M1 default ID
+)
 class Dwt(MemoryMappedComponent):
     CTRL = 0
     CTRL_CYCCNTENA          = 1 << 0
