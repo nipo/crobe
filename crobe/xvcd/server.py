@@ -109,15 +109,17 @@ class XvcdSession(SocketSession):
         self.jtag = JtagHandler(interface)
 
     def serve(self):
-        self.refill(8)
+        self.logger.info("Refill")
+        self.refill(6)
 
+        self.logger.info("buffer: %s", self.buffer)
         if self.buffer.startswith(b"shift:"):
             self.read(6)
             self.handle_shift()
-        elif self.buffer.startswith(b"getinfo:"):
+        elif self.buffer.startswith(b"getinf"):
             self.read(8)
             self.handle_getinfo()
-        elif self.buffer.startswith(b"settck:"):
+        elif self.buffer.startswith(b"settck"):
             self.read(7)
             self.handle_settck()
         else:
