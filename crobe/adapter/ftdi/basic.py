@@ -1049,12 +1049,17 @@ class ChipconInterface(BaseInterface, chipcon.Interface):
         self.handle.mpsse_execute(self.cmd_activity(False))
 
 class SpiInterface(EngineInterface, spi.Interface):
-    def __init__(self, adapter, csn_pin = None, name = None, **args):
+    def __init__(self, adapter, csn_pin = None, cs_pin = None, name = None, **args):
         EngineInterface.__init__(self, adapter, **args)
         spi.Interface.__init__(self, adapter, name)
         self.freq_cap("hardware", adapter.freq_max)
 
-        self.__cs = PinControl(self, n_pin = csn_pin)
+        if csn_pin is not None:
+            self.__cs = PinControl(self, n_pin = csn_pin)
+        elif cs_pin is not None:
+            self.__cs = PinControl(self, pin = cs_pin)
+        else:
+            self.__cs = None
         self.__sck = PinControl(self, pin = 0)
         self.child_add(spi.Target(self, "cs0", 0))
 
@@ -1177,8 +1182,8 @@ class MpsseBitbangInterface(EngineInterface, bitbang.Interface):
                 mask = 0
                 value = 0
                 oe = 0
-                for iop in op.ops:
-                    io = self._ios[iop.io]
+                for name, iop in op.mod_map.items():
+                    io = self._ios[name]
 
                     if iop.mode is not None:
                         io.mode = iop.mode
@@ -1249,8 +1254,8 @@ class BitbangInterface(BaseInterface, bitbang.Interface):
                 mask = 0
                 value = 0
                 oe = 0
-                for iop in op.ops:
-                    io = self._ios[iop.io]
+                for name, iop in op.mod_map.items():
+                    io = self._ios[name]
 
                     if iop.mode is not None:
                         io.mode = iop.mode
