@@ -49,6 +49,7 @@ class JtagTransactor(PortComponent):
         return self.base_freq / ((self.__divisor + 1) * 2)
         
     def execute(self, operation_list):
+        self.logger.trace("Run %s", operation_list)
         ops = deque(operation_list)
         max_size = 1024
         pending = deque()
@@ -165,6 +166,7 @@ class JtagTransactor(PortComponent):
                 rsp_size += op_rsp_size
 
             assert cmd_size
+            self.logger.protocol("Cmd < %s", cmd[:cmd_size].hex())
             try:
                 if isinstance(self.port, datagram.Interface):
                     in_blob = self.port.send_receive(cmd[:cmd_size])
@@ -180,6 +182,7 @@ class JtagTransactor(PortComponent):
                 print(cmd[:cmd_size])
                 print(rsp_size)
                 raise
+            self.logger.protocol("Rsp > %s", in_blob.hex())
 
             for op, offset, bit_count in tdo_gather:
                 op.tdo += BitString(in_blob[offset : offset + ((bit_count + 7) // 8)], bit_count)
