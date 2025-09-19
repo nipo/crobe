@@ -1,6 +1,6 @@
 from .. import model
 from ..ftdi import basic
-from ...loadable.object import Program
+from ...loadable.xilinx import XilinxBitstream
 from ...protocol import base
 import logging
 
@@ -38,7 +38,7 @@ class ProbyAdapter(basic.Adapter):
         fw_name = "fw/" + mode + ".bit.gz"
         fd = resource_filename(__name__, fw_name)
 
-        obj = Program.from_xilinx_bit(fd)
+        obj = XilinxBitstream(fd)
                  
         self.logger.trace("Using internal chain of Proby, starting discovery")
 
