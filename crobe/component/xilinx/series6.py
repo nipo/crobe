@@ -105,6 +105,8 @@ class Series6(Series67):
         
         if "device" in program.info:
             target = program.info["device"].lower()
+            if target.startswith("xa6s"):
+                target = target[2:]
             part_name = self.PART_NAMES.get(self.name, self.name)
 
             if not target.startswith(part_name):
