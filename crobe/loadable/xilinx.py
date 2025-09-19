@@ -12,7 +12,9 @@ class XilinxBitstream(model.Program):
     def __init__(self, filename, offset = 0):
         super().__init__(filename)
 
-        if filename.endswith(".bit.gz"):
+        if hasattr(filename, "read"):
+            fd = filename
+        elif filename.endswith(".bit.gz"):
             import gzip
             fd = gzip.open(filename, 'rb')
         else:
