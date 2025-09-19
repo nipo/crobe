@@ -1010,14 +1010,18 @@ class TapDrShift(TapOperation):
         self.read_tdo = read_tdo
 
     def __str__(self):
+        if isinstance(self.tdo, (int, bytes)):
+            tdo = BitString(self.tdo, len(self.tdi or []))
+        else:
+            tdo = self.tdo
         if self.ir:
             return "<DrShift %s %s %s%s>" % (hex(self.ir) if isinstance(self.ir, int) else self.ir,
                                              self.tdi,
-                                             BitString(self.tdo, len(self.tdi or [])),
+                                             tdo,
                                              " rir" if self.read_ir else "")
         else:
             return "<DrShift - %s %s %s>" % (self.tdi,
-                                             BitString(self.tdo, len(self.tdi or [])),
+                                             tdo,
                                              " rir" if self.read_ir else "")
         
 class TapRun(TapOperation):
