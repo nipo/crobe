@@ -8,6 +8,8 @@ class W25x(SpiFlash):
     
     CMD_STATUS_WRITE_ENABLE = b'\x50'
     CMD_WRITE_STATUS = b'\x01'
+    CMD_WRITE_STATUS2 = b'\x31'
+    CMD_WRITE_STATUS3 = b'\x11'
     CMD_RESET_ENABLE = None
     CMD_RESET = None
     CMD_4KB_ERASE = b'\x20'
@@ -40,11 +42,17 @@ class W25x(SpiFlash):
         while self.status & self.STATUS_WIP:
             time.sleep(.01)
 
-    def unprotect(self):
-        self.command(self.CMD_STATUS_WRITE_ENABLE)
-        super().unprotect()
-        time.sleep(.02)
+    def status2_write(self, *values):
+        self.write_enable(True)
+        self.command(self.CMD_WRITE_STATUS2, arg = bytes(values), rsize = 0)
 
+    def unprotect(self):
+        self.status_write(0x00)
+        self.status2_write(0x00)
+
+    def protect(self):
+        self.status_write(0x18)
+        self.status2_write(0x00)
 
 @SpiFlash.db.register(0xef7015)
 @SpiFlash.db.register(0xef7016)
