@@ -108,7 +108,7 @@ class Component(object):
         """
         if isinstance(self.__parent, klass):
             return self.__parent
-        print(self.__parent)
+        #print(self.__parent)
         return self.__parent.parent_of_class(klass)
 
     def child_add(self, obj):
