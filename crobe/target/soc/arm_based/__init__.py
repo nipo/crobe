@@ -11,3 +11,4 @@ from . import zynq_ps
 from . import rp2040
 from . import rp2_picoboot
 from . import zup_ps
+from . import cortex_m1
