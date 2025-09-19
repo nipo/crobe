@@ -127,8 +127,8 @@ class TapBitbang(bitbang.Interface):
         for index, op in enumerate(ops):
             read = False
             if isinstance(op, bitbang.IoSet):
-                for iop in op.ops:
-                    io = self.by_name[iop.io]
+                for name, iop in op.mod_map.items():
+                    io = self.by_name[name]
                     io.set(mode = iop.mode, value = iop.value)
                     io.bs_scatter()
             elif isinstance(op, bitbang.IoGet):
