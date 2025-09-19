@@ -56,7 +56,7 @@ def peek(ctx, address, size):
     bus = ctx.obj["bus"]
     address = int(address, 16)
     size = int(size, 0)
-    click.echo("Bus: %s" % bus)
+    #click.echo("Bus: %s" % bus)
 
     data = bus.mem_read(address, size)
     click.echo(hex(address) + " " + str(binascii.b2a_hex(data), "ascii"))
