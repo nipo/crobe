@@ -1,5 +1,5 @@
 from .. import i2c
-from .bitbang import Mode, IoOpenDrain, IoPushPull, Interface
+from .bitbang import IoOpenDrain, IoPushPull, Interface
 
 @Interface.db.register("i2c")
 class I2cInterface(i2c.Interface):

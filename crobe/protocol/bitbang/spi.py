@@ -1,5 +1,5 @@
 from .. import spi
-from .bitbang import Mode, IoConfig, IoSet, IoGet, Interface
+from .bitbang import IoOpenDrain, IoPushPull, IoInput, Interface, IoGet
 
 @Interface.db.register("spi")
 class SpiInterface(spi.Interface):
@@ -11,6 +11,7 @@ class SpiInterface(spi.Interface):
         self.cs0 = None
         self.hi = []
         self.lo = []
+        self.__mode = 0
         self.child_add(spi.Target(self, "cs0", 0))
 
     def freq_update(self, freq):
@@ -20,20 +21,20 @@ class SpiInterface(spi.Interface):
         if not self.sck:
             raise ValueError("Should set sck at least")
 
-        for port in self.hi:
-            self.port.set(IoConfig(port, value = True, mode = Mode.D0D1))
-        for port in self.lo:
-            self.port.set(IoConfig(port, value = False, mode = Mode.D0D1))
+        inits = {port:IoPushPull(value = True) for port in self.hi}
+        inits.update({port:IoPushPull(value = False) for port in self.lo})
 
         if self.cs0:
-            self.port.set(IoConfig(self.cs0, value = True, mode = Mode.D0Z1))
+            inits.update({self.cs0:IoOpenDrain(value = True)})
         if self.mosi:
-            self.port.set(IoConfig(self.mosi, value = False, mode = Mode.D0D1))
+            inits.update({self.mosi:IoInput()})
         if self.miso:
-            self.port.set(IoConfig(self.miso, value = False, mode = Mode.Input))
+            inits.update({self.miso:IoInput()})
         if self.sck:
-            self.port.set(IoConfig(self.sck, value = False, mode = Mode.D0D1))
-        
+            inits.update({self.miso:IoPushPull(False)})
+
+        self.port.set(inits)
+            
     def option_set(self, opt):
         if opt.startswith("mosi="):
             self.mosi = opt[5:]
@@ -61,15 +62,26 @@ class SpiInterface(spi.Interface):
             mosi = (byte_value >> 7) & 1
             byte_value <<= 1
 
-            if self.mosi is not None:
-                ops.append(IoSet(IoConfig(self.mosi, value = mosi),
-                                 IoConfig(self.sck, value = False)))
-            else:
-                ops.append(IoSet(IoConfig(self.sck, value = False)))
+            if not self.__cpha:
+                update_edge = {self.sck: IoPushPull(value = self.__cpol)}
 
-            ops.append(IoSet(IoConfig(self.sck, value = True)))
-            if self.miso is not None:
-                ops.append(IoGet([self.miso]))
+                if self.mosi is not None:
+                    update_edge[self.mosi] = IoPushPull(value = mosi)
+
+                ops.append(self.port.cmd_set(update_edge))
+                ops.append(self.port.cmd_set({self.sck: IoPushPull(value = not self.__cpol)}))
+                if self.miso is not None and read:
+                    ops.append(self.port.cmd_get([self.miso]))
+            else:
+                update_edge = {self.sck: IoPushPull(value = not self.__cpol)}
+                if self.mosi is not None:
+                    update_edge[self.mosi] = IoPushPull(value = mosi)
+
+                ops.append(self.port.cmd_set(update_edge))
+                ops.append(self.port.cmd_set({self.sck: IoPushPull(value = self.__cpol)}))
+                if self.miso is not None and read:
+                    ops.append(self.port.cmd_get([self.miso]))
+
         return ops
 
     def _op_shift_gather(self, ops):
@@ -87,22 +99,31 @@ class SpiInterface(spi.Interface):
                     ret.append(tmp)
                     tmp = 0
         return bytes(ret)
-                
+
+    @property
+    def __cpol(self):
+        return bool(self.__mode & 2)
+
+    @property
+    def __cpha(self):
+        return bool(self.__mode & 1)
+    
     def _execute(self, operation_list):
         pending = []
         rx_map = {}
 
         for index, op in enumerate(operation_list):
             if isinstance(op, spi.Cs):
-                if self.cs0 is None:
-                    continue
+                self.__mode = op.mode
+                ios = {self.sck: IoPushPull(value = self.__cpol)}
+                if self.mosi is not None:
+                    ios[self.mosi] = IoInput() if op.value is None else IoPushPull(value = False)
+                    pending.append(self.port.cmd_set(ios))
+                if self.cs0 is not None:
+                    ios[self.cs0] = IoOpenDrain(value = not(op.value == 0))
+                pending += [self.port.cmd_set(ios)]*8
 
-                pending.append(IoSet(IoConfig(self.sck, value = False)))
-                pending.append(IoSet(IoConfig(self.cs0, value = op.value is None)))
-                pending.append(IoSet(IoConfig(self.sck, value = False)))
-                continue
-
-            if isinstance(op, spi.Shift):
+            elif isinstance(op, spi.Shift):
                 offset_pre = len(pending)
 
                 if isinstance(op.mosi, int):
