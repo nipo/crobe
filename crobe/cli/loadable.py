@@ -156,6 +156,93 @@ def to_c_blob(programs, within, bitswap, output, name, align, section, size, sta
 #endif
 """)
 
+@loadable.command(help = "VHDL blob file generator")
+@click.argument("programs", type = base.PROGRAM, nargs = -1)
+@click.option("--within", type = base.ADDRESS_RANGE, multiple = True)
+@click.option('-n', '--name', type = str, default = "blob", help = "Variable name")
+@click.option('-p', '--package-name', type = str, default = "pack", help = "Package name")
+@click.option('--hex-string', is_flag = True, default = False, help = "Emit a hex string constant")
+@click.option('--byte-string', is_flag = True, default = False, help = "Emit a nsl_data.bytestream.byte_string constant")
+@click.option('--slv-array', is_flag = True, default = False, help = "Emit std_logic_vector array constant")
+@click.option('-S', '--size', type = int, default = 8, help = "std_logic_vector array item width (bit count, must be multiple of 8)")
+@click.option('-e', '--endian', type = str, default = "little", help = "Multi-byte endianness")
+@click.argument("output", type = click.File("w"))
+def to_vhdl_blob(programs, within, name, package_name, hex_string, byte_string, slv_array, size, endian, output):
+    p = program_get(programs, within).simplified()
+    if len(p) > 1:
+        raise ValueError("Loadable has more than one segment")
+    data = p[0].data
+
+    if slv_array:
+        mode = "slv"
+    elif byte_string:
+        mode = "byte"
+    elif hex_string:
+        mode = "hex"
+    else:
+        raise ValueError("Unspecified output type")
+
+    if mode == "slv":
+        header = """\
+library ieee;
+use ieee.std_logic_1164.all;
+"""
+        pre_declaration = f"\n  type byte_array is array(integer range <>) of std_logic_vector({size}-1 downto 0);"
+        word_size = size // 8
+        data += b"\x00" * ((-len(data)) % word_size)
+        word_count = len(data) // word_size
+        datatype = f"byte_array(0 to {word_count-1})"
+        words = []
+        for addr in range(0, len(data), word_size):
+            words.append(("%x"%int.from_bytes(data[addr : addr + word_size])).rjust(2 * word_size, "0"))
+        init = "(\n"
+        for woff in range(0, len(words), 4):
+            init += "    "
+            for i, w in enumerate(words[woff:woff+4], start = woff):
+                init += f'x"{w}"'
+                if w != len(words) - 1:
+                    init += ", "
+            init += "\n"
+        init += "  )"
+    elif mode == "byte":
+        header = """\
+library nsl_data;
+use nsl_data.bytestream.all;
+"""
+        pre_declaration = ""
+        datatype = "byte_string"
+        init = 'from_hex(""\n'
+        for woff in range(0, len(data), 32):
+            init += f'    & "{data[woff:woff+32].hex()}"\n'
+        init += "  )"
+    elif mode == "hex":
+        header = ""
+        pre_declaration = ""
+        datatype = "string"
+        init = '""\n'
+        for woff in range(0, len(data), 32):
+            init += f'    & "{data[woff:woff+32].hex()}"\n'
+        init += "  )"
+
+    pre_info = ["", "Extracted from:", ""]
+    for l in programs:
+        pre_info.append("- " + ", ".join(l.sources))
+        l.pprint(lambda x: pre_info.append("  " + x))
+    pre_info = '\n-- '.join(pre_info)
+
+    output.write(f"""\
+{header}
+
+{pre_info}
+
+package {package_name} is
+
+{pre_declaration}
+  constant {name} : {datatype} := {init};
+
+end package {package_name};
+""")
+
 @loadable.command(help = "Do CRC of an image")
 @click.argument("programs", type = base.PROGRAM, nargs = -1)
 @click.option("--alg", type = str)
