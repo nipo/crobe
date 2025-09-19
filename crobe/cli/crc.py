@@ -26,7 +26,8 @@ def init_recover(data, alg):
 @click.argument("alg", type = str)
 @click.argument("data", type = str)
 @click.option("--init", type = base.HEX, default = None, help = "Initial CRC state (defaults to algorithm's default)", metavar = "HEX_VALUE")
-def calculate(data, alg, init):
+@click.option("-q", is_flag = True)
+def calculate(data, alg, init, q):
     """
     Calculate CRC of a small blob
     """
@@ -34,9 +35,12 @@ def calculate(data, alg, init):
     data = bytes.fromhex(data)
     state = crc_alg(init)
     state.update(data)
-    print(f"State: {state.state:#x}")
-    print(f"Output as integer: {int(state):#x}")
-    print(f"Output as bytes:   {bytes(state).hex()}")
+    if not q:
+        print(f"State: {state.state:#x}")
+        print(f"Output as integer: {int(state):#x}")
+        print(f"Output as bytes:   {bytes(state).hex()}")
+    else:
+        print(f"{bytes(state).hex()}")
 
 @crc.command()
 @click.argument("alg", type = str)
