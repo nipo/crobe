@@ -85,6 +85,7 @@ class GowinFpga(jtag.Tap, JtagSramFpga):
     BOUNDARY        = jtag.Dr(None)
     ISC_DEFAULT     = jtag.Dr(1)
     ISC_PDATA       = jtag.Dr(None)
+    USERCODE_REG    = jtag.Dr(32)
 
     BYPASS2              = jtag.Instruction(0x00, "BYPASS_REG")
 
@@ -106,7 +107,7 @@ class GowinFpga(jtag.Tap, JtagSramFpga):
     IDCODE               = jtag.Instruction(0x11, "DEVICE_ID")
     IDCODE_PRIV          = jtag.Instruction(0x19, "DEVICE_ID")
     ISC_PROGRAM_USERCODE = jtag.Instruction(0x0a, "DEVICE_ID")
-    USERCODE             = jtag.Instruction(0x13, "DEVICE_ID")
+    USERCODE             = jtag.Instruction(0x13, "USERCODE_REG")
 
     ISC_READ             = jtag.Instruction(0x03, "ISC_PDATA")
     ISC_PROGRAM          = jtag.Instruction(0x14, "ISC_PDATA")
@@ -150,6 +151,13 @@ class GowinFpga(jtag.Tap, JtagSramFpga):
         raise NotImplementedError()
 
     def load(self, program):
+        usercode = self.USERCODE.shift(read_tdo = True)
+        exp = int(program.info.get("UserCode", "0x0"), 16)
+        self.logger.info("Usercode %#010x, expected %#010x", usercode, exp)
+        status = self.status_read()
+        if status.Done and usercode and usercode == exp:
+            self.logger.info("Usercode already matches")
+            return status.Done
         self.sram_erase()
         data = program[0].data
         self.sram_configure(data)
