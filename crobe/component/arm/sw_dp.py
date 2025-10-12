@@ -17,11 +17,11 @@ class SwDp(dp.Dp):
     ABORT    = 0 # W
     RESEND   = 2 # R
 
-    max_freq = 15e6
+    max_freq = 30e6
 
     def __init__(self, port, name = "SWDP"):
         dp.Dp.__init__(self, name, port)
-        self.freq_cap("default", 30e6)
+        self.freq_cap("SWD", self.max_freq)
 
     def start(self):
         dp.Dp.start(self)
