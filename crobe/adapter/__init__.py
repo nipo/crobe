@@ -14,6 +14,7 @@ try:
     from . import efinix
     from . import busblaster
     from . import dc590
+    from . import trenz
 except RuntimeError:
     warnings.warn("FTDI-based adapters unavailable")
 
