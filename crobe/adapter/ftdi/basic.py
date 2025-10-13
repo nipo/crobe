@@ -12,11 +12,13 @@ class Adapter(model.Adapter):
     supported_interfaces = ["jtag"]
     freq_max = None
 
-    def __init__(self, enumerator, device):
+    def __init__(self, enumerator, device, ignore_sn = False):
         self.device = device
         self.enumerator = enumerator
-        self.serial_number = enumerator.serial_mangle(self.device.serial)
-        model.Adapter.__init__(self, "%s-%s" % (enumerator.short_name.lower(), self.serial_number or str(self.device.connection_id, 'ascii')[2:]))
+        self.serial_number = None
+        if not ignore_sn:
+            self.serial_number = enumerator.serial_mangle(self.device.serial)
+        model.Adapter.__init__(self, "%s-%s" % (enumerator.short_name.lower(), self.serial_number or str(self.device.connection_id, 'ascii')[2:].replace("/", "-")))
         self.nickname = self.name
 
     @property
@@ -457,24 +459,25 @@ class JtagInterface(EngineInterface, jtag.Interface):
                     self.__state = self.STATE_RTI
 
                 if self.__state == self.STATE_RTI:
-                    assert op.cycles > 0
+                    #assert op.cycles > 0
                     mpsse_ops.append(self.__cmd_rti1)
-                    left = op.cycles - 1
-                    while left >= 8:
-                        c = min(left, 65536 * 8)
-                        c = c & ~7
-                        if self.handle.can_pad:
-                            mpsse_ops.append(mpsse.ClockBits8(c // 8))
-                        else:
-                            mpsse_ops.append(mpsse.ShiftBits8(b'\x00' * (c // 8),
-                                                              read_pol = self.read_pol))
-                        left -= c
-                    if left:
-                        if self.handle.can_pad:
-                            mpsse_ops.append(mpsse.ClockBits(left))
-                        else:
-                            mpsse_ops.append(mpsse.ShiftBits(0, left,
-                                                              read_pol = self.read_pol))
+                    if op.cycles:
+                        left = op.cycles - 1
+                        while left >= 8:
+                            c = min(left, 65536 * 8)
+                            c = c & ~7
+                            if self.handle.can_pad:
+                                mpsse_ops.append(mpsse.ClockBits8(c // 8))
+                            else:
+                                mpsse_ops.append(mpsse.ShiftBits8(b'\x00' * (c // 8),
+                                                                  read_pol = self.read_pol))
+                            left -= c
+                        if left:
+                            if self.handle.can_pad:
+                                mpsse_ops.append(mpsse.ClockBits(left))
+                            else:
+                                mpsse_ops.append(mpsse.ShiftBits(0, left,
+                                                                  read_pol = self.read_pol))
                 else:
                     self.logger.warning("Running from unknown state, passing through TLR")
 

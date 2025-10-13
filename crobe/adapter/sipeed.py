@@ -6,6 +6,9 @@ __all__ = []
 class Adapter(basic.Adapter):
     supported_interfaces = ["jtag", "spi"]
 
+    def __init__(self, enumerator, device):
+        super().__init__(enumerator, device, ignore_sn = True)
+    
     def open(self, interface_name):
         if interface_name == "jtag":
             return basic.Adapter.open(self, interface_name,
