@@ -88,6 +88,7 @@ class Allocator:
         #print(f"Allocating {size:#x}")
         self.assert_complete()
         target = None
+        assert size
         
         for i, maybe in enumerate(self.__free):
             can_split = maybe.split_alloc(size, align)
@@ -110,7 +111,7 @@ class Allocator:
         #print(f"Target {target}")
             
         if not target:
-            self.dump()
+            #self.dump()
             raise ValueError("No space left", size)
 
         ret, (left, allocated, right) = target
