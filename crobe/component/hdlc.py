@@ -127,9 +127,10 @@ class Hdlc(datagram.Interface):
                 r = self.port.cmd_read(size = None)
                 pending.append(r)
 
-            timeout = deadline - time.time()
-            if timeout < .01:
-                timeout = .01
+            if timeout is not None:
+                timeout = deadline - time.time()
+                if timeout < .01:
+                    timeout = .01
             if first:
                 timeout = None
             first = False
@@ -182,7 +183,55 @@ class Hdlc(datagram.Interface):
     def child_spawn(self, crit):
         from ..db import NoMatch
         from ..model import BadInvocation
-        print(crit)
+        if not crit.startswith("addr"):
+            raise BadInvocation(crit)
+        try:
+            addr = int(crit[4:], 16)
+        except:
+            raise BadInvocation(crit)
+        return HdlcCircuit(self, addr)
+
+class HdlcHeader(datagram.Interface):
+    def __init__(self, port):
+        assert isinstance(port, datagram.Interface)
+        super().__init__(port, "hdlc")
+            
+    def execute(self, operation_list, timeout = None):
+        operation_list = list(operation_list)
+        pending = []
+        for op in operation_list:
+            if isinstance(op, datagram.Send):
+                if op.context:
+                    header = bytes([op.context.address, op.context.command])
+                    no = self.port.cmd_send(header + op.data)
+                else:
+                    no = self.port.cmd_send(op.data)
+                pending.append(no)
+            elif isinstance(op, datagram.Receive):
+                no = self.cmd_receive()
+                pending.append(no)
+                no.__be = op
+            else:
+                self.logger.warning("Ingoring operation %s", op)
+                
+        self.port.execute(pending, timeout = timeout)
+
+        for no in pending:
+            if not isinstance(no, datagram.Receive):
+                continue
+
+            op = no.__be
+            del no.__be
+
+            data = no.data
+            context = Context(data[0], data[1])
+            data = data[2:]
+
+            op.receive_done(data, context = context)
+
+    def child_spawn(self, crit):
+        from ..db import NoMatch
+        from ..model import BadInvocation
         if not crit.startswith("addr"):
             raise NoMatch()
         try:
