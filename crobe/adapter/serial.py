@@ -81,7 +81,11 @@ class SerialInterface(pipe.BackgroundInterface):
         )
 
     def start(self):
-        self.io = serial.Serial(self.params["dev"], **self._options())
+        if self.params["dev"].startswith("rfc2217:"):
+            from serial import rfc2217
+            self.io = rfc2217.Serial(self.params["dev"], **self._options())
+        else:
+            self.io = serial.Serial(self.params["dev"], **self._options())
         self.options_apply()
         super().start()
         
@@ -105,6 +109,8 @@ class SerialInterface(pipe.BackgroundInterface):
         data = b''
 
         while True:
+            if self.params.get("xonxoff"):
+                self.io.write(b"\x11")
             if size is None:
                 d = bytes(self.io.read(self.io.in_waiting or 1))
                 if d:
@@ -157,4 +163,34 @@ class SerialEnumerator(model.Enumerator):
                 name = os.path.basename(str(port.device))
             adapter = SerialAdapter(name, port.device)
             self.child_add(adapter)
-        super().start()
+            
+class Rfc2217Adapter(model.Adapter):
+    @classmethod
+    def from_target(cls, name):
+        hostname, port = name.rsplit(":", 1)
+        
+        return cls(name, hostname, int(port))
+
+    supported_interfaces = ["pipe"]
+    nickname = "rfc2217"
+
+    def __init__(self, name, hostname, port):
+        self.hostname = hostname
+        self.port = port
+        model.Adapter.__init__(self, "rfc2217:%s" % name)
+
+    @property
+    def firmware_info(self):
+        return "RFC2217 socket at %s:%d" % (self.hostname, self.port)
+
+    def open(self, interface_name):
+        if interface_name.lower() == "pipe":
+            return SerialInterface(self, f"rfc2217://{self.hostname}:{self.port}/")
+
+@model.HwRoot.register
+class Rfc2217Enumerator(model.ExplicitEnumerator):
+    def __init__(self):
+        model.Enumerator.__init__(self, "rfc2217")
+
+    def child_spawn(self, name):
+        return Rfc2217Adapter.from_target(name)
