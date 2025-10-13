@@ -43,16 +43,16 @@ class Adapter(model.Adapter):
 
 class PipeInterface(socket_server.SocketPipe):
     def __init__(self, port):
-        ais = socket.getaddrinfo(self.port.hostname, self.port.port,
+        ais = socket.getaddrinfo(port.hostname, port.port,
                                  0, 0, socket.IPPROTO_TCP)
 
         for i, (family, socktype, proto, canonname, sockaddr) in enumerate(ais):
-            socket = socket.socket(family, socktype, proto)
+            sock = socket.socket(family, socktype, proto)
             try:
-                socket.connect(sockaddr)
+                sock.connect(sockaddr)
             except ConnectionRefusedError:
                 if i == len(ais) - 1:
                     raise
                 continue
             break
-        super().__init__(socket)
+        super().__init__(sock)
