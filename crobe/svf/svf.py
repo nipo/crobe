@@ -139,7 +139,10 @@ class Parser:
 
     def __iter__(self):
         while True:
-            token = next(self.lex)
+            try:
+                token = next(self.lex)
+            except StopIteration:
+                break
 
             handler = getattr(self, "handle_" + token.text.lower())
             yield handler(token)
