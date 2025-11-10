@@ -11,3 +11,4 @@ from . import mem
 from . import xilinx
 from . import dfu
 from . import uf2
+from . import altera
