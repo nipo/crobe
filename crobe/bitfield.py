@@ -71,26 +71,27 @@ class Field(_Field):
 Integer value""" + (f" with offset of {self.offset}" if self.offset else "")
         
 class Log2Field(Field):
-    def __init__(self, lsb, width, offset = 0, log_offset = 0, doc = None):
+    def __init__(self, lsb, width, offset = 0, log_offset = 0, step = 1, doc = None):
         super().__init__(lsb, width, offset = offset, doc = doc)
         self.log_offset = log_offset
+        self.step = step
 
     def represent(self, value):
-        return super().represent(2 ** (value + self.log_offset))
+        return super().represent(self.step * (2 ** (value + self.log_offset)))
 
     def parse(self, value):
-        return super().parse(int(math.log2(int(value)) - self.log_offset))
+        return super().parse(int((math.log2(int(value)) - self.log_offset) / self.step + .5))
 
     def docstring(self):
         return _Field.docstring(self) + f"""
 Log2 value with integer offset of {self.offset} and logarithmic offset of {self.log_offset}
-value = {self.offset} + 2 ** ({self.log_offset} + field)
-field = log2(value - {self.offset}) - {self.log_offset}
+value = {self.step} * ({self.offset} + 2 ** ({self.log_offset} + field))
+field = (log2(value - {self.offset}) - {self.log_offset}) / {self.step}
 """
 
 class ScaledField(Field):
-    def __init__(self, lsb, width, scale = 1, offset = 0, scale_offset = 0, doc = None):
-        super().__init__(lsb, width, offset = offset, doc = doc)
+    def __init__(self, lsb, width, scale = 1, offset = 0, signed = False, scale_offset = 0, doc = None):
+        super().__init__(lsb, width, signed = signed, offset = offset, doc = doc)
         self.scale = scale
         self.scale_offset = scale_offset
 
