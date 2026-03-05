@@ -22,4 +22,4 @@ class Enumerator(basic.AdapterEnumerator):
                                        vid = 0x0403, pid = 0x6010,
                                        channel = "A")
     def filter(self, adapter):
-        return adapter.device.vendor == "Arrow" and adapter.device.model in ["Arrow USB Blaster TEI0003"]
+        return adapter.device.vendor == "Arrow" and adapter.device.model.startswith("Arrow USB Blaster")
