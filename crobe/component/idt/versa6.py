@@ -257,7 +257,7 @@ class Versa6(i2c.Slave):
     def state_dump(self, clkin = 1e6, xtal = 1e6):
         power = self.reg_read(0x10)
         vco = self.reg_read(0x11)
-        xtal = self.reg_read(0x12)
+        xtalc = self.reg_read(0x12)
         pll = self.reg_read(0x15)
         factory = self.reg_read(0x1c)
         rc = self.reg_read(0x1e)
@@ -267,11 +267,11 @@ class Versa6(i2c.Slave):
         os = self.reg_read(0x69)
 
         if power.clkin_en:
-            ref = clkin
+            ref = float(clkin)
         else:
-            ref = xtalin
+            ref = float(xtal)
             if power.xtal_double:
-                ref = xtalin * 2
+                ref = float(xtal) * 2
             if not power.xtal_en:
                 ref = 0
 
