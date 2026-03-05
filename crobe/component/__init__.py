@@ -35,3 +35,4 @@ from . import neorv32
 from . import espressif
 from . import hdlc
 from . import altera
+from . import i2c_gpio_ext
