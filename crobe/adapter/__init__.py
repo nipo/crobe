@@ -15,6 +15,7 @@ try:
     from . import busblaster
     from . import dc590
     from . import trenz
+    from . import usb_blaster
 except RuntimeError:
     warnings.warn("FTDI-based adapters unavailable")
 
