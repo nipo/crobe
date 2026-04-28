@@ -16,6 +16,7 @@ from . import memory
 from . import chip
 from . import bscan
 from . import svf
+from . import stapl
 from . import pin
 from . import nordic
 from . import ws2812
