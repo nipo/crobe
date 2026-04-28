@@ -51,3 +51,25 @@ class SofBitstream(model.Program):
         info = {}
 
         raise NotImplementedError()
+
+@model.Program.ext_db.register("rbf")
+@model.Program.ext_db.register("rbf.gz")
+class CmfBitstream(model.Program):
+    HEADER = b"\x95\x48\x29\x62"
+
+    def __init__(self, filename, offset = 0):
+        super().__init__(filename)
+
+        if hasattr(filename, "read"):
+            fd = filename
+        elif filename.endswith(".rbf.gz"):
+            import gzip
+            fd = gzip.open(filename, 'rb')
+        else:
+            fd = open(filename, 'rb')
+
+        bitstream = fd.read()
+        if bitstream[:len(self.HEADER)] != self.HEADER:
+            raise ValueError("Bad header in %s" % filename)
+
+        self.append(model.Segment(0, bitstream, filename))
