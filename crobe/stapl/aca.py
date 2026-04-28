@@ -5,49 +5,49 @@ ACA encodes Boolean array data as base-64 text, which decodes to a
 compressed binary bitstream containing literal and repeated data blocks.
 """
 
-# Base-64 character to 6-bit value mapping (Table 2)
-_CHAR_TO_VAL = {}
-for _i in range(10):
-    _CHAR_TO_VAL[ord('0') + _i] = _i
-for _i in range(26):
-    _CHAR_TO_VAL[ord('A') + _i] = 10 + _i
-for _i in range(26):
-    _CHAR_TO_VAL[ord('a') + _i] = 36 + _i
-_CHAR_TO_VAL[ord('_')] = 62
-_CHAR_TO_VAL[ord('@')] = 63
+import base64
+
+from ..util.endian import swib, bitswap8
 
 
-def _text_to_bits(text: str) -> bytearray:
+# ACA's 6-bit alphabet (JESD71 Table 2): digits, then upper-case, then
+# lower-case, then '_' (62) and '@' (63). Differs from RFC 4648 standard
+# base64 (upper, lower, digits, +/) in alphabet ordering AND in bit
+# packing: ACA packs 6-bit values LSB-first into the byte stream, std
+# base64 packs them MSB-first. Both differences fall out of bit-reversing
+# each 6-bit value (during alphabet translation) and bit-reversing each
+# output byte (bitswap8) — the result lets stdlib's b64 decoder do the
+# heavy lifting.
+_ACA_ALPHABET = (
+    "0123456789"
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+    "abcdefghijklmnopqrstuvwxyz"
+    "_@"
+)
+_STD_ALPHABET = (
+    "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+    "abcdefghijklmnopqrstuvwxyz"
+    "0123456789+/"
+)
+_ACA_TO_STD = {ord(a): ord(_STD_ALPHABET[swib(i, 6)])
+               for i, a in enumerate(_ACA_ALPHABET)}
+for _ws in " \t\n\r":
+    _ACA_TO_STD[ord(_ws)] = None
+
+
+def _text_to_bits(text: str) -> bytes:
     """Convert ACA base-64 text to a compressed binary array.
 
-    Each character maps to a 6-bit value. Four 6-bit values pack into
-    three bytes: first value in lower 6 bits of byte 0, second value
-    in upper 2 bits of byte 0 and lower 4 bits of byte 1, etc.
+    Each character maps to a 6-bit value, packed LSB-first into bytes.
+    Implemented via stdlib base64 by bit-reversing the alphabet mapping
+    and bit-reversing each output byte. Inputs whose 6-bit-value count
+    isn't a multiple of 4 are zero-padded with 'A' (the std-b64
+    zero-value char), preserving ACA's zero-pad-to-byte-boundary
+    semantics.
     """
-    values = []
-    for ch in text:
-        if ch in (' ', '\t', '\n', '\r'):
-            continue
-        val = _CHAR_TO_VAL.get(ord(ch))
-        if val is None:
-            raise ValueError(f"Invalid ACA character: {ch!r}")
-        values.append(val)
-
-    # Pack 6-bit values into bytes via a bit accumulator
-    result = bytearray()
-    bit_acc = 0
-    bit_count = 0
-    for val in values:
-        bit_acc |= val << bit_count
-        bit_count += 6
-        while bit_count >= 8:
-            result.append(bit_acc & 0xFF)
-            bit_acc >>= 8
-            bit_count -= 8
-    if bit_count > 0:
-        result.append(bit_acc & 0xFF)
-
-    return result
+    as_std = text.translate(_ACA_TO_STD)
+    as_std += "A" * (-len(as_std) % 4)
+    return bitswap8(base64.b64decode(as_std))
 
 
 class _BitReader:
