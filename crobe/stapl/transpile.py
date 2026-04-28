@@ -1928,42 +1928,35 @@ class _ExprEmitter:
             case _:
                 return f'{self.int_expr(expr)} + 1'
 
-    def _exclusive_end_rev(self, expr):
-        """Emit expr - 1 with simplification for reversed slice stop."""
-        match expr:
-            case BinOp(op='+', left=a, right=IntLiteral(value=1)):
-                return self.int_expr(a)
-            case IntLiteral(value=0):
-                return None  # will need special handling
-            case IntLiteral(value=v):
-                return self.int_expr(IntLiteral(value=v - 1))
-            case _:
-                return f'{self.int_expr(expr)} - 1'
-
     def slice_expr(self, high, low):
-        """Emit slice for a[high..low] subrange (STAPL convention).
+        """Emit ascending Python slice for STAPL var[high..low].
 
-        Returns a string like '[0:10]' or '[3::-1]'.
-        Uses _try_const_fold to determine direction statically.
-        Falls back to get_subrange() for dynamic cases.
+        Always emits ascending order [min:max+1]. For STAPL descending
+        subranges (high < low) the caller is responsible for applying
+        .reversed() to either the source (read context) or the assigned
+        value (write context); see is_descending().
         """
+        if self.is_descending(high, low):
+            # Bounds order is high..low ascending in Python.
+            return f'[{self.int_expr(high)}:{self._exclusive_end(low)}]'
+        return f'[{self.int_expr(low)}:{self._exclusive_end(high)}]'
+
+    def is_descending(self, high, low) -> bool:
+        """True when STAPL var[high..low] denotes a descending subrange."""
         h_val = _try_const_fold(high)
         l_val = _try_const_fold(low)
+        return (h_val is not None and l_val is not None and h_val < l_val)
 
-        if h_val is not None and l_val is not None:
-            if h_val >= l_val:
-                # Ascending: a[low:high+1]
-                return f'[{self.int_expr(low)}:{self._exclusive_end(high)}]'
-            else:
-                # Reversed: a[low:high-1:-1] (or a[low::-1] when high=0)
-                stop = self._exclusive_end_rev(high)
-                if stop is None:
-                    return f'[{self.int_expr(low)}::-1]'
-                return f'[{self.int_expr(low)}:{stop}:-1]'
-        else:
-            # Dynamic: cannot determine direction at compile time
-            # Emit ascending and hope for the best (all real STAPL uses ascending)
-            return f'[{self.int_expr(low)}:{self._exclusive_end(high)}]'
+    def subrange_rvalue(self, arr, high, low):
+        """Emit a read-only expression for `arr` over STAPL var[high..low].
+
+        Adds `.reversed()` for descending subranges so the resulting bit
+        order matches STAPL semantics regardless of slice direction.
+        """
+        base = f'{arr}{self.slice_expr(high, low)}'
+        if self.is_descending(high, low):
+            return f'{base}.reversed()'
+        return base
 
     def int_expr(self, expr, _parent_prec=0, _type_hint=None):
         """Emit expression that evaluates to int.
@@ -1988,13 +1981,12 @@ class _ExprEmitter:
                 return f'{arr}[{self._emit_int(idx)}]'
 
             case ArraySubrange(name=n, high=h, low=l):
-                arr = self._ref(n)
-                return f'{arr}{self.slice_expr(h, l)}.to_int()'
+                return f'int({self.subrange_rvalue(self._ref(n), h, l)})'
 
             case ArrayWhole(name=n):
                 arr = self._ref(n)
                 if self._is_boolean_array(n):
-                    return f'{arr}.to_int()'
+                    return f'int({arr})'
                 return arr
 
             case UnaryOp(op='!', operand=a):
@@ -2056,43 +2048,41 @@ class _ExprEmitter:
         """Emit int conversion of a bits expression."""
         match expr:
             case ArraySubrange(name=n, high=h, low=l):
-                arr = self._ref(n)
-                return f'{arr}{self.slice_expr(h, l)}.to_int()'
+                return f'int({self.subrange_rvalue(self._ref(n), h, l)})'
             case ArrayWhole(name=n):
-                return f'{self._ref(n)}.to_int()'
+                return f'int({self._ref(n)})'
             case VarRef(name=n):
                 if self._is_boolean_array(n):
-                    return f'{self._ref(n)}.to_int()'
+                    return f'int({self._ref(n)})'
                 return self._ref(n)
             case _:
-                return f'{self.bits_expr(expr)}.to_int()'
+                return f'int({self.bits_expr(expr)})'
 
     def bits_expr(self, expr):
-        """Emit expression that evaluates to BitArray."""
+        """Emit expression that evaluates to a bit string."""
         match expr:
             case VarRef(name=n):
                 return self._ref(n)
 
             case ArraySubrange(name=n, high=h, low=l):
-                arr = self._ref(n)
-                return f'{arr}{self.slice_expr(h, l)}'
+                return self.subrange_rvalue(self._ref(n), h, l)
 
             case ArrayWhole(name=n):
                 return self._ref(n)
 
             case BooleanLiteral(data=d, bit_count=bc):
-                return f'BitArray({bc}, {d!r})'
+                return f'BitString({d!r}, {bc})'
 
             case FuncCall(name='BOOL', arg=a):
-                return f'BitArray.from_int({self.int_expr(a)})'
+                return f'BitString({self.int_expr(a)}, 32)'
 
             case _:
-                # Fallback: convert int expression to BitArray
-                return f'BitArray.from_int({self.int_expr(expr)})'
+                # Fallback: convert int expression to a 32-bit bitstring
+                return f'BitString({self.int_expr(expr)}, 32)'
 
     def scan_tdi_expr(self, expr):
         """Emit expression for scan TDI data (needs to produce bytes)."""
-        return f'{self.bits_expr(expr)}.to_bytes()'
+        return f'bytes({self.bits_expr(expr)})'
 
     def scan_tdi_as_int(self, expr):
         """Emit expression for IR scan (integer value)."""
@@ -2320,13 +2310,14 @@ class _StmtEmitter:
                         vi = self._var_infos.get(n)
                         if vi and vi.extern_filename is not None:
                             # Externalized to file
-                            w.line(f'{ref} = BitArray({init.bit_count}, '
-                                   f'(self.DATA_DIR / "{vi.extern_filename}").read_bytes())')
+                            w.line(f'{ref} = MutableBitString('
+                                   f'(self.DATA_DIR / "{vi.extern_filename}").read_bytes(), '
+                                   f'{init.bit_count})')
                         else:
                             # Inline
-                            w.line(f'{ref} = BitArray({init.bit_count}, {init.data!r})')
+                            w.line(f'{ref} = MutableBitString({init.data!r}, {init.bit_count})')
                     else:
-                        w.line(f'{ref} = BitArray({size_s})')
+                        w.line(f'{ref} = MutableBitString(0, {size_s})')
                 else:
                     # Scalar boolean
                     if init is not None:
@@ -2341,9 +2332,13 @@ class _StmtEmitter:
                 ref = t if t in self._proc_locals else f'self.{t}'
                 th = e._type_for_var(t)
                 if h is not None and l is not None:
-                    # Subrange assignment
-                    w.line(f'{ref}{e.slice_expr(h, l)} = '
-                           f'{e.bits_expr(v)}')
+                    # Subrange assignment. The LHS is always an ascending
+                    # Python slice; for STAPL descending subranges we
+                    # reverse the source so the bit order matches.
+                    rhs = e.bits_expr(v)
+                    if e.is_descending(h, l):
+                        rhs = f'({rhs}).reversed()'
+                    w.line(f'{ref}{e.slice_expr(h, l)} = {rhs}')
                 elif idx is not None:
                     w.line(f'{ref}[{e.int_expr(idx)}] = '
                            f'{e.int_expr(v, _type_hint=th)}')
@@ -2522,30 +2517,38 @@ class _StmtEmitter:
                 if compare is not None:
                     cap_ref = self._emit_capture_ref(capture) if capture else '_tdo_bits'
                     if capture is None:
-                        w.line(f'_tdo_bits = BitArray({length_s}, _tdo)')
+                        w.line(f'_tdo_bits = BitString(_tdo, {length_s})')
                     cmp_s = e.bits_expr(compare)
                     mask_s = e.bits_expr(mask)
                     result_ref = self._emit_lvalue(result)
-                    w.line(f'{result_ref} = 1 if {cap_ref}.compare('
+                    w.line(f'{result_ref} = 1 if _bit_compare({cap_ref}, '
                            f'{cmp_s}, {mask_s}, {length_s}) else 0')
             else:
                 w.line(f'self._dr_scan('
                        f'{e.scan_tdi_expr(tdi)}, {length_s})')
 
     def _emit_capture_store(self, capture_expr, length_s):
-        """Emit code to store captured TDO data."""
+        """Emit code to store captured TDO data.
+
+        Subrange assignments use a BitString r-value (read-only source);
+        whole-array assignments install a MutableBitString as the variable's
+        new storage so subsequent statements can mutate it. STAPL descending
+        subranges reverse the captured value so bit ordering matches.
+        """
         w = self._w
         match capture_expr:
             case ArraySubrange(name=n, high=h, low=l):
                 ref = n if n in self._proc_locals else f'self.{n}'
-                w.line(f'{ref}{self._expr.slice_expr(h, l)} = '
-                       f'BitArray({length_s}, _tdo)')
+                rhs = f'BitString(_tdo, {length_s})'
+                if self._expr.is_descending(h, l):
+                    rhs = f'({rhs}).reversed()'
+                w.line(f'{ref}{self._expr.slice_expr(h, l)} = {rhs}')
             case ArrayWhole(name=n):
                 ref = n if n in self._proc_locals else f'self.{n}'
-                w.line(f'{ref} = BitArray({length_s}, _tdo)')
+                w.line(f'{ref} = MutableBitString(_tdo, {length_s})')
             case VarRef(name=n):
                 ref = n if n in self._proc_locals else f'self.{n}'
-                w.line(f'{ref} = BitArray({length_s}, _tdo)')
+                w.line(f'{ref} = MutableBitString(_tdo, {length_s})')
             case _:
                 w.line(f'# capture store: ??? {capture_expr!r}')
 
@@ -2661,8 +2664,8 @@ def transpile(program: Program, config: TranspileConfig | None = None,
     w.line()
     w.line('import click')
     w.line()
-    w.line('from crobe.bitstring import BitString')
-    w.line('from crobe.stapl.interpreter import BitArray')
+    w.line('from crobe.bitstring import BitString, MutableBitString')
+    w.line('from crobe.stapl import bit_compare as _bit_compare')
     w.line()
     w.line()
     w.line('class _StaplExit(Exception):')
@@ -2803,15 +2806,16 @@ def _emit_constructor(w, program, var_infos, config, demotable):
                         if (init is not None
                                 and isinstance(init, BooleanLiteral)
                                 and vi and vi.extern_filename is not None):
-                            w.line(f'self.{n} = BitArray({init.bit_count}, '
+                            w.line(f'self.{n} = MutableBitString('
                                    f'(self.DATA_DIR / '
-                                   f'"{vi.extern_filename}").read_bytes())')
+                                   f'"{vi.extern_filename}").read_bytes(), '
+                                   f'{init.bit_count})')
                         elif (init is not None
                                 and isinstance(init, BooleanLiteral)):
-                            w.line(f'self.{n} = BitArray({init.bit_count}, '
-                                   f'{init.data!r})')
+                            w.line(f'self.{n} = MutableBitString({init.data!r}, '
+                                   f'{init.bit_count})')
                         else:
-                            w.line(f'self.{n} = BitArray('
+                            w.line(f'self.{n} = MutableBitString(0, '
                                    f'{expr_em.int_expr(sz)})')
                     else:
                         if init is not None:
@@ -2977,14 +2981,15 @@ def _emit_procedure(w, proc, program, var_infos, config,
                             if (stmt.init is not None
                                     and isinstance(stmt.init, BooleanLiteral)
                                     and vi and vi.extern_filename is not None):
-                                w.line(f'{n} = BitArray({stmt.init.bit_count}, '
-                                       f'(self.DATA_DIR / "{vi.extern_filename}").read_bytes())')
+                                w.line(f'{n} = MutableBitString('
+                                       f'(self.DATA_DIR / "{vi.extern_filename}").read_bytes(), '
+                                       f'{stmt.init.bit_count})')
                             elif (stmt.init is not None
                                     and isinstance(stmt.init, BooleanLiteral)):
-                                w.line(f'{n} = BitArray({stmt.init.bit_count}, '
-                                       f'{stmt.init.data!r})')
+                                w.line(f'{n} = MutableBitString({stmt.init.data!r}, '
+                                       f'{stmt.init.bit_count})')
                             else:
-                                w.line(f'{n} = BitArray({expr_em.int_expr(stmt.size)})')
+                                w.line(f'{n} = MutableBitString(0, {expr_em.int_expr(stmt.size)})')
                         else:
                             if stmt.init is not None:
                                 w.line(f'{n} = {expr_em.int_expr(stmt.init)}')

@@ -7,6 +7,7 @@ variables, and dispatching JTAG operations to a pluggable Player.
 import math
 from dataclasses import dataclass
 
+from ..bitstring import BitString, BitStringBase, MutableBitString
 from .parser import (
     Program, ProcedureDef, DataBlock,
     Expr, IntLiteral, VarRef, ArrayIndex, ArraySubrange, ArrayWhole,
@@ -34,124 +35,67 @@ class StaplExit(Exception):
 
 
 # --- Bit array (Boolean) storage ---
+#
+# Boolean variables are stored as MutableBitString. A few STAPL-specific
+# semantics live as module-level helpers: lenient out-of-bounds reads
+# (return 0) and writes (no-op), descending subranges (high < low), and
+# mask-aware compare.
 
-class BitArray:
-    """Mutable bit array, stored LSB-first in a bytearray."""
-    __slots__ = ('_data', '_size')
 
-    def __init__(self, size: int, data: bytes | None = None):
-        self._size = int(size)
-        byte_count = (self._size + 7) // 8
-        if data is not None:
-            self._data = bytearray(data[:byte_count])
-            if len(self._data) < byte_count:
-                self._data.extend(b'\x00' * (byte_count - len(self._data)))
-        else:
-            self._data = bytearray(byte_count)
+def _get_bit(bs, idx: int) -> int:
+    """Read bit at idx, returning 0 when out of bounds (STAPL semantics)."""
+    if 0 <= idx < len(bs):
+        return int(bool(bs[idx]))
+    return 0
 
-    @property
-    def size(self):
-        return self._size
 
-    def __getitem__(self, key):
-        if isinstance(key, slice):
-            start, stop, step = key.start, key.stop, key.step
-            if step is None or step == 1:
-                # a[start:stop] → ascending, exclusive end
-                size = stop - start
-                result = BitArray(size)
-                for i in range(size):
-                    result.set_bit(i, self.get_bit(start + i))
-                return result
-            elif step == -1:
-                # a[start:stop:-1] → descending, exclusive end
-                # stop=None means go down to index 0 inclusive
-                end = stop if stop is not None else -1
-                size = start - end
-                result = BitArray(size)
-                for i in range(size):
-                    result.set_bit(i, self.get_bit(start - i))
-                return result
-            else:
-                assert False, f"unsupported step {step}"
-        return self.get_bit(key)
+def _set_bit(bs, idx: int, value) -> None:
+    """Write bit at idx, no-op when out of bounds (STAPL semantics)."""
+    if 0 <= idx < len(bs):
+        bs[idx] = value
 
-    def __setitem__(self, key, value):
-        if isinstance(key, slice):
-            start, stop, step = key.start, key.stop, key.step
-            if step is None or step == 1:
-                size = stop - start
-                for i in range(min(size, value.size)):
-                    self.set_bit(start + i, value.get_bit(i))
-            elif step == -1:
-                end = stop if stop is not None else -1
-                size = start - end
-                for i in range(min(size, value.size)):
-                    self.set_bit(start - i, value.get_bit(i))
-            else:
-                assert False, f"unsupported step {step}"
-        else:
-            self.set_bit(key, value)
 
-    def get_bit(self, index: int) -> int:
-        if index < 0 or index >= self._size:
-            return 0
-        return (self._data[index >> 3] >> (index & 7)) & 1
+def _get_subrange(source, high: int, low: int) -> BitStringBase:
+    """Extract bits [low..high] (STAPL semantics).
 
-    def set_bit(self, index: int, value: int):
-        if index < 0 or index >= self._size:
-            return
-        byte_idx = index >> 3
-        bit_idx = index & 7
-        if value:
-            self._data[byte_idx] |= (1 << bit_idx)
-        else:
-            self._data[byte_idx] &= ~(1 << bit_idx)
+    high >= low → ascending (low to high inclusive); returns a slice view.
+    high  < low → descending (low down to high inclusive, reversed bits).
+    """
+    if high >= low:
+        return source[low:high + 1]
+    return source[high:low + 1].reversed()
 
-    def get_subrange(self, high: int, low: int) -> 'BitArray':
-        """Extract bits [low..high] into a new BitArray (STAPL convention)."""
-        if high >= low:
-            return self[low:high + 1]
-        else:
-            stop = high - 1 if high > 0 else None
-            return self[low:stop:-1]
 
-    def set_subrange(self, high: int, low: int, source: 'BitArray'):
-        """Set bits [low..high] from source BitArray (STAPL convention)."""
-        if high >= low:
-            self[low:high + 1] = source
-        else:
-            stop = high - 1 if high > 0 else None
-            self[low:stop:-1] = source
+def _set_subrange(target, high: int, low: int, source) -> None:
+    """Assign bits [low..high] from source (STAPL semantics).
 
-    def to_bytes(self) -> bytes:
-        return bytes(self._data)
+    Source shorter than the range writes only the available bits and
+    leaves the rest of the range untouched. For descending ranges the
+    written positions stay anchored at `low` (the high index in STAPL
+    notation), matching the original STAPL bit order.
+    """
+    if high >= low:
+        target[low:high + 1] = source
+    else:
+        n = min(low - high + 1, len(source))
+        # Anchor the assignment at `low`: write to the n highest indices
+        # of the ascending range, with source bits reversed.
+        target[low + 1 - n:low + 1] = source.reversed()
 
-    def to_int(self) -> int:
-        """Convert to unsigned integer (up to 32 bits)."""
-        val = 0
-        for i in range(min(self._size, 32)):
-            val |= self.get_bit(i) << i
-        return val
 
-    @classmethod
-    def from_int(cls, value: int, size: int = 32) -> 'BitArray':
-        """Create BitArray from integer value."""
-        result = cls(size)
-        for i in range(size):
-            if value & (1 << i):
-                result.set_bit(i, 1)
-        return result
+def _copy_bits(target, source) -> None:
+    """Copy bits from source into target, up to min(len) bits."""
+    for i in range(min(len(source), len(target))):
+        target[i] = bool(source[i])
 
-    def compare(self, other: 'BitArray', mask: 'BitArray', length: int) -> bool:
-        """Compare self against other, using mask to select which bits to compare."""
-        for i in range(length):
-            if i < mask.size and mask.get_bit(i):
-                a = self.get_bit(i) if i < self.size else 0
-                b = other.get_bit(i) if i < other.size else 0
-                if a != b:
-                    return False
-        return True
+
+def _bits_compare(a, b, mask, length: int) -> bool:
+    """Compare a vs b at positions selected by mask, up to length bits."""
+    for i in range(length):
+        if i < len(mask) and bool(mask[i]):
+            if _get_bit(a, i) != _get_bit(b, i):
+                return False
+    return True
 
 
 # --- Player protocol ---
@@ -209,7 +153,7 @@ class Interpreter:
     def __init__(self, program: Program):
         self._program = program
         self._integers: dict[str, int | list[int]] = {}
-        self._booleans: dict[str, BitArray] = {}
+        self._booleans: dict[str, MutableBitString] = {}
         self._bool_scalars: set[str] = set()  # names of scalar booleans
         self._stack: list[int] = []
         self._call_stack: list[tuple[str, int]] = []  # (proc_name, pc)
@@ -328,8 +272,7 @@ class Interpreter:
                     arr[idx] = val
                 elif stmt.target in self._bool_scalars:
                     assert val in (0, 1), f"POP to boolean: value must be 0 or 1, got {val}"
-                    ba = self._booleans[stmt.target]
-                    ba.set_bit(0, val)
+                    self._booleans[stmt.target][0] = val
                 else:
                     self._integers[stmt.target] = val
             case DrScanStmt():
@@ -356,19 +299,19 @@ class Interpreter:
                 player.frequency(hz)
             case PreDrStmt():
                 count = self._eval_int(stmt.count)
-                data = self._eval_bits(stmt.data).to_bytes() if stmt.data else _ones_bytes(count)
+                data = bytes(self._eval_bits(stmt.data)) if stmt.data else _ones_bytes(count)
                 self._pre_dr = (count, data)
             case PostDrStmt():
                 count = self._eval_int(stmt.count)
-                data = self._eval_bits(stmt.data).to_bytes() if stmt.data else _ones_bytes(count)
+                data = bytes(self._eval_bits(stmt.data)) if stmt.data else _ones_bytes(count)
                 self._post_dr = (count, data)
             case PreIrStmt():
                 count = self._eval_int(stmt.count)
-                data = self._eval_bits(stmt.data).to_bytes() if stmt.data else _ones_bytes(count)
+                data = bytes(self._eval_bits(stmt.data)) if stmt.data else _ones_bytes(count)
                 self._pre_ir = (count, data)
             case PostIrStmt():
                 count = self._eval_int(stmt.count)
-                data = self._eval_bits(stmt.data).to_bytes() if stmt.data else _ones_bytes(count)
+                data = bytes(self._eval_bits(stmt.data)) if stmt.data else _ones_bytes(count)
                 self._post_ir = (count, data)
             case PrintStmt():
                 text = self._eval_print(stmt)
@@ -412,19 +355,17 @@ class Interpreter:
         if decl.size is not None:
             size = self._eval_int(decl.size)
             if decl.init and isinstance(decl.init, BooleanLiteral):
-                self._booleans[decl.name] = BitArray(size, decl.init.data)
+                self._booleans[decl.name] = MutableBitString(decl.init.data, size)
             else:
-                self._booleans[decl.name] = BitArray(size)
+                self._booleans[decl.name] = MutableBitString(0, size)
         else:
             # Scalar boolean
             self._bool_scalars.add(decl.name)
             if decl.init:
                 val = self._eval_int(decl.init)
-                ba = BitArray(1)
-                ba.set_bit(0, val)
-                self._booleans[decl.name] = ba
+                self._booleans[decl.name] = MutableBitString(val & 1, 1)
             else:
-                self._booleans[decl.name] = BitArray(1)
+                self._booleans[decl.name] = MutableBitString(0, 1)
 
     def _init_data_block(self, name: str):
         if name in self._initialized_data:
@@ -447,7 +388,7 @@ class Interpreter:
             high = self._eval_int(stmt.high)
             low = self._eval_int(stmt.low)
             source = self._eval_bits(stmt.value)
-            self._booleans[name].set_subrange(high, low, source)
+            _set_subrange(self._booleans[name], high, low, source)
         elif stmt.index is not None:
             idx = self._eval_int(stmt.index)
             if name in self._integers:
@@ -458,21 +399,17 @@ class Interpreter:
                     raise StaplRuntimeError(f"Cannot index scalar integer {name}")
             elif name in self._booleans:
                 bit_val = self._eval_int(stmt.value)
-                self._booleans[name].set_bit(idx, bit_val)
+                _set_bit(self._booleans[name], idx, bit_val)
             else:
                 raise StaplRuntimeError(f"Undefined variable: {name}")
         else:
             # Whole assignment
             if name in self._booleans and name not in self._bool_scalars:
-                # Array assignment
                 source = self._eval_bits(stmt.value)
-                target = self._booleans[name]
-                # Copy all bits
-                for i in range(min(source.size, target.size)):
-                    target.set_bit(i, source.get_bit(i))
+                _copy_bits(self._booleans[name], source)
             elif name in self._bool_scalars:
                 val = self._eval_int(stmt.value)
-                self._booleans[name].set_bit(0, val)
+                self._booleans[name][0] = val & 1
             elif name in self._integers:
                 val = self._integers[name]
                 if isinstance(val, list):
@@ -531,23 +468,23 @@ class Interpreter:
             post = self._post_dr
 
         if is_ir:
-            tdo_bytes = player.ir_scan(length, tdi.to_bytes(),
+            tdo_bytes = player.ir_scan(length, bytes(tdi),
                                        pre=pre, post=post,
                                        capture=needs_capture)
         else:
-            tdo_bytes = player.dr_scan(length, tdi.to_bytes(),
+            tdo_bytes = player.dr_scan(length, bytes(tdi),
                                        pre=pre, post=post,
                                        capture=needs_capture)
 
         if stmt.capture is not None and tdo_bytes is not None:
-            tdo = BitArray(length, tdo_bytes)
+            tdo = BitString(tdo_bytes, length)
             self._store_bits(stmt.capture, tdo)
 
         if stmt.compare is not None and tdo_bytes is not None:
-            tdo = BitArray(length, tdo_bytes)
+            tdo = BitString(tdo_bytes, length)
             expected = self._eval_bits(stmt.compare)
-            mask = self._eval_bits(stmt.mask) if stmt.mask else BitArray(length, _ones_bytes(length))
-            match = tdo.compare(expected, mask, length)
+            mask = self._eval_bits(stmt.mask) if stmt.mask else BitString(_ones_bytes(length), length)
+            match = _bits_compare(tdo, expected, mask, length)
             if stmt.result is not None:
                 self._store_bool_result(stmt.result, 1 if match else 0)
 
@@ -558,18 +495,19 @@ class Interpreter:
         in_vec = self._eval_bits(stmt.in_vec)
         needs_capture = stmt.capture is not None or stmt.compare is not None
 
-        tdo_bytes = player.vector(dir_vec.to_bytes(), in_vec.to_bytes(),
+        tdo_bytes = player.vector(bytes(dir_vec), bytes(in_vec),
                                   capture=needs_capture)
+        n = len(dir_vec)
 
         if stmt.capture is not None and tdo_bytes is not None:
-            tdo = BitArray(dir_vec.size, tdo_bytes)
+            tdo = BitString(tdo_bytes, n)
             self._store_bits(stmt.capture, tdo)
 
         if stmt.compare is not None and tdo_bytes is not None:
-            tdo = BitArray(dir_vec.size, tdo_bytes)
+            tdo = BitString(tdo_bytes, n)
             expected = self._eval_bits(stmt.compare)
-            mask_bits = self._eval_bits(stmt.mask) if stmt.mask else BitArray(dir_vec.size, _ones_bytes(dir_vec.size))
-            match = tdo.compare(expected, mask_bits, dir_vec.size)
+            mask_bits = self._eval_bits(stmt.mask) if stmt.mask else BitString(_ones_bytes(n), n)
+            match = _bits_compare(tdo, expected, mask_bits, n)
             if stmt.result is not None:
                 self._store_bool_result(stmt.result, 1 if match else 0)
 
@@ -588,8 +526,8 @@ class Interpreter:
                 if name in self._booleans:
                     ba = self._booleans[name]
                     if name in self._bool_scalars:
-                        return ba.get_bit(0)
-                    return ba.to_int()
+                        return _get_bit(ba, 0)
+                    return int(ba)
                 raise StaplRuntimeError(f"Undefined variable: {name}")
             case ArrayIndex(name=name, index=idx_expr):
                 idx = self._eval_int(idx_expr)
@@ -600,7 +538,7 @@ class Interpreter:
                         return 0
                     return arr[idx]
                 if name in self._booleans:
-                    return self._booleans[name].get_bit(idx)
+                    return _get_bit(self._booleans[name], idx)
                 raise StaplRuntimeError(f"Undefined variable: {name}")
             case UnaryOp(op=op, operand=operand):
                 val = self._eval_int(operand)
@@ -617,11 +555,10 @@ class Interpreter:
                 return abs(self._eval_int(arg))
             case FuncCall(name='INT', arg=arg):
                 ba = self._eval_bits(arg)
-                return ba.to_int()
+                return int(ba)
             case BooleanLiteral():
                 # Single-bit or small boolean used as integer
-                ba = BitArray(expr.bit_count, expr.data)
-                return ba.to_int()
+                return int(BitString(expr.data, expr.bit_count))
             case _:
                 raise StaplRuntimeError(f"Cannot evaluate as integer: {type(expr).__name__}")
 
@@ -656,24 +593,29 @@ class Interpreter:
             case _:
                 assert False, f"Unknown binary op: {op}"
 
-    def _eval_bits(self, expr: Expr) -> BitArray:
-        """Evaluate an expression as a BitArray."""
+    def _eval_bits(self, expr: Expr) -> BitStringBase:
+        """Evaluate an expression as a bit string.
+
+        Returns the underlying MutableBitString when the expression names
+        a boolean variable or whole array (so callers can mutate it via
+        ArrayWhole assignment); fresh r-values come back as BitString.
+        """
         match expr:
             case BooleanLiteral(data=data, bit_count=bc):
-                return BitArray(bc, data)
+                return BitString(data, bc)
             case VarRef(name=name):
                 if name in self._booleans:
                     return self._booleans[name]
                 if name in self._integers:
                     val = self._integers[name]
                     assert isinstance(val, int)
-                    return BitArray.from_int(val)
+                    return BitString(val, 32)
                 raise StaplRuntimeError(f"Undefined variable: {name}")
             case ArraySubrange(name=name, high=high_expr, low=low_expr):
                 high = self._eval_int(high_expr)
                 low = self._eval_int(low_expr)
                 if name in self._booleans:
-                    return self._booleans[name].get_subrange(high, low)
+                    return _get_subrange(self._booleans[name], high, low)
                 raise StaplRuntimeError(f"Subrange on non-boolean: {name}")
             case ArrayWhole(name=name):
                 if name in self._booleans:
@@ -681,30 +623,26 @@ class Interpreter:
                 raise StaplRuntimeError(f"Whole array ref on non-boolean: {name}")
             case FuncCall(name='BOOL', arg=arg):
                 val = self._eval_int(arg)
-                return BitArray.from_int(val)
+                return BitString(val, 32)
             case _:
                 # Fall back to integer evaluation and convert
                 val = self._eval_int(expr)
-                return BitArray.from_int(val)
+                return BitString(val, 32)
 
-    def _store_bits(self, target_expr: Expr, source: BitArray):
-        """Store a BitArray result into a target expression."""
+    def _store_bits(self, target_expr: Expr, source: BitStringBase):
+        """Store a bitstring result into a target expression."""
         match target_expr:
             case VarRef(name=name):
                 if name in self._booleans:
-                    target = self._booleans[name]
-                    for i in range(min(source.size, target.size)):
-                        target.set_bit(i, source.get_bit(i))
+                    _copy_bits(self._booleans[name], source)
                 else:
                     raise StaplRuntimeError(f"Cannot store bits to {name}")
             case ArraySubrange(name=name, high=h, low=l):
                 high = self._eval_int(h)
                 low = self._eval_int(l)
-                self._booleans[name].set_subrange(high, low, source)
+                _set_subrange(self._booleans[name], high, low, source)
             case ArrayWhole(name=name):
-                target = self._booleans[name]
-                for i in range(min(source.size, target.size)):
-                    target.set_bit(i, source.get_bit(i))
+                _copy_bits(self._booleans[name], source)
             case _:
                 raise StaplRuntimeError(f"Invalid capture target: {type(target_expr).__name__}")
 
@@ -713,7 +651,7 @@ class Interpreter:
         match target_expr:
             case VarRef(name=name):
                 if name in self._bool_scalars:
-                    self._booleans[name].set_bit(0, value)
+                    self._booleans[name][0] = value & 1
                 elif name in self._integers:
                     self._integers[name] = value
                 else:
@@ -721,7 +659,7 @@ class Interpreter:
             case ArrayIndex(name=name, index=idx_expr):
                 idx = self._eval_int(idx_expr)
                 if name in self._booleans:
-                    self._booleans[name].set_bit(idx, value)
+                    _set_bit(self._booleans[name], idx, value)
                 elif name in self._integers:
                     arr = self._integers[name]
                     assert isinstance(arr, list)
@@ -751,8 +689,7 @@ class Interpreter:
         try:
             return self._eval_int(expr)
         except (StaplRuntimeError, AssertionError):
-            ba = self._eval_bits(expr)
-            return ba.to_bytes()
+            return bytes(self._eval_bits(expr))
 
 
 # --- Utilities ---

@@ -9,6 +9,8 @@ Public API:
 from .lexer import tokenize, StaplError, StaplSyntaxError, StaplCrcError
 from .parser import parse, Program
 from .interpreter import Interpreter, StaplPlayer, StaplExit
+# STAPL bit helpers re-exported under public names for transpiled output
+from .interpreter import _bits_compare as bit_compare
 
 
 def load(source: str, *, check_crc: bool = True) -> Program:

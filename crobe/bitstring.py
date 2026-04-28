@@ -9,6 +9,18 @@ class BitStringBase:
     def __bytes__(self):
         return self.data
 
+    def reversed(self):
+        """Return a new BitString with the bits in reverse order."""
+        n = len(self)
+        if n == 0:
+            return BitString()
+        val = int(self)
+        rev = 0
+        for i in range(n):
+            if val & (1 << i):
+                rev |= 1 << (n - 1 - i)
+        return BitString(rev, n)
+
     def __bool__(self):
         """
         Whether BitString is zero length (regardless of value).
@@ -123,7 +135,7 @@ class BitString(BitStringBase):
         If data is an integer, it is used LSB first, providing length
         is mandatory.
         """
-        if isinstance(data, (BitString, BitStringSlice)):
+        if isinstance(data, BitStringBase):
             length = len(data)
             if self.__length & 7:
                 data = int(data)
@@ -275,6 +287,109 @@ class BitString(BitStringBase):
 
         self.__data_cache = None
 
+class MutableBitString(BitStringBase):
+    """
+    Fixed-length bitstring with mutable bytearray backing.
+
+    Construction matches BitString's prototype (same args). Once built,
+    individual bits can be modified in place via __setitem__ — single-bit
+    set is O(1) without copying or reallocating, unlike BitString (which
+    is optimized for append-only construction and degrades sharply on
+    per-bit mutation).
+    """
+
+    def __init__(self, *args, **kwargs):
+        if not args and not kwargs:
+            self._data = bytearray()
+            self._length = 0
+            return
+        # Reuse BitString's argument parsing for the initial value.
+        seed = BitString(*args, **kwargs)
+        self._length = len(seed)
+        self._data = bytearray(seed.data)
+        # Normalize storage: exactly ceil(length / 8) bytes, with junk in
+        # bits past the end of the last byte cleared. Keeps __int__,
+        # __eq__ and friends from leaking the unused tail.
+        expected = (self._length + 7) // 8
+        if len(self._data) < expected:
+            self._data.extend(b'\x00' * (expected - len(self._data)))
+        elif len(self._data) > expected:
+            del self._data[expected:]
+        excess = self._length & 7
+        if excess and self._data:
+            self._data[-1] &= (1 << excess) - 1
+
+    @property
+    def data(self):
+        return bytes(self._data)
+
+    def __len__(self):
+        return self._length
+
+    def __getitem__(self, offset):
+        if isinstance(offset, slice):
+            if offset.step not in (None, 1):
+                raise ValueError(
+                    "MutableBitString supports only step=1 slices; "
+                    "use .reversed() for descending order")
+            b, e = offset.start, offset.stop
+            if b is None:
+                b = 0
+            elif b < 0:
+                b += self._length
+            if e is None:
+                e = self._length
+            elif e < 0:
+                e += self._length
+            b = max(0, min(b, self._length))
+            e = max(0, min(e, self._length))
+            if e <= b:
+                return BitString(0, 0)
+            return BitStringSlice(self, b, e)
+
+        if offset < 0:
+            offset += self._length
+        if not (0 <= offset < self._length):
+            raise IndexError(offset)
+        return bool((self._data[offset >> 3] >> (offset & 7)) & 1)
+
+    def __setitem__(self, offset, value):
+        if isinstance(offset, slice):
+            if offset.step not in (None, 1):
+                raise ValueError(
+                    "MutableBitString supports only step=1 slices; "
+                    "reverse the source with .reversed() instead")
+            b, e = offset.start, offset.stop
+            if b is None:
+                b = 0
+            elif b < 0:
+                b += self._length
+            if e is None:
+                e = self._length
+            elif e < 0:
+                e += self._length
+            b = max(0, min(b, self._length))
+            e = max(0, min(e, self._length))
+            slice_len = e - b
+            n = min(slice_len, len(value))
+            for i in range(n):
+                pos = b + i
+                if value[i]:
+                    self._data[pos >> 3] |= 1 << (pos & 7)
+                else:
+                    self._data[pos >> 3] &= ~(1 << (pos & 7))
+            return
+
+        if offset < 0:
+            offset += self._length
+        if not (0 <= offset < self._length):
+            raise IndexError(offset)
+        if value:
+            self._data[offset >> 3] |= 1 << (offset & 7)
+        else:
+            self._data[offset >> 3] &= ~(1 << (offset & 7))
+
+
 if __name__ == "__main__":
     a = BitString(0x1234, 16)
     print(a)
@@ -288,4 +403,4 @@ if __name__ == "__main__":
     print(e)
 
     print(e[2:10])
-    
+
