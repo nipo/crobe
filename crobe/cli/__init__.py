@@ -12,6 +12,7 @@ except RuntimeError:
     pass
 
 from . import xilinx
+from . import altera
 from . import memory
 from . import chip
 from . import bscan
