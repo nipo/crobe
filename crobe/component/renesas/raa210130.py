@@ -50,11 +50,11 @@ class Raa210130(i2c.AddressedSlave):
 
         pretty = reg_class(int(value))
 
-        reg_size = reg_class._width // 8
+        reg_size = (reg_class._width + 7) // 8
         raw = int(value).to_bytes(reg_size, "little")
 
         self.logger.trace("Reg write %s (%02x): %s (%s)", reg_class.__name__, reg, pretty, raw.hex())
-        super().mem_write(addr, raw)
+        self.port.execute([i2c.Write(self.saddr, bytes([addr]) + raw)])
 
 @i2c.Interface.db.register("raa210130")
 def raa_get(bus):
