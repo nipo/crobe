@@ -9,7 +9,7 @@ class Adapter(basic.Adapter):
     def open(self, interface_name):
         if interface_name == "jtag":
             return basic.Adapter.open(self, interface_name,
-                                      gpio_output = 0x1d, gpio_value = 0x0000,
+                                      gpio_output = 0x1d, gpio_value = 0x000b,
                                       channel = "A")
 
 @model.HwRoot.register
