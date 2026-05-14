@@ -312,16 +312,16 @@ class SwdInterface(JLinkInterface, swd.Interface):
                         used += 2
 
                 elif isinstance(op, swd.Wakeup):
-                    c = (op.cycles + 7) // 8
-                    oe_list.append(b"\xff" * c)
-                    out_list.append(b'\xff' * c)
-                    used += c
+                    nbytes = (op.cycles + 7) // 8
+                    oe_list.append(b"\xff" * nbytes)
+                    out_list.append(b'\xff' * nbytes)
+                    used += nbytes
 
                 elif isinstance(op, swd.Run):
-                    c = (op.cycles + 7) // 8
-                    oe_list.append(b"\xff" * c)
-                    out_list.append(b'\x00' * c)
-                    used += c
+                    nbytes = (op.cycles + 7) // 8
+                    oe_list.append(b"\xff" * nbytes)
+                    out_list.append(b'\x00' * nbytes)
+                    used += nbytes
 
                 elif isinstance(op, swd.SelectionOperation):
                     d = op.out.data

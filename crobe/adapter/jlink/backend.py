@@ -306,10 +306,11 @@ class Handle(Component):
         assert tms_len == tdi_len
         assert 0 < tms_len <= 0xffff
 
-        if v >= 5:
+        major = self.hardware_version[1]
+        if major >= 5:
             cmd = [HwJtag3(tms, tdi, tms_len)]
         else:
-            cmd = [HwJtag(tms, tdi, tms_len), HwJtagGetResult()]
+            cmd = [HwJtag2(tms, tdi, tms_len)]
         self.execute(cmd)
 
         tdo = cmd[0].tdo
@@ -462,7 +463,11 @@ class GetHwVersion(Command):
     rsp_size = False, 4
 
     def response_handle(self, blob):
-        self.type, self.major, self.minor, self.rev = blob
+        v = int.from_bytes(blob, "little")
+        self.type = v // 1_000_000
+        self.major = (v // 10_000) % 100
+        self.minor = (v // 100) % 100
+        self.rev = v % 100
 
 class GetState(Command):
     cmd = 0x07
@@ -695,8 +700,8 @@ class HwJtag2(Command):
         return b'\x00' + self.length.to_bytes(2, "little") + self.tms + self.tdi
 
     def response_handle(self, data):
-        self.tdo = data[:-1]
-        self.ret = data[-1]
+        self.tdo = data
+        self.ret = 0
 
 class HwJtag3(Command):
     cmd = 0xCF
@@ -706,20 +711,18 @@ class HwJtag3(Command):
         self.tdi = tdi
         self.length = length
 
-    def response_size_parse(self, blob):
-        self.tdo = blob
-        return 1
-
     @property
     def rsp_size(self):
-        return True, (self.length + 7) // 8
+        return False, (self.length + 7) // 8 + 1
 
     @property
     def cmd_args(self):
         return b'\x00' + self.length.to_bytes(2, "little") + self.tms + self.tdi
 
     def response_handle(self, data):
-        self.ret = data[0]
+        n = (self.length + 7) // 8
+        self.tdo = data[:n]
+        self.ret = data[n]
 
 #class HwJtagWrite(Command):
 #    cmd = 0xD5
