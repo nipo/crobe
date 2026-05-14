@@ -347,7 +347,7 @@ class SwdInterface(JLinkInterface, swd.Interface):
                     try:
                         ack = swd.Ack(0x7 & (in_blob[byte] >> bit))
                     except ValueError:
-                        ack = swd.Ack.INVALID
+                        ack = swd.Ack.INVALID011
 
                     op.ack = ack
                     if isinstance(op, swd.Read):
