@@ -325,12 +325,23 @@ class Handle(pipe.Interface, Context):
                 self._do_write(o.data)
                 continue
 
-            if isinstance(o, pipe.Read) and o.size != 0:
+            if isinstance(o, pipe.Read):
+                if o.size == 0:
+                    o.data = b''
+                    continue
+
+                if o.size is None:
+                    deadline = time.time() + timeout
+                    rsp = b''
+                    while not rsp and time.time() < deadline:
+                        rsp = self._read()
+                    self.logger.protocol(">> %s", binascii.b2a_hex(rsp))
+                    o.data = rsp
+                    continue
+
                 rsp = b''
-                while len(rsp) < (o.size or 0):
+                while len(rsp) < o.size:
                     rsp += self._do_read(o.size - len(rsp), timeout = timeout)
-                    if o.size is None:
-                        break
                 o.data = rsp
                 continue
 
