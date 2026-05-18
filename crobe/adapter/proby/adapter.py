@@ -42,6 +42,11 @@ class ProbyAdapter(basic.Adapter):
 
         self.logger.trace("Using internal chain of Proby, starting discovery")
 
+        # Reset both channels' bitmodes before opening JTAG on B. A
+        # previous run may have left channel A in SYNCFF mode, which
+        # interferes with reopening channel B as MPSSE.
+        self.device.reset()
+
         jtag_intf = basic.Adapter.open(self, "jtag", channel = "B", resetn_pin = 9, name = "pint-"+self.serial_number,
                                        gpio_output = 0, gpio_value = 0)
         jtag_intf.logger.setLevel(logging.WARNING)
