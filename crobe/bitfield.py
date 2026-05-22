@@ -245,8 +245,10 @@ class _register_meta(type):
         return new_class
 
 class Bitfield(object, metaclass = _register_meta):
+    DEFAULT = 0
+
     def __init__(self, *args, **kwargs):
-        self.__value = 0
+        self.__value = self.DEFAULT
 
         if args and len(args) != 1:
             raise ValueError("Cannot specify more than one init value")
