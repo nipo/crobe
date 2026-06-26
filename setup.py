@@ -13,7 +13,7 @@ setup(
         "Programming Language :: Python",
     ],
     package_data = {
-        '': ['*.bit.gz', '*.hex'],
+        '': ['*.bit.gz', '*.fs.gz', '*.hex'],
     },
     entry_points={
         'console_scripts': [
