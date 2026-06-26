@@ -179,11 +179,11 @@ class Adapter(fx2.Adapter):
 
         if not self.__inited:
             from ...loadable.object import Program
-            from pkg_resources import resource_filename
+            from ...package_resource import PackageResource
             fw_name = self.fw[(self.device.idVendor << 16)
                               | self.device.idProduct]
-            fn = resource_filename(__name__, fw_name)
-            program = Program.from_file(fn)
+            with PackageResource(__package__, fw_name).path() as fn:
+                program = Program.from_file(str(fn))
 
             self.firmware_load(program)
             self.device.set_configuration(1)

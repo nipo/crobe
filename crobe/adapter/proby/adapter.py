@@ -34,12 +34,12 @@ class ProbyAdapter(basic.Adapter):
 
         self.logger.trace("Reprogramming FPGA to use mode %s", mode)
 
-        from pkg_resources import resource_filename
+        from ...package_resource import PackageResource
         fw_name = "fw/" + mode + ".bit.gz"
-        fd = resource_filename(__name__, fw_name)
+        with PackageResource(__package__, fw_name).path() as fw_path:
+            obj = XilinxBitstream(str(fw_path))
 
-        obj = XilinxBitstream(fd)
-                 
+
         self.logger.trace("Using internal chain of Proby, starting discovery")
 
         jtag_intf = basic.Adapter.open(self, "jtag", channel = "B", resetn_pin = 9, name = "pint-"+self.serial_number,

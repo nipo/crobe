@@ -168,14 +168,14 @@ class Series67(jtag.Tap, JtagSramFpga):
 @Series67.application_db.register("spi")
 def spi_interface(tap):
     from ...loadable.object import Program
-    import pkg_resources
+    from ...package_resource import PackageResource
 
     fw_name = f"fw/{int(tap.idcode.drop_revision()):#010x}_jtag_spi.bit.gz"
-    try:
-        filename = pkg_resources.resource_filename(__name__, fw_name)
-    except:
+    resource = PackageResource(__package__, fw_name)
+    if not resource.exists():
         raise db.NoMatch("spi")
-    tap.load(Program.from_file(filename))
+    with resource.path() as filename:
+        tap.load(Program.from_file(str(filename)))
 
     from ..jtag_spi_bridge import JtagSpiBridge
     return JtagSpiBridge(tap, tap.USER_IR[0], tap.USER_IR[1], tap.max_freq)
