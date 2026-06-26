@@ -23,7 +23,6 @@ setup(
             'eggsecutable = crobe.cli.console:cli',
         ]
     },
-    use_2to3 = False,
     packages = find_packages(),
     install_requires = ["pyelftools >= 0.23", "click >= 0.6", "ptpython", "tqdm", "pyusb", "pyserial", "decorator", "paramiko"],
     dependency_links=[
