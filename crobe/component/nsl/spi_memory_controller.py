@@ -2,12 +2,25 @@ from ...model import PortComponent
 from ...protocol import spi
 import enum
 
+@spi.Target.db.register("spi_mem_ctrl")
 class SpiMemoryController(PortComponent):
     def __init__(self, port, name = "SpiMemoryController"):
         super().__init__(port, name)
         self.write_opcode = 0xf8
         self.read_opcode = 0
         self.addr_size = 1
+
+    def option_set(self, opt):
+        k, v = opt.split('=', 1)
+        if k == 'addr_size':
+            self.addr_size = int(v)
+            return
+        if k == 'read_opcode':
+            self.read_opcode = int(v, 16)
+            return
+        if k == 'write_opcode':
+            self.write_opcode = int(v, 16)
+            return
 
     def mem_read(self, addr, size):
         addr = int(addr).to_bytes(self.addr_size, "big")
