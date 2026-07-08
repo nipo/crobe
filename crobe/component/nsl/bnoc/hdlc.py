@@ -66,7 +66,7 @@ class Hdlc(datagram.Interface):
     @classmethod
     def __crc(cls, data, init = 0):
         from ....util.crc import Crc
-        state = Crc.hdlc(init)
+        state = Crc.from_name("hdlc")(init)
         state.update(data)
         return bytes(state)
 
