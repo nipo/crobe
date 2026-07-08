@@ -6,7 +6,8 @@ import enum
 
 parts = {
     0x362c: "5EB013B",
-    0x364f: "5ED065B",
+    0x364f: "5ED065B_32A",
+    0x363f: "5ED065B_23A", # ES and production are only distinguished by the version (bits 31:28): 0 for ES and 4 for production
 }
 
 @jtag.Chain.db.register(*[PartId(0, 0x6e, x) for x in parts.keys()])
