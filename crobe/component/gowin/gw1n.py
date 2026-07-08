@@ -298,6 +298,9 @@ class Gw2a(GowinFpga):
 class Gw5a(GowinFpga):
     max_freq = 30e6
 
+    # Undocumented instruction used by openFPGALoader for GW5A recovery
+    ISC_UNKNOWN_3F = jtag.Instruction(0x3f, "ISC_DEFAULT")
+
     class Status(bitfield.Bitfield):
         all             = bitfield.Field(0, 32)
         CRCError        = bitfield.BooleanField(0)
@@ -331,6 +334,34 @@ class Gw5a(GowinFpga):
         Wakeup          = bitfield.BooleanField(30)
         AutoErase       = bitfield.BooleanField(31)
     STATUS_REGISTER = jtag.Dr(32, type = Status)
+
+    def _sram_erase(self):
+        self.logger.trace("GW5A: Erasing SRAM")
+        self.logger.info("Status before erase:")
+        status = self.status_read()
+
+        # GW5A workaround from OpenFPGALoader: when AutoBoot2ndFail, Timeout, or BadCommand
+        # are set, send undocumented 0x3F sequence before erase
+        if status.AutoBoot2ndFail or status.Timeout or status.BadCommand:
+            self.logger.info("GW5A: Status has AutoBoot2ndFail=%s Timeout=%s BadCommand=%s, "
+                             "sending 0x3F recovery sequence",
+                             status.AutoBoot2ndFail, status.Timeout, status.BadCommand)
+            self.execute([
+                self.ISC_ENABLE.cmd(),
+                self.cmd_run(6),
+                self.ISC_UNKNOWN_3F.cmd(),
+                self.cmd_run(6),
+                self.ISC_DISABLE.cmd(),
+                self.cmd_run(6),
+                self.ISC_NOOP.cmd(),
+                self.cmd_run(6),
+                self.IDCODE.cmd(),
+                self.cmd_run(6),
+                self.ISC_NOOP.cmd(),
+                self.cmd_run(1000),  # 125*8 = 1000 TCK cycles
+            ])
+            
+        super()._sram_erase()
 
 @GowinFpga.application_db.register("spi")
 def spi_interface(tap):
