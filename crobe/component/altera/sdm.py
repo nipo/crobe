@@ -266,7 +266,7 @@ class Sdm(PortComponent):
         for c in channels:
             bitfield |= 1 << int(c)
 
-        rsp = self.command(Command.GET_VOLTAGE, int(bitfield).to_bytes(4, "little"))
+        rsp = self.command(Opcode.GET_VOLTAGE, int(bitfield).to_bytes(4, "little"))
         vs = [(int.from_bytes(rsp[i:i+4], "little") / 0x10000) for i in range(0, len(rsp), 4)]
         return dict(zip(sorted(channels), vs))
 
@@ -277,7 +277,7 @@ class Sdm(PortComponent):
         for c in channels:
             bitfield |= 1 << int(c)
 
-        rsp = self.command(Command.GET_TEMPERATURE, int(bitfield).to_bytes(4, "little"))
+        rsp = self.command(Opcode.GET_TEMPERATURE, int(bitfield).to_bytes(4, "little"))
         ret = {}
         for c, off in zip(sorted(channels), range(0, len(rsp), 4)):
             v = int.from_bytes(rsp[off:off+4], "little")

@@ -43,3 +43,4 @@ from . import stusb4500
 from . import max31760
 from . import mpm54304
 from . import swire
+from . import sdm
