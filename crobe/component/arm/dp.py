@@ -56,7 +56,7 @@ class Dp(PortComponent, FreqCapper):
 
             try:
                 self.target_id = PartId.from_idcode(self.banked_reg_read(self.TARGETID))
-            except (DpAccessFailure, ValueError):
+            except (AssertionError, DpAccessFailure, ValueError):
                 self.target_id = None
 
             self.logger.info("DP Target ID: %s", self.target_id)
