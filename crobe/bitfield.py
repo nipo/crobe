@@ -99,7 +99,7 @@ class ScaledField(Field):
         return super().represent(self.scale * (value + self.scale_offset))
 
     def parse(self, value):
-        return super().parse((int(value) - self.scale_offset) // self.scale)
+        return super().parse(round(value / self.scale - self.scale_offset))
 
     def docstring(self):
         return _Field.docstring(self) + f"""
