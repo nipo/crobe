@@ -3,6 +3,7 @@ from collections import deque
 from ....model import PortComponent
 from ....protocol import pipe, datagram
 
+@pipe.Interface.db.register("bnoc_sized")
 class Sized(datagram.Interface):
     def __init__(self, port):
         assert isinstance(port, pipe.Interface)
