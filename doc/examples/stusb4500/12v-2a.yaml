@@ -1,0 +1,8 @@
+# Sink 12V 2A, falling back to 5V 0.5A
+base: device
+pdo:
+  - {current: 0.5A}
+  - {voltage: 12V, current: 2A}
+pdo_count: 2
+usb_comm_capable: true
+gpio_cfg: debug
