@@ -1,0 +1,15 @@
+# 25kHz PWM fan driven from remote diode, quiet below 40°C, full speed above 70°C
+base: device
+temperature_source: remote
+pwm_frequency: 25000
+ramp_rate: 6.25
+spin_up: true
+tach2: false
+mask: {tach2: true}
+threshold: {remote_high: 80, remote_overtemp: 95}
+lut:
+  16: 20%
+  40: 40%
+  50: 60%
+  60: 80%
+  70: 100%
