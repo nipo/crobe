@@ -7,59 +7,88 @@ from .embedded_ice import *
 import functools
 from . import armv5
 
-class CpuContext:
-    def __init__(self, **regs):
-        self.regs = regs
+class MemoryAbort(IOError):
+    pass
 
-    def save(self, debug):
-        pass
+class Context:
+    """
+    Core registers of a halted ARM926EJ-S, all modes included.
 
-    def restore(self, debug):
-        pass
+    `banks` maps each register bank (see `armv5.Mode.bank`) to the
+    registers it holds, `spsr` maps each bank having one to its
+    SPSR. `pc` is the address execution resumes at.
+    """
 
-class Arm926Context(CpuContext):
-    def save(self, debug):
-        cmds = [
-            XpsrRead(False),
-            XpsrRead(True),
-            RegsRead(range(0, 16)),
-            ]
-        debug.execute(cmds)
-        self.regs["cpsr"] = cmds[0].value
-        self.regs["spsr"] = cmds[1].value
-        for no, value in cmds[2].values.items():
-            self.regs[f"r{no:02d}"] = value
+    def __init__(self, cpsr, pc, banks, spsr, moe):
+        self.cpsr = cpsr
+        self.pc = pc
+        self.banks = banks
+        self.spsr = spsr
+        self.moe = moe
 
-    def restore(self, debug):
-        cmds = [
-            XpsrWrite(False, self.regs["cpsr"]),
-            XpsrWrite(True, self.regs["spsr"]),
-            RegsWrite({i:self.regs[f"r{i:02d}"] for i in range(15)}),
-            ]
-        debug.execute(cmds)
+    @property
+    def mode(self):
+        return armv5.Mode(armv5.Psr(self.cpsr).mode)
 
-    @classmethod
-    def normalized(cls):
-        return cls(
-            cpsr = 0xd3,
-            spsr = 0,
-            r0 = 0, r1 = 0, r2 = 0, r3 = 0,
-            r4 = 0, r5 = 0, r6 = 0, r7 = 0,
-            r8 = 0, r9 = 0, r10 = 0, r11 = 0,
-            r12 = 0, r13 = 0, r14 = 0, r15 = 0,
-        )
+    def reg(self, no, mode = None):
+        """
+        Register `no` (0-15) as seen from `mode`, current mode by
+        default.
+        """
+        if no == 15:
+            return self.pc
+        mode = mode or self.mode
+        return self.banks[mode.register_bank(no)][no]
+
+    def reg_set(self, no, value, mode = None):
+        if no == 15:
+            self.pc = value
+            return
+        mode = mode or self.mode
+        self.banks[mode.register_bank(no)][no] = value
 
     def dump(self):
-        for k, v in sorted(self.regs.items()):
-            print(f"{k}: {v:#010x}")
-    
+        print(f"cpsr: {self.cpsr:#010x} ({self.mode.name}), entry: {self.moe.name}")
+        print(f"pc: {self.pc:#010x}")
+        for bank, regs in self.banks.items():
+            print(f"{bank.name}: " + ", ".join(f"r{no}={v:#010x}" for no, v in sorted(regs.items())))
+        for bank, value in self.spsr.items():
+            print(f"spsr_{bank.name}: {value:#010x}")
+
 class Debug(PortComponent):
     """
-    Passed port must be a ARM classic TAP.
+    Passed port must be a ARM926EJ-S TAP.
+
+    Halting saves the whole core context (see `Context`), resuming
+    writes it back. In between, register accessors work on the saved
+    context while memory and coprocessor accessors act on the target
+    and clobber core registers.
     """
+
+    # r15 value stored by the first debug instruction (STM) after
+    # entry, relative to the address execution resumes at. This holds
+    # for all ARM state entry reasons.
+    PC_ENTRY_OFFSET = 24
+
+    # Data registers for memory transfers. r0 holds the base address.
+    MEM_REGS = range(1, 15)
+
+    # CP15 registers and bits used for cache maintenance
+    CP15_CONTROL = (0, 1, 0, 0)
+    CP15_DEBUG_OVERRIDE = (0, 15, 0, 0)
+    CP15_DCACHE_TEST_CLEAN = (0, 7, 10, 3)
+    CP15_WRITE_BUFFER_DRAIN = (0, 7, 10, 4)
+    CP15_ICACHE_INVALIDATE = (0, 7, 5, 0)
+    DEBUG_OVERRIDE_TEST_CLEAN_ALL = 1 << 19
+    TEST_CLEAN_DONE = 1 << 30
+    CONTROL_MMU = 1 << 0
+    CONTROL_DCACHE = 1 << 2
+    CONTROL_ICACHE = 1 << 12
 
     def __init__(self, port):
         super().__init__(port, "Debug")
+        self.__context = None
+        self.__written = False
 
     def lower(self, op_list):
         ret = []
@@ -133,6 +162,7 @@ class Debug(PortComponent):
         self.debug_control(disable = False, intdis = False, dbgack = False, dbgrq = False, monitor = False)
 
     def debug_disable(self):
+        self.__context = None
         self.execute([
             self.cmd_ice(Register.DebugCtrl, DebugControl(disable = 1)),
             self.port.RESTART.cmd(),
@@ -178,44 +208,190 @@ class Debug(PortComponent):
             ])
         self.halt_wait()
         self.debug_control(dbgack = True, dbgrq = False)
-        
+        self.__context = None
+        self.__written = False
+        return self.context()
+
+    def context(self):
+        """
+        Context of the halted core, saved on first call after halt.
+        """
+        if self.__context is None:
+            self.__context = self.context_save()
+        return self.__context
+
+    @staticmethod
+    def mode_cpsr(cpsr, bank):
+        """
+        `cpsr` switched to a mode accessing `bank`. User bank is
+        accessed from System mode to stay privileged.
+        """
+        mode = armv5.Mode.Sys if bank == armv5.Mode.Usr else bank
+        return (cpsr & ~0x1f) | int(mode)
+
+    def context_save(self):
+        """
+        Reads all core registers. Must run before any other debug
+        instruction is executed after entry, as PC is derived from
+        the first one.
+        """
+        status = DebugStatus(self.ice(Register.DebugStatus))
+        if status.itbit or status.ijbit:
+            raise NotImplementedError("Debugging Thumb or Jazelle state is not supported")
+
+        # Registers first, CPSR read clobbers r0
+        current = RegsRead(range(16))
+        cpsr_read = XpsrRead(False)
+        self.execute([current, cpsr_read])
+
+        cpsr = cpsr_read.value
+        mode = armv5.Mode(armv5.Psr(cpsr).mode)
+        banks = {bank: {} for bank in armv5.Mode.banks()}
+        for no in range(15):
+            banks[mode.register_bank(no)][no] = current.values[no]
+
+        commands = []
+        spsr_reads = {}
+        bank_reads = {}
+        if mode.has_spsr:
+            spsr_reads[mode.bank] = XpsrRead(True)
+            commands.append(spsr_reads[mode.bank])
+        for bank in armv5.Mode.banks():
+            if bank == mode.bank:
+                continue
+            bank_reads[bank] = RegsRead(bank.banked_registers)
+            commands += [
+                XpsrWrite(False, self.mode_cpsr(cpsr, bank)),
+                bank_reads[bank],
+            ]
+            if bank.has_spsr:
+                spsr_reads[bank] = XpsrRead(True)
+                commands.append(spsr_reads[bank])
+        commands.append(XpsrWrite(False, cpsr))
+        self.execute(commands)
+
+        # Registers read in entry mode take precedence, others banks
+        # may see r0 clobbered by SPSR reads.
+        for bank, read in bank_reads.items():
+            for no, value in read.values.items():
+                banks[bank].setdefault(no, value)
+
+        return Context(
+            cpsr = cpsr,
+            pc = (current.values[15] - self.PC_ENTRY_OFFSET) & 0xffffffff,
+            banks = banks,
+            spsr = {bank: read.value for bank, read in spsr_reads.items()},
+            moe = Moe(status.moe),
+        )
+
+    def cmd_context_restore(self, context):
+        """
+        Commands writing back all registers but PC from `context`.
+        """
+        mode = context.mode
+        commands = []
+        for bank in armv5.Mode.banks():
+            if bank == mode.bank:
+                continue
+            commands += [
+                XpsrWrite(False, self.mode_cpsr(context.cpsr, bank)),
+                RegsWrite({no: context.banks[bank][no] for no in bank.banked_registers}),
+            ]
+            if bank.has_spsr:
+                commands.append(XpsrWrite(True, context.spsr[bank]))
+        commands.append(XpsrWrite(False, context.cpsr))
+        if mode.has_spsr:
+            commands.append(XpsrWrite(True, context.spsr[mode.bank]))
+        commands.append(RegsWrite({no: context.reg(no) for no in range(15)}))
+        return commands
+
     def cmd_mcr(self, coprocessor, op1, crn, crm, op2, value):
         if coprocessor == 15:
             return Cp15Scan(op1, op2, crn, crm, value)
-        raise NotImplemented("Cannot access other CP than 15")
+        raise NotImplementedError("Cannot access other CP than 15")
+
+    def cp15_complete(self, op, retries = 10):
+        for i in range(retries):
+            if op.complete:
+                return
+            self.execute([Cp15Readback(op)])
+        raise IOError("CP15 access did not complete")
 
     def mcr(self, coprocessor, op1, crn, crm, op2, value):
         op = self.cmd_mcr(coprocessor, op1, crn, crm, op2, value)
         self.execute([op])
+        self.cp15_complete(op)
         
     def cmd_mrc(self, coprocessor, op1, crn, crm, op2):
         if coprocessor == 15:
             return Cp15Scan(op1, op2, crn, crm)
-        raise NotImplemented("Cannot access other CP than 15")
+        raise NotImplementedError("Cannot access other CP than 15")
 
     def mrc(self, coprocessor, op1, crn, crm, op2):
         op = self.cmd_mrc(coprocessor, op1, crn, crm, op2)
         self.execute([op])
+        self.cp15_complete(op)
         return op.rdata
-        
-    def reg_read(self, no):
-        regs = self.regs_read(set([no]))
-        return regs[no]
 
-    def reg_write(self, no, value):
-        self.regs_write({no: value})
+    def dcache_clean(self):
+        override = self.mrc(15, *self.CP15_DEBUG_OVERRIDE)
+        self.mcr(15, *self.CP15_DEBUG_OVERRIDE, override | self.DEBUG_OVERRIDE_TEST_CLEAN_ALL)
+        try:
+            for i in range(100):
+                if self.mrc(15, *self.CP15_DCACHE_TEST_CLEAN) & self.TEST_CLEAN_DONE:
+                    return
+            raise RuntimeError("Data cache clean did not complete")
+        finally:
+            self.mcr(15, *self.CP15_DEBUG_OVERRIDE, override)
+
+    def caches_sync(self):
+        """
+        Makes memory written through the data side visible to
+        instruction fetches.
+        """
+        self.dcache_clean()
+        self.mcr(15, *self.CP15_WRITE_BUFFER_DRAIN, 0)
+        self.mcr(15, *self.CP15_ICACHE_INVALIDATE, 0)
+
+    def caches_disable(self):
+        """
+        Disables MMU and caches, memory accesses then use physical
+        addresses. Settings are kept when resuming.
+        """
+        self.caches_sync()
+        control = self.mrc(15, *self.CP15_CONTROL)
+        control &= ~(self.CONTROL_MMU | self.CONTROL_DCACHE | self.CONTROL_ICACHE)
+        self.mcr(15, *self.CP15_CONTROL, control)
+
+    def reg_read(self, no, mode = None):
+        """
+        Register `no` of the saved context, as seen from `mode`
+        (current mode by default).
+        """
+        return self.context().reg(no, mode)
+
+    def reg_write(self, no, value, mode = None):
+        """
+        Updates saved context, written to the core on resume.
+        """
+        self.context().reg_set(no, value, mode)
 
     def regs_read(self, nos):
+        """
+        Raw read of current mode registers, r15 value depends on
+        executed debug instructions.
+        """
         command = RegsRead(set(nos))
         self.execute([command])
         return command.values
 
     def regs_write(self, reg_map):
+        """
+        Raw write of current mode registers, r15 excluded.
+        """
         self.execute([RegsWrite(reg_map)])
 
     def asm_run(self, opcodes, *, sysspeed = False):
-        for i, o in enumerate(opcodes):
-            print(f"asm run {i:d}: {o:08x}")
         commands = [
             self.cmd_watch(0, address = 0, address_mask = 0, instruction = 0, instruction_mask = 0),
         ]
@@ -233,96 +409,133 @@ class Debug(PortComponent):
             self.halt_wait(syscomp = True)
         else:
             self.execute(commands)
-        
-    def mem_read(self, addr, size):
-        # Align base address
-        offset = addr & 0x3
-        addr -= offset
-        size += offset
 
-        data = b''
+    @classmethod
+    def access_plan(cls, addr, size):
+        """
+        Splits [addr, addr + size) into naturally aligned accesses,
+        grouped as [address, unit, count] runs fitting `MEM_REGS`.
+        """
+        plan = []
+        end = addr + size
+        while addr < end:
+            left = end - addr
+            if addr & 1 or left < 2:
+                unit = 1
+            elif addr & 2 or left < 4:
+                unit = 2
+            else:
+                unit = 4
+            if plan and plan[-1][1] == unit and plan[-1][2] < len(cls.MEM_REGS):
+                plan[-1][2] += 1
+            else:
+                plan.append([addr, unit, 1])
+            addr += unit
+        return plan
 
-        self.logger.trace("Reading at %#10x: %d bytes", addr, size)
+    def memory_cpsr(self, context):
+        """
+        CPSR used for memory accesses: entry mode, unless it is User
+        mode (unprivileged) or Abort mode (hides aborts).
+        """
+        if context.mode in (armv5.Mode.Usr, armv5.Mode.Abt):
+            return self.mode_cpsr(context.cpsr, armv5.Mode.Usr)
+        return context.cpsr
+
+    def abort_check(self, cpsr, addr):
+        read = XpsrRead(False)
+        self.execute([read])
+        if armv5.Psr(read.value).mode == armv5.Psr(cpsr).mode:
+            return
+        self.execute([XpsrWrite(False, cpsr)])
+        raise MemoryAbort(f"Memory abort accessing {addr:#010x}")
+
+    def mem_transfer(self, cpsr, base, unit, count, load):
+        """
+        Transfers between memory at `base` and `count` first `MEM_REGS`.
+        """
+        regs = self.MEM_REGS[:count]
+        if unit == 4:
+            mask = sum(1 << no for no in regs)
+            op = armv5.ldmia if load else armv5.stmia
+            self.asm_run([op(0, mask), armv5.nop()], sysspeed = True)
+        else:
+            if load:
+                op = armv5.ldrb if unit == 1 else armv5.ldrh
+            else:
+                op = armv5.strb if unit == 1 else armv5.strh
+            for no in regs:
+                self.asm_run([op(no, 0, unit, post_index = True), armv5.nop()], sysspeed = True)
+        self.abort_check(cpsr, base)
+
+    def mem_access(self, addr, size, load, data = None):
+        context = self.context()
+        cpsr = self.memory_cpsr(context)
+        ret = b''
 
         self.debug_control(dbgack = False)
+        if cpsr != context.cpsr:
+            self.execute([XpsrWrite(False, cpsr)])
+        try:
 
-        while len(data) < size:
-            # Set base address
-            base = addr + len(data)
-            self.reg_write(14, base)
+            for base, unit, count in self.access_plan(addr, size):
+                regs = self.MEM_REGS[:count]
+                values = {0: base}
+                if not load:
+                    for no in regs:
+                        values[no] = int.from_bytes(data[:unit], "little")
+                        data = data[unit:]
+                self.regs_write(values)
 
-            # Read as much memory as possible to r0-r13
-            reg_count = (size - len(data) + 3) // 4
-            if reg_count > 14:
-                reg_count = 14
-            mask = (1 << reg_count) - 1
+                self.mem_transfer(cpsr, base, unit, count, load)
 
-            self.logger.trace("Loading %d regs at 0x%08x", reg_count, base)
+                if load:
+                    for no, value in sorted(self.regs_read(regs).items()):
+                        ret += value.to_bytes(unit, "little")
+        finally:
+            if cpsr != context.cpsr:
+                self.execute([XpsrWrite(False, context.cpsr)])
+            self.debug_control(dbgack = True)
 
-            self.asm_run([
-                armv5.ldmia(14, mask, update = True),
-                armv5.nop(),
-            ], sysspeed = True)
+        return ret
 
-            # Read matching registers
-            regs = self.regs_read(set(range(reg_count)))
-
-            # Append to blob
-            for no in range(reg_count):
-                data += regs[no].to_bytes(4, "little")
-
-        self.debug_control(dbgack = True)
-
-        # Drop initial alignment
-        data = data[offset:size]
-        
+    def mem_read(self, addr, size):
+        """
+        Reads memory through current MMU and caches setup, with
+        privileges of `memory_cpsr`. Raises `MemoryAbort` on abort.
+        """
+        self.logger.trace("Reading at %#10x: %d bytes", addr, size)
+        data = self.mem_access(addr, size, load = True)
         self.logger.trace("-> %s", data.hex())
-
         return data
             
     def mem_write(self, addr, data):
-        # Dont support misalignment for now
-        if addr & 0x3:
-            raise ValueError(f"Unaligned address {addr:x}")
-        if len(data) & 0x3:
-            raise ValueError(f"Unaligned blob")
-
+        """
+        Writes memory, see `mem_read`. Caches are synchronized on
+        resume.
+        """
         self.logger.trace("Writing %d bytes at %#10x", len(data), addr)
         self.logger.trace("<- %s", data.hex())
-        
-        self.debug_control(dbgack = False)
+        self.__written = True
+        self.mem_access(addr, len(data), load = False, data = bytes(data))
 
-        while data:
-            # Select at most 14 words to write
-            reg_count = len(data) // 4
-            if reg_count > 14:
-                reg_count = 14
-            mask = (1 << reg_count) - 1
-
-            # Set base address
-            regs = {14 : addr}
-
-            # Fill data to write in r0-r13
-            for i in range(reg_count):
-                regs[i] = int.from_bytes(data[:4], "little")
-                data = data[4:]
-                addr += 4
-
-            self.regs_write(regs)
-
-            # Commit to RAM
-            self.asm_run([
-                armv5.stmia(14, mask, update = True),
-                armv5.nop(),
-            ], sysspeed = True)
-        self.debug_control(dbgack = True)
-            
-    def resume(self, pc,
+    def resume(self, pc = None,
                intdis = False,
                dbgack = False,
                disable = False,
                monitor = False):
-        self.logger.trace("Resuming execution at %#10x", pc)
+        """
+        Writes back saved context and resumes execution at `pc`,
+        saved context PC by default.
+        """
+        context = self.context()
+        if pc is not None:
+            context.pc = pc
+
+        if self.__written:
+            self.caches_sync()
+
+        self.logger.trace("Resuming execution at %#10x", context.pc)
         self.debug_control(dbgack = dbgack,
                            intdis = intdis,
                            monitor = monitor,
@@ -330,19 +543,22 @@ class Debug(PortComponent):
         commands = [
             self.cmd_watch(0),
             self.cmd_watch(1),
-            ResumeAt(pc),
         ]
+        commands += self.cmd_context_restore(context)
+        commands.append(ResumeAt(context.pc))
         self.execute(commands)
 
+        self.__context = None
+        self.__written = False
+
     def dcc_pop_fast(self, count):
-#        self.logger.info("Popping %d DCC items", count)
         rsp = []
         while len(rsp) < count:
             cmds = [IceScan(Register.CommData) for x in range(count - len(rsp))]
             self.execute(cmds)
             for r in cmds:
                 if r.rdata_valid:
-                    rsp.append(r.rata)
+                    rsp.append(r.rdata)
         return rsp
 
     def dcc_pop(self, count):
@@ -480,6 +696,11 @@ class DebugScan(Op):
         return v
 
 class Cp15Scan(Op):
+    """
+    CP15 register access through scan chain 15. Access is complete
+    when `complete` is set, otherwise `Cp15Readback` must be issued
+    until it is.
+    """
     scan_chain = "Cp15"
 
     def __init__(self, op1, op2, crn, crm, data = None):
@@ -489,34 +710,42 @@ class Cp15Scan(Op):
         self.crm = crm
         self.wdata = data
         self.rdata = None
+        self.complete = False
 
     def ops(self, tap):
-        self.__Cp15 = tap.Cp15
-
-        reg = self.__Cp15(data = self.wdata or 0,
-                          access = 1,
-                          op1 = self.op1,
-                          op2 = self.op2,
-                          crn = self.crn,
-                          crm = self.crm,
-                          write = self.wdata is not None,
+        reg = tap.Cp15(data = self.wdata or 0,
+                       access = 1,
+                       op1 = self.op1,
+                       op2 = self.op2,
+                       crn = self.crn,
+                       crm = self.crm,
+                       write = self.wdata is not None,
         )
         
-        ret = [tap.INTEST_CP15.cmd(tdi = reg)]
-        ret.append(tap.cmd_run(1))
+        return [
+            tap.INTEST_CP15.cmd(tdi = reg),
+            tap.cmd_run(1),
+        ] + self.readback(tap)
 
-        if self.wdata is None:
-            ret += [
-                tap.INTEST_CP15.cmd(tdi = self.__Cp15()),
-                tap.cmd_run(1),
-            ]
-            ret[-2].postprocess = self.tdo_handle
-        return ret
+    def readback(self, tap):
+        cmd = tap.INTEST_CP15.cmd(tdi = tap.Cp15(), read_tdo = True)
+        cmd.postprocess = functools.partial(self.tdo_handle, tap.Cp15)
+        return [cmd, tap.cmd_run(1)]
 
-    def tdo_handle(self, tdo):
-        v = self.__Cp15(tdo)
+    def tdo_handle(self, reg_type, tdo):
+        v = reg_type(tdo)
+        self.complete = v.access
         self.rdata = v.data
         return v
+
+class Cp15Readback(Op):
+    scan_chain = "Cp15"
+
+    def __init__(self, scan):
+        self.scan = scan
+
+    def ops(self, tap):
+        return self.scan.readback(tap)
 
 class WatchPointSetup(Op):
     scan_chain = "Ice"
@@ -550,36 +779,39 @@ class WatchPointSetup(Op):
         self.thumb = thumb
         self.jazelle = jazelle
 
-        self.enable = any(x is not None for x in [address, data, instruction, privileged, dbgext, chain, range, dmas, thumb, jazelle])
+        self.enable = any(x is not None for x in [address, data, instruction, write, privileged, dbgext, chain, range, dmas, thumb, jazelle])
         self.instruction_bkpt = any(x is not None for x in [instruction, thumb, jazelle])
 
     def ops(self, tap):
         offset = Register.Wpt1AddrValue - Register.Wpt0AddrValue if self.no else 0
         control = WatchControl()
-        control_mask = WatchControl()
+        # Bits compared, data/instruction selection always is.
+        cared = WatchControl(data = True)
 
         if self.instruction_bkpt:
             control.data = 0
             control.thumb = self.thumb or False
             control.jazelle = self.jazelle or False
-            control_mask.thumb = self.thumb is not None
-            control_mask.jazelle = self.jazelle is not None
+            cared.thumb = self.thumb is not None
+            cared.jazelle = self.jazelle is not None
         else:
             control.data = 1
+            control.write = self.write or False
+            cared.write = self.write is not None
             control.dmas = self.dmas or 0
-            control_mask.dmas = 3 if self.dmas is not None else 0
+            cared.dmas = 3 if self.dmas is not None else 0
 
         control.privileged = self.privileged or False
-        control_mask.privileged = self.privileged is not None
+        cared.privileged = self.privileged is not None
 
         control.dbgext = self.dbgext or False
-        control_mask.dbgext = self.dbgext is not None
+        cared.dbgext = self.dbgext is not None
 
         control.chain = self.chain or False
-        control_mask.chain = self.chain is not None
+        cared.chain = self.chain is not None
 
         control.range = self.range or False
-        control_mask.range = self.range is not None
+        cared.range = self.range is not None
 
         control.enable = False
 
@@ -587,18 +819,18 @@ class WatchPointSetup(Op):
 
         # In any case, emit disabled control first
         ops.append(IceScan(offset + Register.Wpt0ControlValue, int(control)))
-        ops.append(IceScan(offset + Register.Wpt0ControlMask, ~int(control_mask) & ~0x8))
+        ops.append(IceScan(offset + Register.Wpt0ControlMask, ~int(cared) & 0xff))
 
         if self.enable:
             # Update address / data mask if needed
             ops.append(IceScan(offset + Register.Wpt0AddrValue, self.address or 0))
-            ops.append(IceScan(offset + Register.Wpt0AddrMask, ~self.address_mask))
+            ops.append(IceScan(offset + Register.Wpt0AddrMask, ~self.address_mask & 0xffffffff))
             if self.instruction_bkpt:
                 ops.append(IceScan(offset + Register.Wpt0DataValue, self.instruction or 0))
-                ops.append(IceScan(offset + Register.Wpt0DataMask, ~self.instruction_mask))
+                ops.append(IceScan(offset + Register.Wpt0DataMask, ~self.instruction_mask & 0xffffffff))
             else:
                 ops.append(IceScan(offset + Register.Wpt0DataValue, self.data or 0))
-                ops.append(IceScan(offset + Register.Wpt0DataMask, ~self.data_mask))
+                ops.append(IceScan(offset + Register.Wpt0DataMask, ~self.data_mask & 0xffffffff))
 
             # Lastly, enable back
             control.enable = True
@@ -664,13 +896,6 @@ class XpsrRead(Op):
         for o in ops:
             ret += o.ops(tap)
         ret[-2].postprocess = self.tdo_handle
-
-        for i in ret:
-            if isinstance(i, jtag.TapRun):
-                print("run")
-            elif isinstance(i, jtag.TapDrShift):
-                print("shift %x" % (int(i.tdi) >> 35))
-
         return ret
 
     def tdo_handle(self, tdo):
@@ -685,8 +910,6 @@ class XpsrWrite(Op):
         self.value = value
 
     def ops(self, tap):
-        self.__Debug = tap.Debug
-
         ops = [
             DebugScan(armv5.msr_imm(self.value & 0xff, 0, 1, int(bool(self.spsr)))),
             DebugScan(armv5.msr_imm((self.value >> 8) & 0xff, 0xc, 2, int(bool(self.spsr)))),
@@ -704,12 +927,7 @@ class XpsrWrite(Op):
         ret = []
         for o in ops:
             ret += o.ops(tap)
-        ret[-2].postprocess = self.tdo_handle
         return ret
-
-    def tdo_handle(self, tdo):
-        v = self.__Debug(tdo)
-        self.value = v.data
 
 class RegsWrite(Op):
     scan_chain = "Debug"
@@ -768,6 +986,10 @@ class RegsWriteSlow(Op):
         return ret
 
 class ResumeAt(Op):
+    """
+    Loads PC, then branches back to it, as leaving debug state
+    requires.
+    """
     scan_chain = "Debug"
 
     def __init__(self, pc):
@@ -781,7 +1003,9 @@ class ResumeAt(Op):
             DebugScan(armv5.nop(), data = self.pc),
             DebugScan(armv5.nop()),
             DebugScan(armv5.nop()),
-            DebugScan(armv5.nop(), sysspeed = 1),
+            DebugScan(armv5.nop()),
+            DebugScan(armv5.b(-4)),
+            DebugScan(armv5.nop(), sysspeed = True),
         ]
 
         ret = []

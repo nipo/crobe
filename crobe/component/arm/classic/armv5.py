@@ -1,5 +1,4 @@
 from .... import bitfield
-from ....util import bit
 import enum
 
 class Instr(bitfield.Bitfield):
@@ -51,45 +50,46 @@ class Alu(Instr):
     # imm = 0
     rm = bitfield.Field(0, 4)
     reg_shift = bitfield.BooleanField(4)
-    ## reg_shift = 0
     shift = bitfield.Field(5, 2)
+    ## reg_shift = 0
     shift_imm = bitfield.Field(7, 5)
     ## reg_shift = 1
-    shift = bitfield.Field(5, 2)
     rs = bitfield.Field(8, 4)
 
-def _imm8_decompose(imm8):
-    lsb = bit.ctz(imm8) & ~1
-    imm = (imm8 >> lsb) & 0xff
-    
-    if imm8 != imm << lsb:
-        raise ValueError(f"Cannot encode {imm8:#010x} as 8-bit rotated value")
+class Shift(enum.IntEnum):
+    Lsl = 0
+    Lsr = 1
+    Asr = 2
+    Ror = 3
 
-    return imm, lsb // 2
+def imm8_encode(value):
+    """
+    Encode value as an 8-bit constant rotated right by twice a
+    4-bit amount.
+    """
+    value &= 0xffffffff
+    for rot in range(16):
+        byte = ((value << (2 * rot)) | (value >> (32 - 2 * rot))) & 0xffffffff
+        if byte < 0x100:
+            return dict(
+                imm = 1,
+                rot = rot,
+                imm8 = byte,
+                )
+    raise ValueError(f"Cannot encode {value:#010x} as 8-bit rotated value")
 
-def imm8_decompose(imm8):
-    imm8 = imm8 & 0xffffffff
-    try:
-        imm, lsb2 = _imm8_decompose((imm8 >> 16) | ((imm8 & 0xffff) << 16))
-        lsb2 = lsb2 + 8
-        return imm, lsb2
-    except ValueError:
-        pass
-    return _imm8_decompose(imm8)
-
-def imm8_encode(imm8):
-    byte, lsb2 = imm8_decompose(imm8)
-    return dict(
-        imm = 1,
-        rot = (-lsb2) & 0xf,
-        imm8 = byte,
-        )
-
-def rm_encode(rm, shift = 0):
+def rm_encode(rm, shift = Shift.Lsl, amount = 0):
+    """
+    Register operand shifted by an immediate amount.
+    """
+    if not 0 <= amount < 32:
+        raise ValueError(f"Shift amount {amount} out of range")
     return dict(
         imm = 0,
         rm = rm,
-        reg_shift = shift,
+        reg_shift = 0,
+        shift = shift,
+        shift_imm = amount,
         )
 
 def movi(rd, imm8):
@@ -101,13 +101,13 @@ def movi(rd, imm8):
         **imm8_encode(imm8)
     ).all
 
-def mov(rd, rm, shift = 0):
+def mov(rd, rm, shift = Shift.Lsl, amount = 0):
     return Alu(
         cond = 0xe,
         alu_op = AluOp.Mov,
         rd = rd,
         rn = 0,
-        **rm_encode(rm)
+        **rm_encode(rm, shift, amount)
     ).all
 
 def nop():
@@ -152,10 +152,15 @@ def stmia(base, mask, update = False):
     ).all
 
 def b(offset, link = False):
+    """
+    Branch by offset words, relative to the branch address + 8.
+    """
+    if not -(1 << 23) <= offset < (1 << 23):
+        raise ValueError(f"Branch offset {offset} out of range")
     return B(cond = 0xe,
-             op = 0xa,
+             op = 0x5,
              link = link,
-             offset = offset,
+             offset = offset & 0xffffff,
     ).all
 
 class Mrs(Instr):
@@ -218,38 +223,84 @@ def msr_reg(reg, spsr):
 class Ldstr(Instr):
     p = bitfield.Field(24, 1)
     u = bitfield.Field(23, 1)
+    b = bitfield.Field(22, 1)
     w = bitfield.Field(21, 1)
     l = bitfield.Field(20, 1)
     rn = bitfield.Field(16, 4)
     rd = bitfield.Field(12, 4)
     addr = bitfield.Field(0, 12)
 
-def str(rd, rn):
+class Ldsth(Instr):
+    p = bitfield.Field(24, 1)
+    u = bitfield.Field(23, 1)
+    c1 = bitfield.Field(22, 1)
+    w = bitfield.Field(21, 1)
+    l = bitfield.Field(20, 1)
+    rn = bitfield.Field(16, 4)
+    rd = bitfield.Field(12, 4)
+    imm_hi = bitfield.Field(8, 4)
+    c1011 = bitfield.Field(4, 4)
+    imm_lo = bitfield.Field(0, 4)
+
+def _ldst(load, byte, rd, rn, offset, post_index):
+    if not -0x1000 < offset < 0x1000:
+        raise ValueError(f"Offset {offset} out of range")
+    return Ldstr(
+        cond = 0xe,
+        op = 2,
+        p = 0 if post_index else 1,
+        u = 1 if offset >= 0 else 0,
+        b = int(byte),
+        l = int(load),
+        rn = rn,
+        rd = rd,
+        addr = abs(offset),
+        ).all
+
+def _ldsth(load, rd, rn, offset, post_index):
+    if not -0x100 < offset < 0x100:
+        raise ValueError(f"Offset {offset} out of range")
+    return Ldsth(
+        cond = 0xe,
+        op = 0,
+        p = 0 if post_index else 1,
+        u = 1 if offset >= 0 else 0,
+        c1 = 1,
+        l = int(load),
+        rn = rn,
+        rd = rd,
+        imm_hi = abs(offset) >> 4,
+        c1011 = 0xb,
+        imm_lo = abs(offset) & 0xf,
+        ).all
+
+# Single transfers. Without post_index, address is [rn, #offset]
+# without writeback. With post_index, address is [rn], and rn is
+# incremented by offset afterwards.
+
+def str(rd, rn, offset = 0, post_index = False):
     """
     [rn] <- rd
     """
-    return Ldstr(
-        cond = 0xe,
-        p = 1,
-        op = 2,
-        u = 1,
-        rn = rn,
-        rd = rd,
-        ).all
+    return _ldst(False, False, rd, rn, offset, post_index)
 
-def ldr(rd, rn):
+def ldr(rd, rn, offset = 0, post_index = False):
     """
     rd <- [rn]
     """
-    return Ldstr(
-        cond = 0xe,
-        p = 1,
-        op = 2,
-        u = 1,
-        rn = rn,
-        rd = rd,
-        l = 1,
-        ).all
+    return _ldst(True, False, rd, rn, offset, post_index)
+
+def strb(rd, rn, offset = 0, post_index = False):
+    return _ldst(False, True, rd, rn, offset, post_index)
+
+def ldrb(rd, rn, offset = 0, post_index = False):
+    return _ldst(True, True, rd, rn, offset, post_index)
+
+def strh(rd, rn, offset = 0, post_index = False):
+    return _ldsth(False, rd, rn, offset, post_index)
+
+def ldrh(rd, rn, offset = 0, post_index = False):
+    return _ldsth(True, rd, rn, offset, post_index)
 
 def bkpt(no = 0):
     return Instr(
@@ -265,11 +316,11 @@ class Mcrc(Instr):
     op1 = bitfield.Field(21, 3)
     move_from = bitfield.BooleanField(20)
     crn = bitfield.Field(16, 4)
-    rn = bitfield.Field(12, 4)
+    rd = bitfield.Field(12, 4)
     cp = bitfield.Field(8, 4)
     op2 = bitfield.Field(5, 3)
     c4 = bitfield.BooleanField(4)
-    crm = bitfield.Field(0, 3)
+    crm = bitfield.Field(0, 4)
 
 def mrc(cp, op1, rd, crn, crm, op2 = 0):
     """
@@ -292,7 +343,7 @@ def mrc(cp, op1, rd, crn, crm, op2 = 0):
 def mcr(cp, op1, rd, crn, crm, op2 = 0):
     """
     Move ARM register to coprocessor
-    MRC pcp, op1, rd, crn, crm, op2
+    MCR pcp, op1, rd, crn, crm, op2
     """
     return Mcrc(
         cond = 0xe,
@@ -306,3 +357,55 @@ def mcr(cp, op1, rd, crn, crm, op2 = 0):
         c4 = 1,
         crm = crm,
     ).all        
+
+class Mode(enum.IntEnum):
+    Usr = 0x10
+    Fiq = 0x11
+    Irq = 0x12
+    Svc = 0x13
+    Abt = 0x17
+    Und = 0x1b
+    Sys = 0x1f
+
+    @property
+    def bank(self):
+        """
+        Mode owning the register bank this mode uses.
+        """
+        return Mode.Usr if self == Mode.Sys else self
+
+    @property
+    def banked_registers(self):
+        """
+        Registers this mode's bank holds. User bank holds all of
+        r0-r14, other banks the ones they do not share with it.
+        """
+        if self.bank == Mode.Usr:
+            return range(0, 15)
+        if self == Mode.Fiq:
+            return range(8, 15)
+        return range(13, 15)
+
+    @property
+    def has_spsr(self):
+        return self.bank != Mode.Usr
+
+    @classmethod
+    def banks(cls):
+        return [cls.Usr, cls.Fiq, cls.Irq, cls.Svc, cls.Abt, cls.Und]
+
+    def register_bank(self, no):
+        """
+        Bank holding register `no` (0-14) when in this mode.
+        """
+        if no in self.bank.banked_registers:
+            return self.bank
+        return Mode.Usr
+
+class Psr(bitfield.Bitfield):
+    all = bitfield.Field(0, 32)
+    mode = bitfield.Field(0, 5)
+    thumb = bitfield.BooleanField(5)
+    fiq_disable = bitfield.BooleanField(6)
+    irq_disable = bitfield.BooleanField(7)
+    jazelle = bitfield.BooleanField(24)

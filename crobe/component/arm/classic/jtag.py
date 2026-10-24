@@ -37,7 +37,7 @@ class InstructionRegistry(jtag.InstructionRegistry):
         crm        = bitfield.Field(33, 4)
         access     = bitfield.BooleanField(32)
         data       = bitfield.Field(0, 32)
-    CP15 = jtag.Dr(Ice._width, type = Cp15)
+    CP15 = jtag.Dr(Cp15._width, type = Cp15)
 
     IDCODE               = jtag.Instruction(0xe, "DEVICE_ID")
     EXTEST               = jtag.Instruction(0x0, "BYPASS_REG")
