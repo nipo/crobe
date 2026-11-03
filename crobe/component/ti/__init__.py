@@ -8,3 +8,4 @@ from . import tla202x
 from . import dac3171
 from . import cc2650
 from . import adc3101
+from . import tca6408a
